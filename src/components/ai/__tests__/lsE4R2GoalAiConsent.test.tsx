@@ -46,8 +46,8 @@ const status: AiConsentStatusResponse = {
 describe.each(['beforeAnswer', 'default'] as const)('LS-E4R2 B2: C3 consent (%s)', (variant) => {
   async function draw() {
     const api: AiConsentSheetApi = {
-      getStatus: jest.fn(async () => ({ kind: 'ok', status })),
-      grantRoman: jest.fn(async () => ({ kind: 'ok', status })),
+      getStatus: jest.fn(async () => ({ kind: 'ok' as const, status })),
+      grantRoman: jest.fn(async () => ({ kind: 'ok' as const, status })),
     };
     const r = await render(
       <AiConsentSheet visible variant={variant} api={api} sessionUserId={() => 'u1'}
