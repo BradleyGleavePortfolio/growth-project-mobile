@@ -94,7 +94,7 @@ import {
 } from '../../lib/coachSignupAttempt';
 import { layout, lightTokens, radius, typography, type SemanticTokens } from '../../theme/tokens';
 import ResendVerificationLink from './ResendVerificationLink';
-import { authStyleB, RoundBack, styleBFieldStyles } from './AuthStyleB';
+import { authStyleB, RoundBack, StepPill, styleBFieldStyles, type SignupStep } from './AuthStyleB';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { Headline, Overline, PrimaryButton, Screen, ScreenTopBar, TextLink } from '../../ui';
 import { Checkbox } from '../consultation/components';
@@ -208,6 +208,11 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
     () => getLastKnownSignupPolicy()?.roleChoice ?? null,
   );
   const [step, setStep] = useState<Step>(() => firstStep(arrivedWithCode, roleChoiceEnabled));
+  // LS-E4R2 B3 (C7 Style B, code entry kept): the step count is the client's own path, role, account,
+  // inbox; from a link (or with no role choice) there is no role step, so it is 2.
+  const hasRoleStep = roleChoiceEnabled === true && !arrivedWithCode;
+  const stepAt = (n: number): SignupStep | undefined => (v2 ? { n, of: hasRoleStep ? 3 : 2 } : undefined);
+  const registerStep = stepAt(hasRoleStep ? 2 : 1);
   const [intendedRole, setIntendedRole] = useState<IntendedRole>('client');
   // Prototype ROLE (01): a row tap only selects; Continue commits. `null`
   // until the person picks, so Continue starts disabled.
@@ -1191,7 +1196,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
     return (
       <Screen
         testID="create-account-role"
-        header={v2 ? <RoundBack onBack={leaveCreateAccount} testID="role-choice-back" /> : <ScreenTopBar onBack={leaveCreateAccount} testID="role-choice-back" />}
+        header={v2 ? <RoundBack onBack={leaveCreateAccount} testID="role-choice-back" step={stepAt(1)} /> : <ScreenTopBar onBack={leaveCreateAccount} testID="role-choice-back" />}
         footer={
           <>
             <PrimaryButton
@@ -1220,6 +1225,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
         }
       >
           <View style={styles.header}>
+            {v2 ? <StepPill step={{ n: 1, of: 3 }} /> : null}
             <Overline style={styles.eyebrow}>Welcome</Overline>
             <Headline style={styles.title}>How will you use TGP Fitness?</Headline>
           </View>
@@ -1322,10 +1328,11 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
       key="register"
       testID="create-account-register"
       scrollRef={formScrollRef}
-      header={v2 ? <RoundBack onBack={backFromRegister} testID="create-account-back" /> : <ScreenTopBar onBack={backFromRegister} testID="create-account-back" />}
+      header={v2 ? <RoundBack onBack={backFromRegister} testID="create-account-back" step={registerStep} /> : <ScreenTopBar onBack={backFromRegister} testID="create-account-back" />}
       footer={<>{keyboardOpen ? null : footerContent}</>}
     >
         <View style={styles.header}>
+          {registerStep ? <StepPill step={registerStep} /> : null}
           <Overline style={styles.eyebrow} testID="create-account-eyebrow">{eyebrow}</Overline>
           <Headline style={styles.title}>
             {isCoachSignup ? 'Create your coach account.' : 'Create your account.'}
