@@ -8,7 +8,7 @@
  * the coaching row read again, so the chat comes back.
  */
 import type { InfiniteData, QueryClient } from '@tanstack/react-query';
-import { useBlockedUsersStore, type BlockedUser } from '../store/blockedUsersStore';
+import { useBlockedUsersStore, ownsBlockList, type BlockedUser } from '../store/blockedUsersStore';
 import { closedRefusals } from '../components/messaging/closedRefusal';
 
 // The app's one query client registers itself here (services/queryClient.ts), so the API wrappers that call here never
@@ -33,16 +33,20 @@ const isOther = (userId: string) => (r: Row) => r.other_user_id !== userId && r.
 
 export type BlockedWho = Partial<Pick<BlockedUser, 'displayName' | 'role'>>;
 
-/** The server placed my block on `userId`. */
-export function blockPlaced(userId: string, who: BlockedWho = {}): void {
-  if (!userId) return;
+/** The server placed my block on `userId`. `heldOwner` (blockListOwner() before the request, LS-914 B1): an answer
+ *  that lands after sign-out or an account switch writes nothing, neither the list nor the cached lists. */
+export function blockPlaced(userId: string, who: BlockedWho = {}, heldOwner?: number): void {
+  if (!userId || !ownsBlockList(heldOwner)) return;
   const store = useBlockedUsersStore.getState();
   const known = store.blocked.find((b) => b.id === userId);
-  void store.block({
-    id: userId,
-    displayName: who.displayName || known?.displayName || 'Blocked user',
-    role: who.role ?? known?.role ?? 'other',
-  });
+  void store.block(
+    {
+      id: userId,
+      displayName: who.displayName || known?.displayName || 'Blocked user',
+      role: who.role ?? known?.role ?? 'other',
+    },
+    heldOwner,
+  );
   const queryClient = client;
   if (!queryClient) return;
   queryClient.setQueriesData<Row[]>({ queryKey: DM_LISTS }, (old) => (Array.isArray(old) ? old.filter(isOther(userId)) : old));
@@ -63,9 +67,9 @@ export function blockPlaced(userId: string, who: BlockedWho = {}): void {
 }
 
 /** The server lifted my block on `userId`: the chat opens again everywhere and comes back to the lists. */
-export function blockLifted(userId: string): void {
-  if (!userId) return;
-  void useBlockedUsersStore.getState().unblock(userId);
+export function blockLifted(userId: string, heldOwner?: number): void {
+  if (!userId || !ownsBlockList(heldOwner)) return;
+  void useBlockedUsersStore.getState().unblock(userId, heldOwner);
   closedRefusals.clear(userId);
   const queryClient = client;
   if (!queryClient) return;
