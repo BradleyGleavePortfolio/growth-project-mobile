@@ -9,11 +9,34 @@
  */
 import React from 'react';
 import { Text } from 'react-native';
-import { render } from '@testing-library/react-native';
+import { render, waitFor } from '@testing-library/react-native';
 
 const mockStore = new Map<string, string>();
 const mockSet = jest.fn(async (key: string, value: string) => {
   mockStore.set(key, value);
+});
+
+describe('LS-E4 B1: an unknown record is not evidence that another agreement is needed', () => {
+  it.each(['offline', 'empty response'])(
+    'does not re-ask a one-box account after reinstall when the first read is %s',
+    async (failure) => {
+      // The account's accepted one-box record remains on the server. A fresh
+      // installation has no per-device Community marker; its first read fails.
+      const serverRecord = stateWith(CONSULT_CONSENT_ONE_BOX_COPY_VERSION);
+      const read = jest.fn(async () => {
+        if (failure === 'offline') throw new Error('offline');
+        return null;
+      });
+      expect(agreedToCommunityInConsultation(serverRecord)).toBe(true);
+      const screen = await renderGate(read);
+      await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(screen.queryByTestId('community-terms-loading')).toBeNull());
+      // Keep access closed pending verification, but do not present a second
+      // agreement merely because the existing agreement could not be read.
+      expect(screen.queryByTestId('community-content')).toBeNull();
+      expect(screen.queryByTestId('community-terms-agree')).toBeNull();
+    },
+  );
 });
 jest.mock('../../../storage/mmkv', () => ({
   prefsStorage: {
