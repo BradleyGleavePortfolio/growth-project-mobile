@@ -249,3 +249,47 @@ describe('B-343-4 a resumed trial keeps its pinned first-charge date', () => {
     expect(mockInitSheet).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('PF-1-M an unclear one-time result asks about its own purchase only', () => {
+  const row = (id: string, created_at: string, over: Record<string, unknown> = {}) => ({
+    id, package_id: A.id, status: 'paid', entitlement_active: true, access_expires_at: null, created_at, ...over,
+  });
+
+  it("this attempt's own paid purchase still confirms it, by its own id", async () => {
+    mockPresent.mockResolvedValueOnce({ error: { code: 'Timeout' } });
+    mockPurchases.mockResolvedValue({
+      ok: true,
+      data: [row('synthetic-own', '2026-10-30T12:00:00.000Z'), row('synthetic-older', '2026-10-01T12:00:00.000Z')],
+    });
+    const h = await mount();
+    await act(async () => { await h.result.current.start(A); });
+    expect(h.result.current.state.success).toEqual(
+      expect.objectContaining({ kind: 'one_time', packageId: A.id, purchaseId: 'synthetic-own' }),
+    );
+    expect(h.onEntitled).toHaveBeenCalledTimes(1);
+  });
+
+  it('Check again reads the same purchase: a newer row of the package never confirms it; its own paid row does', async () => {
+    mockPresent.mockResolvedValueOnce({ error: { code: 'Timeout' } });
+    const own = (over: Record<string, unknown> = {}) => row('synthetic-own', '2026-10-30T12:00:00.000Z', over);
+    const newer = row('synthetic-newer', '2026-10-31T12:00:00.000Z');
+    mockPurchases.mockResolvedValueOnce({ ok: true, data: [own({ status: 'pending', entitlement_active: false })] });
+    const h = await mount();
+    await act(async () => { await h.result.current.start(A); });
+    const unknown = h.result.current.state.notice;
+    expect(unknown?.checkAgain).toBe(true);
+
+    mockPurchases.mockResolvedValueOnce({ ok: true, data: [newer, own({ status: 'pending', entitlement_active: false })] });
+    await act(async () => { await h.result.current.checkAgain(); });
+    expect(h.result.current.state.success).toBeNull();
+    expect(h.result.current.state.notice).toEqual(expect.objectContaining({
+      checkAgain: true, message: unknown?.message, reference: unknown?.reference,
+    }));
+    expect(h.onEntitled).not.toHaveBeenCalled();
+
+    mockPurchases.mockResolvedValueOnce({ ok: true, data: [newer, own()] });
+    await act(async () => { await h.result.current.checkAgain(); });
+    expect(h.result.current.state.success).toEqual(expect.objectContaining({ purchaseId: 'synthetic-own' }));
+    expect(mockPost).toHaveBeenCalledTimes(1);
+  });
+});

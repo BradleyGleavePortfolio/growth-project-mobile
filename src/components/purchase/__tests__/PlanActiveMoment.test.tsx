@@ -135,13 +135,13 @@ describe('PlanActiveMoment', () => {
     expect(pending.queryByTestId('payment-success-paid')).toBeNull();
   });
 
-  it('See what unlocks opens the newest entitled purchase of the package; Done leaves', async () => {
+  it('See what unlocks opens this purchase (the newest of the package), not an older one; Done leaves', async () => {
     mockGetPurchases.mockResolvedValue({
       ok: true,
       data: [
-        row({ id: 'pur-other', package_id: 'pkg-2' }),
-        row({ id: 'pur-pending', entitlement_active: false }),
-        row({ id: 'pur-new' }),
+        row({ id: 'pur-other', package_id: 'pkg-2', created_at: '2026-10-31T12:00:00Z' }),
+        row({ id: 'pur-old', created_at: '2026-10-01T12:00:00Z' }),
+        row({ id: 'pur-new', created_at: '2026-10-30T12:00:00Z' }),
       ],
     });
     const onSeeUnlocks = jest.fn();
@@ -159,6 +159,27 @@ describe('PlanActiveMoment', () => {
     await fireEvent.press(view.getByTestId('payment-continue'));
     expect(onContinue).toHaveBeenCalledTimes(1);
     expect(view.getByText('Done')).toBeTruthy();
+  });
+
+  it('LS-PAYFAIL B7: an older purchase of the package never stands in for this one', async () => {
+    mockGetPurchases.mockResolvedValue({
+      ok: true,
+      data: [
+        row({ id: 'pur-new', status: 'pending', entitlement_active: false, created_at: '2026-10-30T12:00:00Z' }),
+        row({ id: 'pur-old', created_at: '2026-10-01T12:00:00Z' }),
+      ],
+    });
+    const view = await render(
+      <PlanActiveMoment
+        success={success({ kind: 'one_time', purchaseId: null })}
+        onContinue={jest.fn()}
+        onSeeUnlocks={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(view.getByText('S', { includeHiddenElements: true })).toBeTruthy());
+    expect(mockGetPurchases).toHaveBeenCalledTimes(1);
+    expect(view.queryByTestId('payment-success-paid')).toBeNull();
+    expect(view.queryByTestId('payment-see-unlocks')).toBeNull();
   });
 
   it('without deliverables or a place to open, Done is the only action', async () => {

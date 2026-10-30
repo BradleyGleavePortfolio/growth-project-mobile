@@ -63,6 +63,7 @@ import {
   type StripeSdkError,
 } from "../lib/packagePayment";
 import {
+  attemptPurchase,
   formatPlanDate,
   money,
   planTerms,
@@ -278,6 +279,8 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
   const oneTimeUnknownRef = useRef<{
     pkg: PurchasablePackage;
     ref: string | null;
+    /** LS-PAYFAIL B7: this attempt's purchase row, pinned on first sight. */
+    purchaseId: string | null;
   } | null>(null);
 
   const set = useCallback((patch: Partial<PurchaseState>) => {
@@ -727,8 +730,9 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
 
   /**
    * B-334-3: a one-time card sheet ended without a clear answer. Read the
-   * client's purchases (bounded): an entitled purchase of this package means
-   * it went through; otherwise the outcome is unknown (Check again).
+   * client's purchases (bounded): this attempt's own row, paid and entitled,
+   * means it went through (LS-PAYFAIL B7: an older purchase of the package
+   * never does); otherwise the outcome is unknown (Check again).
    */
   const settleOneTimeUnknown = useCallback(
     async (stripe: StripeSdkError | null, cause: string): Promise<void> => {
@@ -741,20 +745,17 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
         try {
           const res = await clientPaymentsApi.getPurchases();
           if (!mountedRef.current || oneTimeUnknownRef.current !== u) return;
-          const paid =
-            res.ok &&
-            res.data.some(
-              (p) =>
-                p.package_id === u.pkg.id &&
-                p.entitlement_active === true &&
-                (p.status === "paid" || p.status === "active"),
-            );
-          if (paid) {
+          const mine = res.ok ? attemptPurchase(res.data, u.pkg.id, u.purchaseId) : null;
+          if (mine) u.purchaseId = mine.id;
+          if (
+            mine?.entitlement_active === true &&
+            (mine.status === "paid" || mine.status === "active")
+          ) {
             finishSuccess(
               {
                 kind: "one_time",
                 packageId: u.pkg.id,
-                purchaseId: null,
+                purchaseId: mine.id,
                 title: PACKAGE_PAYMENT_COPY.successTitle,
                 body: PACKAGE_PAYMENT_COPY.successBody(u.pkg.name, null),
               },
@@ -863,7 +864,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
       }
       if (outcome.kind === "uncertain") {
         // Keep the key: a retry gets the same PaymentIntent, never a second one.
-        oneTimeUnknownRef.current = { pkg, ref };
+        oneTimeUnknownRef.current = { pkg, ref, purchaseId: null };
         await settleOneTimeUnknown(outcome.stripe, outcome.cause);
         return;
       }

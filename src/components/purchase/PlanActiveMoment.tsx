@@ -28,7 +28,7 @@ import {
 import { featureFlags } from "../../config/featureFlags";
 import type { PurchaseSuccess } from "../../hooks/usePackagePurchase";
 import { PACKAGE_PAYMENT_COPY as COPY } from "../../lib/packagePayment";
-import { formatPlanDate, paidAmount } from "../../lib/planTerms";
+import { attemptPurchase, formatPlanDate, paidAmount } from "../../lib/planTerms";
 import { useTheme } from "../../theme/ThemeProvider";
 import {
   colors,
@@ -147,13 +147,10 @@ export default function PlanActiveMoment({
     let live = true;
     void clientPaymentsApi.getPurchases().then((res) => {
       if (!live || !res.ok) return;
-      // The confirmed row, else the newest entitled row for the package.
-      const found = res.data.find((p) =>
-        success.purchaseId
-          ? p.id === success.purchaseId
-          : p.package_id === success.packageId && p.entitlement_active,
-      );
-      setRow(found ?? null);
+      // The confirmed row, else this purchase's own row (the newest of the
+      // package) once it is in force; never an older purchase (LS-PAYFAIL B7).
+      const mine = attemptPurchase(res.data, success.packageId, success.purchaseId);
+      setRow(mine && (success.purchaseId || mine.entitlement_active) ? mine : null);
     });
     api
       .get<{ name?: string }>("/v1/clients/me/coach")
