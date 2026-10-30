@@ -183,6 +183,8 @@ export interface FrameProps {
   pauseLabel?: boolean;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  /** LS-913R3 B1 (C7 Style B consent): the title fixed in the bar beside Back, outside the scroll. */
+  title?: string;
   testID?: string;
 }
 
@@ -224,7 +226,7 @@ export function useConsultInsets() {
  * body because src/ui Screen cannot yet carry the analytics marker on the
  * scroll view or `automaticallyAdjustKeyboardInsets` (Opus C-6).
  */
-export function Frame({ progress, onBack, onFinishLater, pauseLabel, children, footer, testID }: FrameProps) {
+export function Frame({ progress, onBack, onFinishLater, pauseLabel, children, footer, title, testID }: FrameProps) {
   const { s } = useConsultationStyles();
   const insets = useConsultInsets();
   return (
@@ -236,6 +238,7 @@ export function Frame({ progress, onBack, onFinishLater, pauseLabel, children, f
       <ScreenTopBar
         onBack={onBack ?? undefined}
         testID="consult"
+        title={title ? <Text accessibilityRole="header" maxFontSizeMultiplier={1.4} style={s.titleCentered}>{title}</Text> : undefined}
         trailing={
           onFinishLater ? (
             <TextLink
@@ -279,6 +282,7 @@ export function QuestionHeader({
   question,
   long,
   why,
+  centered = false,
 }: {
   eyebrow?: string;
   timeLeft?: string;
@@ -287,19 +291,23 @@ export function QuestionHeader({
   question: string;
   long?: boolean;
   why?: string;
+  /** C7 Style B consent: the eyebrow centred; the title is in Frame's fixed bar (LS-913R3 B1), so none here. */
+  centered?: boolean;
 }) {
   const { s } = useConsultationStyles();
   return (
     <View>
-      <View style={s.eyerow}>
+      <View style={[s.eyerow, centered && s.eyerowCentered]}>
         {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : <View />}
         {timeLeft ? <Text style={s.timeLeft}>{timeLeft}</Text> : null}
       </View>
       {sub ? <Text style={s.sub}>{sub}</Text> : null}
       {roman ? <RomanLine text={roman} /> : null}
-      <Headline level={long ? 'h2' : 'h1'} style={s.question}>
-        {question}
-      </Headline>
+      {centered ? null : (
+        <Headline level={long ? 'h2' : 'h1'} style={s.question}>
+          {question}
+        </Headline>
+      )}
       {why ? <Text style={s.why}>{why}</Text> : null}
     </View>
   );
@@ -395,6 +403,7 @@ export function Checkbox({
   hint,
   detail,
   variant = 'default',
+  boxRef,
 }: {
   checked: boolean;
   onToggle: () => void;
@@ -407,11 +416,16 @@ export function Checkbox({
   detail?: string;
   /** Owner-approved warm fill for the coach sign-up card; selection is unchanged. */
   variant?: 'default' | 'tan';
+  /** The row itself, for a screen that moves screen-reader focus to it (coach Create account, LO-E4 B2). */
+  boxRef?: React.Ref<View>;
 }) {
   const { s, palette } = useConsultationStyles();
-  const text = <Text style={[s.checkLabel, detail ? s.checkTitle : null]}>{label}</Text>;
+  // LS-E4R2 B1 (C7 Style B): a ticked default row fills forest with light text; the coach card keeps its tan.
+  const filled = checked && variant === 'default';
+  const text = <Text style={[s.checkLabel, detail ? s.checkTitle : null, filled && s.onFilled]}>{label}</Text>;
   return (
     <Pressable
+      ref={boxRef}
       onPress={disabled ? undefined : onToggle}
       disabled={disabled}
       accessibilityRole="checkbox"
@@ -419,15 +433,15 @@ export function Checkbox({
       accessibilityHint={hint ?? detail}
       accessibilityState={disabled ? { checked, disabled: true, busy: true } : { checked }}
       testID={testID}
-      style={({ pressed }) => [s.checkRow, variant === 'tan' && s.checkTan, checked && s.rowSel, pressed && s.pressed, disabled && s.checkDisabled]}
+      style={({ pressed }) => [s.checkRow, variant === 'tan' && s.checkTan, checked && s.rowSel, filled && s.checkFilled, pressed && s.pressed, disabled && s.checkDisabled]}
     >
-      <View style={[s.box, checked && s.boxOn]}>
-        {checked ? <Ionicons name="checkmark" size={16} color={palette.onAccent} /> : null}
+      <View style={[s.box, checked && s.boxOn, filled && s.boxOnFilled]}>
+        {checked ? <Ionicons name="checkmark" size={16} color={filled ? palette.accent : palette.onAccent} /> : null}
       </View>
       {detail ? (
         <View style={s.checkText}>
           {text}
-          <Text style={s.checkDetail}>{detail}</Text>
+          <Text style={[s.checkDetail, filled && s.onFilled]}>{detail}</Text>
         </View>
       ) : (
         text
@@ -611,6 +625,8 @@ const createStyles = (palette: ReturnType<typeof semanticPalette>) => StyleSheet
   scroll: { paddingHorizontal: layout.gutter, paddingTop: spacing.xl, paddingBottom: spacing.xl },
   footer: { paddingHorizontal: layout.gutter, paddingTop: layout.footerTopGap, gap: layout.footerItemGap },
   eyerow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  eyerowCentered: { justifyContent: 'center' },
+  titleCentered: { ...typography.h4, fontFamily: 'Inter_600SemiBold', fontWeight: '600', color: palette.ink, textAlign: 'center' },
   eyebrow: { ...typography.eyebrow, color: palette.muted },
   timeLeft: { ...typography.bodySmall, color: palette.muted },
   sub: { ...typography.bodySmall, color: palette.muted, marginTop: 6 },
@@ -706,6 +722,11 @@ const createStyles = (palette: ReturnType<typeof semanticPalette>) => StyleSheet
     marginTop: spacing.lg,
   },
   checkTan: { backgroundColor: colors.cream },
+  checkFilled: { backgroundColor: palette.accent, borderColor: palette.accent },
+  boxOnFilled: { backgroundColor: palette.onAccent, borderColor: palette.onAccent },
+  onFilled: { color: palette.onAccent },
+  // LS-E4R2 B1: each P0 disclosure paragraph in a cream radius-16 card (C7 Style B).
+  discloseCard: { backgroundColor: palette.tile, borderRadius: radius.card, padding: spacing.lg, marginBottom: spacing.md },
   box: {
     width: 22,
     height: 22,

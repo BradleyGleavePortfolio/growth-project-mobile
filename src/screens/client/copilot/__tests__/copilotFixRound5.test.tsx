@@ -157,6 +157,10 @@ test('B-S3: AI help off on Send is Roman\'s AI help card; the grant brings Send 
   expect(s.getByTestId('copilot-send-refusal-roman')).toBeTruthy();
   expect(s.queryByTestId('copilot-send')).toBeNull();
   await act(async () => fireEvent.press(s.getByTestId('copilot-send-refusal-allow')));
+  // FR-E4M (LS-E4 R1_B2 class): Copilot's own Roman ask is "Before Roman answers", opening with PERM-W3.
+  expect((await s.findByTestId('copilot-send-refusal-consent-sheet-lead')).props.children).toBe(
+    "Roman's AI runs on Anthropic, an outside AI company. Allow it to use your information to answer you? You can turn it off at any time in Settings > Privacy.",
+  );
   await act(async () => fireEvent.press(await s.findByTestId('copilot-send-refusal-consent-sheet-allow')));
   expect(post.mock.calls.some(([url]) => url === '/me/ai-consent/roman')).toBe(true);
   expect(await s.findByTestId('copilot-send')).toBeTruthy();

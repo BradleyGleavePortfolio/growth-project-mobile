@@ -74,8 +74,9 @@ import { useCrisisAlertNow } from '../../hooks/useFeatureFlags';
 import { openPrivacyPolicyPage } from '../../lib/legalLinks';
 import { diagnosticReference, shortReference } from '../../utils/correlation';
 import { captureError } from '../../services/sentry';
+import RomanAvatar from '../roman/RomanAvatar';
 import { useTheme, type ThemeColors } from '../../theme/ThemeProvider';
-import { layout, radius } from '../../theme/tokens';
+import { layout, lightTokens, radius } from '../../theme/tokens';
 import { footerBottomPadding, Headline, PrimaryButton, TextLink, useScreenInsets } from '../../ui';
 
 export type AiConsentSheetApi = Pick<typeof defaultAiConsentApi, 'getStatus' | 'grantRoman'>;
@@ -96,7 +97,7 @@ export interface AiConsentSheetProps {
    * first answer. Same ledger, same server wording; the title, the paired
    * same-size actions and the Privacy Policy link follow the prototype.
    */
-  variant?: 'default' | 'beforeAnswer' | 'afterJoin';
+  variant?: 'default' | 'beforeAnswer';
   testID?: string;
 }
 
@@ -128,9 +129,13 @@ type Phase =
 export const AI_CONSENT_SHEET_COPY = {
   title: 'Allow AI help',
   beforeAnswerTitle: 'Before Roman answers',
-  /** Owner 62y2: the one-time offer right after a client with no coach joins a coach. */
-  afterJoinTitle: 'Roman and AI',
-  afterJoinAllow: 'Allow',
+  /**
+   * STORE-E4 (owner #184-E5 / #184-E6 op 1, PERM-W3, copied exactly): the first line of "Before Roman
+   * answers". Shown above the server's paragraph and box label; the ledger's sha256 covers only those
+   * (status.copy), so no client-ai version changes.
+   */
+  beforeAnswerLead:
+    "Roman's AI runs on Anthropic, an outside AI company. Allow it to use your information to answer you? You can turn it off at any time in Settings > Privacy.",
   allowAndContinue: 'Allow and continue',
   privacyPolicy: 'Privacy Policy',
   coachNote:
@@ -181,7 +186,6 @@ export default function AiConsentSheet({
   testID = 'ai-consent-sheet',
 }: AiConsentSheetProps): React.ReactElement {
   const beforeAnswer = variant === 'beforeAnswer';
-  const afterJoin = variant === 'afterJoin';
   // The coach note is true only when a coach is attached (B-592-SOL-B-1). Read from
   // the signed-in user's cache (patched by CoachCodeSheet after a join), not a hook.
   const cachedUser = readUserCacheSync();
@@ -192,7 +196,7 @@ export default function AiConsentSheet({
   // whose answer is shown (b#1047).
   const today = useCallback(() => (coachless ? { coachFree: true } : { crisis: crisisAlert() }), [coachless, crisisAlert]);
   const askRef = useRef<AiConsentAsk>(ROMAN_HEALTH_ASK);
-  const { colors } = useTheme();
+  const { colors, semanticColors: sc = lightTokens } = useTheme();
   const styles = makeStyles(colors);
   // Presentation (ROMAN-ROOM-133, operator 17:16): the sheet clears the
   // gesture bar from real insets; buttons are the shared src/ui primitives.
@@ -371,30 +375,35 @@ export default function AiConsentSheet({
         return (
           <>
             <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+              {beforeAnswer ? (
+                <Text style={styles.paragraph} testID={`${testID}-lead`}>
+                  {AI_CONSENT_SHEET_COPY.beforeAnswerLead}
+                </Text>
+              ) : null}
               {phase.reconsent ? (
                 <Text style={styles.note} testID={`${testID}-reconsent`}>
                   {AI_CONSENT_SHEET_COPY.reconsent}
                 </Text>
               ) : null}
-              <Text style={styles.paragraph} testID={`${testID}-paragraph`}>
-                {phase.paragraph}
-              </Text>
+              {/* LS-E4R2 B2 (C3 Style B): the server disclosure in a cream radius-16 card on the white sheet. */}
+              <View style={styles.discloseCard}>
+                <Text style={[styles.paragraph, styles.inCard]} testID={`${testID}-paragraph`}>
+                  {phase.paragraph}
+                </Text>
+              </View>
               <Text style={styles.label} testID={`${testID}-label`}>
                 {phase.label}
               </Text>
               {coachless ? null : (
                 <Text style={styles.note} testID={`${testID}-coach-note`}>{AI_CONSENT_SHEET_COPY.coachNote}</Text>
               )}
-              <Text style={styles.note}>{AI_CONSENT_SHEET_COPY.changeLater}</Text>
+              {/* SHEET-1 (owner 185-W4): Before Roman answers drops it; its lead already names Settings > Privacy. */}
+              {beforeAnswer ? null : <Text style={styles.note}>{AI_CONSENT_SHEET_COPY.changeLater}</Text>}
             </ScrollView>
             <View style={beforeAnswer ? styles.pair : null} testID={`${testID}-actions`}>
               <PrimaryButton
                 label={
-                  beforeAnswer
-                    ? AI_CONSENT_SHEET_COPY.allowAndContinue
-                    : afterJoin
-                      ? AI_CONSENT_SHEET_COPY.afterJoinAllow
-                      : AI_CONSENT_SHEET_COPY.allow
+                  beforeAnswer ? AI_CONSENT_SHEET_COPY.allowAndContinue : AI_CONSENT_SHEET_COPY.allow
                 }
                 onPress={() => void allow()}
                 loading={saving}
@@ -406,9 +415,8 @@ export default function AiConsentSheet({
                 onPress={onClose}
                 disabled={saving}
                 tone={beforeAnswer ? 'ink' : 'muted'}
-                underline={!beforeAnswer}
-                // Prototype 68: Not now matches Allow in size (a framed TextLink, never a second fill).
-                style={beforeAnswer ? [styles.pairItem, styles.pairOutline, { borderColor: colors.textPrimary }] : styles.secondary}
+                // LS-E4R2 B2 (C3 Style B): Not now is a centred underlined link under Allow, never a second fill.
+                style={styles.secondary}
                 testID={`${testID}-not-now`}
               />
             </View>
@@ -513,17 +521,20 @@ export default function AiConsentSheet({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <View
-          style={[styles.sheet, { paddingBottom: footerBottomPadding(insets.bottom) }]}
+          // LS-E4R2 B2 (C3 Style B): the client sheet is white so its cream disclosure card reads as a card.
+          style={[styles.sheet, { backgroundColor: sc.bgSurface, paddingBottom: footerBottomPadding(insets.bottom) }]}
           testID={testID}
           accessibilityViewIsModal
         >
-          <Headline level="h2" style={styles.title}>
-            {beforeAnswer
-              ? AI_CONSENT_SHEET_COPY.beforeAnswerTitle
-              : afterJoin
-                ? AI_CONSENT_SHEET_COPY.afterJoinTitle
-                : AI_CONSENT_SHEET_COPY.title}
-          </Headline>
+          {/* LS-913R3 B2 (C3 Style B): the small centred grip. Look only: the sheet still closes only by its buttons. */}
+          <View style={[styles.grip, { backgroundColor: sc.border }]} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" testID={`${testID}-grip`} />
+          {/* LS-E4R2 B2 (C3 Style B): Roman's portrait beside the title. */}
+          <View style={styles.titleRow}>
+            <RomanAvatar crop="neutral" size={44} />
+            <Headline level="h2" style={styles.titleText}>
+              {beforeAnswer ? AI_CONSENT_SHEET_COPY.beforeAnswerTitle : AI_CONSENT_SHEET_COPY.title}
+            </Headline>
+          </View>
           {renderBody()}
         </View>
       </View>
@@ -544,6 +555,11 @@ export function makeStyles(colors: ThemeColors) {
       maxHeight: '85%',
     },
     title: { marginBottom: 12 },
+    grip: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: -14, marginBottom: 14 },
+    titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
+    titleText: { flex: 1 },
+    discloseCard: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 16, marginBottom: 12 },
+    inCard: { marginBottom: 0 },
     center: { paddingVertical: 32, alignItems: 'center' },
     scroll: { flexGrow: 0 },
     scrollContent: { paddingBottom: 8 },
@@ -557,12 +573,5 @@ export function makeStyles(colors: ThemeColors) {
     // Stacked, both full width and 54 pt: the same size, and "Allow and continue" never truncates.
     pair: { alignSelf: 'stretch' },
     pairItem: { alignSelf: 'stretch' },
-    pairOutline: {
-      marginTop: 8,
-      minHeight: layout.buttonHeight,
-      borderWidth: 1,
-      borderRadius: radius.button,
-      justifyContent: 'center',
-    },
   });
 }

@@ -79,6 +79,11 @@ describe('Role (prototype 01)', () => {
     await fireEvent.press(ui.getByTestId('role-choice-coach'));
     expect(ui.queryByTestId('role-choice-coachless-note')).toBeNull();
     await fireEvent.press(ui.getByTestId('role-choice-continue'));
+    // STORE-E4 (PERM-W4): the coach form's required box is ticked before signing up.
+    {
+      const coachTerms = (ui as unknown as { queryByTestId: (id: string) => unknown }).queryByTestId('create-account-coach-terms');
+      if (coachTerms) await fireEvent.press(coachTerms as never);
+    }
     expect(ui.getByText('Create your coach account.')).toBeTruthy();
     expect(ui.getByText('Joining as a coach')).toBeTruthy();
   });
@@ -107,6 +112,11 @@ describe('Create account (prototype 02)', () => {
     const ui = await renderRole();
     await fireEvent.press(ui.getByTestId('role-choice-client'));
     await fireEvent.press(ui.getByTestId('role-choice-continue'));
+    // STORE-E4 (PERM-W4): the coach form's required box is ticked before signing up.
+    {
+      const coachTerms = (ui as unknown as { queryByTestId: (id: string) => unknown }).queryByTestId('create-account-coach-terms');
+      if (coachTerms) await fireEvent.press(coachTerms as never);
+    }
     const tree = JSON.stringify(ui.toJSON());
     const at = (s: string) => tree.indexOf(s);
     expect(at('Continue with Apple')).toBeGreaterThan(-1);
@@ -134,6 +144,11 @@ describe('Create account (prototype 02)', () => {
     const ui = await renderRole();
     await fireEvent.press(ui.getByTestId('role-choice-client'));
     await fireEvent.press(ui.getByTestId('role-choice-continue'));
+    // STORE-E4 (PERM-W4): the coach form's required box is ticked before signing up.
+    {
+      const coachTerms = (ui as unknown as { queryByTestId: (id: string) => unknown }).queryByTestId('create-account-coach-terms');
+      if (coachTerms) await fireEvent.press(coachTerms as never);
+    }
     expect(ui.getByLabelText('Password').props.secureTextEntry).toBe(true);
     await fireEvent.press(ui.getByLabelText('Show password'));
     expect(ui.getByLabelText('Password').props.secureTextEntry).toBe(false);
@@ -159,6 +174,11 @@ describe('Create account (prototype 02)', () => {
     expect(ui.toJSON()).toMatchSnapshot('role');
     await fireEvent.press(ui.getByTestId('role-choice-client'));
     await fireEvent.press(ui.getByTestId('role-choice-continue'));
+    // STORE-E4 (PERM-W4): the coach form's required box is ticked before signing up.
+    {
+      const coachTerms = (ui as unknown as { queryByTestId: (id: string) => unknown }).queryByTestId('create-account-coach-terms');
+      if (coachTerms) await fireEvent.press(coachTerms as never);
+    }
     expect(StyleSheet.flatten(ui.getByTestId('create-account-register').props.style).paddingTop).toBe(insets.top + 12);
     expect(ui.toJSON()).toMatchSnapshot('create');
   });

@@ -1,0 +1,228 @@
+/**
+ * STORE-E4 (agent 185; owner #184-E5 / #184-E6 op 1): the one-box "Before we start" includes the
+ * community guidelines, so the first Community visit does not ask again — for that client only.
+ *
+ *  - A client whose server record is a current one-box agreement (consult-consent-v19 or
+ *    consult-consent-v18-coach-free) opens Community straight away, and the phone remembers it.
+ *  - A client who agreed to an older screen, a client with no current agreement and a coach all still
+ *    see the Community gate.
+ *  - FR-E4M (LS-E4 R1_B1): a record that could not be read shows the app's "did not load" line with
+ *    Try again — neither Community nor a second agreement.
+ */
+import React from 'react';
+import { Text } from 'react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
+
+const mockStore = new Map<string, string>();
+const mockSet = jest.fn(async (key: string, value: string) => {
+  mockStore.set(key, value);
+});
+
+describe('LS-E4 B1: an unknown record is not evidence that another agreement is needed', () => {
+  it.each(['offline', 'empty response'])(
+    'does not re-ask a one-box account after reinstall when the first read is %s',
+    async (failure) => {
+      // The account's accepted one-box record remains on the server. A fresh
+      // installation has no per-device Community marker; its first read fails.
+      const serverRecord = stateWith(CONSULT_CONSENT_ONE_BOX_COPY_VERSION);
+      const read = jest.fn(async () => {
+        if (failure === 'offline') throw new Error('offline');
+        return null;
+      });
+      expect(agreedToCommunityInConsultation(serverRecord)).toBe(true);
+      const screen = await renderGate(read);
+      await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(screen.queryByTestId('community-terms-loading')).toBeNull());
+      // Keep access closed pending verification, but do not present a second
+      // agreement merely because the existing agreement could not be read.
+      expect(screen.queryByTestId('community-content')).toBeNull();
+      expect(screen.queryByTestId('community-terms-agree')).toBeNull();
+    },
+  );
+});
+jest.mock('../../../storage/mmkv', () => ({
+  prefsStorage: {
+    getStringAsync: async (key: string) => mockStore.get(key),
+    set: (key: string, value: string) => mockSet(key, value),
+  },
+}));
+
+let mockUserId: string | null = 'u-me';
+let mockRole: string | undefined = 'student';
+jest.mock('../../../hooks/useCurrentUser', () => ({
+  useCurrentUser: () => (mockUserId ? { id: mockUserId, email: 'me@example.test', role: mockRole } : null),
+}));
+jest.mock('../../../theme/useTheme', () => {
+  const { lightTokens } = jest.requireActual('../../../theme/tokens');
+  return { useTheme: () => ({ colorScheme: 'light', semanticColors: lightTokens }) };
+});
+jest.mock('react-native-safe-area-context', () => {
+  const actual = jest.requireActual('react-native-safe-area-context');
+  const { View } = require('react-native');
+  return { ...actual, SafeAreaView: View };
+});
+jest.mock('../../HapticPressable', () => {
+  const React = require('react');
+  const { Pressable } = require('react-native');
+  return {
+    __esModule: true,
+    default: ({
+      children,
+      onPress,
+      testID,
+    }: {
+      children: React.ReactNode;
+      onPress?: () => void;
+      testID?: string;
+    }) => React.createElement(Pressable, { onPress, testID }, children),
+  };
+});
+
+import CommunityTermsGate, { communityTermsKey } from '../CommunityTermsGate';
+import type { OnboardingStateResponse } from '../../../api/consultationApi';
+import { agreedToCommunityInConsultation } from '../../../lib/consultation/communityAgreement';
+import {
+  CONSULT_CONSENT_COPY_VERSION,
+  CONSULT_CONSENT_ONE_BOX_COPY_VERSION,
+  CONSULT_CONSENT_ONE_BOX_COACH_FREE_COPY_VERSION,
+} from '../../../lib/consultation/consentVersion';
+
+function stateWith(copyVersion: string | null, recorded = true): OnboardingStateResponse {
+  return {
+    answers: copyVersion
+      ? ({ P0: { agreed: true, agreed_at: '2026-10-30T03:00:00.000Z', copy_version: copyVersion } } as never)
+      : null,
+    completed: false,
+    consent_recorded: recorded,
+  };
+}
+
+async function renderGate(read: () => Promise<OnboardingStateResponse | null>) {
+  return await render(
+    <CommunityTermsGate readOnboarding={read}>
+      <Text testID="community-content">Community feed</Text>
+    </CommunityTermsGate>,
+  );
+}
+
+beforeEach(() => {
+  mockStore.clear();
+  mockSet.mockClear();
+  mockUserId = 'u-me';
+  mockRole = 'student';
+});
+
+describe('CommunityTermsGate after the one-box Before we start (STORE-E4)', () => {
+  it.each([CONSULT_CONSENT_ONE_BOX_COPY_VERSION, CONSULT_CONSENT_ONE_BOX_COACH_FREE_COPY_VERSION])(
+    'a client who agreed to %s opens Community straight away and the phone remembers it',
+    async (version) => {
+      const read = jest.fn(async () => stateWith(version));
+      const screen = await renderGate(read);
+      expect(await screen.findByTestId('community-content')).toBeTruthy();
+      expect(screen.queryByTestId('community-terms-gate')).toBeNull();
+      expect(read).toHaveBeenCalledTimes(1);
+      expect(mockSet).toHaveBeenCalledWith(communityTermsKey('u-me'), expect.any(String));
+    },
+  );
+
+  it('a client who agreed to the older screen still sees the gate', async () => {
+    const screen = await renderGate(async () => stateWith(CONSULT_CONSENT_COPY_VERSION));
+    expect(await screen.findByTestId('community-terms-gate')).toBeTruthy();
+    expect(screen.queryByTestId('community-content')).toBeNull();
+    expect(mockSet).not.toHaveBeenCalled();
+  });
+
+  it('no current agreement on file or no P0 answer: the gate shows', async () => {
+    for (const read of [
+      async () => stateWith(CONSULT_CONSENT_ONE_BOX_COPY_VERSION, false),
+      async () => stateWith(null),
+    ]) {
+      mockStore.clear();
+      const screen = await renderGate(read);
+      expect(await screen.findByTestId('community-terms-gate')).toBeTruthy();
+      expect(screen.queryByTestId('community-content')).toBeNull();
+      await screen.unmount();
+    }
+    expect(mockSet).not.toHaveBeenCalled();
+  });
+
+  it('FR-E4M: an unreadable record shows the did-not-load line, and Try again reads again and opens', async () => {
+    let calls = 0;
+    const read = jest.fn(async () => {
+      calls += 1;
+      if (calls === 1) throw new Error('offline');
+      return stateWith(CONSULT_CONSENT_ONE_BOX_COPY_VERSION);
+    });
+    const screen = await renderGate(read);
+    expect(await screen.findByTestId('community-terms-unknown')).toBeTruthy();
+    expect(screen.getByText('Your community did not load. Check your connection, then try again.')).toBeTruthy();
+    expect(screen.queryByTestId('community-terms-gate')).toBeNull();
+    expect(screen.queryByTestId('community-content')).toBeNull();
+    expect(mockSet).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByTestId('community-terms-retry'));
+    expect(await screen.findByTestId('community-content')).toBeTruthy();
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(mockSet).toHaveBeenCalledWith(communityTermsKey('u-me'), expect.any(String));
+  });
+
+  it('FR-E4M: Try again after a read that still fails stays on the did-not-load line; a real no-agreement read asks', async () => {
+    const answers: Array<() => Promise<OnboardingStateResponse | null>> = [
+      async () => null,
+      async () => {
+        throw new Error('500');
+      },
+      async () => stateWith(CONSULT_CONSENT_COPY_VERSION),
+    ];
+    const read = jest.fn(async () => answers.shift()!());
+    const screen = await renderGate(read);
+    expect(await screen.findByTestId('community-terms-unknown')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('community-terms-retry'));
+    await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+    expect(await screen.findByTestId('community-terms-unknown')).toBeTruthy();
+    expect(screen.queryByTestId('community-terms-agree')).toBeNull();
+    await fireEvent.press(screen.getByTestId('community-terms-retry'));
+    expect(await screen.findByTestId('community-terms-gate')).toBeTruthy();
+    expect(read).toHaveBeenCalledTimes(3);
+  });
+
+  it('FR-E4M: the did-not-load view keeps the coach-style Back when the stack gives one', async () => {
+    const onBack = jest.fn();
+    const screen = await render(
+      <CommunityTermsGate readOnboarding={async () => null} onBack={onBack}>
+        <Text testID="community-content">Community feed</Text>
+      </CommunityTermsGate>,
+    );
+    expect(await screen.findByTestId('community-terms-unknown')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('community-terms-back'));
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('a coach keeps the gate and the record is not read', async () => {
+    mockRole = 'coach';
+    const read = jest.fn(async () => stateWith(CONSULT_CONSENT_ONE_BOX_COPY_VERSION));
+    const screen = await renderGate(read);
+    expect(await screen.findByTestId('community-terms-gate')).toBeTruthy();
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it('a stored agreement opens Community without reading the record', async () => {
+    mockStore.set(communityTermsKey('u-me'), '2026-10-01T00:00:00.000Z');
+    const read = jest.fn(async () => null);
+    const screen = await renderGate(read);
+    expect(await screen.findByTestId('community-content')).toBeTruthy();
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it('agreedToCommunityInConsultation needs agreed: true on a one-box version', () => {
+    expect(agreedToCommunityInConsultation(stateWith(CONSULT_CONSENT_ONE_BOX_COPY_VERSION))).toBe(true);
+    expect(agreedToCommunityInConsultation(stateWith(CONSULT_CONSENT_COPY_VERSION))).toBe(false);
+    expect(agreedToCommunityInConsultation(null)).toBe(false);
+    expect(
+      agreedToCommunityInConsultation({
+        answers: { P0: { agreed: false, copy_version: CONSULT_CONSENT_ONE_BOX_COPY_VERSION } } as never,
+        completed: false,
+        consent_recorded: true,
+      }),
+    ).toBe(false);
+  });
+});

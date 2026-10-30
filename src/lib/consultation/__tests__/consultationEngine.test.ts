@@ -311,8 +311,12 @@ describe('validation', () => {
     }
     expect(cur({ ...ok, copy_version: 'consult-consent-v16-coach-free' })).toBe(true);
     expect(cur({ ...ok, copy_version: 'consult-consent-v17-coach-free' })).toBe(true);
-    expect(cur({ ...ok, copy_version: 'consult-consent-v19' })).toBe(false);
-    expect(cur({ ...ok, copy_version: 'consult-consent-v18-coach-free' })).toBe(false);
+    // STORE-E4 (owner #184-E5 / #184-E6 op 1): the one-box screens this build shows count too.
+    expect(cur({ ...ok, copy_version: 'consult-consent-v19' })).toBe(true);
+    expect(cur({ ...ok, copy_version: 'consult-consent-v18-coach-free' })).toBe(true);
+    // The next numbers do not.
+    expect(cur({ ...ok, copy_version: 'consult-consent-v20' })).toBe(false);
+    expect(cur({ ...ok, copy_version: 'consult-consent-v19-coach-free' })).toBe(false);
     for (const v of [
       'consult-consent-v3',
       'consult-consent-v4',

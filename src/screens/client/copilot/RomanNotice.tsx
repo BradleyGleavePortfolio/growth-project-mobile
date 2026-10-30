@@ -17,7 +17,7 @@ import { useTheme } from '../../../theme/ThemeProvider';
 import { colors, forestPop, radius, withAlpha } from '../../../theme/tokens';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import RomanAvatar from '../../../components/roman/RomanAvatar';
-import AiRefusalNotice, { AI_REFUSAL_ACTIONS } from '../../../components/ai/AiRefusalNotice';
+import AiRefusalNotice, { AI_REFUSAL_ACTIONS, consentSheetVariantFor } from '../../../components/ai/AiRefusalNotice';
 import AiConsentSheet from '../../../components/ai/AiConsentSheet';
 import { useOpenSupport } from '../../../components/ai/useOpenSupport';
 import { aiRefusalCopy, type AiRefusal } from '../../../lib/ai/aiRefusal';
@@ -51,7 +51,8 @@ export function CopilotRefusal({ refusal, onRetry, testID }: { refusal: AiRefusa
     <RomanNotice title={copy.title} body={copy.body} testID={testID}>
       <LedgerButton label={AI_REFUSAL_ACTIONS.allow} onPress={() => setOpen(true)} haptic={false} testID={`${testID}-allow`} />
       <AiConsentSheet visible={open} onGranted={() => { setOpen(false); onRetry(); }} onClose={() => setOpen(false)}
-        onContactSupport={support ? () => void support() : undefined} testID={`${testID}-consent-sheet`} />
+        onContactSupport={support ? () => void support() : undefined} variant={consentSheetVariantFor('roman')}
+        testID={`${testID}-consent-sheet`} />
     </RomanNotice>
   );
 }

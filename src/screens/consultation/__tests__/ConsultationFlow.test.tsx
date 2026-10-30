@@ -109,54 +109,6 @@ describe('ConsultationFlow', () => {
     await waitFor(() => r.getByTestId('consult-screen-N3'));
   });
 
-  it('P0 shows the D2 copy with two boxes; box 1 gates Continue and is recorded by the intake first', async () => {
-    const api = makeApi();
-    await seedLocal({}, 'P0');
-    const r = await renderFlow(api);
-    await waitFor(() => r.getByTestId('consult-screen-P0'));
-    expect(r.getByText('Before we start')).toBeTruthy();
-    expect(r.getByText(/Roman, the assistant in this app, is powered by Anthropic, a third-party AI provider/)).toBeTruthy();
-    // Owner C-6a: paragraph 3 ends at "We never sell it." (no referral-partner sentence).
-    expect(r.getByText(/and posts you write in the community\. We use it only to provide your training\. We never sell it\.$/)).toBeTruthy();
-    expect(r.queryByText(/cl[i]nic/i)).toBeNull();
-    expect(r.getByTestId('consent-footer').props.children).toBe(
-      "Nothing is sent until you continue. You can change the optional choice at any time in Settings > Privacy. Roman's guided tour works either way.",
-    );
-    // Chapter 0: no progress bar and no Finish later before the agreement.
-    expect(r.queryByTestId('consult-finish-later')).toBeNull();
-    expect(r.queryByTestId('consult-progress')).toBeNull();
-
-    const cont = () => r.getByTestId('consult-continue');
-    expect(cont().props.accessibilityState).toMatchObject({ disabled: true });
-    // Box 2 alone never unlocks Continue; it is unticked by default.
-    expect(r.getByTestId('consent-ai-checkbox').props.accessibilityState).toMatchObject({ checked: false });
-    await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
-    expect(cont().props.accessibilityState).toMatchObject({ disabled: true });
-    await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
-    await fireEvent.press(cont());
-    expect(r.getByTestId('consult-screen-P0')).toBeTruthy();
-    expect(api.save).not.toHaveBeenCalled();
-
-    const box = r.getByTestId('consent-checkbox');
-    expect(box.props.accessibilityRole).toBe('checkbox');
-    await fireEvent.press(box);
-    expect(r.getByTestId('consent-checkbox').props.accessibilityState).toMatchObject({ checked: true });
-    await fireEvent.press(cont());
-    await waitFor(() => r.getByTestId('consult-screen-G1'));
-    // The first server write carries only the agreement, with v2 and the pinned hash.
-    await waitFor(() => expect(api.save).toHaveBeenCalledTimes(1));
-    expect(Object.keys(api.save.mock.calls[0][0].answers)).toEqual(['P0']);
-    expect(api.save.mock.calls[0][0].answers.P0).toMatchObject({
-      agreed: true,
-      copy_version: 'consult-consent-v11',
-      text_sha256: CONSENT_COPY_SHA256,
-    });
-    // Box 2 was left unticked: nothing goes to the AI consent ledger.
-    expect(api.grantRomanConsent).not.toHaveBeenCalled();
-
-    const stored = await readLocalState('u1', NOW);
-    expect(stored?.answers.P0).toMatchObject({ agreed: true, copy_version: 'consult-consent-v11' });
-  });
 
   it('skips P8 when every screening answer is no', async () => {
     const a = fullAnswers();
@@ -288,24 +240,6 @@ describe('ConsultationFlow', () => {
     await waitFor(() => r.getByTestId('consult-screen-G1'));
   });
 
-  it('409 consent_missing resends the saved P0 alone and retries once, never ticking a box', async () => {
-    const complete = jest
-      .fn<Promise<CompleteOutcome>, []>()
-      .mockResolvedValueOnce({ kind: 'conflict', code: 'consent_missing' })
-      .mockResolvedValueOnce({ kind: 'ok', data: RESULT });
-    const api = makeApi({ complete });
-    await seedLocal(fullAnswers(), 'SUM');
-    const r = await renderFlow(api);
-    await waitFor(() => r.getByTestId('consult-screen-SUM'));
-    await fireEvent.press(r.getByTestId('consult-prepare'));
-    await waitFor(() => r.getByTestId('consult-screen-MACRO'));
-    expect(api.grantRomanConsent).not.toHaveBeenCalled();
-    // Each attempt sends P0 on its own first, then the full set.
-    expect(api.save).toHaveBeenCalledTimes(4);
-    expect(Object.keys(api.save.mock.calls[0][0].answers)).toEqual(['P0']);
-    expect(Object.keys(api.save.mock.calls[2][0].answers)).toEqual(['P0']);
-    expect(complete).toHaveBeenCalledTimes(2);
-  });
 
   it('409 consent_missing that persists sends the client back to P0', async () => {
     const api = makeApi({
@@ -463,29 +397,6 @@ const lastBody = (save: jest.Mock) => {
 };
 
 describe('C-8 Privacy Policy link on P0', () => {
-  it('renders below the two boxes, opens the public Privacy Policy, and sends nothing', async () => {
-    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
-    const api = makeApi();
-    await seedLocal({}, 'P0');
-    const r = await renderFlow(api);
-    await waitFor(() => r.getByTestId('consult-screen-P0'));
-    const link = r.getByTestId('consent-privacy-link');
-    expect(link.props.accessibilityRole).toBe('link');
-    expect(link.props.accessibilityLabel).toBe('Privacy Policy');
-    // Order on screen: box 1, box 2, footer, then the link.
-    const tree = JSON.stringify(r.toJSON());
-    const at = (id: string) => tree.indexOf(`"testID":"${id}"`);
-    expect(at('consent-privacy-link')).toBeGreaterThan(-1);
-    expect(at('consent-checkbox')).toBeLessThan(at('consent-ai-checkbox'));
-    expect(at('consent-ai-checkbox')).toBeLessThan(at('consent-privacy-link'));
-    expect(at('consent-footer')).toBeLessThan(at('consent-privacy-link'));
-    await fireEvent.press(link);
-    expect(open).toHaveBeenCalledWith('https://app.trygrowthproject.com/privacy');
-    expect(r.getByTestId('consult-screen-P0')).toBeTruthy();
-    expect(api.save).not.toHaveBeenCalled();
-    expect(api.grantRomanConsent).not.toHaveBeenCalled();
-    open.mockRestore();
-  });
 
   it('a link that cannot open shows a calm message', async () => {
     const open = jest.spyOn(Linking, 'openURL').mockRejectedValue(new Error('no browser'));

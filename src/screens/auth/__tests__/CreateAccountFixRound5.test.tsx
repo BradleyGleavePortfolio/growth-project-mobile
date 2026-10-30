@@ -124,6 +124,11 @@ async function renderScreen(params?: { invite_code?: string }, role: 'client' | 
     // Prototype ROLE (01): a row tap selects, Continue commits.
     await fireEvent.press(utils.getByTestId(`role-choice-${role}`));
     await fireEvent.press(utils.getByTestId('role-choice-continue'));
+    // STORE-E4 (PERM-W4): the coach form's required box is ticked before signing up.
+    {
+      const coachTerms = (utils as unknown as { queryByTestId: (id: string) => unknown }).queryByTestId('create-account-coach-terms');
+      if (coachTerms) await fireEvent.press(coachTerms as never);
+    }
   }
   return { nav, ...utils };
 }

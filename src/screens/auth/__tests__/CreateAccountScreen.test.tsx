@@ -50,13 +50,14 @@ jest.mock('../../../utils/googleAuth', () => ({
 }));
 
 jest.mock('../../../components/AppleSignInButton', () => {
-  const { TouchableOpacity, Text } = jest.requireActual('react-native');
+  const { Pressable, Text } = jest.requireActual('react-native');
   return {
     __esModule: true,
-    default: ({ onPress }: { onPress: () => void }) => (
-      <TouchableOpacity testID="apple-button" onPress={onPress}>
+    // Pressable, like the native button: a disabled state is read out but does not block the press.
+    default: ({ onPress, accessibilityState }: { onPress: () => void; accessibilityState?: object }) => (
+      <Pressable testID="apple-button" onPress={onPress} accessibilityState={accessibilityState}>
         <Text>Apple</Text>
-      </TouchableOpacity>
+      </Pressable>
     ),
   };
 });
@@ -95,6 +96,7 @@ import { CoachSignupUnavailableError } from '../../../lib/intendedRole';
 import { SIGNUP_ROLE_NOTICE_KEY } from '../../../lib/signupRoleNotice';
 import { COACH_SIGNUP_UNCONFIRMED_KEY, rememberUnconfirmedCoachSignup } from '../../../lib/coachSignupAttempt';
 import { colors, darkTokens, lightTokens } from '../../../theme/tokens';
+import { Spacing } from '../../../theme';
 
 function makeNav() {
   return { replace: jest.fn(), navigate: jest.fn() };
@@ -110,12 +112,25 @@ const ROLE_CHOICE_POLICY = {
 };
 
 // Prototype ROLE (01): a row tap selects, Continue commits.
+// STORE-E4: whether chooseRole ticks the coach form's required box (the box test opts out).
+let mockTickCoachTerms = true;
+
 async function chooseRole(utils: { findByTestId: (id: string) => Promise<unknown>; getByTestId: (id: string) => unknown }, role: 'client' | 'coach') {
   await fireEvent.press((await utils.findByTestId(`role-choice-${role}`)) as never);
   await fireEvent.press(utils.getByTestId('role-choice-continue') as never);
+  // STORE-E4 (PERM-W4): the coach form's required box is ticked before signing up.
+  {
+    const coachTerms = (utils as unknown as { queryByTestId: (id: string) => unknown }).queryByTestId('create-account-coach-terms');
+    if (coachTerms && mockTickCoachTerms) await fireEvent.press(coachTerms as never);
+  }
 }
 
-async function renderScreen(params?: { invite_code?: string }, role: 'client' | 'coach' | null = 'client') {
+async function renderScreen(
+  params?: { invite_code?: string },
+  role: 'client' | 'coach' | null = 'client',
+  tickCoachTerms = true,
+) {
+  mockTickCoachTerms = tickCoachTerms;
   const nav = makeNav();
   const utils = await render(
     <CreateAccountScreen navigation={nav as never} route={params ? { params } : undefined} />,
@@ -605,29 +620,86 @@ describe('CreateAccountScreen', () => {
       expect(utils.nav.replace).not.toHaveBeenCalled();
     });
 
-    it.each([true, false])('COACH-AI-CONSENT: the optional, unticked Roman box grants only when ticked (%s), after the account exists', async (tick) => {
+    it('STORE-E4 (PERM-W4): the coach form has one required, unticked box; sign-up waits for it', async () => {
       mockGetSignupPolicy.mockResolvedValue({ data: ROLE_CHOICE_POLICY });
       mockSignInWithApple.mockResolvedValue({ success: true, is_new_user: true, user: { id: 'c1', role: 'coach' } });
-      const utils = await renderScreen(undefined, 'coach');
-      const box = utils.getByTestId('create-account-roman');
+      const utils = await renderScreen(undefined, 'coach', false);
+      const box = utils.getByTestId('create-account-coach-terms');
       expect(box.props.accessibilityState).toMatchObject({ checked: false });
       expect(StyleSheet.flatten(box.props.style).backgroundColor).toBe(colors.cream);
-      // In the form (its last item), never in the pinned footer that holds Create account.
-      expect(within(utils.getByTestId('create-account-register-scroll')).getByTestId('create-account-roman')).toBeTruthy();
-      expect(within(utils.getByTestId('create-account-register-footer')).queryByTestId('create-account-roman')).toBeNull();
-      expect(utils.getByText('Turn on Roman')).toBeTruthy();
-      expect(utils.getByText(/^Roman runs on Anthropic, an outside AI company\./)).toBeTruthy();
-      if (tick) await fireEvent.press(box);
-      expect(mockCoachGrant).not.toHaveBeenCalled();
+      // In the form, never in the pinned footer that holds Create account.
+      expect(within(utils.getByTestId('create-account-register-scroll')).getByTestId('create-account-coach-terms')).toBeTruthy();
+      expect(within(utils.getByTestId('create-account-register-footer')).queryByTestId('create-account-coach-terms')).toBeNull();
+      // Owner #186-P3 op 1: just above Apple and Google (the next item is the row that holds them), above every field.
+      const form = JSON.stringify(utils.toJSON());
+      const at = (id: string) => form.indexOf(`"testID":"${id}"`);
+      expect(at('create-account-coach-terms-place')).toBeGreaterThan(-1);
+      expect(at('create-account-coach-terms-place')).toBeLessThan(at('create-account-providers'));
+      expect(at('create-account-providers')).toBeLessThan(at('apple-button'));
+      expect(at('apple-button')).toBeLessThan(form.indexOf('"accessibilityLabel":"Email"'));
+      expect(
+        utils.getByText(
+          'I agree to the Terms of Service and Privacy Policy, and TGP Fitness may send me service and plan notices.',
+        ),
+      ).toBeTruthy();
+      expect(utils.queryByText('Turn on Roman')).toBeNull();
+      expect(utils.getByTestId('create-account-submit').props.accessibilityState).toMatchObject({ disabled: true });
+      await fireEvent.press(utils.getByTestId('apple-button'));
+      expect(mockSignInWithApple).not.toHaveBeenCalled();
+      await fireEvent.press(box);
+      expect(utils.getByTestId('create-account-submit').props.accessibilityState).toMatchObject({ disabled: false });
       await fireEvent.press(utils.getByTestId('apple-button'));
       await waitFor(() => expect(mockEmit).toHaveBeenCalled());
-      expect(mockCoachGrant).toHaveBeenCalledTimes(tick ? 1 : 0);
-      expect(mockMarkAsked).toHaveBeenCalledWith('c1');
+      // Roman is asked the first time the coach opens Roman, never here.
+      expect(mockCoachGrant).not.toHaveBeenCalled();
+      expect(mockMarkAsked).not.toHaveBeenCalled();
     });
 
-    it('COACH-AI-CONSENT: the client form has no Roman box', async () => {
+    it('LO-E4 B2: a tap on a waiting sign-up button brings the unticked box into view and focuses it', async () => {
+      mockGetSignupPolicy.mockResolvedValue({ data: { ...ROLE_CHOICE_POLICY, providers: ['email', 'google', 'apple'] } });
+      const { ScrollView: MockScrollView, AccessibilityInfo: MockA11y } = jest.requireActual<typeof import('react-native')>('react-native');
+      const scrollTo = (MockScrollView.prototype as unknown as { scrollTo: jest.Mock }).scrollTo;
+      const focus = jest.spyOn(MockA11y, 'sendAccessibilityEvent');
+      scrollTo.mockClear();
+      const utils = await renderScreen(undefined, 'coach', false);
+      await fireEvent(utils.getByTestId('create-account-coach-terms-place'), 'layout', {
+        nativeEvent: { layout: { x: 0, y: 900, width: 360, height: 80 } },
+      });
+      const google = utils.getByLabelText('Continue with Google');
+      // Each waiting button reads as disabled itself, not only through the row around it.
+      for (const button of [utils.getByTestId('create-account-submit'), utils.getByTestId('apple-button'), google]) {
+        expect(button.props.accessibilityState).toMatchObject({ disabled: true });
+      }
+      for (const id of ['create-account-submit', 'apple-button']) {
+        scrollTo.mockClear();
+        focus.mockClear();
+        await fireEvent.press(utils.getByTestId(id));
+        expect(scrollTo).toHaveBeenCalledWith({ y: 900 - Spacing.lg, animated: true });
+        expect(focus).toHaveBeenCalledWith(expect.anything(), 'focus');
+      }
+      scrollTo.mockClear();
+      await fireEvent.press(google);
+      expect(scrollTo).toHaveBeenCalledTimes(1);
+      expect(mockSignInWithApple).not.toHaveBeenCalled();
+      expect(mockSignInWithGoogle).not.toHaveBeenCalled();
+      expect(mockRegister).not.toHaveBeenCalled();
+      // Ticked: the same buttons sign up and no longer read as disabled.
+      await fireEvent.press(utils.getByTestId('create-account-coach-terms'));
+      for (const button of [utils.getByTestId('apple-button'), utils.getByLabelText('Continue with Google')]) {
+        expect(button.props.accessibilityState).toMatchObject({ disabled: false });
+      }
+      scrollTo.mockClear();
+      await fireEvent.press(utils.getByTestId('apple-button'));
+      await waitFor(() => expect(mockSignInWithApple).toHaveBeenCalled());
+      expect(scrollTo).not.toHaveBeenCalled();
+      focus.mockRestore();
+    });
+
+    it('STORE-E4: the client form has no coach box (the client agrees at Before we start)', async () => {
       mockGetSignupPolicy.mockResolvedValue({ data: ROLE_CHOICE_POLICY });
-      expect((await renderScreen(undefined, 'client')).queryByTestId('create-account-roman')).toBeNull();
+      const utils = await renderScreen(undefined, 'client');
+      expect(utils.queryByTestId('create-account-coach-terms')).toBeNull();
+      expect(utils.queryByTestId('create-account-roman')).toBeNull();
     });
 
     it('F4: Apple coach choice on an EXISTING provider account: signed in, and told the choice did not apply', async () => {

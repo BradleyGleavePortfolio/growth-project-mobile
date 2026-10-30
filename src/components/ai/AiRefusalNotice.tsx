@@ -42,6 +42,12 @@ export const AI_REFUSAL_ACTIONS = {
   copied: 'Reference copied',
 } as const;
 
+/** LS-E4 R1_B2: the client consent sheet each surface opens; Roman's asks (here, RomanConsentGate, Copilot) are
+ * "Before Roman answers", PERM-W3 first. */
+export function consentSheetVariantFor(surface: AiSurface): 'default' | 'beforeAnswer' {
+  return surface === 'roman' ? 'beforeAnswer' : 'default';
+}
+
 export interface AiRefusalNoticeProps {
   refusal: AiRefusal;
   audience: AiAudience;
@@ -169,6 +175,7 @@ export default function AiRefusalNotice({
           onContactSupport={openSupport ? () => void openSupport() : undefined}
           api={consentApi}
           {...(consentSessionUserId ? { sessionUserId: consentSessionUserId } : {})}
+          variant={consentSheetVariantFor(surface)}
           testID={`${testID}-consent-sheet`}
         />
       ) : null}

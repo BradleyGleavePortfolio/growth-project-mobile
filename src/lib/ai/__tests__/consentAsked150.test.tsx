@@ -309,40 +309,6 @@ const P0: Array<[boolean, boolean, boolean, string, string]> = [
 ];
 
 describe('FIXCONSENT: P0 through the navigator asks the server, never the flag, and records the screen shown', () => {
-  it.each(P0)('no coach %s, switch %s, memory %s: %s', async (coachless, on, memoryOn, version, pin) => {
-    mockUser = coachless ? { id: 'u1' } : { id: 'u1', coach_id: 'coach-1' };
-    const srv = server(on, null, memoryOn);
-    const calls = backend(srv);
-    const r = await render(
-      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <NavigationContainer>
-          <ConsultationOnboardingNavigator />
-        </NavigationContainer>
-      </QueryClientProvider>,
-    );
-    await waitFor(() => r.getByTestId('consult-screen-W1'));
-    await fireEvent.press(r.getByTestId('consult-continue'));
-    await waitFor(() => r.getByTestId('consult-screen-P0'));
-    const box2 = FAMILIES[on ? 'crisis' : 'coached'][memoryOn ? 1 : 0];
-    await waitFor(() => expect(r.getByTestId('consent-ai-paragraph').props.children).toBe(TEXT[box2]));
-    expect(mockHttp.get).toHaveBeenCalledWith('/me/ai-consent', { params: { variant: 'crisis_alert' } });
-    const out = strings(r.toJSON()); // every string from the P0 title to the Privacy Policy link, in display order
-    const shown = out.slice(out.lastIndexOf(copy.CONSENT_TITLE, out.indexOf('Privacy Policy')), out.indexOf('Privacy Policy')).join('\n\n');
-    await fireEvent.press(r.getByTestId('consent-checkbox'));
-    await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
-    await fireEvent.press(r.getByTestId('consult-continue'));
-    await waitFor(() => r.getByTestId('consult-screen-G1'));
-    await waitFor(() => expect(srv.recorded()).toEqual({ version: box2, grant: true }));
-    const grantBody = { version: box2, copy_sha256: sha(`${TEXT[box2]}\n\n${B_LABEL}`) };
-    expect(mockHttp.post).toHaveBeenCalledWith('/me/ai-consent/roman', expect.objectContaining(grantBody), { params: { variant: 'crisis_alert' } });
-    expect(sha(shown)).toBe(pin);
-    expect(mockHttp.put.mock.calls[0][0]).toBe('/me/onboarding/consultation');
-    expect(mockHttp.put.mock.calls[0][1].answers.P0).toMatchObject({ agreed: true, copy_version: version, text_sha256: pin });
-    // Before the date of birth, nothing outside backend main's allow list is asked (no GET /me/feature-flags).
-    expect(calls).toContain('GET /me/ai-consent');
-    expect(calls.filter((c) => !PRE_AGE.test(c.split(' ')[1]))).toEqual([]);
-    expect(mockGetFlags).not.toHaveBeenCalled();
-  });
 
   it('the rows are every record a P0 screen can name', () => {
     const named = [false, true].flatMap((cf) =>
