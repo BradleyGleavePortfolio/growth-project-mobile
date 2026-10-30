@@ -18,10 +18,8 @@
  * STORE-E4 (owner #184-E5 / #184-E6 op 1): a client whose "Before we start" box included the community
  * guidelines (consult-consent-v19 / v18-coach-free, the server's record) is not asked again; coaches and
  * clients who agreed to an older screen keep this gate.
- *
- * FR-E4M (LS-E4 R1_B1): for a client with no mark on this phone, a record that could not be read (offline,
- * a server error, or no record endpoint) is not evidence that another agreement is needed. Community stays
- * closed and the person sees the app's own "did not load" line with Try again, never the agreement.
+ * LS-E4 R1_B1: an unreadable record (offline, server error, no endpoint) is not a reason to ask again; the person
+ * sees the app's own "did not load" line with Try again, never the agreement.
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';

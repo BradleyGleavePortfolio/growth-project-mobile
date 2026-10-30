@@ -275,8 +275,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   const [coachTermsAgreed, setCoachTermsAgreed] = useState(false);
   // PERM-W4: a coach signs up (email, Apple or Google) only once the box is ticked.
   const coachTermsMissing = isCoachSignup && !coachTermsAgreed;
-  // LO-E4 B2 (operator ruling, option 1): a tap on a waiting sign-up button (the box unticked) brings the
-  // box into view and moves screen-reader focus to it, so the person learns what the button waits for.
+  // LO-E4 B2: a tap on a waiting sign-up button brings the unticked box into view and moves screen-reader focus to it.
   const formScrollRef = useRef<ScrollView>(null);
   const coachTermsRef = useRef<View>(null);
   const coachTermsY = useRef(0);
@@ -1319,8 +1318,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
 
   return (
     <Screen
-      // Its own key: the role step's Screen would otherwise be reused, and a reused scroll area never
-      // hands its node to scrollRef (RNWeb attaches a forwarded ref once, at mount).
+      // Own key: a scroll area reused from the role step never hands its node to scrollRef (RNWeb, at least).
       key="register"
       testID="create-account-register"
       scrollRef={formScrollRef}
@@ -1442,8 +1440,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
           </View>
         ) : null}
 
-        {/* STORE-E4 (PERM-W4); owner #186-P3 op 1: the box sits just above Apple and Google, so it is on
-            screen whenever the buttons it turns on are. */}
+        {/* PERM-W4 box; owner #186-P3 op 1: just above Apple and Google, on screen whenever they are. */}
         {isCoachSignup ? (
           <View
             style={styles.coachTermsPlace}
