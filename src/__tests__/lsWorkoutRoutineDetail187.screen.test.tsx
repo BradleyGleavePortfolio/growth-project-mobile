@@ -100,7 +100,7 @@ it('B-LS-WORKOUT-2 opens the existing exercise instructions from a saved routine
   const detail = await render(<ExerciseDetailScreen {...{
     route: { key: 'detail', name: 'ExerciseDetail', params },
     navigation: {},
-  } as never} />);
+  } as unknown as React.ComponentProps<typeof ExerciseDetailScreen>} />);
   await waitFor(() => expect(detail.queryByTestId('exercise-detail-loading')).toBeNull());
   expect(detail.getByText('Lower under control.')).toBeTruthy();
 });
