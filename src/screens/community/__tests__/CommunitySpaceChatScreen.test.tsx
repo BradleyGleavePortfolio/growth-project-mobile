@@ -1732,7 +1732,7 @@ describe('LS-909 B-TEST quote access and reply recovery', () => {
       .map((m) => (m as { id: string }).id === 'reply1'
         ? { ...(m as object), parent: { id: 'm3', gone: true } } : m);
     await refresh();
-    expect(r.queryByTestId('space-chat-row-m3')).toBeNull();
+    await waitFor(() => expect(r.queryByTestId('space-chat-row-m3')).toBeNull());
     expect(r.queryByLabelText(`Replying to ${JO.name}`)).toBeNull();
   });
 
@@ -1762,8 +1762,8 @@ describe('LS-909 B-TEST quote access and reply recovery', () => {
     }), ...page.filter((m) => (m as { id: string }).id !== 'm3')];
     await refresh();
     await r.findByTestId('space-chat-row-reply1');
-    expect(r.queryByLabelText(/^Replying to jo b\.: body m3\. Dana Reyes, Waiting to send\. Queued reply$/)).toBeNull();
     expect(mockDisk.get('space_outbox_me-1')).not.toContain('body m3');
+    expect(r.queryByLabelText(/^Replying to jo b\.: body m3\. Dana Reyes, Waiting to send\. Queued reply$/)).toBeNull();
   });
 
   it('LS909-B2: Announcements 422 puts the rejected reply and parent back in the field', async () => {
@@ -1813,7 +1813,7 @@ describe('LS-909 B-TEST quote access and reply recovery', () => {
     await fireEvent(r.getByTestId('space-chat-row-m3'), 'longPress');
     page = page.filter((m) => (m as { id: string }).id !== 'm3');
     await refresh();
-    expect(r.queryByTestId('space-chat-row-m3')).toBeNull();
+    await waitFor(() => expect(r.queryByTestId('space-chat-row-m3')).toBeNull());
     const copy = r.queryByTestId('space-chat-sheet-copy');
     if (copy) await fireEvent.press(copy);
     expect(Clipboard.setStringAsync).not.toHaveBeenCalled();
@@ -1844,7 +1844,7 @@ describe('LS-909 B-TEST quote access and reply recovery', () => {
     mockApi.get.mockImplementation((url: string, ...rest: unknown[]) => url.endsWith('/messages')
       ? new Promise(() => undefined) : answer(url, ...rest));
     await fireEvent.press(r.getByTestId('space-chat-menu-m3'));
-    expect(r.queryByTestId('space-chat-row-m3')).toBeNull();
+    await waitFor(() => expect(r.queryByTestId('space-chat-row-m3')).toBeNull());
     expect(within(r.getByTestId('space-chat-quote-reply1', { includeHiddenElements: true }))
       .queryByText('Blocked original', { includeHiddenElements: true })).toBeNull();
   });
