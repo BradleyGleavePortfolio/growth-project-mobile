@@ -275,11 +275,12 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
     };
   }, [navigation, loadStatus]);
 
-  // Deletion completed: clear the local session once.
+  // Deletion completed: clear the local session once. The server confirmed
+  // the deletion, so the account's kept marks go too (FR-898R3).
   useEffect(() => {
     if (phase === 'deleted' && !signedOut.current) {
       signedOut.current = true;
-      signOut();
+      signOut(undefined, { accountDeleted: true });
     }
   }, [phase]);
 

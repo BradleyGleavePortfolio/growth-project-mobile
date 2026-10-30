@@ -64,7 +64,12 @@ jest.mock('../../../../hooks/useNotifications', () => ({
 const mockMarkFirstPaymentSeen: jest.Mock<Promise<void>, [string]> = jest.fn(
   (_id: string): Promise<void> => Promise.resolve(),
 );
+// The host reads the persisted gate before it shows (B-LONOTIFY4-1); unseen here.
+const mockHasSeenFirstPayment: jest.Mock<Promise<boolean>, [string]> = jest.fn(
+  (_id: string): Promise<boolean> => Promise.resolve(false),
+);
 jest.mock('../firstPaymentGate', () => ({
+  hasSeenFirstPayment: (id: string) => mockHasSeenFirstPayment(id),
   markFirstPaymentSeen: (id: string) => mockMarkFirstPaymentSeen(id),
 }));
 
@@ -75,6 +80,8 @@ beforeEach(() => {
   mockCurrentUser = { id: 'coach-xyz', firstName: 'Marcus' };
   mockMarkFirstPaymentSeen.mockReset();
   mockMarkFirstPaymentSeen.mockReturnValue(Promise.resolve(undefined));
+  mockHasSeenFirstPayment.mockReset();
+  mockHasSeenFirstPayment.mockReturnValue(Promise.resolve(false));
 });
 
 async function renderHostWithEvent() {
@@ -236,5 +243,19 @@ describe('FirstPaymentWowHost — ED.3 (P1-3 dismiss ordering)', () => {
       await Promise.resolve();
     });
     expect(getByTestId('first-payment-wow')).toBeTruthy();
+  });
+
+  it('B-LONOTIFY4-1: never shows when the saved gate says this coach already saw it', async () => {
+    mockHasSeenFirstPayment.mockReturnValue(Promise.resolve(true));
+    const { queryByTestId } = await renderHostWithEvent();
+    expect(mockHasSeenFirstPayment).toHaveBeenCalledWith('coach-xyz');
+    expect(queryByTestId('first-payment-wow')).toBeNull();
+    expect(mockMarkFirstPaymentSeen).not.toHaveBeenCalled();
+  });
+
+  it('B-LONOTIFY4-1: still shows (and logs) when the saved gate cannot be read', async () => {
+    mockHasSeenFirstPayment.mockImplementation(() => Promise.reject(new Error('storage down')));
+    const { getByTestId } = await renderHostWithEvent();
+    await waitFor(() => expect(getByTestId('first-payment-wow')).toBeTruthy());
   });
 });
