@@ -1,0 +1,3 @@
+src/__tests__/(workout|assignedWorkout|liveWorkout|entitlementGateKeepsWorkout|syncEngine|activeWorkoutRoman)
+src/screens/client/__tests__/(ActiveWorkout|RoutineBuilder|WorkoutScreen|AssignedWorkout|ExerciseLibrary)
+src/api/__tests__/workoutBuilderApi.myAssignments.test.ts
