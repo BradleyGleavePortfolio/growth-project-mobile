@@ -251,6 +251,29 @@ it('Style C leads with the success moment, and Back from it finishes like Done (
   haptic.mockRestore();
 });
 
+it('LS-914R2 B2: success keeps See what unlocks and Done in the pinned footer, outside scrolling content', async () => {
+  mockBillingV2 = true;
+  jest.mocked(clientPaymentsApi.getPurchases).mockResolvedValueOnce({ ok: true, data: [{
+    id: 'purchase-1', package_id: 'pkg-monthly', status: 'active', entitlement_active: true,
+    access_expires_at: null, current_period_end: PLAN.next_charge_at, cancel_at_period_end: false,
+    canceled_at: null, created_at: '2026-10-30T12:00:00Z', amount_cents: 9900, currency: 'usd',
+    first_charge_cents: 9900, billing_type: 'recurring',
+  }] });
+  const r = await render(<ClientPackagesScreen />);
+  await waitFor(() => expect(r.getByTestId('plan-offer-pkg-monthly-open')).toBeTruthy());
+  await fireEvent.press(r.getByTestId('plan-offer-pkg-monthly-open'));
+  // The sale already uses the shared fixed footer; success must preserve that placement.
+  expect(within(r.getByTestId('client-plan-page-footer')).getByTestId('buy-plan-pkg-monthly')).toBeTruthy();
+  await fireEvent.press(r.getByTestId('buy-plan-pkg-monthly'));
+  await waitFor(() => expect(r.getByTestId('payment-see-unlocks')).toBeTruthy());
+  const footer = r.getByTestId('client-plan-page-footer');
+  expect(within(footer).getByTestId('payment-see-unlocks')).toBeTruthy();
+  expect(within(footer).getByTestId('payment-continue')).toBeTruthy();
+  const body = within(r.getByTestId('client-plan-page-body'));
+  expect(body.queryByTestId('payment-see-unlocks')).toBeNull();
+  expect(body.queryByTestId('payment-continue')).toBeNull();
+});
+
 it('Style C cannot open a plan when the scoped list read is denied', async () => {
   mockBillingV2 = true;
   jest.mocked(clientPaymentsApi.getPackages).mockResolvedValue({ ok: false, reason: 'error', message: 'Denied' });
