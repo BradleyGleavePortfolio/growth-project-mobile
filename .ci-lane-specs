@@ -1,0 +1,7 @@
+src/components/community
+src/screens/community
+src/hooks/__tests__/useSpace
+src/api/__tests__/community
+src/components/__tests__/HapticPressable
+src/ui/haptics/__tests__/haptics.service.test.ts
+src/services/__tests__/queryClient.signout.test.ts
