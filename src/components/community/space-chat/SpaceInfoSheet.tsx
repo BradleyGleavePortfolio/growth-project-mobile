@@ -11,8 +11,13 @@
  * Loading and could-not-load come from src/ui (QuietLoading, QuietError with Try again); Show more asks for the next 50.
  * No coach controls here: the coach's space page has them. Look: the safety sheet's (white, radius.sheet top corners,
  * grab), 44 pt targets, small grey text in graphite (owner #168-13).
+ * W897-CLOSE (agent 185, owner "#181-W2 - option 1"): a visible Close leads the header, where C6CHAT-S-V2 puts it (c07's
+ * Back, the X of v1/k07/p3, in forest): the community sheets' X (ChallengeProgressSheet) under the word the sheet already
+ * speaks, "Close" (C6-S-137). It closes as the scrim and Android Back do (onClose) and is the first thing VoiceOver reads,
+ * the sheet staying modal for it, so a screen reader user always has a way out.
  */
 import React from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { QuietOverline } from '../../../ui';
@@ -56,11 +61,19 @@ export default function SpaceInfoSheet(p: SpaceInfoSheetProps): React.ReactEleme
         <Pressable style={StyleSheet.absoluteFill} onPress={p.onClose} accessibilityRole="button" accessibilityLabel="Close" testID="space-info-scrim" />
         <View style={[s.sheet, { maxHeight: height * 0.85, paddingBottom: insets.bottom + spacing.xl }]} accessibilityViewIsModal onAccessibilityEscape={p.onClose} testID="space-info-sheet">
           <View style={s.grab} />
-          <View style={s.titleRow} accessible accessibilityRole="header">
-            <HashGlyph color={SMALL_GREY} />
-            <Text style={s.title} numberOfLines={2}>{p.name}</Text>
+          <View style={s.head}>
+            <HapticPressable intent="light" onPress={p.onClose} accessibilityRole="button" accessibilityLabel="Close" testID="space-info-close"
+              style={({ pressed }) => [s.close, pressed ? s.pressed : null]}>
+              <Ionicons name="close" size={22} color={fp.forest} />
+            </HapticPressable>
+            <View style={s.headText}>
+              <View style={s.titleRow} accessible accessibilityRole="header">
+                <HashGlyph color={SMALL_GREY} />
+                <Text style={s.title} numberOfLines={2}>{p.name}</Text>
+              </View>
+              <Text style={s.sub}>{p.members}</Text>
+            </View>
           </View>
-          <Text style={s.sub}>{p.members}</Text>
           <ScrollView style={s.scroll} contentContainerStyle={s.body} showsVerticalScrollIndicator={false} testID="space-info-scroll">
             {purpose ? <Text style={s.purpose} testID="space-info-purpose">{purpose}</Text> : null}
             {p.people === 'failed' ? (
@@ -149,6 +162,10 @@ const s = StyleSheet.create({
   scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: withAlpha(colors.ink, 0.4) },
   sheet: { backgroundColor: neutral[0], borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, paddingHorizontal: 20, paddingTop: 8, gap: 2 },
   grab: { width: 36, height: 5, borderRadius: 3, alignSelf: 'center', marginBottom: 10, backgroundColor: fp.sageLine },
+  // The Close leads the header (C6CHAT-S-V2): a 44 pt square, its X on the content edge; the name sits level with it.
+  head: { flexDirection: 'row', alignItems: 'flex-start' },
+  close: { width: 44, height: 44, alignItems: 'flex-start', justifyContent: 'center' },
+  headText: { flex: 1, minWidth: 0, paddingTop: 10 },
   titleRow: { flexDirection: 'row', alignItems: 'center' },
   title: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 19, lineHeight: 24, color: fp.ink, flexShrink: 1 },
   sub: { fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18, color: SMALL_GREY },
