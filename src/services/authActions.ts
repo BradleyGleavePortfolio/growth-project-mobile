@@ -46,6 +46,7 @@ import { firstPaymentSeenKey } from '../screens/coach/ed/firstPaymentGate';
 import { ROMAN_JOIN_OFFER_KEY_PREFIX } from '../lib/romanJoinOffer';
 import { deletionScheduledThisSession } from './deletionSchedule';
 import { releaseAgeHolds } from '../lib/ageGate';
+import { NOTIF_CATEGORY_PREFS_KEY } from '../storage/notificationCategoryPrefs';
 
 // Tokens live in SecureStore; everything else is plain AsyncStorage.
 const SECURE_SIGN_OUT_KEYS = [
@@ -99,6 +100,8 @@ const ASYNC_SIGN_OUT_KEYS = [
   // migrate it into their namespace and surface the previous user's
   // working set. See audit #2 / R15.
   '@activeWorkoutSession/v1',
+  // LS-908R2 B-R2-1 (STORE-B2): the notification category switches, the plan renewal offers yes among them.
+  NOTIF_CATEGORY_PREFS_KEY,
 ];
 // Prefixes whose every matching AsyncStorage key should be wiped on signOut.
 // Per-user namespaced data lives behind these prefixes; without enumeration the
