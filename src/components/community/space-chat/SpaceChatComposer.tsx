@@ -8,14 +8,17 @@
  * field to rephrase, with the thread's and the DMs' reason ("Please rephrase"), as soon as the field is empty: a newer
  * draft is never overwritten (the row keeps the text and the reason until then). Sent again it is a new message with
  * a new key; Try again on any other failure resends the same text with the same key.
+ * SC-M3 (agent 184): a reply sets ReplyComposer above the bar (who is answered, the quoted first line, Cancel reply) and
+ * puts the cursor in the field; a refused reply comes back with its quote. The mic is the screen's to leave out.
  */
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Alert, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useChatDraft } from '../../../lib/chatDrafts';
 import { forestPop as fp, neutral, spacing, typography, voiceShades } from '../../../theme/tokens';
 import { SPACE_MESSAGE_MAX } from './spaceChatApi';
 import { REJECTED_WORDS, spaceOutbox, useSpaceOutbox } from './spaceChatOutbox';
+import { ReplyComposer, type ReplyTarget } from '../../messaging/ReplyComposer';
 
 export interface SpaceChatComposerProps {
   cohortId: string;
@@ -26,43 +29,53 @@ export interface SpaceChatComposerProps {
   trailing?: React.ReactNode;
   /** FR-871R6 (m#879 Opus B1): the bottom safe area to keep clear while no tab bar is under the dock (0 otherwise). */
   bottomInset?: number;
+  /** SC-M3: the message being answered (reply mode), and how the screen sets or clears it. */
+  reply?: ReplyTarget | null;
+  onReply?: (target: ReplyTarget | null) => void;
 }
 
-export default function SpaceChatComposer({ cohortId, onSend, leading, trailing, bottomInset = 0 }: SpaceChatComposerProps): React.ReactElement {
+export default function SpaceChatComposer({ cohortId, onSend, leading, trailing, bottomInset = 0, reply, onReply }: SpaceChatComposerProps): React.ReactElement {
   const [text, setText] = useChatDraft(`space:${cohortId}`);
   const body = text.trim();
+  const field = useRef<TextInput>(null);
   const rejected = useSpaceOutbox(cohortId).find((r) => r.state === 'failed' && r.reason === 'rejected');
   useEffect(() => {
     if (!rejected || text.trim() !== '') return;
     setText(rejected.body);
+    if (rejected.reply) onReply?.(rejected.reply);
     spaceOutbox.discard(rejected.localId);
     Alert.alert(REJECTED_WORDS.title, REJECTED_WORDS.message);
-  }, [rejected, text, setText]);
+  }, [rejected, text, setText, onReply]);
+  useEffect(() => { if (reply) field.current?.focus(); }, [reply]);
   return (
-    <View style={[s.bar, leading ? null : s.noLead, bottomInset ? { paddingBottom: spacing.sm + bottomInset } : null]} testID="space-chat-composer">
-      {leading ? <View style={s.slot}>{leading}</View> : null}
-      <TextInput
-        value={text}
-        onChangeText={setText}
-        placeholder="Type a message..."
-        placeholderTextColor={fp.n700}
-        maxLength={SPACE_MESSAGE_MAX}
-        multiline
-        accessibilityLabel="Type a message..."
-        style={s.field}
-        testID="space-chat-composer-field"
-      />
-      <View style={s.slot}>
-        {body ? (
-          <TouchableOpacity
-            onPress={() => { onSend(body); setText(''); }}
-            accessibilityRole="button" accessibilityLabel="Send" style={s.send} testID="space-chat-composer-send"
-          >
-            <Ionicons name="arrow-up" size={20} color={fp.onDeep} />
-          </TouchableOpacity>
-        ) : trailing}
+    <>
+      {reply && onReply ? <ReplyComposer target={reply} onCancel={() => onReply(null)} /> : null}
+      <View style={[s.bar, leading ? null : s.noLead, bottomInset ? { paddingBottom: spacing.sm + bottomInset } : null]} testID="space-chat-composer">
+        {leading ? <View style={s.slot}>{leading}</View> : null}
+        <TextInput
+          ref={field}
+          value={text}
+          onChangeText={setText}
+          placeholder="Type a message..."
+          placeholderTextColor={fp.n700}
+          maxLength={SPACE_MESSAGE_MAX}
+          multiline
+          accessibilityLabel="Type a message..."
+          style={s.field}
+          testID="space-chat-composer-field"
+        />
+        <View style={s.slot}>
+          {body ? (
+            <TouchableOpacity
+              onPress={() => { onSend(body); setText(''); }}
+              accessibilityRole="button" accessibilityLabel="Send" style={s.send} testID="space-chat-composer-send"
+            >
+              <Ionicons name="arrow-up" size={20} color={fp.onDeep} />
+            </TouchableOpacity>
+          ) : trailing}
+        </View>
       </View>
-    </View>
+    </>
   );
 }
 

@@ -13,6 +13,7 @@ import { coachCommunityKeys } from '../../../hooks/useCoachCommunity';
 import { communityVoiceApi } from '../../../api/communityVoiceApi';
 import { isNoAccess, spaceChatApi, type SpaceMessage, type SpaceMessagePage } from './spaceChatApi';
 import { setSpaceOutboxOnline, spaceOutbox, startSpaceOutbox, useSpaceOutbox, type PendingRow } from './spaceChatOutbox';
+import type { ReplyTarget } from '../../messaging/ReplyComposer';
 
 export type { PendingRow, PendingState } from './spaceChatOutbox';
 
@@ -60,7 +61,7 @@ export function useSpaceChat(cohortId: string, userId: string | null, isOnline: 
     void qc.invalidateQueries({ queryKey: spaceChatKey(uid, id) });
   }), [qc, uid, cohortId]);
   const pending = useSpaceOutbox(cohortId);
-  const send = useCallback((body: string) => spaceOutbox.add(cohortId, body), [cohortId]);
+  const send = useCallback((body: string, reply?: ReplyTarget) => spaceOutbox.add(cohortId, body, reply), [cohortId]);
 
   const messages: SpaceMessage[] = useMemo(() => {
     const seen = new Set<string>();
