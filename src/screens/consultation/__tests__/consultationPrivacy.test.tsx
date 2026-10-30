@@ -39,7 +39,7 @@ import {
 } from '../../../lib/consultation/storage';
 import { signOut } from '../../../services/authActions';
 import { aiWithdrawalPendingKey, resetAiLedgerWritesForTests } from '../../../lib/consultation/aiConsent';
-import { AI_CONSENT_COPY_SHA256, AI_GRANT_NOTICE, AI_GRANT_UNCONFIRMED_NOTICE, AI_WITHDRAW_NOTICE, AI_WITHDRAW_UNCONFIRMED_LINE, CONSENT_COPY_SHA256, CONSULT_CONSENT_COPY_VERSION, SUPPORT_EMAIL, AI_CHOICE_UNKNOWN_LINE } from '../../../lib/consultation/copy';
+import { AI_CONSENT_COPY_SHA256, AI_GRANT_NOTICE, AI_GRANT_UNCONFIRMED_NOTICE, AI_WITHDRAW_NOTICE, AI_WITHDRAW_UNCONFIRMED_LINE, CONSENT_COPY_SHA256, CONSENT_COPY_SHA256_V19, CONSULT_CONSENT_COPY_VERSION, SUPPORT_EMAIL, oneBoxConsentScreenCopy, AI_CHOICE_UNKNOWN_LINE } from '../../../lib/consultation/copy';
 
 jest.mock('../../../services/api', () => ({
   __esModule: true,
@@ -236,9 +236,11 @@ describe('A-02 consent-first PUT (backend #607)', () => {
     await waitFor(() => expect(api.save).toHaveBeenCalledTimes(1));
     const first = api.save.mock.calls[0][0];
     expect(Object.keys(first.answers)).toEqual(['P0']);
-    expect(first.answers.P0).toMatchObject({ agreed: true, copy_version: 'consult-consent-v11', text_sha256: CONSENT_COPY_SHA256 });
-    expect(first.answers.P0.copy_version).toBe(CONSULT_CONSENT_COPY_VERSION);
-    // Only backend #607 P0 keys: box 2 is never part of the intake answer.
+    // STORE-E4 (owner #184-E5 / #184-E6 op 1): the displayed one-box screen is consult-consent-v19 (b#1188 pins).
+    expect(first.answers.P0).toMatchObject({ agreed: true, copy_version: 'consult-consent-v19', text_sha256: CONSENT_COPY_SHA256_V19 });
+    expect(first.answers.P0.copy_version).toBe(oneBoxConsentScreenCopy(false).version);
+    expect(first.answers.P0.text_sha256).toBe(oneBoxConsentScreenCopy(false).sha256);
+    // Only backend #607 P0 keys: no AI choice is part of the intake answer.
     expect(Object.keys(first.answers.P0).sort()).toEqual(['agreed', 'agreed_at', 'copy_version', 'text_sha256']);
   });
 
@@ -366,60 +368,16 @@ const httpErr = (status: number, code?: string) =>
   Object.assign(new Error(String(status)), { response: { status, data: code ? { code } : {} } });
 const offline = () => new Error('Network Error');
 
-/** P0 from a seeded draft, both boxes ticked, Continue: lands on G1. */
-async function continueWithBothBoxes(api: ConsultationApi, props: Partial<React.ComponentProps<typeof ConsultationFlow>> = {}) {
+/** P0 from a seeded draft, the one box ticked, Continue: lands on G1. */
+async function continueWithTheBox(api: ConsultationApi, props: Partial<React.ComponentProps<typeof ConsultationFlow>> = {}) {
   await seedLocal({}, 'P0');
   const r = await renderFlow(api, props);
   await waitFor(() => r.getByTestId('consult-screen-P0'));
   await fireEvent.press(r.getByTestId('consent-checkbox'));
-  await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
   await fireEvent.press(r.getByTestId('consult-continue'));
   await waitFor(() => r.getByTestId('consult-screen-G1'));
   return r;
 }
-
-const aiBox = (r: { getByTestId: (id: string) => { props: { accessibilityState?: { checked?: boolean } } } }) =>
-  r.getByTestId('consent-ai-checkbox').props.accessibilityState?.checked;
-
-describe('B-310-1 the box 2 grant waits for the agreement to land', () => {
-
-
-
-});
-
-describe('B-310-2 box 2 on P0 shows only confirmed results', () => {
-
-
-
-  it('GET /me/ai-consent is the truth when it answers: granted ticks box 2', async () => {
-    const api = makeApi({ getRomanConsent: jest.fn(async () => ({ kind: 'ok' as const, status: AI_ALLOWED })) });
-    await seedLocal({}, 'P0');
-    const r = await renderFlow(api);
-    await waitFor(() => r.getByTestId('consult-screen-P0'));
-    await waitFor(() => expect(aiBox(r)).toBe(true));
-  });
-
-  it('GET /me/ai-consent is the truth when it answers: withdrawn unticks a draft that said allowed', async () => {
-    const api = makeApi({ getRomanConsent: jest.fn(async () => ({ kind: 'ok' as const, status: aiStatus({ state: 'withdrawn', version: 'client-ai-v4' }) })) });
-    await seedLocal({}, 'P0', { aiRoman: true });
-    const r = await renderFlow(api);
-    await waitFor(() => r.getByTestId('consult-screen-P0'));
-    await waitFor(() => expect(aiBox(r)).toBe(false));
-  });
-
-
-
-});
-
-describe('B-310-3 / C-310-6 / C-310-7 the latest box 2 choice wins', () => {
-
-
-
-
-
-
-
-});
 
 describe('C-310-1 / C-310-3 completion guard and the way out of problem screens', () => {
   it('C-310-1: two synchronous taps on Prepare my plan complete once', async () => {
@@ -470,7 +428,7 @@ describe('C-310-1 / C-310-3 completion guard and the way out of problem screens'
   it('B-324-1: Contact support that cannot open an email app shows the address, Copy and Try again in place', async () => {
     const open = jest.spyOn(Linking, 'openURL').mockRejectedValue(new Error('no mail app'));
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-    const r = await continueWithBothBoxes(makeApi(), { onSignOut: jest.fn() });
+    const r = await continueWithTheBox(makeApi(), { onSignOut: jest.fn() });
     await fireEvent.press(r.getByTestId('consult-finish-later'));
     await waitFor(() => r.getByTestId('consult-paused'));
     expect(r.queryByTestId('consult-support-fallback')).toBeNull();
@@ -491,7 +449,7 @@ describe('C-310-1 / C-310-3 completion guard and the way out of problem screens'
   });
 
   it('C-310-3: the paused screen has the same way out', async () => {
-    const r = await continueWithBothBoxes(makeApi(), { onSignOut: jest.fn() });
+    const r = await continueWithTheBox(makeApi(), { onSignOut: jest.fn() });
     await fireEvent.press(r.getByTestId('consult-finish-later'));
     await waitFor(() => r.getByTestId('consult-paused'));
     expect(r.getByTestId('consult-resume')).toBeTruthy();
@@ -500,7 +458,7 @@ describe('C-310-1 / C-310-3 completion guard and the way out of problem screens'
   });
 
   it('C-310-3: without a sign-out handler only Contact support shows', async () => {
-    const r = await continueWithBothBoxes(makeApi());
+    const r = await continueWithTheBox(makeApi());
     await fireEvent.press(r.getByTestId('consult-finish-later'));
     await waitFor(() => r.getByTestId('consult-paused'));
     expect(r.getByTestId('consult-support')).toBeTruthy();

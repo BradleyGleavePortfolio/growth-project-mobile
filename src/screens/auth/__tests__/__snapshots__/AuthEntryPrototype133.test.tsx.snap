@@ -224,10 +224,19 @@ exports[`Create account (prototype 02) Android 360x800: role and create steps si
           </Text>
         </View>
         <View
-          style={
+          accessibilityState={
             {
-              "gap": 8,
+              "disabled": false,
             }
+          }
+          pointerEvents="auto"
+          style={
+            [
+              {
+                "gap": 8,
+              },
+              false,
+            ]
           }
           testID="create-account-providers"
         >
@@ -1792,10 +1801,19 @@ exports[`Create account (prototype 02) iPhone 390x844: role and create steps sit
           </Text>
         </View>
         <View
-          style={
+          accessibilityState={
             {
-              "gap": 8,
+              "disabled": false,
             }
+          }
+          pointerEvents="auto"
+          style={
+            [
+              {
+                "gap": 8,
+              },
+              false,
+            ]
           }
           testID="create-account-providers"
         >
