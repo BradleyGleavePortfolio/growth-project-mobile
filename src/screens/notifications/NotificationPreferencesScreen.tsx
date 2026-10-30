@@ -15,6 +15,13 @@
 // B-341-2: a failed save says what happened by status (offline, signed out,
 // busy, server with a reference and the support address), the same rules as
 // Settings > Notifications (notificationPreferenceErrors.ts).
+// FR-B2 B1 (STORE-B2, App Store 4.5.4): every client route to notification
+// settings opens this screen, so the plan renewal offers switch is here. It
+// shows only when the server sends its field (an older server keeps it hidden)
+// and the entitlement read carries `renewal`; it starts at the server's answer
+// and is never on before the server says so. A failed read is the failed-load
+// state below, whose Try again reads both again. Mute all does not hide or lock
+// it: the yes can always be taken back.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -39,6 +46,15 @@ import {
   saveNotificationPreferences,
 } from '../../services/notificationsApi';
 import { preferenceSaveFailureOf } from '../settings/notificationPreferenceErrors';
+import { notificationsApi } from '../../services/api';
+import { readUserCacheSync } from '../../lib/userCache';
+import { usePlanRenewalGate } from '../settings/usePlanRenewalGate';
+import {
+  PLAN_RENEWAL_OFFERS_COPY,
+  PLAN_RENEWAL_OFFERS_WRITE_FIELD,
+  planRenewalOffersForRole,
+  planRenewalOffersFromServer,
+} from '../settings/planRenewalOffers';
 import type { IoniconName } from '../../types/common';
 import HapticPressable from '../../components/HapticPressable';
 
@@ -194,6 +210,9 @@ export const QUIET_HOURS_COPY = {
     'Your time. Notifications that arrive overnight wait until 8:00 AM. A reminder for a session that starts within the hour still comes through.',
 };
 
+const READ_FAILED_COPY =
+  'Notification preferences could not be loaded. Check your connection, then try again.';
+
 export const MUTE_ALL_COPY =
   'Turns off all push, in-app and email notifications, session reminders included.';
 
@@ -211,22 +230,48 @@ export default function NotificationPreferencesScreen() {
   // B-341-1: set synchronously, so a second tap before the re-render is ignored.
   const savingRef = useRef(false);
 
+  // FR-B2 B1: the server's yes (true) or no (false) to plan renewal offers;
+  // null hides the switch (not a client, flag off, or an older server).
+  // LO-908R2 B1: a failed plan read is read again on open and on Try again.
+  const roleEligible = planRenewalOffersForRole(readUserCacheSync()?.role);
+  const { renewalOn, gateFailed, rereadIfFailed } = usePlanRenewalGate(roleEligible);
+  const offersEligible = renewalOn && roleEligible;
+  const [renewalOffers, setRenewalOffers] = useState<boolean | null>(null);
+  const [renewalFailure, setRenewalFailure] = useState<string | null>(null);
+
   const [loadAttempt, setLoadAttempt] = useState(0);
   useEffect(() => {
     let live = true;
     setIsLoading(true);
-    fetchNotificationPreferences()
+    // A plan read that answers re-runs this effect (offersEligible), which then reads the offers answer too.
+    rereadIfFailed()
+      .then(() => live
+        ? Promise.all([
+          fetchNotificationPreferences(),
+          offersEligible
+            ? notificationsApi.getPreferences().then((res) => planRenewalOffersFromServer(res?.data))
+            : Promise.resolve(null),
+        ])
+        : null)
       .then((loaded) => {
-        if (live) setPrefs(loaded);
+        if (live && loaded) {
+          setPrefs(loaded[0]);
+          setRenewalOffers(loaded[1]);
+        }
       })
-      .catch(() => { if (live) setPrefs(null); })
+      .catch(() => {
+        if (live) {
+          setPrefs(null);
+          setRenewalOffers(null);
+        }
+      })
       .finally(() => {
         if (live) setIsLoading(false);
       });
     return () => {
       live = false;
     };
-  }, [loadAttempt]);
+  }, [loadAttempt, offersEligible, rereadIfFailed]);
 
   // `next` is shown at once; only `patch` (what changed) is sent. One save at
   // a time (B-341-1): `previous` is then the only other state there is.
@@ -238,6 +283,7 @@ export default function NotificationPreferencesScreen() {
       setPrefs(next);
       setIsSaving(true);
       setSaveFailure(null);
+      setRenewalFailure(null);
       try {
         const saved = await saveNotificationPreferences(patch);
         setPrefs(saved);
@@ -262,6 +308,39 @@ export default function NotificationPreferencesScreen() {
     },
     [prefs],
   );
+
+  // FR-B2 B1: the yes or no to plan renewal offers, written alone; the same
+  // one-save-at-a-time fence and failure words as every other switch here.
+  const setPlanRenewalOffers = useCallback(async (value: boolean) => {
+    if (savingRef.current || renewalOffers === null) return;
+    savingRef.current = true;
+    const previous = renewalOffers;
+    setRenewalOffers(value);
+    setIsSaving(true);
+    setSaveFailure(null);
+    setRenewalFailure(null);
+    try {
+      const res = await notificationsApi.updatePreferences({ [PLAN_RENEWAL_OFFERS_WRITE_FIELD]: value });
+      const saved = planRenewalOffersFromServer(res?.data);
+      if (saved !== null) setRenewalOffers(saved);
+    } catch (err: unknown) {
+      setRenewalOffers(previous);
+      const failure = preferenceSaveFailureOf(err, PLAN_RENEWAL_OFFERS_COPY.noun);
+      setRenewalFailure(failure.message);
+      if (failure.kind === 'offline' || failure.kind === 'server') {
+        try {
+          const res = await notificationsApi.getPreferences();
+          const server = planRenewalOffersFromServer(res?.data);
+          if (server !== null) setRenewalOffers(server);
+        } catch {
+          // Still unreachable: the restored switch and the notice stand.
+        }
+      }
+    } finally {
+      savingRef.current = false;
+      setIsSaving(false);
+    }
+  }, [renewalOffers]);
 
   const setMuteAll = useCallback((value: boolean) => {
     if (!prefs) return;
@@ -295,7 +374,7 @@ export default function NotificationPreferencesScreen() {
         <Ionicons name="arrow-back-outline" size={24} color={colors.textPrimary} />
       </TouchableOpacity>
       <View style={[styles.centered, { flex: 1 }]}>
-        <Text style={styles.notice}>Notification preferences could not be loaded. Check your connection, then try again.</Text>
+        <Text style={styles.notice}>{READ_FAILED_COPY}</Text>
         <HapticPressable style={[styles.backTarget, { backgroundColor: colors.primary, paddingHorizontal: 20, marginTop: 16 }]} onPress={() => setLoadAttempt((n) => n + 1)} accessibilityRole="button" accessibilityLabel="Try again">
           <Text style={[styles.kindLabel, { color: colors.textOnPrimary }]}>Try again</Text>
         </HapticPressable>
@@ -410,6 +489,56 @@ export default function NotificationPreferencesScreen() {
           );
         })}
 
+        {renewalOffers !== null ? (
+          <View style={[styles.kindBlock, styles.offerBlock]} testID="plan-renewal-offers-row">
+            <View style={styles.offerText}>
+              <Text style={[styles.kindLabel, { color: colors.textPrimary }]}>{PLAN_RENEWAL_OFFERS_COPY.label}</Text>
+              <Text style={[styles.kindDescription, { color: colors.textSecondary }]}>
+                {PLAN_RENEWAL_OFFERS_COPY.description}
+              </Text>
+            </View>
+            <Switch
+              style={{ minHeight: 44 }}
+              value={renewalOffers}
+              onValueChange={setPlanRenewalOffers}
+              disabled={isSaving}
+              accessibilityLabel={PLAN_RENEWAL_OFFERS_COPY.label}
+              accessibilityRole="switch"
+              trackColor={{ false: colors.textMuted, true: colors.primary }}
+              thumbColor={Platform.OS === 'android'
+                ? (renewalOffers ? colors.textOnPrimary : colors.background)
+                : undefined}
+            />
+          </View>
+        ) : null}
+        {renewalOffers !== null && renewalFailure ? (
+          <Text
+            selectable
+            testID="plan-renewal-offers-save-failed"
+            accessibilityLiveRegion="polite"
+            style={[styles.notice, { color: colors.textSecondary }]}
+          >
+            {renewalFailure}
+          </Text>
+        ) : null}
+        {/* LO-908R2 B1: the plan read still fails, so whether the switch belongs here is not known: say so, with Try
+            again (it reads the plan again first). */}
+        {gateFailed ? (
+          <View testID="plan-renewal-offers-read-failed" accessibilityLiveRegion="polite">
+            <Text selectable style={[styles.notice, { color: colors.textSecondary }]}>{READ_FAILED_COPY}</Text>
+            <HapticPressable
+              style={styles.gateRetry}
+              onPress={() => setLoadAttempt((n) => n + 1)}
+              disabled={isSaving}
+              accessibilityRole="button"
+              accessibilityLabel="Try again"
+              accessibilityState={{ disabled: isSaving }}
+            >
+              <Text style={[styles.kindLabel, { color: colors.primary }]}>Try again</Text>
+            </HapticPressable>
+          </View>
+        ) : null}
+
         <View style={styles.footerSpacer} />
       </ScrollView>
     </View>
@@ -477,6 +606,16 @@ const makeStyles = (colors: ReturnType<typeof usePreferenceColors>) =>
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
       padding: 14,
+    },
+    gateRetry: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start', paddingHorizontal: 20 },
+    offerBlock: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    offerText: {
+      flex: 1,
+      gap: 4,
     },
     kindHeader: {
       marginBottom: 12,
