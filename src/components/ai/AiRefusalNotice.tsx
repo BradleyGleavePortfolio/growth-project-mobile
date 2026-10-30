@@ -17,6 +17,9 @@
  *
  * Never a generic "Something went wrong"; never asks the person to change
  * consent for a server defect.
+ *
+ * FR-E4M (LS-E4 R1_B2): on Roman the client's sheet is "Before Roman answers" (`beforeAnswer`), the same
+ * ask RomanConsentGate opens, so a first ask reached through this refusal still opens with PERM-W3.
  */
 import React, { useCallback, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -41,6 +44,11 @@ export const AI_REFUSAL_ACTIONS = {
   copyReference: 'Copy reference',
   copied: 'Reference copied',
 } as const;
+
+/** The client consent sheet each surface opens: Roman's asks are "Before Roman answers" (PERM-W3 first). */
+export function consentSheetVariantFor(surface: AiSurface): 'default' | 'beforeAnswer' {
+  return surface === 'roman' ? 'beforeAnswer' : 'default';
+}
 
 export interface AiRefusalNoticeProps {
   refusal: AiRefusal;
@@ -169,6 +177,7 @@ export default function AiRefusalNotice({
           onContactSupport={openSupport ? () => void openSupport() : undefined}
           api={consentApi}
           {...(consentSessionUserId ? { sessionUserId: consentSessionUserId } : {})}
+          variant={consentSheetVariantFor(surface)}
           testID={`${testID}-consent-sheet`}
         />
       ) : null}
