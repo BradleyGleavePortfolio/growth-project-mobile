@@ -205,9 +205,12 @@ export function PlanActiveActions({ moment, onContinue, onSeeUnlocks }: PlanActi
         onPress={unlock}
         testID="payment-see-unlocks"
       />
+      {/* C5 .link: forest, 14. */}
       <TextLink
         label={COPY.done}
         onPress={onContinue}
+        tone="accent"
+        size="small"
         testID="payment-continue"
       />
     </>
