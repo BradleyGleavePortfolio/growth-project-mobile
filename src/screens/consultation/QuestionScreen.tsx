@@ -148,6 +148,7 @@ export default function QuestionScreen(props: QuestionScreenProps) {
       question={f(screen.question) ?? ''}
       long={screen.longQuestion}
       why={f(screen.why)}
+      centered={screen.template === 'consent'}
     />
   );
 
@@ -600,7 +601,9 @@ function ConsentBody(props: BodyProps) {
       }
     >
       {copy.paragraphs.map((p) => (
-        <Text key={p} style={[s.small, { marginBottom: 12 }]}>{p}</Text>
+        <View key={p} style={s.discloseCard}>
+          <Text style={s.small}>{p}</Text>
+        </View>
       ))}
       <Checkbox
         checked={checked}

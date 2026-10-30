@@ -279,6 +279,7 @@ export function QuestionHeader({
   question,
   long,
   why,
+  centered = false,
 }: {
   eyebrow?: string;
   timeLeft?: string;
@@ -287,19 +288,25 @@ export function QuestionHeader({
   question: string;
   long?: boolean;
   why?: string;
+  /** LS-E4R2 B1 (C7 Style B consent): the title centred in the sans face, same words. */
+  centered?: boolean;
 }) {
   const { s } = useConsultationStyles();
   return (
     <View>
-      <View style={s.eyerow}>
+      <View style={[s.eyerow, centered && s.eyerowCentered]}>
         {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : <View />}
         {timeLeft ? <Text style={s.timeLeft}>{timeLeft}</Text> : null}
       </View>
       {sub ? <Text style={s.sub}>{sub}</Text> : null}
       {roman ? <RomanLine text={roman} /> : null}
-      <Headline level={long ? 'h2' : 'h1'} style={s.question}>
-        {question}
-      </Headline>
+      {centered ? (
+        <Text accessibilityRole="header" maxFontSizeMultiplier={1.4} style={[s.question, s.titleCentered]}>{question}</Text>
+      ) : (
+        <Headline level={long ? 'h2' : 'h1'} style={s.question}>
+          {question}
+        </Headline>
+      )}
       {why ? <Text style={s.why}>{why}</Text> : null}
     </View>
   );
@@ -412,7 +419,9 @@ export function Checkbox({
   boxRef?: React.Ref<View>;
 }) {
   const { s, palette } = useConsultationStyles();
-  const text = <Text style={[s.checkLabel, detail ? s.checkTitle : null]}>{label}</Text>;
+  // LS-E4R2 B1 (C7 Style B): a ticked default row fills forest with light text; the coach card keeps its tan.
+  const filled = checked && variant === 'default';
+  const text = <Text style={[s.checkLabel, detail ? s.checkTitle : null, filled && s.onFilled]}>{label}</Text>;
   return (
     <Pressable
       ref={boxRef}
@@ -423,15 +432,15 @@ export function Checkbox({
       accessibilityHint={hint ?? detail}
       accessibilityState={disabled ? { checked, disabled: true, busy: true } : { checked }}
       testID={testID}
-      style={({ pressed }) => [s.checkRow, variant === 'tan' && s.checkTan, checked && s.rowSel, pressed && s.pressed, disabled && s.checkDisabled]}
+      style={({ pressed }) => [s.checkRow, variant === 'tan' && s.checkTan, checked && s.rowSel, filled && s.checkFilled, pressed && s.pressed, disabled && s.checkDisabled]}
     >
-      <View style={[s.box, checked && s.boxOn]}>
-        {checked ? <Ionicons name="checkmark" size={16} color={palette.onAccent} /> : null}
+      <View style={[s.box, checked && s.boxOn, filled && s.boxOnFilled]}>
+        {checked ? <Ionicons name="checkmark" size={16} color={filled ? palette.accent : palette.onAccent} /> : null}
       </View>
       {detail ? (
         <View style={s.checkText}>
           {text}
-          <Text style={s.checkDetail}>{detail}</Text>
+          <Text style={[s.checkDetail, filled && s.onFilled]}>{detail}</Text>
         </View>
       ) : (
         text
@@ -615,6 +624,8 @@ const createStyles = (palette: ReturnType<typeof semanticPalette>) => StyleSheet
   scroll: { paddingHorizontal: layout.gutter, paddingTop: spacing.xl, paddingBottom: spacing.xl },
   footer: { paddingHorizontal: layout.gutter, paddingTop: layout.footerTopGap, gap: layout.footerItemGap },
   eyerow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  eyerowCentered: { justifyContent: 'center' },
+  titleCentered: { ...typography.h4, fontFamily: 'Inter_600SemiBold', fontWeight: '600', color: palette.ink, textAlign: 'center' },
   eyebrow: { ...typography.eyebrow, color: palette.muted },
   timeLeft: { ...typography.bodySmall, color: palette.muted },
   sub: { ...typography.bodySmall, color: palette.muted, marginTop: 6 },
@@ -710,6 +721,11 @@ const createStyles = (palette: ReturnType<typeof semanticPalette>) => StyleSheet
     marginTop: spacing.lg,
   },
   checkTan: { backgroundColor: colors.cream },
+  checkFilled: { backgroundColor: palette.accent, borderColor: palette.accent },
+  boxOnFilled: { backgroundColor: palette.onAccent, borderColor: palette.onAccent },
+  onFilled: { color: palette.onAccent },
+  // LS-E4R2 B1: each P0 disclosure paragraph in a cream radius-16 card (C7 Style B).
+  discloseCard: { backgroundColor: palette.tile, borderRadius: radius.card, padding: spacing.lg, marginBottom: spacing.md },
   box: {
     width: 22,
     height: 22,
