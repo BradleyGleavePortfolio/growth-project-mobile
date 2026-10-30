@@ -57,12 +57,12 @@ const CASES: Case[] = [
   { name: 'people closed', people: 'closed', viewerId: 'me-1', members: {} },
 ];
 
-async function open(c: Case) {
+async function open(c: Case, name = 'Everyone') {
   mockMembers.current = membersState(c.members);
   const onClose = jest.fn();
   const onRetry = jest.fn();
   await render(
-    <SpaceInfoSheet cohortId="c-every" name="Everyone" members="24 members" description={c.purpose ?? 'Say hi and share your wins.'}
+    <SpaceInfoSheet cohortId="c-every" name={name} members="24 members" description={c.purpose ?? 'Say hi and share your wins.'}
       people={c.people} viewerId={c.viewerId} offline={c.offline ?? false} error={c.error} onRetry={onRetry} onClose={onClose} />,
   );
   return { onClose, onRetry, sheet: screen.getByTestId('space-info-sheet'), close: screen.getByTestId('space-info-close') };
@@ -128,6 +128,40 @@ describe('SpaceInfoSheet Close (W897-CLOSE)', () => {
       dimensions.mockRestore();
     }
     });
+
+  // FR-912 (B1 when a long name wraps, and past the B-TEST's two sizes): the name's first line keeps its centre on the
+  // X's; at 200% the line is taller than the Close, so the Close drops rather than the name rising past the header.
+  it.each([1, 1.3, 2])('FR-912: a long name that wraps stays level with the X on its first line at %s text scale', async (fontScale) => {
+    const dimensions = jest.spyOn(require('react-native'), 'useWindowDimensions').mockReturnValue({
+      width: 320, height: 568, scale: 2, fontScale,
+    });
+    try {
+      const long = 'Morning mobility and stretching for the whole studio';
+      const { sheet, close } = await open(CASES[0], long);
+      const title = within(sheet).getByText(long);
+      expect(title.props.numberOfLines).toBe(2);
+      const headText = within(sheet).getAllByRole('header')[0].parent as TestInstance;
+      const inset = StyleSheet.flatten(headText.props.style).paddingTop;
+      const closeStyle = StyleSheet.flatten(close.props.style);
+      const firstLineCentre = inset + StyleSheet.flatten(title.props.style).lineHeight * fontScale / 2;
+      expect(Math.abs(firstLineCentre - ((closeStyle.marginTop ?? 0) + closeStyle.height / 2))).toBeLessThanOrEqual(0.01);
+      expect(inset).toBeGreaterThanOrEqual(0);
+      expect([closeStyle.width, closeStyle.height]).toEqual([44, 44]);
+    } finally {
+      dimensions.mockRestore();
+    }
+  });
+
+  it('FR-912 B2: the scrim is not an accessibility element on either platform, and a sighted tap on it still closes', async () => {
+    const { onClose } = await open(CASES[0]);
+    const scrim = screen.getByTestId('space-info-scrim', { includeHiddenElements: true });
+    expect(scrim.props.accessible).toBe(false);
+    expect(scrim.props.importantForAccessibility).toBe('no');
+    expect(scrim.props.accessibilityLabel).toBeUndefined();
+    expect(scrim.props.accessibilityRole).toBeUndefined();
+    await fireEvent.press(scrim);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 
   it.each(CASES)('$name: the header leads with one visible Close, first for VoiceOver', async (c) => {
     const { sheet, close } = await open(c);
