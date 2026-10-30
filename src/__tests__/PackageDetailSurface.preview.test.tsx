@@ -216,8 +216,8 @@ describe('FR-1TO1: 1:1 coaching with the coach is first on both modes, every pac
   it.each([
     ['buyer', 'no features, no note', [], null],
     ['buyer', 'features and a note', ['Weekly check-ins'], 'A note.'],
-    ['preview', 'no features, no note', [], null],
-    ['preview', 'features and a note', ['Weekly check-ins'], 'A note.'],
+    ['coachPreview', 'no features, no note', [], null],
+    ['coachPreview', 'features and a note', ['Weekly check-ins'], 'A note.'],
   ] as const)('%s, %s', async (mode, _shape, features, description) => {
     const onPay = jest.fn();
     const r = await render(
@@ -227,6 +227,6 @@ describe('FR-1TO1: 1:1 coaching with the coach is first on both modes, every pac
     const items = r.getAllByText(/^1:1 coaching with Jordan Coach$|^Weekly check-ins$/).map((n) => n.props.children);
     expect(items).toEqual(['1:1 coaching with Jordan Coach', ...features]);
     expect(r.getByTestId('package-detail-one-to-one').props.children).toBe('1:1 coaching with Jordan Coach');
-    if (mode === 'preview') expect(r.getByText('Buyer preview — checkout is disabled for coaches.')).toBeTruthy();
+    if (mode === 'coachPreview') expect(r.getByText('Buyer preview — checkout is disabled for coaches.')).toBeTruthy();
   });
 });
