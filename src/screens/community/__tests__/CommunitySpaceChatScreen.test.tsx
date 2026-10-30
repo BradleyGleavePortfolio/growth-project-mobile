@@ -1696,3 +1696,126 @@ describe('SC-M3 (agent 184): press and hold for Reply and Copy, reply mode, a re
     expect(r.queryByTestId('space-chat-error')).toBeNull();
   });
 });
+
+// LS-909 independent regressions. Normal access and refusal transitions must also retire quoted snapshots.
+describe('LS-909 B-TEST quote access and reply recovery', () => {
+  const os = Platform.OS;
+  type R = Awaited<ReturnType<typeof open>>;
+  const field = (r: R) => r.getByTestId('space-chat-composer-field');
+  const select = async (r: R, id: string) => {
+    await fireEvent(r.getByTestId(`space-chat-row-${id}`), 'longPress');
+    await fireEvent.press(r.getByTestId('space-chat-sheet-reply'));
+  };
+  const q = (id: string, name: string, text: string) => ({
+    id, gone: false, kind: 'text', sender_name: name, snippet: text, voice_duration_ms: null,
+  });
+  const refresh = () => act(async () => {
+    await client.invalidateQueries({ queryKey: ['community', 'space-chat'] });
+  });
+  beforeEach(() => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'android' });
+    (Clipboard.setStringAsync as jest.Mock).mockClear();
+  });
+  afterEach(() => Object.defineProperty(Platform, 'OS', { configurable: true, get: () => os }));
+
+  it('LS909-B1a: block removes the blocked root from cached quote and selected composer too', async () => {
+    page = [msg('reply1', '2026-10-22T10:10:00.000Z', COACH, {
+      body: 'Other member reply', parent_message_id: 'm3', parent: q('m3', JO.name, 'body m3'),
+    }), ...page];
+    const r = await open();
+    await r.findByTestId('space-chat-row-reply1');
+    await select(r, 'm3');
+    expect(r.getByLabelText(`Replying to ${JO.name}`)).toBeTruthy();
+    await fireEvent.press(r.getByTestId('space-chat-menu-m3'));
+    // Successful server block is confirmed. Its read already hides all direct rows and quote words.
+    page = page.filter((m) => (m as { sender_user_id: string }).sender_user_id !== JO.id)
+      .map((m) => (m as { id: string }).id === 'reply1'
+        ? { ...(m as object), parent: { id: 'm3', gone: true } } : m);
+    await refresh();
+    expect(r.queryByTestId('space-chat-row-m3')).toBeNull();
+    expect(r.queryByLabelText(`Replying to ${JO.name}`)).toBeNull();
+  });
+
+  it('LS909-B1b: successful own delete retires every existing quote immediately', async () => {
+    page = [msg('reply1', '2026-10-22T10:10:00.000Z', COACH, {
+      body: 'Other member reply', parent_message_id: 'mine', parent: q('mine', ME.name, 'Deleted original'),
+    }), msg('mine', '2026-10-22T10:00:00.000Z', ME, { body: 'Deleted original' }), ...page];
+    const r = await open();
+    await r.findByTestId('space-chat-row-mine');
+    await fireEvent.press(r.getByTestId('space-chat-menu-mine-delete'));
+    await waitFor(() => expect(r.queryByTestId('space-chat-row-mine')).toBeNull());
+    expect(within(r.getByTestId('space-chat-quote-reply1', { includeHiddenElements: true }))
+      .queryByText('Deleted original', { includeHiddenElements: true })).toBeNull();
+  });
+
+  it('LS909-B1c: refreshed removed parent retires quote kept in offline outbox and on disk', async () => {
+    mockNet.isOnline = false;
+    mockNet.reachable = false;
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    await select(r, 'm3');
+    await fireEvent.changeText(field(r), 'Queued reply');
+    await fireEvent.press(r.getByTestId('space-chat-composer-send'));
+    await waitFor(() => expect(mockDisk.get('space_outbox_me-1')).toContain('Queued reply'));
+    page = [msg('reply1', '2026-10-22T10:10:00.000Z', COACH, {
+      body: 'Other member reply', parent_message_id: 'm3', parent: { id: 'm3', gone: true },
+    }), ...page.filter((m) => (m as { id: string }).id !== 'm3')];
+    await refresh();
+    await r.findByTestId('space-chat-row-reply1');
+    expect(r.queryByLabelText(/^Replying to jo b\.: body m3\. Dana Reyes, Waiting to send\. Queued reply$/)).toBeNull();
+    expect(mockDisk.get('space_outbox_me-1')).not.toContain('body m3');
+  });
+
+  it('LS909-B2: Announcements 422 puts the rejected reply and parent back in the field', async () => {
+    mockParams.current = { cohortId: 'c-ann' };
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    mockApi.post.mockImplementation(async (url: string) => {
+      if (url.endsWith('/messages')) throw Object.assign(new Error('HTTP 422'), {
+        isAxiosError: true, response: { status: 422, data: { code: 'community.content.rejected' } },
+      });
+      return { data: { ok: true } };
+    });
+    try {
+      const r = await open();
+      await r.findByTestId('space-chat-row-m1');
+      await select(r, 'm1');
+      await fireEvent.changeText(field(r), 'Please revise this');
+      await fireEvent.press(r.getByTestId('space-chat-composer-send'));
+      await waitFor(() => expect(r.getByTestId('space-chat-composer-field').props.value).toBe('Please revise this'));
+      expect(r.getByLabelText('Replying to Sam Okafor')).toBeTruthy();
+      expect(alert).toHaveBeenCalledWith('Please rephrase', expect.any(String));
+    } finally { alert.mockRestore(); }
+  });
+
+  it('LS909-B3: reply refusal revalidates admission instead of retaining closed-space rows', async () => {
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    await select(r, 'm3');
+    mockApi.post.mockImplementation(async (url: string) => {
+      if (url.endsWith('/messages')) throw fail(403);
+      return { data: { ok: true } };
+    });
+    mockApi.get.mockImplementation(async (url: string) => {
+      if (url.endsWith('/messages')) throw fail(403);
+      return { data: readAnswer };
+    });
+    mockApi.get.mockClear();
+    await fireEvent.changeText(field(r), 'A reply');
+    await fireEvent.press(r.getByTestId('space-chat-composer-send'));
+    await r.findByText('Not sent');
+    await waitFor(() => expect(mockApi.get).toHaveBeenCalledWith('/community/cohorts/c-every/messages', expect.anything()));
+    expect(await r.findByTestId('space-chat-no-access')).toBeTruthy();
+  });
+
+  it('LS909-B1d: an open message sheet cannot copy the root after its removal is confirmed', async () => {
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    await fireEvent(r.getByTestId('space-chat-row-m3'), 'longPress');
+    page = page.filter((m) => (m as { id: string }).id !== 'm3');
+    await refresh();
+    expect(r.queryByTestId('space-chat-row-m3')).toBeNull();
+    const copy = r.queryByTestId('space-chat-sheet-copy');
+    if (copy) await fireEvent.press(copy);
+    expect(Clipboard.setStringAsync).not.toHaveBeenCalled();
+  });
+});
