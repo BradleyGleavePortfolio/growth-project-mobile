@@ -526,6 +526,8 @@ export default function AiConsentSheet({
           testID={testID}
           accessibilityViewIsModal
         >
+          {/* LS-913R3 B2 (C3 Style B): the small centred grip. Look only: the sheet still closes only by its buttons. */}
+          <View style={[styles.grip, { backgroundColor: sc.border }]} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" testID={`${testID}-grip`} />
           {/* LS-E4R2 B2 (C3 Style B): Roman's portrait beside the title. */}
           <View style={styles.titleRow}>
             <RomanAvatar crop="neutral" size={44} />
@@ -553,6 +555,7 @@ export function makeStyles(colors: ThemeColors) {
       maxHeight: '85%',
     },
     title: { marginBottom: 12 },
+    grip: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: -14, marginBottom: 14 },
     titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
     titleText: { flex: 1 },
     discloseCard: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 16, marginBottom: 12 },
