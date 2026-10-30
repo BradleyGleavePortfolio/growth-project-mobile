@@ -76,7 +76,7 @@ import { diagnosticReference, shortReference } from '../../utils/correlation';
 import { captureError } from '../../services/sentry';
 import RomanAvatar from '../roman/RomanAvatar';
 import { useTheme, type ThemeColors } from '../../theme/ThemeProvider';
-import { layout, radius } from '../../theme/tokens';
+import { layout, lightTokens, radius } from '../../theme/tokens';
 import { footerBottomPadding, Headline, PrimaryButton, TextLink, useScreenInsets } from '../../ui';
 
 export type AiConsentSheetApi = Pick<typeof defaultAiConsentApi, 'getStatus' | 'grantRoman'>;
@@ -196,7 +196,7 @@ export default function AiConsentSheet({
   // whose answer is shown (b#1047).
   const today = useCallback(() => (coachless ? { coachFree: true } : { crisis: crisisAlert() }), [coachless, crisisAlert]);
   const askRef = useRef<AiConsentAsk>(ROMAN_HEALTH_ASK);
-  const { colors } = useTheme();
+  const { colors, semanticColors: sc = lightTokens } = useTheme();
   const styles = makeStyles(colors);
   // Presentation (ROMAN-ROOM-133, operator 17:16): the sheet clears the
   // gesture bar from real insets; buttons are the shared src/ui primitives.
@@ -521,7 +521,8 @@ export default function AiConsentSheet({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <View
-          style={[styles.sheet, { paddingBottom: footerBottomPadding(insets.bottom) }]}
+          // LS-E4R2 B2 (C3 Style B): the client sheet is white so its cream disclosure card reads as a card.
+          style={[styles.sheet, { backgroundColor: sc.bgSurface, paddingBottom: footerBottomPadding(insets.bottom) }]}
           testID={testID}
           accessibilityViewIsModal
         >
