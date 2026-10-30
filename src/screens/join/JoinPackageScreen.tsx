@@ -17,7 +17,8 @@ import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import { usePackagePurchase } from '../../hooks/usePackagePurchase';
 import { usePaymentSheetAppearance } from '../../components/purchase/usePaymentSheetAppearance';
 import PlanTermsBlock from '../../components/purchase/PlanTermsBlock';
-import PurchaseFeedback from '../../components/purchase/PurchaseFeedback';
+import PurchaseFeedback, { styleCSuccess } from '../../components/purchase/PurchaseFeedback';
+import { PlanActiveActions, usePlanMoment } from '../../components/purchase/PlanActiveMoment';
 import CoachSharingNotice from '../../components/coachSharing/CoachSharingNotice';
 import { acceptFirstSignInSharing } from '../../api/coachSharingApi';
 import { useCoachSharingNotice } from '../../lib/coachSharingNotice';
@@ -122,7 +123,13 @@ export default function JoinPackageScreen({ join: given, onClose, resumed = fals
     phase === 'confirmed_pending' ||
     purchase.state.priceChange !== null;
 
-  const footer = paid ? (
+  // LS-914R2 B2: the success actions take the pinned footer (C5).
+  const successShown = styleCSuccess(purchase);
+  const moment = usePlanMoment(successShown);
+
+  const footer = successShown ? (
+    <PlanActiveActions moment={moment} onContinue={leave} />
+  ) : paid ? (
     <View>
       {hidePay ? null : (
         <>
@@ -161,7 +168,7 @@ export default function JoinPackageScreen({ join: given, onClose, resumed = fals
             {`Joining ${coach} finishes when the payment goes through.`}
           </Lede>
           {sellable && !hidePay ? <PlanTermsBlock pkg={sellable} /> : null}
-          <PurchaseFeedback purchase={purchase} onContinue={leave} onOpenPlan={leave} />
+          <PurchaseFeedback purchase={purchase} onContinue={leave} onOpenPlan={leave} moment={successShown ? moment : undefined} />
         </>
       ) : (
         <>

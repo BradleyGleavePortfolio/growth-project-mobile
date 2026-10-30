@@ -75,7 +75,8 @@ import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import { usePackagePurchase } from '../../hooks/usePackagePurchase';
 import { usePaymentSheetAppearance } from '../../components/purchase/usePaymentSheetAppearance';
 import PlanTermsBlock from '../../components/purchase/PlanTermsBlock';
-import PurchaseFeedback from '../../components/purchase/PurchaseFeedback';
+import PurchaseFeedback, { styleCSuccess } from '../../components/purchase/PurchaseFeedback';
+import { PlanActiveActions, usePlanMoment } from '../../components/purchase/PlanActiveMoment';
 import YourPlansPanel from '../../components/purchase/YourPlansPanel';
 import { SupportEmailFallback, useSupportEmail } from '../../components/support/SupportEmailFallback';
 import { PACKAGE_PAYMENT_COPY } from '../../lib/packagePayment';
@@ -296,6 +297,11 @@ export default function ClientPackagesScreen() {
     },
     [finishPurchase, navigation],
   );
+  // LS-914R2 B2: on the open plan page the success actions sit in its pinned
+  // footer (C5); the moment is read once here for the content and the footer.
+  const successShown = styleCSuccess(purchase);
+  const pinnedSuccess = successShown && openPlanId === successShown.packageId ? successShown : null;
+  const moment = usePlanMoment(pinnedSuccess);
 
   const handleUpdateCard = useCallback(() => {
     // OR-110-2: the native card screen (Stripe PaymentSheet, TGP theme)
@@ -523,6 +529,7 @@ export default function ClientPackagesScreen() {
                 onContinue={finishPurchase}
                 onOpenPlan={finishPurchase}
                 onSeeUnlocks={seeUnlocks}
+                moment={pinnedSuccess ? moment : undefined}
               />
             ) : null;
             // FR-1TO1 (LS B1): no sale while the coach's name is unknown.
@@ -582,7 +589,9 @@ export default function ClientPackagesScreen() {
                     <ClientPlanPage name={pkg.name} price={displayPrice} description={pkg.description}
                       features={pkg.features ?? []} coach={coachName} onBack={closePlan}
                       outcome={feedback} outcomeKey={shown ? purchase.state.phase : null}
-                      footer={action ? <>
+                      footer={active && pinnedSuccess ? (
+                        <PlanActiveActions moment={moment} onContinue={finishPurchase} onSeeUnlocks={seeUnlocks} />
+                      ) : action ? <>
                         {sellable?.quote && !current ? (
                           <View style={styles.dueToday} testID="plan-due-today" accessible
                             accessibilityLabel={`${CLIENT_PLAN_COPY.due}, ${money(sellable.quote.dueTodayCents, sellable.quote.currency)}`}>

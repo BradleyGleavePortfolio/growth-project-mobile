@@ -53,7 +53,8 @@ import { useEntitlement } from '../entitlements/EntitlementProvider';
 import { usePackagePurchase } from '../hooks/usePackagePurchase';
 import { usePaymentSheetAppearance } from './purchase/usePaymentSheetAppearance';
 import PlanTermsBlock from './purchase/PlanTermsBlock';
-import PurchaseFeedback from './purchase/PurchaseFeedback';
+import PurchaseFeedback, { styleCSuccess } from './purchase/PurchaseFeedback';
+import { PlanActiveBar, usePlanMoment } from './purchase/PlanActiveMoment';
 import { QuietOverline as Overline } from '../ui/sections/QuietSection';
 import { oneToOneCoachingLabel } from '../config/purchaseSurfaces';
 import { PLANS_LOAD_ERROR } from '../constants/packageCoachingCopy';
@@ -304,6 +305,10 @@ export default function PackageSelectionSheet({
   const busy = purchase.busy;
   const done = state.phase === 'success' || state.phase === 'confirm_slow' || state.phase === 'confirmed_pending';
   const finish = useCallback(() => onPaymentSuccess(state.phase === 'success'), [onPaymentSuccess, state.phase]);
+  // LS-914R2 B2: the success actions sit in a pinned bar under the sheet's
+  // scroll (C5). The house-coach join keeps its own close.
+  const successShown = houseName ? null : styleCSuccess(purchase);
+  const moment = usePlanMoment(visible && ready ? successShown : null);
   const handleSkip = useCallback(() => {
     if (busy) return; // never close the sheet in the middle of a payment
     if (dismissedKey) {
@@ -405,6 +410,7 @@ export default function PackageSelectionSheet({
             onContinue={finish}
             onOpenPlan={openPlan}
             openPlanLabel={onOpenPlan ? undefined : 'Continue to the app'}
+            moment={successShown ? moment : undefined}
           />
 
           {/* CTA */}
@@ -440,6 +446,7 @@ export default function PackageSelectionSheet({
             </TouchableOpacity>
           )}
         </ScrollView>
+        {successShown ? <PlanActiveBar moment={moment} onContinue={finish} /> : null}
       </View>
       )}
     </Modal>

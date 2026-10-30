@@ -8,6 +8,11 @@
  * Next charge from the purchase's period end. See what unlocks shows when
  * deliverables are on and the purchase row is found; Done leaves. One success
  * haptic when the moment appears.
+ *
+ * LS-914R2 B2: as in the C5 frames, the two actions sit in the host's pinned,
+ * inset-safe bottom bar, not under the content. A host reads the moment once
+ * with usePlanMoment, passes it to PlanActiveMoment (content only) and puts
+ * PlanActiveActions in its footer (or PlanActiveBar where it has none).
  */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -32,12 +37,14 @@ import { attemptPurchase, formatPlanDate, paidAmount } from "../../lib/planTerms
 import { useTheme } from "../../theme/ThemeProvider";
 import {
   colors,
+  layout,
   motion,
   radius,
+  SERIF_MIN_LINE_RATIO,
   typography,
   type SemanticTokens,
 } from "../../theme/tokens";
-import { PrimaryButton, TextLink } from "../../ui";
+import { PrimaryButton, TextLink, footerBottomPadding, useScreenInsets } from "../../ui";
 import { HapticService } from "../../ui/haptics/haptics.service";
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -48,13 +55,21 @@ export function CoachMark({
   name,
   size,
   draw = false,
+  ring = 1.5,
+  ringColor = colors.camel,
+  initialSize,
 }: {
   name: string | null;
   size: number;
   draw?: boolean;
+  /** Ring width, drawn inside `size` (C5 seal: 2 around a 72 disc). */
+  ring?: number;
+  ringColor?: string;
+  /** Italic initial at this size (C5 seal: 40); default upright 0.42 x size. */
+  initialSize?: number;
 }) {
   const { semanticColors: sc } = useTheme();
-  const r = size / 2 - 1.5;
+  const r = size / 2 - ring / 2;
   const length = 2 * Math.PI * r;
   const offset = useRef(new Animated.Value(draw ? length : 0)).current;
   useEffect(() => {
@@ -95,8 +110,8 @@ export function CoachMark({
           cy={size / 2}
           r={r}
           fill="none"
-          stroke={colors.camel}
-          strokeWidth={1.5}
+          stroke={ringColor}
+          strokeWidth={ring}
           strokeDasharray={`${length} ${length}`}
           strokeDashoffset={offset}
           rotation={-90}
@@ -109,7 +124,16 @@ export function CoachMark({
             allowFontScaling={false}
             style={[
               typography.h1,
-              { color: colors.forest, fontSize: size * 0.42, lineHeight: size * 0.6 },
+              initialSize
+                ? {
+                    color: colors.forest,
+                    fontFamily: "CormorantGaramond_500Medium",
+                    fontWeight: "500",
+                    fontStyle: "italic",
+                    fontSize: initialSize,
+                    lineHeight: Math.ceil(initialSize * SERIF_MIN_LINE_RATIO),
+                  }
+                : { color: colors.forest, fontSize: size * 0.42, lineHeight: size * 0.6 },
             ]}
           >
             {initial}
@@ -122,35 +146,32 @@ export function CoachMark({
   );
 }
 
-export interface PlanActiveMomentProps {
-  success: PurchaseSuccess;
-  onContinue: () => void;
-  /** Open what the purchase unlocks (More stack only); omitted elsewhere. */
-  onSeeUnlocks?: (purchaseId: string) => void;
+/** What the moment shows: this purchase's own row and the coach's name. */
+export interface PlanMoment {
+  row: ClientPurchase | null;
+  coach: string | null;
 }
 
-export default function PlanActiveMoment({
-  success,
-  onContinue,
-  onSeeUnlocks,
-}: PlanActiveMomentProps) {
-  const { semanticColors } = useTheme();
-  const s = useMemo(() => makeStyles(semanticColors), [semanticColors]);
+/**
+ * Reads the moment once for a host (null while there is no success). The
+ * content and the pinned actions both use this one read.
+ */
+export function usePlanMoment(success: PurchaseSuccess | null): PlanMoment {
   const [row, setRow] = useState<ClientPurchase | null>(null);
   const [coach, setCoach] = useState<string | null>(null);
-
+  const packageId = success?.packageId ?? null;
+  const purchaseId = success?.purchaseId ?? null;
   useEffect(() => {
-    void HapticService.success();
-  }, []);
-
-  useEffect(() => {
+    setRow(null);
+    setCoach(null);
+    if (!packageId) return undefined;
     let live = true;
     void clientPaymentsApi.getPurchases().then((res) => {
       if (!live || !res.ok) return;
       // The confirmed row, else this purchase's own row (the newest of the
       // package) once it is in force; never an older purchase (LS-PAYFAIL B7).
-      const mine = attemptPurchase(res.data, success.packageId, success.purchaseId);
-      setRow(mine && (success.purchaseId || mine.entitlement_active) ? mine : null);
+      const mine = attemptPurchase(res.data, packageId, purchaseId);
+      setRow(mine && (purchaseId || mine.entitlement_active) ? mine : null);
     });
     api
       .get<{ name?: string }>("/v1/clients/me/coach")
@@ -159,7 +180,92 @@ export default function PlanActiveMoment({
     return () => {
       live = false;
     };
-  }, [success.purchaseId, success.packageId]);
+  }, [purchaseId, packageId]);
+  return useMemo(() => ({ row, coach }), [row, coach]);
+}
+
+export interface PlanActiveActionsProps {
+  moment: PlanMoment;
+  onContinue: () => void;
+  /** Open what the purchase unlocks (More stack only); omitted elsewhere. */
+  onSeeUnlocks?: (purchaseId: string) => void;
+}
+
+/** See what unlocks (when there is something to open) and Done. */
+export function PlanActiveActions({ moment, onContinue, onSeeUnlocks }: PlanActiveActionsProps) {
+  const { row } = moment;
+  const unlock =
+    onSeeUnlocks && featureFlags.deliverables && row
+      ? () => onSeeUnlocks(row.id)
+      : null;
+  return unlock ? (
+    <>
+      <PrimaryButton
+        label={COPY.seeWhatUnlocks}
+        onPress={unlock}
+        testID="payment-see-unlocks"
+      />
+      <TextLink
+        label={COPY.done}
+        onPress={onContinue}
+        testID="payment-continue"
+      />
+    </>
+  ) : (
+    <PrimaryButton
+      label={COPY.done}
+      onPress={onContinue}
+      testID="payment-continue"
+    />
+  );
+}
+
+/**
+ * The pinned, inset-safe bottom bar for hosts whose layout has no footer
+ * (the package sheet and the package detail). Same padding as Screen's footer.
+ */
+export function PlanActiveBar(props: PlanActiveActionsProps) {
+  const { semanticColors } = useTheme();
+  const insets = useScreenInsets();
+  return (
+    <View
+      style={[
+        styles.bar,
+        { backgroundColor: semanticColors.bgPrimary, paddingBottom: footerBottomPadding(insets.bottom) },
+      ]}
+      testID="payment-success-footer"
+    >
+      <PlanActiveActions {...props} />
+    </View>
+  );
+}
+
+export interface PlanActiveMomentProps {
+  success: PurchaseSuccess;
+  onContinue: () => void;
+  /** Open what the purchase unlocks (More stack only); omitted elsewhere. */
+  onSeeUnlocks?: (purchaseId: string) => void;
+  /**
+   * The host's read (usePlanMoment). When given, the host shows the actions
+   * in its pinned bar and this draws the content only.
+   */
+  moment?: PlanMoment;
+}
+
+export default function PlanActiveMoment({
+  success,
+  onContinue,
+  onSeeUnlocks,
+  moment: hosted,
+}: PlanActiveMomentProps) {
+  const { semanticColors } = useTheme();
+  const s = useMemo(() => makeStyles(semanticColors), [semanticColors]);
+  const own = usePlanMoment(hosted ? null : success);
+  const { row, coach } = hosted ?? own;
+
+  useEffect(() => {
+    void HapticService.success();
+  }, []);
 
   const paid = row ? paidAmount(row) : null;
   const nextIso =
@@ -169,10 +275,6 @@ export default function PlanActiveMoment({
   const next =
     nextIso && !Number.isNaN(Date.parse(nextIso))
       ? formatPlanDate(new Date(nextIso))
-      : null;
-  const unlock =
-    onSeeUnlocks && featureFlags.deliverables && row
-      ? () => onSeeUnlocks(row.id)
       : null;
   const lines: { id: string; label: string; value: string }[] = [];
   if (paid) lines.push({ id: "paid", label: COPY.paid, value: paid });
@@ -184,7 +286,15 @@ export default function PlanActiveMoment({
       testID="payment-success"
       accessibilityLiveRegion="polite"
     >
-      <CoachMark name={coach} size={96} draw />
+      {/* C5 seal: a 72 disc in a 2 pt gold ring, the initial in italic. */}
+      <CoachMark
+        name={coach}
+        size={SEAL + 2 * SEAL_RING}
+        ring={SEAL_RING}
+        ringColor={colors.romanAccent}
+        initialSize={40}
+        draw
+      />
       <Text style={s.title} accessibilityRole="header">
         {success.title}
       </Text>
@@ -192,81 +302,85 @@ export default function PlanActiveMoment({
       {lines.length > 0 ? (
         <View style={s.card} testID="payment-success-receipt">
           <View style={s.rule} />
-          {lines.map((l, i) => (
-            <View
-              key={l.id}
-              style={[s.line, i > 0 && s.lineGap]}
-              accessible
-              accessibilityLabel={`${l.label}, ${l.value}`}
-              testID={`payment-success-${l.id}`}
-            >
-              <Text style={s.label}>{l.label}</Text>
-              <Text style={s.value}>{l.value}</Text>
+          {lines.map((l) => (
+            <View key={l.id}>
+              <View
+                style={s.line}
+                accessible
+                accessibilityLabel={`${l.label}, ${l.value}`}
+                testID={`payment-success-${l.id}`}
+              >
+                <Text style={s.label}>{l.label}</Text>
+                <Text style={s.value}>{l.value}</Text>
+              </View>
+              {/* One dashed edge: RN draws dashes only on a full border. */}
+              <View style={s.dashClip}>
+                <View style={s.dash} />
+              </View>
             </View>
           ))}
         </View>
       ) : null}
-      <View style={s.actions}>
-        {unlock ? (
-          <>
-            <PrimaryButton
-              label={COPY.seeWhatUnlocks}
-              onPress={unlock}
-              testID="payment-see-unlocks"
-            />
-            <TextLink
-              label={COPY.done}
-              onPress={onContinue}
-              testID="payment-continue"
-            />
-          </>
-        ) : (
-          <PrimaryButton
-            label={COPY.done}
-            onPress={onContinue}
-            testID="payment-continue"
-          />
-        )}
-      </View>
+      {hosted ? null : (
+        <View style={s.actions}>
+          <PlanActiveActions moment={own} onContinue={onContinue} onSeeUnlocks={onSeeUnlocks} />
+        </View>
+      )}
     </View>
   );
 }
 
+// C5 (MOCK-C5 C_success.html): .c-s.lg 72 x 72 with a 2 px gold ring.
+const SEAL = 72;
+const SEAL_RING = 2;
+
 const styles = StyleSheet.create({
   center: { alignItems: "center", justifyContent: "center" },
+  bar: {
+    paddingHorizontal: layout.gutter,
+    paddingTop: layout.footerTopGap,
+    gap: layout.footerItemGap,
+  },
 });
 
+// Geometry from MOCK-C5 C_success.html (.c-ok, .c-slip, .c-kv). The title
+// keeps a 40 line (not 36.8): serif lines stay >= 1.25 x size (B15 guard).
 function makeStyles(sc: SemanticTokens) {
   return StyleSheet.create({
-    wrap: { alignItems: "center", paddingTop: 24, paddingBottom: 8 },
+    wrap: { alignItems: "center", paddingTop: 10, paddingBottom: 2 },
     title: {
       ...typography.h1,
+      fontFamily: "CormorantGaramond_500Medium",
+      fontWeight: "500",
+      letterSpacing: -0.2,
       color: sc.textPrimary,
-      textAlign: "center",
-      marginTop: 20,
-    },
-    body: {
-      ...typography.body,
-      color: sc.textMuted,
       textAlign: "center",
       marginTop: 12,
     },
+    body: {
+      ...typography.bodySmall,
+      lineHeight: 21,
+      color: colors.charcoal,
+      textAlign: "center",
+      marginTop: 8,
+    },
     card: {
       alignSelf: "stretch",
-      marginTop: 24,
+      marginTop: 8,
       borderRadius: radius.card,
       borderWidth: 1,
       borderColor: sc.border,
       backgroundColor: sc.bgSurface,
       overflow: "hidden",
-      paddingHorizontal: 20,
-      paddingBottom: 16,
+      padding: 16,
     },
     rule: {
+      position: "absolute",
+      top: 0,
+      left: 16,
+      right: 16,
       height: 2,
-      backgroundColor: colors.camel,
-      marginHorizontal: -20,
-      marginBottom: 4,
+      backgroundColor: colors.romanAccent,
     },
     line: {
       flexDirection: "row",
@@ -274,16 +388,21 @@ function makeStyles(sc: SemanticTokens) {
       justifyContent: "space-between",
       alignItems: "baseline",
       columnGap: 12,
-      paddingTop: 12,
+      rowGap: 4,
+      paddingVertical: 9,
     },
-    lineGap: {
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: sc.border,
-      marginTop: 12,
+    dashClip: { height: 1, overflow: "hidden" },
+    dash: {
+      height: 2,
+      borderWidth: 1,
+      borderStyle: "dashed",
+      borderColor: sc.border,
     },
-    label: { ...typography.body, color: sc.textMuted },
+    label: { ...typography.bodySmall, fontSize: 13, lineHeight: 18, color: sc.textMuted },
     value: {
       ...typography.bodyMd,
+      fontSize: 15,
+      lineHeight: 21,
       color: sc.textPrimary,
       fontVariant: ["tabular-nums"],
       flexShrink: 1,
