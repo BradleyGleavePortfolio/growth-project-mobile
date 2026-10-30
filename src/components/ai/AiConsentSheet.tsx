@@ -393,7 +393,8 @@ export default function AiConsentSheet({
               {coachless ? null : (
                 <Text style={styles.note} testID={`${testID}-coach-note`}>{AI_CONSENT_SHEET_COPY.coachNote}</Text>
               )}
-              <Text style={styles.note}>{AI_CONSENT_SHEET_COPY.changeLater}</Text>
+              {/* SHEET-1 (owner 185-W4): Before Roman answers drops it; its lead already names Settings > Privacy. */}
+              {beforeAnswer ? null : <Text style={styles.note}>{AI_CONSENT_SHEET_COPY.changeLater}</Text>}
             </ScrollView>
             <View style={beforeAnswer ? styles.pair : null} testID={`${testID}-actions`}>
               <PrimaryButton

@@ -530,7 +530,7 @@ function GoalWeightBody(props: BodyProps) {
 // Opus C-3: no "Nothing has been sent" here; chapter saves may already have
 // landed when the server moves to a newer agreement.
 /** Shown next to a disabled P0 Continue (box 1 may be below the fold). */
-export const CONSENT_TICK_HINT = 'Tick the first box above to continue.';
+export const CONSENT_TICK_HINT = 'Tick the box to continue.'; // HINT-1 (owner 185-W4)
 
 const CONSENT_ERROR_COPY = {
   version_mismatch:
@@ -592,7 +592,7 @@ function ConsentBody(props: BodyProps) {
           <PrimaryButton
             label={props.screen.cta ?? 'Continue'}
             disabled={!checked || blocked}
-            accessibilityHint={checked ? undefined : 'Tick the first box to continue'}
+            accessibilityHint={checked ? undefined : 'Tick the box to continue'}
             onPress={() => onNext({ P0: already ? answers.P0 : consent }, null)}
             testID="consult-continue"
           />

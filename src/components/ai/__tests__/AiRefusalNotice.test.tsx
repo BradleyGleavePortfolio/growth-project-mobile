@@ -95,6 +95,8 @@ describe('AiRefusalNotice — client consent_required', () => {
     await waitFor(() => r.getByTestId('first-roman-fallback-consent-sheet-paragraph'));
     expect(api.grantRoman).not.toHaveBeenCalled();
     expect(r.getByText(AI_CONSENT_SHEET_COPY.beforeAnswerLead)).toBeTruthy();
+    // SHEET-1 (owner 185-W4): the lead already names Settings > Privacy, so the closing line is gone here.
+    expect(r.queryByText(AI_CONSENT_SHEET_COPY.changeLater)).toBeNull();
   });
 
   it('FR-E4M: only Roman asks open "Before Roman answers"; the guide and insight sheets keep their own', async () => {
@@ -109,6 +111,7 @@ describe('AiRefusalNotice — client consent_required', () => {
       await waitFor(() => r.getByTestId('g-consent-sheet-paragraph'));
       expect(r.queryByTestId('g-consent-sheet-lead')).toBeNull();
       expect(r.queryByText(AI_CONSENT_SHEET_COPY.beforeAnswerTitle)).toBeNull();
+      expect(r.getByText(AI_CONSENT_SHEET_COPY.changeLater)).toBeTruthy();
       await r.unmount();
     }
   });
