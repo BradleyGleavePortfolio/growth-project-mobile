@@ -54,6 +54,11 @@ const initialClientState = {
   loadError: null as string | null,
 };
 
+// LS-PAYFAIL B10: one generation per signed-in account. reset() runs on every
+// sign-out (resetUserScopedStores) and starts a new one, so a reply, refresh or
+// rollback started by the previous account never writes into the next one.
+let session = 0;
+
 export const useClientStore = create<ClientStore>((set, get) => ({
   ...initialClientState,
 
@@ -67,9 +72,13 @@ export const useClientStore = create<ClientStore>((set, get) => ({
     loadError: null,
   }),
 
-  reset: () => set({ ...initialClientState, selectedDate: getTodayString() }),
+  reset: () => {
+    session += 1;
+    set({ ...initialClientState, selectedDate: getTodayString() });
+  },
 
   loadDayData: async (_userId: string, date?: string) => {
+    const mine = session;
     const d = date || get().selectedDate;
     try {
       get().setSelectedDate(d);
@@ -83,7 +92,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
           return null;
         }),
       ]);
-      if (get().selectedDate !== d) return;
+      if (mine !== session || get().selectedDate !== d) return;
       const data = foodResponse.data;
 
       // Wire shape returned by /v1/log/daily.
@@ -170,7 +179,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
           : 'Water data could not refresh. Check your connection and try again.',
       });
     } catch (err) {
-      if (get().selectedDate !== d) return;
+      if (mine !== session || get().selectedDate !== d) return;
       // Preserve data only for a refresh of the same selected day.
       logger.error('ClientStore', 'loadDayData failed', err);
       set({
@@ -185,6 +194,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
   },
 
   logFood: async (data) => {
+    const mine = session;
     try {
       await logApi.logFood({
         date: data.date,
@@ -193,7 +203,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
         quantity_multiplier: data.quantityMultiplier || 1.0,
         notes: data.notes,
       });
-      await get().loadDayData(data.userId, data.date);
+      if (mine === session) await get().loadDayData(data.userId, data.date);
     } catch (err) {
       throw err;
     }
@@ -217,11 +227,13 @@ export const useClientStore = create<ClientStore>((set, get) => ({
 
   logWater: async (_userId: string, _coachId: string, amountOz: number) => {
     // Optimistic update — add immediately, sync to backend
+    const mine = session;
     set((state) => ({ waterOz: state.waterOz + amountOz }));
     try {
       const amountMl = Math.round(amountOz * 29.5735);
       const date = get().selectedDate;
       const response = await waterApi.log({ amount_ml: amountMl, date });
+      if (mine !== session) return;
       if (response.data.id) {
         set((state) => ({ waterEntries: [...state.waterEntries, response.data] }));
       }
@@ -232,6 +244,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       // Revert the optimistic bump and say so: a number that silently goes
       // back down reads as a glitch, not as "this was not saved".
       logger.error('ClientStore', 'logWater failed', err);
+      if (mine !== session) return;
       set((state) => ({
         waterOz: Math.max(0, state.waterOz - amountOz),
         loadError: `${Math.round(amountOz)} oz of water was not saved. Check the connection, then add it again.`,
@@ -240,7 +253,9 @@ export const useClientStore = create<ClientStore>((set, get) => ({
   },
 
   removeWaterEntry: async (entryId: string) => {
+    const mine = session;
     await waterApi.deleteEntry(entryId);
+    if (mine !== session) return;
     set((state) => {
       if (!state.waterEntries.some((entry) => entry.id === entryId)) return {};
       const waterEntries = state.waterEntries.filter((entry) => entry.id !== entryId);
