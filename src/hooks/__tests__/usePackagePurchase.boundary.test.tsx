@@ -21,10 +21,11 @@ jest.mock('../../services/api', () => ({
 }));
 jest.mock('../../services/sentry', () => ({ captureError: jest.fn() }));
 const mockPurchases = jest.fn();
+const mockEntitlement = jest.fn();
 jest.mock('../../api/clientPaymentsApi', () => ({
   clientPaymentsApi: {
     getPurchases: () => mockPurchases(),
-    getEntitlement: async () => ({ ok: true, data: { active: false } }),
+    getEntitlement: () => mockEntitlement(),
   },
 }));
 const mockInitSheet = jest.fn();
@@ -78,6 +79,7 @@ beforeEach(() => {
   mockInitSheet.mockResolvedValue({});
   mockPresent.mockResolvedValue({ error: { code: 'Canceled' } });
   mockPurchases.mockResolvedValue({ ok: true, data: [] });
+  mockEntitlement.mockResolvedValue({ ok: true, data: { active: false } });
 });
 
 describe('B-343-1 (Sol) a flow that outlived its screen or account never opens a sheet', () => {
@@ -291,5 +293,25 @@ describe('PF-1-M an unclear one-time result asks about its own purchase only', (
     await act(async () => { await h.result.current.checkAgain(); });
     expect(h.result.current.state.success).toEqual(expect.objectContaining({ purchaseId: 'synthetic-own' }));
     expect(mockPost).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('LS-914R2 B3: clear one-time confirmation also belongs to the purchased package', () => {
+  it('another active package cannot announce the new pending package as active', async () => {
+    // The native sheet succeeded: payment is known, but new-package access
+    // has not arrived yet. The global entitlement is for the older other plan.
+    mockPresent.mockResolvedValueOnce({});
+    mockEntitlement.mockResolvedValue({ ok: true, data: { active: true } });
+    mockPurchases.mockResolvedValue({ ok: true, data: [
+      { id: 'synthetic-new-A', package_id: A.id, status: 'pending', entitlement_active: false,
+        access_expires_at: null, created_at: '2026-10-30T12:00:00Z' },
+      { id: 'synthetic-old-B', package_id: B.id, status: 'paid', entitlement_active: true,
+        access_expires_at: null, created_at: '2026-10-01T12:00:00Z' },
+    ] });
+    const h = await mount();
+    await act(async () => { await h.result.current.start(A); });
+    expect(mockPresent).toHaveBeenCalledTimes(1);
+    expect(h.result.current.state.success).toBeNull();
+    expect(h.result.current.state.phase).toBe('confirmed_pending');
   });
 });
