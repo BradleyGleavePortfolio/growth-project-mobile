@@ -30,7 +30,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Linking } from "react-native";
 import { resolveStripePublishableKey } from "../config/stripe";
 import { resolveWalletConfig } from "../config/wallets";
-import { clientPaymentsApi } from "../api/clientPaymentsApi";
+import { clientPaymentsApi, type ClientPurchase } from "../api/clientPaymentsApi";
 import { generateIdempotencyKey } from "../utils/idempotency";
 import { authEvents } from "../utils/authEvents";
 import { shortReference } from "../utils/correlation";
@@ -790,7 +790,9 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
         try {
           const res = await clientPaymentsApi.getPurchases();
           if (!live()) return null;
-          const mine = res.ok ? attemptPurchase(res.data, packageId, pinned) : null;
+          const mine: ClientPurchase | null = res.ok
+            ? attemptPurchase(res.data, packageId, pinned)
+            : null;
           if (mine) pinned = mine.id;
           if (mine && ownRowInForce(mine)) return mine.id;
         } catch {
