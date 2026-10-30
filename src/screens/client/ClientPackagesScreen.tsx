@@ -82,6 +82,7 @@ import { PACKAGE_PAYMENT_COPY } from '../../lib/packagePayment';
 import { money, planTerms, priceLabel } from '../../lib/planTerms';
 import { CLIENT_PLAN_COPY, ClientPlanPage, PlanMasthead, PlanOfferCard } from './packageDetail/ClientPlanPresentation';
 import { useCoachlessClient } from '../../hooks/useCoachlessClient';
+import { PLANS_LOAD_ERROR } from '../../constants/packageCoachingCopy';
 import { COACHLESS_TITLE, COACHLESS_BODY, COACHLESS_CTA } from '../../entitlements/PaywallSheet';
 
 function formatMoney(amount: number, currency: string): string {
@@ -174,8 +175,7 @@ function DunningBanner({
   );
 }
 
-/** U-5 plain words (approved); also the coach-name retry (FR-1TO1). */
-const PLANS_LOAD_ERROR = "Your coach's plans could not load. Check your connection, then tap to try again.";
+// U-5 plain words (approved; PLANS_LOAD_ERROR): also the coach-name retry (FR-1TO1) and the plan sheet's (FR-1TO1R2).
 
 export default function ClientPackagesScreen() {
   const { semanticColors, tokens } = useTheme();

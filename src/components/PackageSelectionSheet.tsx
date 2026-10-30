@@ -42,7 +42,6 @@ import {
   Pressable,
   ScrollView,
   TouchableOpacity,
-  Platform,
 } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
 import type { SemanticTokens, Tokens } from '../theme/tokens';
@@ -57,6 +56,7 @@ import PlanTermsBlock from './purchase/PlanTermsBlock';
 import PurchaseFeedback from './purchase/PurchaseFeedback';
 import { QuietOverline as Overline } from '../ui/sections/QuietSection';
 import { oneToOneCoachingLabel } from '../config/purchaseSurfaces';
+import { PLANS_LOAD_ERROR } from '../constants/packageCoachingCopy';
 import { HouseJoined } from './renewal/CoachMonogram';
 import { forestPop } from '../theme/tokens';
 import {
@@ -67,6 +67,17 @@ import {
 } from '../lib/planTerms';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+/** FR-1TO1R2: the coach's name for the 1:1 line, as ClientPackagesScreen reads it; null when the read
+ *  fails or the name is blank (the sheet then does not sell and offers the retry line). */
+async function readCoachName(): Promise<string | null> {
+  try {
+    const name = (await api.get<{ name?: unknown }>('/v1/clients/me/coach'))?.data?.name;
+    return typeof name === 'string' && name.trim() ? name.trim() : null;
+  } catch {
+    return null;
+  }
+}
 
 export type CoachPackage = PurchasablePackage;
 
@@ -154,6 +165,14 @@ export default function PackageSelectionSheet({
   const [ready, setReady] = useState(false); // passed 24h suppression check
   const [reloadTick, setReloadTick] = useState(0);
   const [coachName, setCoachName] = useState<string | null>(null);
+  // FR-1TO1R2 (LS/LO B1): ClientPackagesScreen's rule on both platforms. Until the coach is named the
+  // sheet does not sell; a failed read shows the U-5 retry line and a tap reads the name again.
+  const [coachNameFailed, setCoachNameFailed] = useState(false);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   // Latest-ref pattern: callers may pass an inline onDismiss that re-creates
   // every render. Subscribing the effects below to `onDismiss` directly would
@@ -222,10 +241,8 @@ export default function PackageSelectionSheet({
     }
     (async () => {
       try {
-        // #161-5: on iOS the list is labelled 1:1 coaching with the coach by name, as on ClientPackages.
-        const coachRead = houseName ?? (Platform.OS === 'ios' && firstLoad
-          ? (async () => (await api.get<{ name?: unknown }>('/v1/clients/me/coach'))?.data?.name)().catch(() => null)
-          : null);
+        // #161-5 / FR-1TO1R2: the list is labelled 1:1 coaching with the coach by name, as on ClientPackages.
+        const coachRead: Promise<string | null> | string | null = houseName ?? (firstLoad ? readCoachName() : null);
         const res = await api.get<{ packages: unknown[] } | unknown[]>(
           houseId ? houseCoachPackagesPath(houseId) : '/v1/clients/me/coach/packages',
         );
@@ -250,7 +267,8 @@ export default function PackageSelectionSheet({
         }
         const name = await coachRead;
         if (cancelled) return;
-        if (typeof name === 'string') setCoachName(name);
+        if (name) setCoachName(name);
+        else if (firstLoad) setCoachNameFailed(true);
         setPackages(list);
         setDescriptions(desc);
         if (firstLoad && initialPackageId && list.some((p) => p.id === initialPackageId)) {
@@ -265,6 +283,15 @@ export default function PackageSelectionSheet({
     })();
     return () => { cancelled = true; };
   }, [ready, reloadTick, initialPackageId, houseId, houseName]);
+
+  const retryCoachName = useCallback(() => {
+    setCoachNameFailed(false);
+    void readCoachName().then((name) => {
+      if (!mountedRef.current) return;
+      if (name) setCoachName(name);
+      else setCoachNameFailed(true);
+    });
+  }, []);
 
   const selected = packages.find((p) => p.id === selectedId) ?? null;
 
@@ -297,7 +324,7 @@ export default function PackageSelectionSheet({
 
   if (!visible || !ready) return null;
 
-  const ctaDisabled = !selected || busy;
+  const ctaDisabled = !selected || busy || !coachName;
   const ctaLabel = selected ? planTerms(selected).cta : 'Select this plan';
 
   return (
@@ -323,8 +350,14 @@ export default function PackageSelectionSheet({
           <Text style={styles.heading}>Choose your plan</Text>
           <Text style={styles.subtext}>Start with a plan that fits your goals.</Text>
 
-          {(Platform.OS === 'ios' || houseName) && !loading ? (
+          {!loading ? (
             <Overline testID="package-sheet-one-to-one">{oneToOneCoachingLabel(coachName)}</Overline>
+          ) : null}
+          {!loading && coachNameFailed && !coachName ? (
+            <TouchableOpacity onPress={retryCoachName} style={styles.retryLine} accessibilityRole="button"
+              testID="package-sheet-coach-retry">
+              <Text style={styles.retryLineText}>{PLANS_LOAD_ERROR}</Text>
+            </TouchableOpacity>
           ) : null}
 
           {/* Package cards */}
@@ -494,6 +527,14 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
     skeletonLine: {
       borderRadius: 2,
       backgroundColor: semanticColors.border,
+    },
+    // FR-1TO1R2: the U-5 retry line, as on ClientPackagesScreen's plan cards.
+    retryLine: {
+      minHeight: 44, justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 12, marginBottom: 12,
+      borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: semanticColors.border, backgroundColor: semanticColors.bgPrimary,
+    },
+    retryLineText: {
+      fontFamily: tokens.typography.bodySmall.fontFamily, fontSize: 13, lineHeight: 19, color: semanticColors.textPrimary,
     },
     // CTA
     ctaBtn: {
