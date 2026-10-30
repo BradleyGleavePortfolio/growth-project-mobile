@@ -81,6 +81,24 @@ function readingOrder(root: TestInstance): TestInstance[] {
 }
 
 describe('SpaceInfoSheet Close (W897-CLOSE)', () => {
+  it.each(CASES)('B-TEST LS-912 B2: Android exposes only the visible Close ($name)', async (c) => {
+    await open(c);
+    // accessibilityViewIsModal is iOS-only. RNTL applies its sibling hiding on every platform,
+    // so the default query below would incorrectly hide the scrim for TalkBack as well.
+    // https://reactnative.dev/docs/0.79/accessibility#accessibilityviewismodal-ios
+    const androidClose = screen.getAllByRole('button', { name: 'Close', includeHiddenElements: true })
+      .filter((node) => {
+        if (node.props.accessible === false || node.props.importantForAccessibility === 'no') return false;
+        for (let ancestor: TestInstance | null = node; ancestor; ancestor = ancestor.parent) {
+          if (ancestor.props.importantForAccessibility === 'no-hide-descendants'
+            || ancestor.props['aria-hidden'] === true
+            || StyleSheet.flatten(ancestor.props.style)?.display === 'none') return false;
+        }
+        return true;
+      });
+    expect(androidClose.map((node) => node.props.testID)).toEqual(['space-info-close']);
+  });
+
   it.each(CASES.flatMap((c) => [1, 1.3].map((fontScale) => ({ c, caseName: c.name, fontScale }))))(
     'B-TEST LS-912 B1: Close stays level with the first title line at $fontScale text scale ($caseName)', async ({ c, fontScale }) => {
     // C6CHAT-S-V2 v1: the leading X is level with the title at both text sizes.
