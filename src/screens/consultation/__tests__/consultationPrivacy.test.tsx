@@ -230,9 +230,8 @@ describe('A-02 agreement before any upload', () => {
     await fireEvent.press(r.getByTestId('consent-checkbox'));
     const button = r.getByTestId('consult-continue');
     await act(async () => {
-      const first = button.props.onPress();
-      const second = button.props.onPress();
-      await Promise.all([first, second]);
+      fireEvent.press(button);
+      fireEvent.press(button);
     });
     await waitFor(() => r.getByTestId('consult-screen-G1'));
     expect(api.save).toHaveBeenCalledTimes(1);
@@ -361,12 +360,12 @@ describe('A-03 consent matches the displayed copy, fails closed', () => {
     expect(api.complete).not.toHaveBeenCalled();
   });
 
-  it('LS-E4 C1: a later save rejected for version returns unticked and stops uploads', async () => {
+  it('LS-E4 C1: a resumed later-screen save rejected for consent returns unticked and stops uploads', async () => {
     await seedLocal(fullAnswers(), 'G1');
-    const api = makeApi({ save: jest.fn(async () => { throw conflict('consent_version_mismatch'); }) });
+    const api = makeApi({ save: jest.fn(async () => { throw conflict('consent_missing'); }) });
     const r = await renderFlow(api);
     await waitFor(() => r.getByTestId('consult-screen-G1'));
-    await fireEvent.press(r.getByTestId('option-get_stronger'));
+    await fireEvent.press(r.getByTestId('consult-option-muscle_gain'));
     await fireEvent.press(r.getByTestId('consult-continue'));
     await waitFor(() => r.getByTestId('consult-screen-P0'));
     expect(r.getByTestId('consent-checkbox').props.accessibilityState).toMatchObject({ checked: false });
