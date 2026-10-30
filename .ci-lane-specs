@@ -1,0 +1,4 @@
+src/screens/consultation/__tests__/ls913r3ConsentHeader.test.tsx
+src/components/ai/__tests__/ls913r3ConsentGrip.test.tsx
+--runInBand
+--forceExit
