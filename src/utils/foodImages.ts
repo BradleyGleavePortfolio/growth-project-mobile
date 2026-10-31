@@ -7,6 +7,8 @@
 // here was looked at, one by one, on 10-30 and shows the food its key names; a key whose photo showed
 // another food (a tiger for ground turkey, a honey jar for ketchup) or whose link was dead was taken
 // out, so those foods show the plain placeholder. Keys are matched whole (see getFoodImageUrl).
+// FR-916 F2: egg (avocado toast), milk (a branded carton) and soda (branded cans) were taken out too, so
+// those foods show the letter tile.
 const FOOD_PHOTOS: Record<string, string> = {
   // Meat, fish and eggs
   chicken: 'https://images.unsplash.com/photo-1598103442097-8b74394b95c6?w=100&h=100&fit=crop',
@@ -17,7 +19,6 @@ const FOOD_PHOTOS: Record<string, string> = {
   salmon: 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=100&h=100&fit=crop',
   fish: 'https://images.unsplash.com/photo-1510130387422-82bed34b37e9?w=100&h=100&fit=crop',
   shrimp: 'https://images.unsplash.com/photo-1565680018434-b513d5e5fd47?w=100&h=100&fit=crop',
-  egg: 'https://images.unsplash.com/photo-1482049016688-2d3e1b311543?w=100&h=100&fit=crop',
   // Grains, bread and cereal
   rice: 'https://images.unsplash.com/photo-1516684732162-798a0062be99?w=100&h=100&fit=crop',
   white_rice: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=100&h=100&fit=crop',
@@ -60,9 +61,6 @@ const FOOD_PHOTOS: Record<string, string> = {
   onion: 'https://images.unsplash.com/photo-1518977956812-cd3dbadaaf31?w=100&h=100&fit=crop',
   salad: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=100&h=100&fit=crop',
   // Dairy
-  milk: 'https://images.unsplash.com/photo-1563636619-e9143da7973b?w=100&h=100&fit=crop',
-  whole_milk: 'https://images.unsplash.com/photo-1563636619-e9143da7973b?w=100&h=100&fit=crop',
-  skim_milk: 'https://images.unsplash.com/photo-1563636619-e9143da7973b?w=100&h=100&fit=crop',
   cheese: 'https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?w=100&h=100&fit=crop',
   butter: 'https://images.unsplash.com/photo-1589985270826-4b7bb135bc9d?w=100&h=100&fit=crop',
   ice_cream: 'https://images.unsplash.com/photo-1497034825429-c343d7c6a68f?w=100&h=100&fit=crop',
@@ -76,7 +74,6 @@ const FOOD_PHOTOS: Record<string, string> = {
   latte: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=100&h=100&fit=crop',
   tea: 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=100&h=100&fit=crop',
   juice: 'https://images.unsplash.com/photo-1621506289937-a8e4df240d0b?w=100&h=100&fit=crop',
-  soda: 'https://images.unsplash.com/photo-1527960471264-932f39eb5846?w=100&h=100&fit=crop',
   smoothie: 'https://images.unsplash.com/photo-1505252585461-04db1eb84625?w=100&h=100&fit=crop',
   // Meals
   pizza: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=100&h=100&fit=crop',
@@ -126,7 +123,9 @@ function mapKey(words: string[]): string | null {
  * there is no photo of this food, and FoodImage shows the plain placeholder.
  */
 export function getFoodImageUrl(foodName: string): string {
-  const parts = foodName.toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/[^a-z,\s]/g, ' ').split(',')
+  // FR-916 F2: words in parentheses count like words after a comma: "Pineapple (raw)" is pineapple,
+  // "Pineapple (juice)" is not.
+  const parts = foodName.toLowerCase().replace(/\(([^)]*)\)/g, ',$1,').replace(/[^a-z,\s]/g, ' ').split(',')
     .map((part) => part.split(/\s+/).filter(Boolean));
   const [head = [], ...rest] = parts;
   if (rest.some((part) => part.some((w) => !PLAIN_WORDS.has(w)))) return '';
