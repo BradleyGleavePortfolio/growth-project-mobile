@@ -44,6 +44,7 @@ import {
   routineSessionExercises,
 } from '../../utils/workout/workoutLogging';
 import { workoutStartDay } from '../../utils/workout/workoutDay';
+import { catalogKey } from '../../utils/workout/exerciseId';
 // Offline-first write path (audit fix H-5: comments were left
 // referencing the deleted WatermelonDB stack — current implementation
 // is built on expo-sqlite, see src/offline/database.ts and
@@ -612,20 +613,11 @@ export default function ActiveWorkoutScreen() {
   };
 
   const openExerciseDetail = (exercise: SessionExercise) => {
-    // W-5 fix: prefer the catalog id when the upstream
-    // routine carries it (coach-assigned workouts always
-    // do; legacy local routines may not). Falling back to a
-    // slug derived from the human-readable name only when
-    // no id is present — the slug hit the "Exercise not
-    // found" path for almost every entry because the
-    // backend catalog is keyed on the real exercise id, not
-    // a name slug.
-    const idOrSlug =
-      (exercise.exerciseId && exercise.exerciseId.trim()) ||
-      exercise.exerciseName
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '');
+    // W-5 fix: prefer the catalog id when the upstream routine carries it
+    // (coach-assigned workouts always do). A saved routine's exercises have
+    // only the phone's fallback id (routine:...), which the catalog cannot
+    // resolve, so they open by the name's slug instead (catalogKey).
+    const idOrSlug = catalogKey(exercise.exerciseId, exercise.exerciseName);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (navigation as any).navigate('ExerciseDetail', {
       idOrSlug,
