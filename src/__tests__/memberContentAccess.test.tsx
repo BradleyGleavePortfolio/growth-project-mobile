@@ -495,3 +495,33 @@ describe('KT-2 known gaps shown in the source (when one fails, the gap is fixed:
     },
   );
 });
+
+// ─── LO-911 B2 (B-TEST, review only): forms the inventory scan must read ─────────────────────────────────────────
+// Each form is real code a builder can write today. The scan names a file only by the exact names in COMPOSER_SIGNS
+// and LIST_SIGNS (and a bare <TextInput inside MEMBER_PLACE), so every form below goes through unnamed and the
+// registry tests stay green. The first two are the space chat unit (m#871 to m#897 head 718aa171) as written.
+describe('LO-911 B2: the inventory scan names every form a member list or composer can take', () => {
+  const FORMS: { file: string; kind: Kind; text: string }[] = [
+    { file: 'screens/community/CommunitySpaceChatScreen.tsx', kind: 'list',
+      text: "import { useSpaceChat } from '../../components/community/space-chat/useSpaceChat';\nconst chat = useSpaceChat(cohortId, client?.id ?? null, isOnline, focused);\n<FlatList data={items} renderItem={renderItem} />" },
+    { file: 'components/community/space-chat/useSpaceChat.ts', kind: 'list',
+      text: 'queryFn: ({ pageParam }) => spaceChatApi.list(cohortId, pageParam),' },
+    { file: 'components/home/AliasFeed.tsx', kind: 'list',
+      text: "import { usePosts as useFeed } from '../../hooks/useCommunity';\nconst q = useFeed(id);\n<FlatList data={q.data?.items} />" },
+    { file: 'components/home/RawWireStream.tsx', kind: 'list',
+      text: 'queryFn: () => api.get(`/community/workspaces/${id}/chat`)\n<SectionList sections={sections} />' },
+    { file: 'hooks/usePostsWithRemoved.ts', kind: 'list',
+      text: 'queryFn: () => removedRowsApi.listPosts(workspaceId)' },
+    { file: 'components/home/AliasComposer.tsx', kind: 'composer',
+      text: "import { useSendDm as useSend } from '../../hooks/useCommunity';\nconst send = useSend(ws, thread);\n<TextInput onSubmitEditing={() => send.mutate(t)} />" },
+    { file: 'components/home/DestructuredSend.tsx', kind: 'composer',
+      text: 'const { sendDm } = communityApi;\n<CopilotComposer onSend={(text) => sendDm(ws, thread, text)} />' },
+  ];
+  const named = (f: { file: string; kind: Kind; text: string }) =>
+    f.kind === 'list'
+      ? LIST_SIGNS.some((r) => r.test(f.text))
+      : COMPOSER_SIGNS.some((r) => r.test(f.text)) || (MEMBER_PLACE.test(f.file) && /<TextInput\b/.test(f.text));
+  it('every form is named by the scan', () => {
+    expect(FORMS.filter((f) => !named(f)).map((f) => `${f.kind} ${f.file}`)).toEqual([]);
+  });
+});
