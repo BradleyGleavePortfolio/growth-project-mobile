@@ -76,6 +76,12 @@ it.each<[string, Row[], Row[], string, number, string[]]>([
     [done({ id: 'a1', started_at: '2026-10-26T16:00:00.000Z', completed_at: '2026-10-26T17:00:00.000Z' }),
       done({ id: 'a2', started_at: '2026-10-26T20:00:00.000Z', completed_at: '2026-10-26T21:00:00.000Z' })],
     [log('w1', '2026-10-26'), log('w2', '2026-10-26')], '2026-10-26', 2, []],
+  ['LS-917R2 B3: two older assignments do not steal each other\'s saved workout after a delayed upload',
+    // GET /assignments/me is scheduled-day ascending. GET /workouts is
+    // recorded-day descending. Older completion rows have no started_at.
+    [done({ id: 'a1', completed_at: '2026-10-27T17:00:00.000Z' }),
+      done({ id: 'a2', scheduled_for: '2026-10-27T00:00:00.000Z', completed_at: '2026-10-27T21:00:00.000Z' })],
+    [log('tuesday', '2026-10-27'), log('monday', '2026-10-26')], '2026-10-26', 2, []],
   ['control: done a day late, the workout is not shown again on its own day',
     [done({ started_at: '2026-10-28T01:00:00.000Z', completed_at: '2026-10-28T02:00:00.000Z' })],
     [log('w1', '2026-10-27')], '2026-10-27', 0, []],
