@@ -19,7 +19,10 @@ const mockLog: FoodLog = {
 const mockStore = {
   selectedDate: '2026-10-06', foodLogs: [mockLog], hasLoadedDay: true,
   dailyTotals: { calories: 162, protein: 6, carbs: 6, fat: 14 }, waterOz: 0,
-  setSelectedDate: jest.fn(), loadDayData: jest.fn().mockResolvedValue(undefined), logWater: jest.fn(),
+  setSelectedDate: jest.fn(), loadDayData: jest.fn().mockResolvedValue(undefined),
+  // Like the store: reads the day again only while it is the day on screen.
+  refreshShownDay: jest.fn((u: string, d: string): Promise<void> => (d === mockStore.selectedDate ? mockStore.loadDayData(u, d) : Promise.resolve())),
+  logWater: jest.fn(),
 };
 jest.mock('../../../store/clientStore', () => ({ useClientStore: () => mockStore }));
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'user' }) }));

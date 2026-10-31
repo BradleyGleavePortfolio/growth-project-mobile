@@ -24,6 +24,10 @@ interface ClientStore {
 
   setSelectedDate: (date: string) => void;
   loadDayData: (userId: string, date?: string) => Promise<void>;
+  // LS-914R3 B1: the one day refresh for work that finishes after a wait
+  // (save, edit, delete, repeat, sync). Reads `date` again only while that day
+  // is the one on screen; it never selects a day.
+  refreshShownDay: (userId: string, date: string) => Promise<void>;
   loadProfile: (userId: string) => Promise<void>;
   logFood: (data: {
     userId: string;
@@ -198,13 +202,17 @@ export const useClientStore = create<ClientStore>((set, get) => ({
     }
   },
 
+  refreshShownDay: async (userId: string, date: string) => {
+    if (get().selectedDate !== date) return;
+    await get().loadDayData(userId, date);
+  },
+
   loadProfile: async (_userId: string) => {
     // Profile is loaded from AsyncStorage macro_targets — nothing to do here
   },
 
   logFood: async (data) => {
     const mine = session;
-    const shown = view;
     try {
       await logApi.logFood({
         date: data.date,
@@ -213,12 +221,9 @@ export const useClientStore = create<ClientStore>((set, get) => ({
         quantity_multiplier: data.quantityMultiplier || 1.0,
         notes: data.notes,
       });
-      // LS-914R2 B1: a day opened while this was saving stays open; the
-      // logged day is read again only if no other day was opened since, or
-      // the client is back on it.
-      if (mine === session && (shown === view || get().selectedDate === data.date)) {
-        await get().loadDayData(data.userId, data.date);
-      }
+      // LS-914R3 B1: a day opened while this was saving stays open; the
+      // logged day is read again only while it is the day on screen.
+      if (mine === session) await get().refreshShownDay(data.userId, data.date);
     } catch (err) {
       throw err;
     }
@@ -251,7 +256,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
     // Another day opened meanwhile: drop the answer; if the client is back on
     // the sent day (A -> B -> A), read that day again so it shows the truth.
     const settleElsewhere = () => {
-      if (mine === session && get().selectedDate === date) void get().loadDayData(userId, date);
+      if (mine === session) void get().refreshShownDay(userId, date);
     };
     set((state) => ({ waterOz: state.waterOz + amountOz }));
     try {

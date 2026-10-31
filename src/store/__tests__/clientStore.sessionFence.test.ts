@@ -61,9 +61,12 @@ const rows: Row[] = [
     (s) => s.logWater('synthetic-old-account', '', 8), (s) => s.waterEntries.some((e) => e.id === 'synthetic-old-water')],
   ['water add rollback', mockLogWater, 'reject', new Error('Network Error'), (s) => s.logWater('synthetic-old-account', '', 8),
     (s) => s.loadError !== null],
-  ['refresh after a food log', mockLogFood, 'resolve', { data: {} },
-    (s) => s.logFood({ userId: 'synthetic-old-account', date: OTHER_DAY, mealType: 'breakfast', foodItemId: 'synthetic-oats' }),
-    (s) => s.selectedDate === OTHER_DAY],
+  // LS-914R3 B1: a food save never selects a day, so the client is on the
+  // logged day; the refresh after the save is what loads it again.
+  ['refresh after a food log', mockLogFood, 'resolve', { data: {} }, (s) => {
+    s.setSelectedDate(OTHER_DAY);
+    return s.logFood({ userId: 'synthetic-old-account', date: OTHER_DAY, mealType: 'breakfast', foodItemId: 'synthetic-oats' });
+  }, (s) => s.selectedDate === OTHER_DAY && s.hasLoadedDay],
   ['water delete reply', mockDeleteWater, 'resolve', { data: {} }, (s) => s.removeWaterEntry('synthetic-water-1'),
     (s) => !s.waterEntries.some((e) => e.id === 'synthetic-water-1')],
 ];
