@@ -15,6 +15,7 @@ jest.mock('../../../theme/useTheme', () => {
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: jest.fn(), goBack: jest.fn() }),
   useRoute: () => ({ params: { voiceNoteId: 'vn-1', excerpt: 'my squat felt strong today' } }),
+  useFocusEffect: () => undefined, // FR-865R5: m#865's page registers its forest status band on focus (FR-865R4)
 }));
 jest.mock('../../../config/featureFlags', () => ({ featureFlags: { communitySearch: true } }));
 jest.mock('../../../hooks/useFeatureFlags', () => ({

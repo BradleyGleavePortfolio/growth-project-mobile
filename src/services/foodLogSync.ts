@@ -55,7 +55,7 @@ export function syncFoodLogQueue(): Promise<number> {
       const userId = readUserCacheSync()?.id;
       if (flushed > 0 && userId) {
         const store = useClientStore.getState();
-        await store.loadDayData(userId, store.selectedDate);
+        await store.refreshShownDay(userId, store.selectedDate);
       }
     } catch (err) {
       logger.warn('FoodLogSync', 'offline food sync failed', err);

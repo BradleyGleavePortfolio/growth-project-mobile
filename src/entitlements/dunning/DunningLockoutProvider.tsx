@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, BackHandler, StyleSheet, View, type AppStateStatus } from 'react-native';
 import { NavigationContainerRefContext } from '@react-navigation/native';
+import { featureFlags } from '../../config/featureFlags';
 import { queryClient } from '../../services/queryClient';
 import { captureError } from '../../services/sentry';
 import { dunningApi, type CancelPlanResponse, type ClientDunningStatus } from './dunningApi';
@@ -35,8 +36,22 @@ export const OPEN_FOR_OWN_LOGGING: ReadonlySet<string> = new Set([
   'WorkoutAssignmentDetail', 'ClientDailyMealPlan', 'Fast', 'ClientMacros', 'Habits', 'RoutineBuilder',
 ]);
 
+/**
+ * #LEARN-LOCK (owner): neither guidelines nor lessons lock when the plan
+ * lapses. Their routes (/v1/client/courses and lessons, /lessons,
+ * /coach/my-guidelines) pass the lockout on the server, so the course and
+ * Learn screens stay open behind the switch that shows them. With a switch
+ * off its screens keep the lockout, exactly as before.
+ */
+export const OPEN_FOR_LEARN: ReadonlyArray<{ flag: 'learnCourses' | 'learnHub'; routes: ReadonlySet<string> }> = [
+  { flag: 'learnCourses', routes: new Set(['Course', 'CourseWeek', 'CourseLesson', 'CourseComplete']) },
+  { flag: 'learnHub', routes: new Set(['Learn', 'LearnLesson', 'CoachGuidelines']) },
+];
+
 function openWhileLocked(name: string | undefined): boolean {
-  return Boolean(name && (REACHABLE_WHILE_LOCKED.has(name) || OPEN_FOR_OWN_LOGGING.has(name)));
+  if (!name) return false;
+  if (REACHABLE_WHILE_LOCKED.has(name) || OPEN_FOR_OWN_LOGGING.has(name)) return true;
+  return OPEN_FOR_LEARN.some(({ flag, routes }) => featureFlags?.[flag] === true && routes.has(name));
 }
 
 interface NavStateLike {

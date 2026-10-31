@@ -17,6 +17,7 @@ const mockParams = { voiceNoteId: 'vn-1', excerpt: 'my squat felt strong today' 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: jest.fn(), goBack: jest.fn() }),
   useRoute: () => ({ params: mockParams }),
+  useFocusEffect: () => undefined, // FR-865R4: the page's forest status band registers on focus
 }));
 jest.mock('../../../config/featureFlags', () => ({ featureFlags: { communitySearch: true } }));
 jest.mock('../../../hooks/useFeatureFlags', () => ({

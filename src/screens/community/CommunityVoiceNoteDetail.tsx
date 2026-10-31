@@ -29,6 +29,12 @@
  * as the Hall feed; the menu stays, Report shown as done ("Reported") with Block still there. A note the
  * coach removed reads as one quiet line (removed/VoiceRemovedPlaceholder): no player, menu or transcript.
  *
+ * Look (FR-865R4, Sol R3 #865 B7, Opus R3 #865 C3/N6): Voice B Studio's page (GOAL B-09a in frame 05b's shell). ONE
+ * header in every state, the deep forest bar with Back (StudioPage), the status band above it in the same forest; the
+ * note named as the Hall names it (square identity tile, name, Coach mark, time) with the card under the name; the
+ * player told when the phone is offline, so Play is off (GOAL B-10a) instead of a load that fails. FR-865R5 (Sol R4 #865 B1,
+ * B2): on a phone too narrow for the card under the name (320 pt) the card keeps the page's width, and the time is the clock.
+ *
  * Tokens only (no raw hex); line Ionicons only (no emoji); fontWeight <= '600'.
  */
 import React, { useEffect, useRef } from 'react';
@@ -39,20 +45,23 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
+import { getCalendars } from 'expo-localization';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
-import { spacing, radius, voiceFaces } from '../../theme/tokens';
+import { forestPop as fp, spacing, radius, voiceFaces } from '../../theme/tokens';
 import { featureFlags } from '../../config/featureFlags';
 import { useFeatureFlags } from '../../hooks/useFeatureFlags';
 import { useVoiceCatchUp } from '../../hooks/useVoiceFeed';
 import { voiceKeys } from '../../hooks/voiceQueryKeys';
 import { ThreadHeader } from '../../components/community';
+import { ForestStatusBar } from '../../components/StatusBarBand';
+import { isEffectivelyOnline, useNetworkStatus } from '../../hooks/useNetworkStatus';
 import VoiceNotePlayer from '../../components/community/VoiceNotePlayer';
-import { formatRelative } from '../../components/community/SearchResultRow';
 import HapticPressable from '../../components/HapticPressable';
 import { communityVoiceApi, type VoiceNoteView } from '../../api/communityVoiceApi';
 import VoiceRemovedPlaceholder, {
@@ -69,10 +78,48 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { describeCommunityFailure } from '../../api/communityErrors';
 import type { CommunityNav, CommunityRoute } from './communityNavTypes';
 
+/**
+ * Frame 05b's shell: the deep forest bar is the page's one header (Back, the title, an empty 44 pt slot), the app's
+ * status band takes the same forest with light icons while the page is in front (as the community DM), and the bone
+ * page sits below. Both stacks mount this page with no bar of their own.
+ */
+function StudioPage({ onBack, children }: { onBack: () => void; children: React.ReactNode }): React.ReactElement {
+  const { semanticColors } = useTheme();
+  return (
+    <SafeAreaView style={[styles.flex, { backgroundColor: fp.deep }]} edges={['top']}>
+      <ForestStatusBar />
+      <ThreadHeader tone="deep" title="Voice note" onBack={onBack} testID="community-voice-detail-header" />
+      <View style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}>{children}</View>
+    </SafeAreaView>
+  );
+}
+
+/** GOAL B-09a: the card starts under the name, past the 32 pt tile, its 8 pt gap and 4 more as the frame. */
+const UNDER_NAME = 32 + spacing.sm + 4;
+/**
+ * Sol R4 #865 B1: the narrowest player card whose 48 bars (2 pt each, 2 apart: 190 pt) fit the seek target beside the 52 pt
+ * disc and its 12 pt gap, inside the card's 12 + 10 padding and 1 pt edges. Under the name that needs a 354 pt phone.
+ */
+const CARD_MIN = 48 * 2 + 47 * 2 + 52 + spacing.md + spacing.md + 10 + 2;
+
+/** Sol R4 #865 B2 (GOAL B-09a "9:20"): the note's clock, in the phone's own time zone and its 12/24-hour setting. */
+function clockOf(iso: string): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return '';
+  const options: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit' };
+  const h24 = getCalendars()[0]?.uses24hourClock;
+  if (typeof h24 === 'boolean') options.hourCycle = h24 ? 'h23' : 'h12'; // h23: midnight is 00:05, never 24:05
+  return at.toLocaleTimeString(undefined, options);
+}
+
 export default function CommunityVoiceNoteDetail(): React.ReactElement {
   const { semanticColors } = useTheme();
+  const { width } = useWindowDimensions();
   const route = useRoute<CommunityRoute<'CommunityVoiceNoteDetail'>>();
   const navigation = useNavigation<CommunityNav>();
+  const goBack = () => navigation.goBack();
+  // Opus R3 #865 N6: no connection, no new Play (the player's grey disc), the same reading as the coach inbox.
+  const online = isEffectivelyOnline(useNetworkStatus());
   const qc = useQueryClient();
   const viewer = useCurrentUser();
   const voiceNoteId = route.params?.voiceNoteId ?? '';
@@ -86,8 +133,14 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
   // controls route REGISTRATION; this is the inner, server-authoritative gate.
   const { flags } = useFeatureFlags();
   const runtimeEnabled = flags.community_search;
+  // VOICE-INBOX: the coach inbox opens a client's note here too; that route is
+  // registered only behind the build-time `communityVoiceNotes` flag.
+  const open =
+    featureFlags.communityVoiceNotes ||
+    (featureFlags.communitySearch && runtimeEnabled);
 
-  const noteEnabled = !!voiceNoteId && featureFlags.communitySearch && runtimeEnabled;
+  // The coach inbox route (communityVoiceNotes) loads the note too, not only search (else Loading forever).
+  const noteEnabled = !!voiceNoteId && open;
   const note = useQuery({
     queryKey: voiceKeys.note(voiceNoteId),
     queryFn: () => communityVoiceApi.getOne(voiceNoteId),
@@ -124,29 +177,21 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
 
   // Defense-in-depth: never reachable with the flag off (route not registered),
   // and additionally hidden if the server flag resolves OFF at runtime.
-  if (!featureFlags.communitySearch || !runtimeEnabled) {
+  if (!open) {
     return (
-      <SafeAreaView
-        style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}
-        edges={['top']}
-      >
-        <ThreadHeader title="Voice note" testID="community-voice-detail-header" />
+      <StudioPage onBack={goBack}>
         <View style={styles.center}>
           <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
             This voice note is not available right now.
           </Text>
         </View>
-      </SafeAreaView>
+      </StudioPage>
     );
   }
 
   if (note.isLoading) {
     return (
-      <SafeAreaView
-        style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}
-        edges={['top']}
-      >
-        <ThreadHeader title="Voice note" testID="community-voice-detail-header" />
+      <StudioPage onBack={goBack}>
         <View
           style={styles.center}
           accessibilityState={{ busy: true }}
@@ -161,17 +206,13 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
             Loading voice note…
           </Text>
         </View>
-      </SafeAreaView>
+      </StudioPage>
     );
   }
 
   if (note.isError || !note.data) {
     return (
-      <SafeAreaView
-        style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}
-        edges={['top']}
-      >
-        <ThreadHeader title="Voice note" testID="community-voice-detail-header" />
+      <StudioPage onBack={goBack}>
         <View style={styles.center} testID="community-voice-detail-error">
           <Ionicons
             name="alert-circle-outline"
@@ -196,12 +237,12 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
             </Text>
           </HapticPressable>
         </View>
-      </SafeAreaView>
+      </StudioPage>
     );
   }
 
   const data = note.data;
-  const when = formatRelative(data.created_at);
+  const when = clockOf(data.created_at);
   const mine = !!viewer?.id && viewer.id === data.author_id;
   const folded = reported.has(data.id);
   // Owner #174-4: a coach-removed note shows one quiet line, no player, menu or transcript.
@@ -232,33 +273,42 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
     });
   };
 
+  const name = data.author_name?.trim() || 'Voice note';
+  const coach = data.author_is_coach === true;
+  const initial = data.author_name?.trim()?.[0]?.toUpperCase() ?? '';
+  // Sol R4 #865 B1: where the card under the name is too narrow for its bars (a 320 pt phone), the player's card keeps the
+  // page's width (the page's 16 pt sides), as the Hall's, so every bar is on the screen and inside the target it seeks.
+  // The removed line and the reported fold have no bars and keep their place under the name.
+  const tight = !removedLine && !folded && width - 2 * spacing.lg - UNDER_NAME < CARD_MIN;
+
   return (
-    <SafeAreaView
-      style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}
-      edges={['top']}
-    >
-      <ThreadHeader title="Voice note" testID="community-voice-detail-header" />
+    <StudioPage onBack={goBack}>
       <ScrollView
         contentContainerStyle={styles.content}
         testID="community-voice-detail-scroll"
       >
+        {/* Sol R3 #865 B7 (GOAL B-09a): named as the Hall names a note, the square identity tile (decorative: the name
+            beside it says who), the name, the coach's Coach mark and the time in the Hall's type, the menu at the end. */}
         <View style={styles.metaRow}>
-          <Ionicons
-            name="mic-outline"
-            size={18}
-            color={semanticColors.textMuted}
-          />
-          <Text
-            style={[styles.kind, { color: semanticColors.textMuted }]}
-            accessibilityRole="header"
-          >
-            Voice note
-          </Text>
-          {when.length > 0 ? (
-            <Text style={[styles.when, { color: semanticColors.textMuted }]}>
-              {when}
-            </Text>
+          {initial ? (
+            <View
+              style={[styles.tile, coach ? styles.tileCoach : styles.tileMember]}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+              testID="community-voice-detail-tile"
+            >
+              <Text style={coach ? styles.initialCoach : styles.initial} allowFontScaling={false}>
+                {initial}
+              </Text>
+            </View>
           ) : null}
+          <View style={styles.byline}>
+            <Text style={styles.who} numberOfLines={1} accessibilityRole="header">
+              {name}
+            </Text>
+            {coach ? <Text style={[styles.coachMark, styles.keep]} numberOfLines={1}>Coach</Text> : null}
+            {when.length > 0 ? <Text style={[styles.when, styles.keep]} numberOfLines={1}>{when}</Text> : null}
+          </View>
           {/* Owner #174-4: a reported note keeps its menu (Reported, Block, the coach's Remove). */}
           {removedLine ? null : (
             <SafetyMenu
@@ -282,21 +332,25 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
           )}
         </View>
 
-        {removedLine ? (
-          <VoiceRemovedPlaceholder line={removedLine} testID="community-voice-detail-removed" />
-        ) : folded ? (
-          <VoiceReportedFold testID="community-voice-detail-reported" />
-        ) : (
-          <VoiceNotePlayer
-            url={data.url}
-            durationMs={data.duration_ms}
-            peaks={data.waveform_peaks ?? []}
-            // Sol R5-B3: a coach's note is the deep card here too, as in the Hall (GOAL B-01b).
-            tone={data.author_is_coach === true ? 'coach' : 'light'}
-            onPlaybackError={() => void note.refetch()}
-            testID="community-voice-detail-player"
-          />
-        )}
+        {/* GOAL B-09a: the card sits under the name, not under the tile. */}
+        <View style={initial && !tight ? styles.underName : undefined}>
+          {removedLine ? (
+            <VoiceRemovedPlaceholder line={removedLine} testID="community-voice-detail-removed" />
+          ) : folded ? (
+            <VoiceReportedFold testID="community-voice-detail-reported" />
+          ) : (
+            <VoiceNotePlayer
+              url={data.url}
+              durationMs={data.duration_ms}
+              peaks={data.waveform_peaks ?? []}
+              // Sol R5-B3: a coach's note is the deep card here too, as in the Hall (GOAL B-01b).
+              tone={coach ? 'coach' : 'light'}
+              offline={!online}
+              onPlaybackError={() => void note.refetch()}
+              testID="community-voice-detail-player"
+            />
+          )}
+        </View>
 
         {excerpt.length > 0 && !folded && !removedLine ? (
           <View style={styles.transcriptWrap}>
@@ -314,7 +368,7 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
           </View>
         ) : null}
       </ScrollView>
-    </SafeAreaView>
+    </StudioPage>
   );
 }
 
@@ -339,9 +393,24 @@ const styles = StyleSheet.create({
   },
   retryLabel: { fontFamily: voiceFaces.semibold, fontSize: 14, fontWeight: '600' },
   content: { padding: spacing.lg, gap: spacing.md },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  kind: { fontFamily: voiceFaces.semibold, fontSize: 12, fontWeight: '600', letterSpacing: 0.3, flex: 1 },
-  when: { fontFamily: voiceFaces.regular, fontSize: 12 },
+  // The Hall's voice row (VoiceNotesSection): name, Coach mark and time. Sol R4 #865 B2: a clock is longer than an age
+  // ("9:20 AM"), so where the three do not fit one line (320 pt, 130% text) the clock goes under the name instead of
+  // cutting it; only a name too long for its line gives way.
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 44 },
+  byline: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: spacing.sm },
+  who: { fontFamily: voiceFaces.semibold, fontSize: 17, fontWeight: '600', color: fp.ink, flexShrink: 1 },
+  coachMark: { overflow: 'hidden', paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: radius.chip,
+    backgroundColor: fp.deep, color: fp.gold, fontFamily: voiceFaces.semibold, fontSize: 13, lineHeight: 18, fontWeight: '600' },
+  when: { fontFamily: voiceFaces.regular, fontSize: 15, color: fp.n700 },
+  keep: { flexShrink: 0 },
+  // GOAL B-09a's small identity tile: a member's leaf tile with a moss edge and an ink initial; the coach's deep tile
+  // with a gold serif initial. The card below starts under the name (UNDER_NAME).
+  tile: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  tileMember: { backgroundColor: fp.leaf, borderColor: fp.moss, borderWidth: 1 },
+  tileCoach: { backgroundColor: fp.deep },
+  initial: { fontFamily: voiceFaces.semibold, fontSize: 14, fontWeight: '600', color: fp.ink },
+  initialCoach: { fontFamily: 'CormorantGaramond_500Medium', fontSize: 18, lineHeight: 23, color: fp.gold },
+  underName: { paddingLeft: UNDER_NAME },
   transcriptWrap: { gap: spacing.xs, marginTop: spacing.sm },
   transcriptLabel: { fontFamily: voiceFaces.semibold, fontSize: 12, fontWeight: '600', letterSpacing: 0.3 },
   transcript: { fontFamily: voiceFaces.regular, fontSize: 15, lineHeight: 22 },

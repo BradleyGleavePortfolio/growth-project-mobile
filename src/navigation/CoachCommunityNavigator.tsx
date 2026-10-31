@@ -38,6 +38,7 @@ import CoachCommunityPostDetailScreen from '../screens/community/CoachCommunityP
 import CoachCommunityModerationScreen from '../screens/community/CoachCommunityModerationScreen';
 import CoachCommunityEventsScreen from '../screens/community/CoachCommunityEventsScreen';
 import CommunityWearablePromptsScreen from '../screens/community/CommunityWearablePromptsScreen';
+import CommunityVoiceNoteDetail from '../screens/community/CommunityVoiceNoteDetail';
 import type { CoachCommunityStackParamList } from '../screens/community/coachCommunityNavTypes';
 
 const CoachCommunityStack =
@@ -165,6 +166,15 @@ function CoachCommunityNavigatorStack(): React.ReactElement {
         <CoachCommunityStack.Screen
           name="CoachCommunityWearablePrompts"
           component={CommunityWearablePromptsScreen}
+          options={{ headerShown: false }}
+        />
+      ) : null}
+      {/* VOICE-INBOX: a voice row in the inbox opens its note here. FR-865R4 (Sol R3 B7): the page draws its own deep
+          Studio bar with Back (frame 05b), so the stack draws none over it. */}
+      {featureFlags.communityVoiceNotes ? (
+        <CoachCommunityStack.Screen
+          name="CommunityVoiceNoteDetail"
+          component={CommunityVoiceNoteDetail}
           options={{ headerShown: false }}
         />
       ) : null}

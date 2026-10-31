@@ -22,6 +22,7 @@ import { z } from 'zod';
 import axios from 'axios';
 import api from '../services/api';
 import { generateIdempotencyKey } from '../utils/idempotency';
+import { REMOVED_ROWS_HEADERS, RemovedBySchema } from './communityRemovedRows';
 import { CommunityApiError } from './communityApi';
 
 // ─── Enums (mirror backend) ───────────────────────────────────────────────────
@@ -127,8 +128,12 @@ export const ChallengeCommentSchema = z
     id: z.string().uuid(),
     challenge_id: z.string().uuid(),
     author_user_id: z.string().uuid(),
-    body: z.string(),
+    // REMOVED-BY-M3 (backend #1176 contract section 5): with the opt-in header a comment a coach removed comes
+    // back as a placeholder, body null plus removed_at and removed_by. Live comments are unchanged.
+    body: z.string().nullable(),
     created_at: z.string().datetime(),
+    removed_at: z.string().optional(),
+    removed_by: RemovedBySchema.optional(),
   })
   .strict();
 export type CommunityChallengeComment = z.infer<typeof ChallengeCommentSchema>;
@@ -325,6 +330,7 @@ export const communityChallengesApi = {
     return call(ChallengeCommentListResponseSchema, () =>
       api.get<unknown>(`/community/challenges/${challengeId}/comments`, {
         params,
+        headers: REMOVED_ROWS_HEADERS,
       }),
     );
   },

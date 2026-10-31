@@ -35,7 +35,17 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { describeCommunityFailure } from '../../api/communityErrors';
 import { useTheme } from '../../theme/useTheme';
-import { spacing, colors, semantic, layout, radius } from '../../theme/tokens';
+import {
+  spacing,
+  colors,
+  semantic,
+  layout,
+  radius,
+  forestPop,
+  neutral,
+  voiceFaces,
+  voiceShades,
+} from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
 import RomanAvatar from '../../components/roman/RomanAvatar';
 import {
@@ -64,6 +74,10 @@ import {
   isIllegalAckTransition,
 } from '../../hooks/useCoachAckActions';
 import { featureFlags } from '../../config/featureFlags';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { formatDuration } from '../../components/community/voiceFormat';
+import VoiceNoteWaveform from '../../components/community/VoiceNoteWaveform';
 import AiTriageCard from '../../components/community/AiTriageCard';
 import { useInboxTriage } from '../../hooks/useInboxTriage';
 import { aiRefusalOf } from '../../lib/ai/aiRefusal';
@@ -244,7 +258,7 @@ export default function CoachCommunityInboxScreen({
 
   const renderItem = useCallback(
     ({ item }: { item: CoachInboxItem }) => (
-      <InboxRow
+      <InboxRowOrVoice
         item={item}
         onOpen={item.type === 'post' ? () => openItem(item) : undefined}
         onAcknowledged={onAcknowledged}
@@ -621,6 +635,89 @@ function InboxAvatar({
   );
 }
 
+type InboxRowProps = React.ComponentProps<typeof InboxRow>;
+
+/**
+ * VOICE-INBOX (#167-4): a voice row (the API sends one only with
+ * communityVoiceNotes on, and only with its note) reads "Voice note · 0:42"
+ * and opens the note; every other row is the coach inbox row.
+ */
+function InboxRowOrVoice(props: InboxRowProps): React.ReactElement {
+  const { voice } = props.item;
+  return props.item.kind === 'voice' && voice ? (
+    <VoiceInboxRow {...props} noteId={voice.note_id} durationMs={voice.duration_ms} />
+  ) : (
+    <InboxRow {...props} />
+  );
+}
+
+/**
+ * The voice row is the same card; its one pressable element opens the note
+ * (no outer pressable around an accessible row: one element, one label).
+ */
+function VoiceInboxRow({
+  noteId,
+  durationMs,
+  item,
+  ...props
+}: InboxRowProps & { noteId: string; durationMs: number }): React.ReactElement {
+  const navigation = useNavigation<CoachCommunityNav>();
+  const labelled = { ...item, snippet: `Voice note · ${formatDuration(durationMs)}` };
+  return (
+    <InboxRow
+      {...props}
+      item={labelled}
+      onOpen={() => openInboxVoiceNote(navigation, noteId)}
+    />
+  );
+}
+
+/** Where a voice row opens: the voice note today; the space chat (#167-3) re-points this one line. */
+export function openInboxVoiceNote(navigation: CoachCommunityNav, noteId: string): void {
+  navigation.navigate('CommunityVoiceNoteDetail', { voiceNoteId: noteId });
+}
+
+/**
+ * Voice B Studio card on a voice row (GOAL B-05a, B-09a): the feed player's
+ * white card, hairline and geometry, the 52 pt deep disc with the leaf play
+ * mark, the bars, and the length under the bars. The inbox sends no loudness
+ * (no peaks), so the bars are the player's flat baseline, never invented.
+ * The bars follow GOAL .wv: 3 pt wide, 2 pt apart, packed from the left in a
+ * strip that clips at its end, so they stay inside the card at any width
+ * (the row's strip is 141 pt at 360 and 171 at 390).
+ * Decorative: the row is the one control and says "Voice note · 0:42"; the
+ * note plays on its own page.
+ */
+function VoiceRowCard({ id, durationMs }: { id: string; durationMs: number }): React.ReactElement {
+  return (
+    <View
+      style={styles.voiceCard}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      testID={`coach-community-inbox-voice-${id}`}
+    >
+      <View style={styles.voiceBrow}>
+        <View style={styles.voiceDisc} testID={`coach-community-inbox-voice-disc-${id}`}>
+          <Ionicons name="play" size={22} color={forestPop.leaf} />
+        </View>
+        <View style={styles.voiceStrip} testID={`coach-community-inbox-voice-strip-${id}`}>
+          <VoiceNoteWaveform
+            peaks={[]}
+            height={34}
+            barCount={48}
+            barWidth={3}
+            gap={2}
+            testID={`coach-community-inbox-voice-bars-${id}`}
+          />
+        </View>
+      </View>
+      <Text style={styles.voiceTime} testID={`coach-community-inbox-voice-time-${id}`}>
+        {formatDuration(durationMs)}
+      </Text>
+    </View>
+  );
+}
+
 function InboxRow({
   item,
   onOpen,
@@ -663,11 +760,16 @@ function InboxRow({
         <Text style={styles.rowCohort} numberOfLines={1}>
           {item.cohort_name}
         </Text>
-        {/* A row that opens (a post) clamps to two lines; a message row has
-            nowhere to open yet, so it shows the whole text (at most 200). */}
-        <Text style={styles.rowSnippet} numberOfLines={onOpen ? 2 : undefined}>
-          {item.snippet}
-        </Text>
+        {/* A row that opens (a post or a voice note) clamps to two lines; a
+            typed message row has nowhere to open yet, so it shows the whole
+            text (at most 200). */}
+        {item.kind === 'voice' && item.voice ? (
+          <VoiceRowCard id={item.id} durationMs={item.voice.duration_ms} />
+        ) : (
+          <Text style={styles.rowSnippet} numberOfLines={onOpen ? 2 : undefined}>
+            {item.snippet}
+          </Text>
+        )}
       </View>
     </>
   );
@@ -964,6 +1066,39 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 18,
     color: colors.forest,
+  },
+  // The feed player's card (VoiceNotePlayer: GOAL .bcard, .brow, .bfoot), still.
+  voiceCard: {
+    marginTop: spacing.xs,
+    paddingTop: 10,
+    paddingRight: 10,
+    paddingBottom: spacing.sm,
+    paddingLeft: spacing.md,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: voiceShades.hairline,
+    backgroundColor: neutral[0],
+  },
+  voiceBrow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 52 },
+  // GOAL .wv: the strip takes the rest of the row and clips the bars at its end.
+  voiceStrip: { flex: 1, minWidth: 0, overflow: 'hidden' },
+  voiceDisc: {
+    width: 52,
+    height: 52,
+    borderRadius: radius.pill,
+    backgroundColor: forestPop.deep,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  voiceTime: {
+    marginTop: 6,
+    paddingLeft: 64,
+    fontFamily: voiceFaces.semibold,
+    fontSize: 14,
+    lineHeight: 17,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+    color: forestPop.ink,
   },
   ackConflict: {
     flexBasis: '100%',

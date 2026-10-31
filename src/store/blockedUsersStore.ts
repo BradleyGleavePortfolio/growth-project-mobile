@@ -12,11 +12,26 @@
  * signOut() the prefs MMKV namespace is wiped wholesale (see authActions.ts
  * `clearAllStorage()`), which drops every user's persisted block list — the
  * next sign-in re-hydrates from the server via GET /users/blocks.
+ *
+ * LS-914 B1: one owner number for the list. It moves on sign-out (retire), reset and an account switch (hydrate for a
+ * different user). Every write that waited on storage or the server carries the owner number it started under and is
+ * dropped when the list has moved on, so an earlier account's answer never adds or removes a person in the next
+ * account's list.
  */
 import { create } from 'zustand';
 import { prefsStorage } from '../storage/mmkv';
 
 const PERSIST_PREFIX = 'blocked_user_ids_v1';
+
+let owner = 0;
+/** LS-914 B1: read before a request; pass it back with the answer's write. */
+export function blockListOwner(): number {
+  return owner;
+}
+/** LS-914 B1: false once sign-out, reset or an account switch has moved the list on since `held` was read. */
+export function ownsBlockList(held: number | undefined): boolean {
+  return held === undefined || held === owner;
+}
 
 export function persistKeyFor(userId: string | null | undefined): string | null {
   if (!userId) return null;
@@ -49,14 +64,20 @@ interface BlockedUsersState {
   /** The user id currently scoping this store. null until hydrate() runs. */
   userId: string | null;
   hydrate: (userId: string) => Promise<void>;
-  block: (user: Omit<BlockedUser, 'blockedAt'>) => Promise<void>;
+  /** `heldOwner` (blockListOwner() before the request): the write is dropped once the list has moved on. */
+  block: (user: Omit<BlockedUser, 'blockedAt'>, heldOwner?: number) => Promise<void>;
   /** Merge rows fetched from GET /users/blocks. Preserves the server-provided
    *  blockedAt timestamp instead of stamping new Date() locally. */
-  addFromServer: (rows: ReadonlyArray<ServerBlockedRow>, opts?: { replace?: boolean }) => Promise<void>;
-  unblock: (id: string) => Promise<void>;
+  addFromServer: (
+    rows: ReadonlyArray<ServerBlockedRow>,
+    opts?: { replace?: boolean; owner?: number },
+  ) => Promise<void>;
+  unblock: (id: string, heldOwner?: number) => Promise<void>;
   isBlocked: (id: string) => boolean;
   /** Wipe all in-memory state and the persisted entry for the active user. */
   reset: () => Promise<void>;
+  /** LS-914 B1: sign-out. Empties the list at once, no storage work (sign-out wipes storage itself). */
+  retire: () => void;
 }
 
 async function persistList(userId: string | null, blocked: BlockedUser[]): Promise<void> {
@@ -104,6 +125,9 @@ export const useBlockedUsersStore = create<BlockedUsersState>((set, get) => ({
     const state = get();
     if (state.hydrated && state.userId === userId) return;
     // Switching users — start clean before reading the new key.
+    if (state.userId !== userId) owner += 1;
+    const mine = owner;
+    const stillMine = () => mine === owner && get().userId === userId;
     set({ blocked: [], hydrated: false, userId });
     const key = persistKeyFor(userId);
     if (!key) {
@@ -113,15 +137,16 @@ export const useBlockedUsersStore = create<BlockedUsersState>((set, get) => ({
     try {
       const sync = prefsStorage.getString(key);
       const raw = sync ?? (await prefsStorage.getStringAsync(key));
-      if (raw) set({ blocked: parseList(raw) });
+      if (raw && stillMine()) set({ blocked: parseList(raw) });
     } catch {
       // Corrupt cache — start clean.
     } finally {
-      set({ hydrated: true });
+      if (stillMine()) set({ hydrated: true });
     }
   },
 
-  block: async (user) => {
+  block: async (user, heldOwner) => {
+    if (!ownsBlockList(heldOwner)) return;
     const now = new Date().toISOString();
     const uid = get().userId;
     set((s) => {
@@ -136,6 +161,7 @@ export const useBlockedUsersStore = create<BlockedUsersState>((set, get) => ({
     // FX-872: `replace` makes the server's list the whole answer, so an unblock made on another device or screen
     // drops here too instead of keeping a stale local block that closes a chat the server has opened.
     if (!rows.length && !opts?.replace) return;
+    if (!ownsBlockList(opts?.owner)) return;
     const uid = get().userId;
     set((s) => {
       const known = new Map<string, BlockedUser>();
@@ -162,7 +188,8 @@ export const useBlockedUsersStore = create<BlockedUsersState>((set, get) => ({
     });
   },
 
-  unblock: async (id) => {
+  unblock: async (id, heldOwner) => {
+    if (!ownsBlockList(heldOwner)) return;
     const uid = get().userId;
     set((s) => {
       const next = s.blocked.filter((b) => b.id !== id);
@@ -178,6 +205,9 @@ export const useBlockedUsersStore = create<BlockedUsersState>((set, get) => ({
 
   reset: async () => {
     const key = persistKeyFor(get().userId);
+    // LS-914 B1: clear first, then delete; a reset that finishes late never clears the next account's list.
+    owner += 1;
+    set({ blocked: [], hydrated: false, userId: null });
     if (key) {
       try {
         await prefsStorage.delete(key);
@@ -185,6 +215,10 @@ export const useBlockedUsersStore = create<BlockedUsersState>((set, get) => ({
         /* non-fatal */
       }
     }
+  },
+
+  retire: () => {
+    owner += 1;
     set({ blocked: [], hydrated: false, userId: null });
   },
 }));

@@ -30,6 +30,11 @@ export type CoachCommunityStackParamList = {
    * Registered only behind `featureFlags.communityWearablePrompts`.
    */
   CoachCommunityWearablePrompts: { clientId: string; clientName?: string };
+  /**
+   * A client's voice note, opened from its inbox row (VOICE-INBOX, #167-4).
+   * Registered only behind `featureFlags.communityVoiceNotes`.
+   */
+  CommunityVoiceNoteDetail: { voiceNoteId: string; excerpt?: string };
 };
 
 /** Loosely-typed nav prop used by the screens (matches the codebase pattern). */

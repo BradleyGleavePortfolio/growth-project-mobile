@@ -24,6 +24,10 @@ interface ClientStore {
 
   setSelectedDate: (date: string) => void;
   loadDayData: (userId: string, date?: string) => Promise<void>;
+  // LS-914R3 B1: the one day refresh for work that finishes after a wait
+  // (save, edit, delete, repeat, sync). Reads `date` again only while that day
+  // is the one on screen; it never selects a day.
+  refreshShownDay: (userId: string, date: string) => Promise<void>;
   loadProfile: (userId: string) => Promise<void>;
   logFood: (data: {
     userId: string;
@@ -54,10 +58,22 @@ const initialClientState = {
   loadError: null as string | null,
 };
 
+// LS-PAYFAIL B10: one generation per signed-in account. reset() runs on every
+// sign-out (resetUserScopedStores) and starts a new one, so a reply, refresh or
+// rollback started by the previous account never writes into the next one.
+let session = 0;
+// LS-914R2 B1: one generation per selected day. A day change (or reset) starts
+// a new one, so a water answer for the day it was sent on never lands on
+// another day the client has opened since.
+let view = 0;
+
 export const useClientStore = create<ClientStore>((set, get) => ({
   ...initialClientState,
 
-  setSelectedDate: (date: string) => set((state) => state.selectedDate === date ? {} : {
+  setSelectedDate: (date: string) => set((state) => {
+    if (state.selectedDate === date) return {};
+    view += 1;
+    return {
     selectedDate: date,
     foodLogs: [],
     dailyTotals: { ...initialClientState.dailyTotals },
@@ -65,11 +81,17 @@ export const useClientStore = create<ClientStore>((set, get) => ({
     waterEntries: [],
     hasLoadedDay: false,
     loadError: null,
+    };
   }),
 
-  reset: () => set({ ...initialClientState, selectedDate: getTodayString() }),
+  reset: () => {
+    session += 1;
+    view += 1;
+    set({ ...initialClientState, selectedDate: getTodayString() });
+  },
 
   loadDayData: async (_userId: string, date?: string) => {
+    const mine = session;
     const d = date || get().selectedDate;
     try {
       get().setSelectedDate(d);
@@ -83,7 +105,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
           return null;
         }),
       ]);
-      if (get().selectedDate !== d) return;
+      if (mine !== session || get().selectedDate !== d) return;
       const data = foodResponse.data;
 
       // Wire shape returned by /v1/log/daily.
@@ -170,7 +192,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
           : 'Water data could not refresh. Check your connection and try again.',
       });
     } catch (err) {
-      if (get().selectedDate !== d) return;
+      if (mine !== session || get().selectedDate !== d) return;
       // Preserve data only for a refresh of the same selected day.
       logger.error('ClientStore', 'loadDayData failed', err);
       set({
@@ -180,11 +202,17 @@ export const useClientStore = create<ClientStore>((set, get) => ({
     }
   },
 
+  refreshShownDay: async (userId: string, date: string) => {
+    if (get().selectedDate !== date) return;
+    await get().loadDayData(userId, date);
+  },
+
   loadProfile: async (_userId: string) => {
     // Profile is loaded from AsyncStorage macro_targets — nothing to do here
   },
 
   logFood: async (data) => {
+    const mine = session;
     try {
       await logApi.logFood({
         date: data.date,
@@ -193,7 +221,9 @@ export const useClientStore = create<ClientStore>((set, get) => ({
         quantity_multiplier: data.quantityMultiplier || 1.0,
         notes: data.notes,
       });
-      await get().loadDayData(data.userId, data.date);
+      // LS-914R3 B1: a day opened while this was saving stays open; the
+      // logged day is read again only while it is the day on screen.
+      if (mine === session) await get().refreshShownDay(data.userId, data.date);
     } catch (err) {
       throw err;
     }
@@ -215,15 +245,29 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       };
     }),
 
-  logWater: async (_userId: string, _coachId: string, amountOz: number) => {
-    // Optimistic update — add immediately, sync to backend
+  logWater: async (userId: string, _coachId: string, amountOz: number) => {
+    // Optimistic update — add immediately, sync to backend. LS-914R2 B1: the
+    // answer belongs to the day it was sent on; it is applied only while that
+    // same day view is still open (same account, no day change in between).
+    const mine = session;
+    const shown = view;
+    const date = get().selectedDate;
+    const ours = () => mine === session && shown === view;
+    // Another day opened meanwhile: drop the answer; if the client is back on
+    // the sent day (A -> B -> A), read that day again so it shows the truth.
+    const settleElsewhere = () => {
+      if (mine === session) void get().refreshShownDay(userId, date);
+    };
     set((state) => ({ waterOz: state.waterOz + amountOz }));
     try {
       const amountMl = Math.round(amountOz * 29.5735);
-      const date = get().selectedDate;
       const response = await waterApi.log({ amount_ml: amountMl, date });
-      if (response.data.id) {
-        set((state) => ({ waterEntries: [...state.waterEntries, response.data] }));
+      if (!ours()) return settleElsewhere();
+      const saved = response.data;
+      if (saved.id) {
+        set((state) => state.waterEntries.some((e) => e.id === saved.id)
+          ? {}
+          : { waterEntries: [...state.waterEntries, saved] });
       }
       set((state) => state.loadError?.endsWith(' oz of water was not saved. Check the connection, then add it again.')
         ? { loadError: null }
@@ -232,6 +276,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       // Revert the optimistic bump and say so: a number that silently goes
       // back down reads as a glitch, not as "this was not saved".
       logger.error('ClientStore', 'logWater failed', err);
+      if (!ours()) return settleElsewhere();
       set((state) => ({
         waterOz: Math.max(0, state.waterOz - amountOz),
         loadError: `${Math.round(amountOz)} oz of water was not saved. Check the connection, then add it again.`,
@@ -240,7 +285,9 @@ export const useClientStore = create<ClientStore>((set, get) => ({
   },
 
   removeWaterEntry: async (entryId: string) => {
+    const mine = session;
     await waterApi.deleteEntry(entryId);
+    if (mine !== session) return;
     set((state) => {
       if (!state.waterEntries.some((entry) => entry.id === entryId)) return {};
       const waterEntries = state.waterEntries.filter((entry) => entry.id !== entryId);

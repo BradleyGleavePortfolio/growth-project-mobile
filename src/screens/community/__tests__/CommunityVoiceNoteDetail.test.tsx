@@ -17,6 +17,7 @@ const mockGoBack = jest.fn();
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate, goBack: mockGoBack }),
   useRoute: () => ({ params: mockParams }),
+  useFocusEffect: () => undefined, // FR-865R4: the page's forest status band registers on focus
 }));
 jest.mock('../../../config/featureFlags', () => ({ featureFlags: { communitySearch: true } }));
 jest.mock('../../../hooks/useFeatureFlags', () => ({

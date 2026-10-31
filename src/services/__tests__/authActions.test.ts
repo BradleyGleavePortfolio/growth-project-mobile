@@ -15,6 +15,10 @@ import {
   IMPORT_OFFER_DECISION_KEY_PREFIX,
   importOfferDecisionKey,
 } from '../../storage/importOfferDecision';
+import {
+  hasSeenFirstPayment,
+  markFirstPaymentSeen,
+} from '../../screens/coach/ed/firstPaymentGate';
 
 jest.mock('../api', () => ({
   usersApi: { updatePushToken: jest.fn(async () => ({ data: {} })) },
@@ -213,6 +217,60 @@ describe('signOut', () => {
     expect(
       allKeys.some((k) => k.startsWith('pending_invite_code')),
     ).toBe(false);
+  });
+
+  // m#898 (B-LONOTIFY5-1, B-LSNOTIFY5-M898-1): the coach's first-payment
+  // "shown" mark is kept across sign-out on purpose (firstPaymentGate.ts). The
+  // server keeps the payment row, so a wiped mark celebrated the same payment
+  // again after the next sign-in. Only that mark stays; the account's data goes.
+  // LO-898R3 N-1: this file mocks clearAllStorage (above), so this test guards
+  // the exact and prefix sweeps only. The real clearAllStorage sweep is proved
+  // by FirstPaymentWowHost.signOut/logout B-TESTs and the control test in
+  // DeleteAccountScreen.firstPayment.btest.test.tsx, which run it unmocked.
+  it('keeps the first-payment shown mark across sign-out and still wipes the account keys', async () => {
+    await markFirstPaymentSeen('user-A');
+    await AsyncStorage.setItem('pending_invite_code:user-A', 'code-A');
+
+    await signOut();
+
+    expect(await hasSeenFirstPayment('user-A')).toBe(true);
+    expect(await hasSeenFirstPayment('user-B')).toBe(false);
+    expect(await AsyncStorage.getItem('pending_invite_code:user-A')).toBeNull();
+  });
+
+  // FR-898R3 (B-LS898R3-1): a confirmed account deletion removes only the
+  // deleted account's mark; another account's mark on this phone stays.
+  it('accountDeleted removes only the signing-out account first-payment mark', async () => {
+    await markFirstPaymentSeen('user-A');
+    await markFirstPaymentSeen('user-B');
+
+    await signOut(undefined, { accountDeleted: true });
+
+    expect(await hasSeenFirstPayment('user-A')).toBe(false);
+    expect(await hasSeenFirstPayment('user-B')).toBe(true);
+  });
+
+  // JOINOFFER-DEL (FR-898R3 follow-up): the Roman join-offer mark goes with a
+  // confirmed deletion too, only for the deleted account; an ordinary sign-out
+  // keeps every account's mark (lib/romanJoinOffer).
+  it('accountDeleted removes only the signing-out account join-offer mark', async () => {
+    await AsyncStorage.setItem('roman_join_offer:user-A', 'done');
+    await AsyncStorage.setItem('roman_join_offer:user-B', 'due');
+
+    await signOut(undefined, { accountDeleted: true });
+
+    expect(await AsyncStorage.getItem('roman_join_offer:user-A')).toBeNull();
+    expect(await AsyncStorage.getItem('roman_join_offer:user-B')).toBe('due');
+  });
+
+  it('control: an ordinary sign-out keeps the join-offer and first-payment marks', async () => {
+    await AsyncStorage.setItem('roman_join_offer:user-A', 'done');
+    await markFirstPaymentSeen('user-A');
+
+    await signOut();
+
+    expect(await AsyncStorage.getItem('roman_join_offer:user-A')).toBe('done');
+    expect(await hasSeenFirstPayment('user-A')).toBe(true);
   });
 
   // MWB-4 #237 R11 (P2) — the workout-builder autosave offline mirror is keyed
