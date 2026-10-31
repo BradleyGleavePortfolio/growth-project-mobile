@@ -1893,3 +1893,35 @@ describe('LO-909 B1 (m#909 round 1, Claude Opus lens): reply mode outlives the m
     expect(r.queryByText('body m3', { includeHiddenElements: true })).toBeNull();
   });
 });
+
+describe('LO-909 B2 (m#909 round 1, Claude Opus lens): a member\'s reply in Announcements refused for its words', () => {
+  const realOS = Platform.OS;
+  const setOS = (os: string) => Object.defineProperty(Platform, 'OS', { configurable: true, get: () => os });
+  let alert: jest.SpyInstance;
+  beforeEach(() => { alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined); });
+  afterEach(() => { setOS(realOS); alert.mockRestore(); });
+
+  it('B-TEST: the text comes back into a field with its quote, as the row promises ("Your draft is kept so you can rephrase it")', async () => {
+    setOS('android');
+    mockParams.current = { cohortId: 'c-ann' };
+    const ok = mockApi.post.getMockImplementation()!;
+    mockApi.post.mockImplementation(async (url: string, body: { body: string }, ...rest: unknown[]) => {
+      if (url.endsWith('/messages') && body.body === 'This kicked my ass') {
+        throw Object.assign(new Error('HTTP 422'), { isAxiosError: true, response: { status: 422, data: { code: 'community.content.rejected' } } });
+      }
+      return ok(url, body, ...rest);
+    });
+    const r = await open();
+    await r.findByTestId('space-chat-row-m1');
+    await fireEvent(r.getByTestId('space-chat-row-m1'), 'longPress');
+    await fireEvent.press(r.getByTestId('space-chat-sheet-reply'));
+    await fireEvent.changeText(r.getByTestId('space-chat-composer-field'), 'This kicked my ass');
+    await fireEvent.press(r.getByTestId('space-chat-composer-send'));
+    // The server refused it (the row reads the reason and offers Delete only) ...
+    expect((await r.findAllByTestId(/^space-chat-rejected-/)).length).toBe(1);
+    // ... and the field the reason points to is back, with the text and its quote.
+    await waitFor(() => expect(alert).toHaveBeenCalledWith('Please rephrase', expect.any(String)));
+    expect(r.getByTestId('space-chat-composer-field').props.value).toBe('This kicked my ass');
+    expect(r.getByLabelText('Replying to Sam Okafor')).toBeTruthy();
+  });
+});
