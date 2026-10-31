@@ -135,7 +135,7 @@ beforeEach(() => {
   mockInitPaymentSheet.mockResolvedValue({});
 });
 
-it('LS-914R3 B2: closing the plan during confirmation still pins the later paid actions', async () => {
+it.each([true, false])('LS-914R3 B2: later paid actions stay pinned (closed during confirmation=%s)', async (closed) => {
   mockBillingV2 = true;
   let finish!: (value: unknown) => void;
   const get = mockGet.getMockImplementation()!;
@@ -147,10 +147,11 @@ it('LS-914R3 B2: closing the plan during confirmation still pins the later paid 
   jest.mocked(clientPaymentsApi.getPurchases).mockResolvedValue({
     ok: true,
     data: [{
-      id: 'purchase-1', package_id: 'pkg-monthly', package_name: 'Monthly coaching',
+      id: 'purchase-1', package_id: 'pkg-monthly',
       amount_cents: 9900, currency: 'usd', status: 'paid', entitlement_active: true,
-      paid_at: '2026-10-30T10:00:00Z', created_at: '2026-10-30T10:00:00Z',
-      interval: 'month', current_period_end: null, cancel_at_period_end: false,
+      created_at: '2026-10-30T10:00:00Z', access_expires_at: null,
+      current_period_end: null, cancel_at_period_end: false, canceled_at: null,
+      billing_type: 'recurring', first_charge_cents: 9900,
     }],
   });
   const r = await render(<ClientPackagesScreen />);
@@ -158,14 +159,19 @@ it('LS-914R3 B2: closing the plan during confirmation still pins the later paid 
   await fireEvent.press(r.getByTestId('buy-plan-pkg-monthly'));
   await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/v1/checkout/subscriptions/purchase-1'));
   // This enabled, real Back control closes the page, not its purchase.
-  const backs = r.getAllByLabelText('Back');
-  await fireEvent.press(backs[backs.length - 1]);
-  expect(r.queryByTestId('client-plan-page')).toBeNull();
+  if (closed) {
+    const backs = r.getAllByLabelText('Back');
+    await fireEvent.press(backs[backs.length - 1]);
+    expect(r.queryByTestId('client-plan-page')).toBeNull();
+  }
   await act(async () => { finish({ data: PLAN }); });
   await waitFor(() => expect(r.getByTestId('payment-see-unlocks')).toBeTruthy());
-  const scrollingActions = r.UNSAFE_getAllByType(ScrollView)
-    .filter((scroll) => within(scroll).queryByTestId('payment-see-unlocks') !== null);
-  expect(scrollingActions).toHaveLength(0);
+  // Use public host test IDs, not a removed testing-library tree API.
+  const footer = r.queryByTestId('client-plan-page-footer')
+    ?? r.queryByTestId('payment-success-footer');
+  expect(footer).not.toBeNull();
+  expect(within(footer!).getByTestId('payment-see-unlocks')).toBeTruthy();
+  expect(within(footer!).getByTestId('payment-continue')).toBeTruthy();
 });
 
 it('Style C opens the plan without checkout, shows the server quote, and returns to the list', async () => {
