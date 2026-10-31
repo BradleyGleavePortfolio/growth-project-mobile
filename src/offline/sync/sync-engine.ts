@@ -81,6 +81,17 @@ const waitingOutRetryAfter = () => isHeld(retryNotBefore);
 // from this engine). A held row is never sent a second time in parallel.
 const heldKeys = new Set<string>();
 
+// This engine's send of a key, while it is in flight. A Finish for that key
+// waits for its answer before touching the row, so the body sent under the
+// key is never replaced under it (LS-917 B2).
+const inFlight = new Map<string, Promise<PushOutcome>>();
+
+// Keys whose queued body changed after a send under the key that may have
+// reached the server unanswered. The server keeps the first body for a key, so
+// once a POST answers with the workout's id the newer body follows as an
+// update (PUT) to it (LO-917 C4). A second key is never used.
+const correctAfterPost = new Set<string>();
+
 // ---------------------------------------------------------------------------
 // Write path
 // ---------------------------------------------------------------------------
@@ -210,11 +221,35 @@ export async function queueWorkout(
   if (!clientKey) {
     throw new Error('queueWorkout: clientKey is required');
   }
-  const db = await getDatabase();
-  const userId = input.userId || readUserCacheSync()?.id || null;
-  const payloadJson = JSON.stringify(input.payload);
-  const assignmentJson = input.assignment ? JSON.stringify(input.assignment) : null;
+  // Let a background send of this key finish first, then hold the key before
+  // reading the row so neither sender starts while this one decides.
+  for (let sending = inFlight.get(clientKey); sending; sending = inFlight.get(clientKey)) {
+    await sending.catch(() => undefined);
+  }
+  heldKeys.add(clientKey);
+  let keepHold = false;
+  try {
+    const db = await getDatabase();
+    const userId = input.userId || readUserCacheSync()?.id || null;
+    const payloadJson = JSON.stringify(input.payload);
+    const assignmentJson = input.assignment ? JSON.stringify(input.assignment) : null;
+    const queued = await queueOnce(db, input, clientKey, userId, payloadJson, assignmentJson);
+    keepHold = !queued.alreadySynced;
+    return queued;
+  } finally {
+    // An update to a workout the server holds is not held: the caller does not POST it.
+    if (!keepHold) heldKeys.delete(clientKey);
+  }
+}
 
+async function queueOnce(
+  db: Awaited<ReturnType<typeof getDatabase>>,
+  input: QueueWorkoutInput,
+  clientKey: string,
+  userId: string | null,
+  payloadJson: string,
+  assignmentJson: string | null,
+): Promise<QueueWorkoutResult> {
   const existing = await db.getFirstAsync<{
     id: string;
     sync_status: string;
@@ -224,14 +259,16 @@ export async function queueWorkout(
     `SELECT id, sync_status, server_id, payload FROM workout_logs WHERE client_key = ? LIMIT 1`,
     [clientKey],
   );
-  const sent = existing?.sync_status === 'synced';
+  // The server holds this workout: it was sent, or an update to it is queued.
+  const sent = existing?.sync_status === 'synced' || !!existing?.server_id;
   if (existing && sent && (!existing.server_id || sameEdits(existing.payload, input.payload))) {
     return { id: existing.id, alreadySynced: true, serverId: existing.server_id };
   }
 
-  // An update to a sent workout is not held: the caller does not POST it.
-  if (!sent) heldKeys.add(clientKey);
   if (existing) {
+    // An earlier send under this key may be on the server unanswered: the
+    // changed body follows the POST's answer as an update.
+    if (!sent && !sameEdits(existing.payload, input.payload)) correctAfterPost.add(clientKey);
     // A sent row keeps its server_id, so pushQueuedRow sends a PUT.
     await db.runAsync(
       `UPDATE workout_logs
@@ -270,6 +307,9 @@ export async function queueWorkout(
  * The stored completion is kept until the server answers it, so a lost or
  * failed done call is retried by the next sync without reposting the
  * workout. Resolves true when the server answered the completion.
+ * When the row's body changed after an earlier send under the key
+ * (correctAfterPost), the answer may be that earlier workout: the latest body
+ * is sent to it as an update first, and stays queued as one until it lands.
  */
 export async function settleQueuedWorkout(
   clientKey: string,
@@ -277,11 +317,22 @@ export async function settleQueuedWorkout(
 ): Promise<boolean> {
   try {
     const db = await getDatabase();
-    const row = await db.getFirstAsync<{ id: string; assignment_json?: string | null }>(
-      `SELECT id, assignment_json FROM workout_logs WHERE client_key = ? LIMIT 1`,
+    const row = await db.getFirstAsync<{ id: string; payload?: string | null; assignment_json?: string | null }>(
+      `SELECT id, payload, assignment_json FROM workout_logs WHERE client_key = ? LIMIT 1`,
       [clientKey],
     );
     if (!row) return false;
+    if (await keepForUpdate(row.id, clientKey, serverId)) {
+      await sendQueuedRow({
+        id: row.id,
+        payload: row.payload ?? null,
+        server_id: serverId,
+        assignment_json: row.assignment_json ?? null,
+        client_key: clientKey,
+      } as QueuedRow, clientKey);
+      // sendQueuedRow sends the completion after the update and refreshes the list itself.
+      return false;
+    }
     await markSynced(row.id, serverId);
     return row.assignment_json ? await sendAssignmentCompletion(row.id, row.assignment_json) : false;
   } finally {
@@ -532,44 +583,71 @@ async function currentUserIdForPush(): Promise<string | undefined> {
 }
 
 /** POST one queued whole workout, then its coach-assignment completion. */
-async function pushQueuedRow(
-  row: QueuedRow,
-): Promise<'sent' | 'dead_letter' | 'kept'> {
+type PushOutcome = 'sent' | 'dead_letter' | 'kept';
+
+async function pushQueuedRow(row: QueuedRow): Promise<PushOutcome> {
   const key = row.client_key ?? '';
-  if (key && heldKeys.has(key)) return 'kept';
-  if (key) heldKeys.add(key);
+  if (!key) return sendQueuedRow(row, key);
+  if (heldKeys.has(key)) return 'kept';
+  heldKeys.add(key);
+  const sending = sendQueuedRow(row, key);
+  inFlight.set(key, sending);
   try {
-    let body: Record<string, unknown>;
-    try {
-      body = JSON.parse(row.payload as string) as Record<string, unknown>;
-    } catch {
-      await markDeadLetter(row.id);
-      return 'dead_letter';
-    }
-    try {
-      // server_id is set when an earlier copy is on the server: update it.
-      const response = row.server_id
-        ? await workoutApi.update(row.server_id, body)
-        : await createWorkoutOnce(body, key);
-      const data = response.data as { id?: string; workout?: { id?: string } };
-      await markSynced(row.id, row.server_id || (data?.id ?? data?.workout?.id ?? ''));
-    } catch (err: unknown) {
-      const errorClass = classifyPushError(err);
-      if (errorClass === 'transient') return 'kept';
-      // A queued workout is created fresh, so a 409 is a refusal too.
-      await markDeadLetter(row.id);
-      if (__DEV__) {
-        console.warn('[SyncEngine] queued workout refused', row.id, err);
-      }
-      return 'dead_letter';
-    }
-    if (row.assignment_json) {
-      await sendAssignmentCompletion(row.id, row.assignment_json);
-    }
-    return 'sent';
+    return await sending;
   } finally {
-    if (key) heldKeys.delete(key);
+    inFlight.delete(key);
+    heldKeys.delete(key);
   }
+}
+
+/**
+ * A POST under `key` answered with the workout's `serverId`. When the row's
+ * body changed after an earlier unanswered send under the key, the row keeps
+ * that id and stays queued, so the latest body is sent as an update to it now
+ * and, without an answer, by the next sync. Resolves true in that case.
+ */
+async function keepForUpdate(rowId: string, key: string, serverId: string): Promise<boolean> {
+  if (!key || !serverId || !correctAfterPost.has(key)) return false;
+  const db = await getDatabase();
+  await db.runAsync(`UPDATE workout_logs SET server_id = ? WHERE id = ?`, [serverId, rowId]);
+  correctAfterPost.delete(key);
+  return true;
+}
+
+async function sendQueuedRow(row: QueuedRow, key: string): Promise<PushOutcome> {
+  let body: Record<string, unknown>;
+  try {
+    body = JSON.parse(row.payload as string) as Record<string, unknown>;
+  } catch {
+    await markDeadLetter(row.id);
+    return 'dead_letter';
+  }
+  try {
+    // server_id is set when an earlier copy is on the server: update it.
+    let serverId = row.server_id;
+    if (!serverId) {
+      const response = await createWorkoutOnce(body, key);
+      const data = response.data as { id?: string; workout?: { id?: string } };
+      serverId = data?.id ?? data?.workout?.id ?? '';
+      if (await keepForUpdate(row.id, key, serverId)) await workoutApi.update(serverId, body);
+    } else {
+      await workoutApi.update(serverId, body);
+    }
+    await markSynced(row.id, serverId);
+  } catch (err: unknown) {
+    const errorClass = classifyPushError(err);
+    if (errorClass === 'transient') return 'kept';
+    // A queued workout is created fresh, so a 409 is a refusal too.
+    await markDeadLetter(row.id);
+    if (__DEV__) {
+      console.warn('[SyncEngine] queued workout refused', row.id, err);
+    }
+    return 'dead_letter';
+  }
+  if (row.assignment_json) {
+    await sendAssignmentCompletion(row.id, row.assignment_json);
+  }
+  return 'sent';
 }
 
 /**
