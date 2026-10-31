@@ -8,6 +8,7 @@ import { enqueue } from '../../../services/foodLogQueue';
 import {
   submitManualLogOffline, submitManualLogOnlineWithId, submitSearchLogOffline, submitSearchLogOnline,
 } from '../logSubmit';
+import { useClientStore } from '../../../store/clientStore';
 import { repeatPastMeal } from '../quickLog';
 import { withSaveKey } from '../saveKey';
 import type { SearchResult } from '../types';
@@ -122,5 +123,15 @@ describe('FOOD-1-M R3 the save key', () => {
     release();
     await both;
     expect(new Set(keys).size).toBe(2);
+  });
+
+  it('sign-out drops every unanswered key, so the next account on the phone never sends one', async () => {
+    jest.spyOn(logApi, 'logFood').mockRejectedValueOnce(lost()).mockResolvedValue({ data: {} } as never);
+    await expect(submitSearchLogOnline(search())).rejects.toThrow('Network Error');
+    useClientStore.getState().reset();
+    await submitSearchLogOnline(search());
+    const [beforeSignOut, nextAccount] = keysSent();
+    expect(nextAccount).toMatch(/^pfl_/);
+    expect(nextAccount).not.toBe(beforeSignOut);
   });
 });

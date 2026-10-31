@@ -8,6 +8,9 @@ import { randomUUID } from 'expo-crypto';
  */
 const unanswered = new Map<string, string>();
 
+/** Sign-out (clientStore.reset): a key never passes from one account to the next on the same phone. */
+export const forgetSaveKeys = (): void => unanswered.clear();
+
 /** The same shape as the offline queue's ids, so one key can pass from the online try to the queue. */
 export const newSaveKey = (): string => `pfl_${randomUUID()}`;
 

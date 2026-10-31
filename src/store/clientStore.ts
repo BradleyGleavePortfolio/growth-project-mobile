@@ -4,7 +4,7 @@ import { getTodayString } from '../utils/date';
 import { MealType, FoodLog } from '../types';
 import { logger } from '../utils/logger';
 import { mapFoodItem, type RawFoodItem } from '../utils/log/mapFoodItem';
-import { withSaveKey } from '../utils/log/saveKey';
+import { forgetSaveKeys, withSaveKey } from '../utils/log/saveKey';
 import { dayForNewLog } from '../utils/logDay';
 
 interface DailyTotals {
@@ -93,6 +93,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
   reset: () => {
     session += 1;
     view += 1;
+    forgetSaveKeys();
     set({ ...initialClientState, selectedDate: getTodayString(), selectedOn: getTodayString() });
   },
 
