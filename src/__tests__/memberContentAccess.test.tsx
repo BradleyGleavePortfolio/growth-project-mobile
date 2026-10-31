@@ -564,7 +564,7 @@ function declKinds(ctx: ScanCtx, o: Origin): Kinds {
 }
 
 /** What a use of `o` (called, drawn, or a method taken) names. */
-function useKinds(ctx: ScanCtx, mod: string, o: Origin, how: 'call' | 'jsx' | 'method', followLocal: boolean): Kinds {
+function kindsOfUse(ctx: ScanCtx, mod: string, o: Origin, how: 'call' | 'jsx' | 'method', followLocal: boolean): Kinds {
   const k = NONE();
   const [obj, method] = o.name.includes('.') ? [o.name.slice(0, o.name.lastIndexOf('.')), o.name.slice(o.name.lastIndexOf('.') + 1)] : [null, null];
   if (notContent(o)) return k;
@@ -625,7 +625,7 @@ function nodeKinds(ctx: ScanCtx, mod: string, root: ts.Node): Kinds {
         }
       } else {
         const o = origin(n.expression);
-        if (o) add(k, useKinds(ctx, mod, o, 'call', followLocal));
+        if (o) add(k, kindsOfUse(ctx, mod, o, 'call', followLocal));
         // a raw call on services/api to a member path
         if (ts.isPropertyAccessExpression(n.expression) && WIRE_VERBS.has(n.expression.name.text) && n.arguments[0]) {
           const api = origin(n.expression.expression);
@@ -642,16 +642,16 @@ function nodeKinds(ctx: ScanCtx, mod: string, root: ts.Node): Kinds {
     } else if (ts.isPropertyAccessExpression(n) && !(ts.isCallExpression(n.parent) && n.parent.expression === n)) {
       // a member API method taken without a call (queryFn: communityApi.listPosts)
       const o = origin(n);
-      if (o && o.name.includes('.')) add(k, useKinds(ctx, mod, o, 'method', followLocal));
+      if (o && o.name.includes('.')) add(k, kindsOfUse(ctx, mod, o, 'method', followLocal));
     }
     if (ts.isIdentifier(n) && isReference(n) && info.bindings.has(n.text)) {
       // an imported function passed on, not called here (queryFn: fetchInboxTriage): it runs, so it counts
       const o = resolveLocal(ctx, mod, n.text);
-      if (o.mod !== mod) add(k, useKinds(ctx, mod, o, 'call', followLocal));
+      if (o.mod !== mod) add(k, kindsOfUse(ctx, mod, o, 'call', followLocal));
     }
     if (ts.isJsxOpeningElement(n) || ts.isJsxSelfClosingElement(n)) {
       const o = tagName(n.tagName);
-      if (o) add(k, useKinds(ctx, mod, o, 'jsx', followLocal));
+      if (o) add(k, kindsOfUse(ctx, mod, o, 'jsx', followLocal));
       if (o?.name === 'TextInput' && MEMBER_PLACE.test(mod)) k.composer = true;
     }
     ts.forEachChild(n, visit);
