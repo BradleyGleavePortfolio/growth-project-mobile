@@ -1802,7 +1802,9 @@ describe('LS-909 B-TEST quote access and reply recovery', () => {
     mockApi.get.mockClear();
     await fireEvent.changeText(field(r), 'A reply');
     await fireEvent.press(r.getByTestId('space-chat-composer-send'));
-    await r.findByText('Not sent');
+    // FR-909: the reply is Not sent and the space is read again at once; with that read refused the page closes in the
+    // same tick, so the test waits for the read itself rather than the Not sent row on the way.
+    await waitFor(() => expect(sends()).toHaveLength(1));
     await waitFor(() => expect(mockApi.get).toHaveBeenCalledWith('/community/cohorts/c-every/messages', expect.anything()));
     expect(await r.findByTestId('space-chat-no-access')).toBeTruthy();
   });
@@ -1917,11 +1919,98 @@ describe('LO-909 B2 (m#909 round 1, Claude Opus lens): a member\'s reply in Anno
     await fireEvent.press(r.getByTestId('space-chat-sheet-reply'));
     await fireEvent.changeText(r.getByTestId('space-chat-composer-field'), 'This kicked my ass');
     await fireEvent.press(r.getByTestId('space-chat-composer-send'));
-    // The server refused it (the row reads the reason and offers Delete only) ...
-    expect((await r.findAllByTestId(/^space-chat-rejected-/)).length).toBe(1);
+    // The server refused it ... (FR-909: waits for the refusal itself; the refused row goes back into the field in the
+    // same render, as in Everyone, so it is never on screen to wait for.)
+    await waitFor(() => expect(sends()).toHaveLength(1));
     // ... and the field the reason points to is back, with the text and its quote.
     await waitFor(() => expect(alert).toHaveBeenCalledWith('Please rephrase', expect.any(String)));
     expect(r.getByTestId('space-chat-composer-field').props.value).toBe('This kicked my ass');
     expect(r.getByLabelText('Replying to Sam Okafor')).toBeTruthy();
+    expect(r.queryAllByTestId(/^space-chat-rejected-/)).toHaveLength(0);
+  });
+});
+
+describe('FR-909 (agent 189): words that leave stay gone; a refused reply never switches a newer one', () => {
+  type R = Awaited<ReturnType<typeof open>>;
+  const realOS = Platform.OS;
+  const setOS = (os: string) => Object.defineProperty(Platform, 'OS', { configurable: true, get: () => os });
+  const hold = async (r: R, id: string) => { await fireEvent(r.getByTestId(`space-chat-row-${id}`), 'longPress'); };
+  const reply = async (r: R, id: string) => {
+    await hold(r, id);
+    await fireEvent.press(r.getByTestId('space-chat-sheet-reply'));
+  };
+  const disk = () => mockDisk.get('space_outbox_me-1') ?? '[]';
+  let alert: jest.SpyInstance;
+  beforeEach(() => {
+    (Clipboard.setStringAsync as jest.Mock).mockClear();
+    alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  });
+  afterEach(() => { setOS(realOS); alert.mockRestore(); });
+
+  it('on iOS a Copy picked as the coach removes the message copies nothing once the sheet has gone', async () => {
+    setOS('ios');
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    await hold(r, 'm3');
+    let node = r.getByTestId('space-chat-sheet') as unknown as { props: Record<string, unknown>; parent: unknown } | null;
+    while (node && typeof node.props.onDismiss !== 'function') node = node.parent as typeof node;
+    const dismiss = node?.props.onDismiss as () => void;
+    await fireEvent.press(r.getByTestId('space-chat-sheet-copy')); // iOS: runs once the sheet has gone
+    page = [removed('m3', '2026-10-22T10:05:00.000Z', JO), ...page.filter((m) => (m as { id: string }).id !== 'm3')];
+    await act(async () => { await client.invalidateQueries({ queryKey: ['community', 'space-chat'] }); });
+    await r.findByTestId('space-chat-removed-m3');
+    await act(async () => { dismiss(); });
+    expect(r.queryByTestId('space-chat-sheet')).toBeNull();
+    expect(Clipboard.setStringAsync).not.toHaveBeenCalled();
+  });
+
+  it('a reply waiting offline keeps no words of a person blocked meanwhile, on screen or on the device', async () => {
+    setOS('android');
+    mockNet.isOnline = false;
+    mockNet.reachable = false;
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    await reply(r, 'm3');
+    await fireEvent.changeText(r.getByTestId('space-chat-composer-field'), 'Queued reply');
+    await fireEvent.press(r.getByTestId('space-chat-composer-send'));
+    await waitFor(() => expect(disk()).toContain('body m3'));
+    // Block jo b. from the row's own ••• (SafetyMenu's onBlocked).
+    await fireEvent.press(r.getByTestId('space-chat-menu-m3'));
+    await waitFor(() => expect(r.queryByTestId('space-chat-row-m3')).toBeNull());
+    await waitFor(() => expect(disk()).not.toContain('body m3'));
+    expect(disk()).toContain('Queued reply');
+    expect(disk()).toContain('"id":"m3"');
+    expect(r.queryByText('body m3', { includeHiddenElements: true })).toBeNull();
+    expect(r.getByLabelText(/^Replying to: Message removed\. Dana Reyes, Waiting to send\. Queued reply$/)).toBeTruthy();
+  });
+
+  it('in Announcements a reply refused while a newer one is chosen waits for it; the newer one is never switched', async () => {
+    setOS('android');
+    mockParams.current = { cohortId: 'c-ann' };
+    let refuse: () => void = () => undefined;
+    mockApi.post.mockImplementation((url: string) => (url.endsWith('/messages')
+      ? new Promise((_ok, no) => {
+        refuse = () => no(Object.assign(new Error('HTTP 422'), { isAxiosError: true, response: { status: 422, data: { code: 'community.content.rejected' } } }));
+      })
+      : Promise.resolve({ data: { ok: true } })));
+    const r = await open();
+    await r.findByTestId('space-chat-row-m1');
+    await reply(r, 'm1');
+    await fireEvent.changeText(r.getByTestId('space-chat-composer-field'), 'This kicked my ass');
+    await fireEvent.press(r.getByTestId('space-chat-composer-send'));
+    await waitFor(() => expect(sends()).toHaveLength(1));
+    // A newer reply, to the voice note, chosen before the server answers the first.
+    await reply(r, 'm2');
+    await act(async () => { refuse(); });
+    await r.findByTestId(/^space-chat-rejected-/);
+    expect(alert).not.toHaveBeenCalled();
+    expect(r.getByTestId('space-chat-composer-field').props.value).toBe('');
+    expect(within(r.getByLabelText('Replying to Sam Okafor')).queryByText('body m1')).toBeNull();
+    // Once the newer reply is sent, the refused one comes back into the empty field with its own quote.
+    await fireEvent.changeText(r.getByTestId('space-chat-composer-field'), 'Newer words');
+    await fireEvent.press(r.getByTestId('space-chat-composer-send'));
+    await waitFor(() => expect(alert).toHaveBeenCalledWith('Please rephrase', expect.any(String)));
+    expect(r.getByTestId('space-chat-composer-field').props.value).toBe('This kicked my ass');
+    expect(within(r.getByLabelText('Replying to Sam Okafor')).getByText('body m1')).toBeTruthy();
   });
 });
