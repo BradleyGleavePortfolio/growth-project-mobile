@@ -45,6 +45,8 @@ import { generateId } from '../../utils/date';
 import { readUserCache, readUserCacheSync } from '../../lib/userCache';
 import { isHeld, isRetryLater, retryAfterMs } from './retryLater';
 import { createWorkoutOnce } from './workoutSaveKey';
+import { queryClient } from '../../services/queryClient';
+import { captureErrorWithoutPii } from '../../services/sentry';
 
 // ---------------------------------------------------------------------------
 // Conflict toast event bus
@@ -639,15 +641,24 @@ async function sendQueuedRow(row: QueuedRow, key: string): Promise<PushOutcome> 
     if (errorClass === 'transient') return 'kept';
     // A queued workout is created fresh, so a 409 is a refusal too.
     await markDeadLetter(row.id);
-    if (__DEV__) {
-      console.warn('[SyncEngine] queued workout refused', row.id, err);
-    }
+    logRefusal('queued workout refused', err);
     return 'dead_letter';
   }
   if (row.assignment_json) {
     await sendAssignmentCompletion(row.id, row.assignment_json);
   }
   return 'sent';
+}
+
+/**
+ * A server refusal the phone drops is written to the production log (Sentry,
+ * no personal data: the HTTP status only), not only a dev-build warning
+ * (LO-917 C5).
+ */
+function logRefusal(what: string, err: unknown): void {
+  const status = (err as { response?: { status?: number } })?.response?.status ?? null;
+  captureErrorWithoutPii(new Error(`[SyncEngine] ${what}`), { area: 'sync-engine', status });
+  if (__DEV__) console.warn(`[SyncEngine] ${what}`, err);
 }
 
 /**
@@ -671,15 +682,16 @@ async function sendAssignmentCompletion(
       await workoutBuilderApi.completeMyAssignment(parsed.assignmentId, parsed.input);
     } catch (err: unknown) {
       if (classifyPushError(err) === 'transient') return false;
-      if (__DEV__) {
-        console.warn('[SyncEngine] assignment completion refused', rowId, err);
-      }
+      logRefusal('assignment completion refused', err);
     }
   }
   await db.runAsync(
     `UPDATE workout_logs SET assignment_json = NULL WHERE id = ?`,
     [rowId],
   );
+  // The server answered the done call: open lists of assignments refresh,
+  // whichever path sent it (LO-917 C6; the Finish screen also refreshes its own).
+  queryClient.invalidateQueries({ queryKey: ['assignments'] }).catch(() => undefined);
   return true;
 }
 
