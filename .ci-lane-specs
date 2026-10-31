@@ -1,0 +1,5 @@
+src/screens/client/__tests__/LogScreen.dayOwnership.ls914r3.test.tsx
+src/__tests__/ClientPackagesScreen.purchase.test.tsx
+--runInBand
+-t
+LS-914R3
