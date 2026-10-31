@@ -5,6 +5,7 @@
 import { randomUuid } from '../idempotency';
 import { routineExerciseId } from './exerciseId';
 import { toServerMuscleGroup } from './muscleGroup';
+import { instantDay, workoutDay } from './workoutDay';
 import type { RoutineExercise, SessionExercise } from '../../screens/client/active-workout/types';
 
 // PATCH /assignments/:id/complete validates `idempotency_key` with
@@ -17,10 +18,9 @@ export function assignmentIdempotencyKey(current: string): string {
   return UUID_RE.test(current) ? current : randomUuid();
 }
 
-/** The client's own calendar day, YYYY-MM-DD (server column is @db.Date). */
+/** The client's own calendar day, YYYY-MM-DD (server column is @db.Date): the shared day helper. */
 export function localCalendarDate(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return instantDay(d);
 }
 
 export interface RoutineBuilderExercise {
@@ -166,6 +166,8 @@ export function mapCoachWorkoutSessions(rows: unknown) {
       routineName: s.workout_name || s.name || s.notes || 'Workout',
       startTime,
       endTime: finishedAt,
+      // The day the client recorded, not the day the server received it.
+      day: workoutDay(s),
       completed: true,
       // FU-WORKLOG2-126: the coach card shows the client's own note and the
       // real duration (no "0 min" when the duration was not recorded).

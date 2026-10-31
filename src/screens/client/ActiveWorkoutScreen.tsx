@@ -39,11 +39,11 @@ import { toServerMuscleGroup } from '../../utils/workout/muscleGroup';
 import {
   assignmentIdempotencyKey,
   isUntouchedSession,
-  localCalendarDate,
   resumedPausedMs,
   resumedSessionRouteParams,
   routineSessionExercises,
 } from '../../utils/workout/workoutLogging';
+import { workoutStartDay } from '../../utils/workout/workoutDay';
 // Offline-first write path (audit fix H-5: comments were left
 // referencing the deleted WatermelonDB stack — current implementation
 // is built on expo-sqlite, see src/offline/database.ts and
@@ -787,10 +787,10 @@ export default function ActiveWorkoutScreen() {
           // for the whole workout) and sent as-is, now or by the background
           // sync once there is signal.
           const workoutPayload = {
-            // The server keeps a calendar date (@db.Date). Sending the
-            // client's own calendar day keeps the history card on the day
-            // the client trained instead of the UTC day.
-            date: localCalendarDate(new Date()),
+            // The server keeps a calendar date (@db.Date): the client's own
+            // local day the workout began, so finishing after midnight keeps
+            // the start day (the shared rule in utils/workout/workoutDay).
+            date: workoutStartDay(sessionStartMsRef.current),
             workout_name: routineName || 'Workout',
             workout_type: 'strength',
             duration_minutes: durationMinutes,

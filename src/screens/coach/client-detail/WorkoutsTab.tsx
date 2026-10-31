@@ -6,6 +6,7 @@ import { useTheme, type ThemeColors } from '../../../theme/ThemeProvider';
 import type { ClientDetailStyles } from './styles';
 import type { SessionExercise, WorkoutSession } from './types';
 import { formatCoachSessionSets } from '../../../utils/workout/workoutLogging';
+import { dayStart, instantDay } from '../../../utils/workout/workoutDay';
 import { AdjustForClientEntry } from '../../../components/coach/ai-entry/AdjustForClient';
 import { spacing, typography } from '../../../theme/tokens';
 
@@ -52,15 +53,19 @@ export function WorkoutsTab({
   const weekStart = new Date(now);
   weekStart.setHours(0, 0, 0, 0);
   weekStart.setDate(now.getDate() - (now.getDay() + 6) % 7);
+  // Each workout on the day it counts on (its recorded day), as the client's own screens count it.
+  const dayOfSession = (s: WorkoutSession) => s.day || instantDay(s.startTime);
+  const dayText = (day: string) => (dayStart(day) ?? new Date(day)).toLocaleDateString();
+  const [monday, today] = [instantDay(weekStart), instantDay(now)];
   // This input is workout history, not an assignment ledger. No target or missed days are inferred.
-  const weeklyCount = workoutSessions.filter((s) => s.completed && new Date(s.startTime) >= weekStart && new Date(s.startTime) <= now).length;
+  const weeklyCount = workoutSessions.filter((s) => s.completed && dayOfSession(s) >= monday && dayOfSession(s) <= today).length;
   const trajectories = new Map<string, { date: string; weight: number }[]>();
   workoutSessions.filter((s) => s.completed).forEach((s) => parseExercises(s.exercises).forEach((e) => {
     const weight = Math.max(0, ...e.sets.filter((set) => set.completed).map((set) => set.weight));
-    if (weight > 0) trajectories.set(e.exerciseName, [...(trajectories.get(e.exerciseName) ?? []), { date: s.startTime, weight }]);
+    if (weight > 0) trajectories.set(e.exerciseName, [...(trajectories.get(e.exerciseName) ?? []), { date: dayOfSession(s), weight }]);
   }));
   const strength = [...trajectories.entries()].find(([, points]) => points.length >= 2);
-  const points = strength?.[1].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) ?? [];
+  const points = strength?.[1].sort((a, b) => a.date.localeCompare(b.date)) ?? [];
   const low = Math.min(...points.map((p) => p.weight));
   const high = Math.max(...points.map((p) => p.weight));
   return (
@@ -100,7 +105,7 @@ export function WorkoutsTab({
                 <View style={{ flex: 1 }}>
                   <Text style={heading}>{session.routineName}</Text>
                   <Text style={meta}>
-                    {new Date(session.startTime).toLocaleDateString()}{duration ? ` · ${duration}` : ''}
+                    {dayText(dayOfSession(session))}{duration ? ` · ${duration}` : ''}
                   </Text>
                 </View>
                 {session.completed ? (
@@ -152,14 +157,14 @@ export function WorkoutsTab({
         <View testID="coach-strength-trajectory" style={{ paddingTop: spacing.xl }}>
           <Text style={heading}>Strength trajectory</Text>
           <Text style={meta}>{`${strength[0]} · top recorded load (lb)`}</Text>
-          <View accessible accessibilityRole="image" accessibilityLabel={points.map((p) => `${new Date(p.date).toLocaleDateString()}: ${p.weight} lb`).join(', ')}>
+          <View accessible accessibilityRole="image" accessibilityLabel={points.map((p) => `${dayText(p.date)}: ${p.weight} lb`).join(', ')}>
             <Svg height={80} width="100%" viewBox="0 0 300 80">
               <Polyline fill="none" stroke={sc.accent} strokeWidth={2} points={points.map((p, i) => `${8 + i * 284 / (points.length - 1)},${68 - (p.weight - low) * 56 / (high - low || 1)}`).join(' ')} />
             </Svg>
           </View>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text style={meta}>{`${new Date(points[0].date).toLocaleDateString()} · ${points[0].weight} lb`}</Text>
-            <Text style={meta}>{`${new Date(points[points.length - 1].date).toLocaleDateString()} · ${points[points.length - 1].weight} lb`}</Text>
+            <Text style={meta}>{`${dayText(points[0].date)} · ${points[0].weight} lb`}</Text>
+            <Text style={meta}>{`${dayText(points[points.length - 1].date)} · ${points[points.length - 1].weight} lb`}</Text>
           </View>
         </View>
       ) : null}
