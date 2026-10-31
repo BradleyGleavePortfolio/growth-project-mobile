@@ -2035,6 +2035,10 @@ describe('FR-909 (agent 189): words that leave stay gone; a refused reply never 
 });
 
 describe('LS-909R2 independent B-TESTS', () => {
+  const os = Platform.OS;
+  beforeEach(() => Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'android' }));
+  afterEach(() => Object.defineProperty(Platform, 'OS', { configurable: true, get: () => os }));
+
   it('LS-909R2 B1: polling an empty complete page retires a selected last parent and its persisted offline quote', async () => {
     page = [msg('only-root', '2026-10-22T10:05:00.000Z', JO, { body: 'Last parent private words' })];
     const r = await open();
