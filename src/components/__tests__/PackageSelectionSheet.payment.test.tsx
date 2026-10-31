@@ -70,8 +70,12 @@ jest.mock('../../services/api', () => ({
   },
 }));
 const mockGetEntitlement = jest.fn();
+const mockGetPurchases = jest.fn();
 jest.mock('../../api/clientPaymentsApi', () => ({
-  clientPaymentsApi: { getEntitlement: () => mockGetEntitlement() },
+  clientPaymentsApi: {
+    getEntitlement: () => mockGetEntitlement(),
+    getPurchases: () => mockGetPurchases(),
+  },
 }));
 const mockCapture = jest.fn();
 jest.mock('../../services/sentry', () => ({
@@ -181,6 +185,18 @@ beforeEach(() => {
   mockInitPaymentSheet.mockResolvedValue({});
   mockPresent.mockResolvedValue({});
   mockGetEntitlement.mockResolvedValue({ ok: true, data: { active: true } });
+  // LS-914R2 B3: a clear payment is in force when its own purchase row is
+  // (the server writes one paid row per payment-intent).
+  mockGetPurchases.mockImplementation(async () => ({
+    ok: true,
+    data: paymentIntentCalls().map((c, i) => ({
+      id: `synthetic-purchase-${i}`,
+      package_id: (c[1] as { package_id: string }).package_id,
+      status: 'paid',
+      entitlement_active: true,
+      created_at: `2026-10-30T12:00:0${i}.000Z`,
+    })),
+  }));
 });
 
 describe('PackageSelectionSheet pays through POST /v1/checkout/payment-intent', () => {
@@ -218,8 +234,10 @@ describe('PackageSelectionSheet pays through POST /v1/checkout/payment-intent', 
     expect(params.style).toBe('alwaysLight');
     expect(params.appearance).toEqual(expect.objectContaining({ colors: expect.any(Object) }));
     expect(mockPresent).toHaveBeenCalledTimes(1);
-    // Success waits for the webhook-driven entitlement, as the rest of the app reads it.
-    expect(mockGetEntitlement).toHaveBeenCalled();
+    // LS-914R2 B3: success waits for this payment's own purchase row, never
+    // the account-wide entitlement (another plan can hold that).
+    expect(mockGetPurchases).toHaveBeenCalled();
+    expect(mockGetEntitlement).not.toHaveBeenCalled();
     expect(mockCapture).not.toHaveBeenCalled();
   });
 
@@ -280,6 +298,7 @@ describe('PackageSelectionSheet pays through POST /v1/checkout/payment-intent', 
 
   it('when the entitlement has not landed yet, says the payment went through and offers Continue', async () => {
     mockGetEntitlement.mockResolvedValue({ ok: true, data: { active: false } });
+    mockGetPurchases.mockResolvedValue({ ok: true, data: [] });
     const r = await mountAndSelect();
     await pressSelect(r);
     await waitFor(() => expect(r.getByTestId('payment-confirmed-pending')).toBeTruthy());
@@ -422,9 +441,10 @@ describe('specific copy per cause', () => {
   });
 
   it('an unknown PaymentSheet failure never sends the client secret or ephemeral key to Sentry', async () => {
-    const { r } = await failWith(() =>
-      mockPresent.mockResolvedValueOnce({ error: { code: 'Failed', message: 'pi_test_123_secret_abc is in a bad state' } }),
-    );
+    const { r } = await failWith(() => {
+      mockPresent.mockResolvedValueOnce({ error: { code: 'Failed', message: 'pi_test_123_secret_abc is in a bad state' } });
+      mockGetPurchases.mockResolvedValue({ ok: true, data: [] }); // nothing was charged
+    });
     expect(r.getByTestId('payment-support')).toBeTruthy();
     expect(mockCapture).toHaveBeenCalledTimes(1);
     const sent = JSON.stringify(mockCapture.mock.calls.map(([e, c]) => [String((e as Error).message), c]));

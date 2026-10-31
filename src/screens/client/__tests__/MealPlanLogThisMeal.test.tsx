@@ -33,7 +33,7 @@ jest.mock('../../../services/foodLogQueue', () => ({ enqueue: jest.fn() }));
 jest.mock('../../../services/foodLogSync', () => ({ notifyPendingFoodLogs: jest.fn() }));
 jest.mock('../../../services/queryClient', () => ({ queryClient: { invalidateQueries: jest.fn() } }));
 jest.mock('../../../store/clientStore', () => ({
-  useClientStore: { getState: () => ({ selectedDate: '2026-10-07', loadDayData: jest.fn() }) },
+  useClientStore: { getState: () => ({ selectedDate: '2026-10-07', refreshShownDay: jest.fn() }) },
 }));
 jest.mock('../../../lib/userCache', () => ({ readUserCacheSync: () => ({ id: 'client-1' }) }));
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));

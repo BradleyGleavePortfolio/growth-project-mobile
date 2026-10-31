@@ -37,6 +37,7 @@ import { useClientStore } from '../store/clientStore';
 import { useFastingStore } from '../store/fastingStore';
 import { foregroundBannerStore } from '../store/foregroundBannerStore';
 import { dunningLockoutStore } from '../entitlements/dunning/dunningLockoutStore';
+import { useBlockedUsersStore } from '../store/blockedUsersStore';
 import { resetCrispIdentity } from './support/crisp.service';
 import { COACH_SIGNUP_UNCONFIRMED_KEY } from '../lib/coachSignupAttempt';
 import { SIGNUP_ROLE_NOTICE_KEY } from '../lib/signupRoleNotice';
@@ -645,6 +646,8 @@ export function resetUserScopedStores(): void {
     ['foregroundBannerStore', () => foregroundBannerStore.getState().reset()],
     // B-352-1: the payment lockout belongs to the signed-in account.
     ['dunningLockoutStore', () => dunningLockoutStore.retire()],
+    // LS-914 B1: the blocked list belongs to the signed-in account; a block answered later writes nothing.
+    ['blockedUsersStore', () => useBlockedUsersStore.getState().retire()],
   ];
   for (const [name, reset] of stores) {
     try {

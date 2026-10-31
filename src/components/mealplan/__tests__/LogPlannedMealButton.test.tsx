@@ -8,7 +8,7 @@ import LogPlannedMealButton, {
 } from '../LogPlannedMealButton';
 import type { DailyMealPlanSlot } from '../../../api/mealTemplatesApi';
 
-const mockLoadDayData = jest.fn();
+const mockRefreshShownDay = jest.fn();
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({ semanticColors: jest.requireActual('../../../theme/tokens').lightTokens }),
 }));
@@ -23,7 +23,7 @@ jest.mock('../../../services/foodLogQueue', () => ({ enqueue: jest.fn() }));
 jest.mock('../../../services/foodLogSync', () => ({ notifyPendingFoodLogs: jest.fn() }));
 jest.mock('../../../services/queryClient', () => ({ queryClient: { invalidateQueries: jest.fn() } }));
 jest.mock('../../../store/clientStore', () => ({
-  useClientStore: { getState: () => ({ selectedDate: '2026-10-07', loadDayData: mockLoadDayData }) },
+  useClientStore: { getState: () => ({ selectedDate: '2026-10-07', refreshShownDay: mockRefreshShownDay }) },
 }));
 jest.mock('../../../lib/userCache', () => ({ readUserCacheSync: () => ({ id: 'client-1' }) }));
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
@@ -85,7 +85,7 @@ describe('LogPlannedMealButton', () => {
       date: '2026-10-07', meal_type: 'lunch', food_item_id: 'food-1', quantity_multiplier: 1,
     }));
     expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['food', 'log'] });
-    expect(mockLoadDayData).toHaveBeenCalledWith('client-1', '2026-10-07');
+    expect(mockRefreshShownDay).toHaveBeenCalledWith('client-1', '2026-10-07');
     expect(screen.queryByText('Adds one entry to today\'s food log.')).toBeNull();
 
     await fireEvent.press(screen.getByText('Undo'));

@@ -21,10 +21,11 @@ jest.mock('../../services/api', () => ({
 }));
 jest.mock('../../services/sentry', () => ({ captureError: jest.fn() }));
 const mockPurchases = jest.fn();
+const mockEntitlement = jest.fn();
 jest.mock('../../api/clientPaymentsApi', () => ({
   clientPaymentsApi: {
     getPurchases: () => mockPurchases(),
-    getEntitlement: async () => ({ ok: true, data: { active: false } }),
+    getEntitlement: (...args: unknown[]) => mockEntitlement(...args),
   },
 }));
 const mockInitSheet = jest.fn();
@@ -78,6 +79,7 @@ beforeEach(() => {
   mockInitSheet.mockResolvedValue({});
   mockPresent.mockResolvedValue({ error: { code: 'Canceled' } });
   mockPurchases.mockResolvedValue({ ok: true, data: [] });
+  mockEntitlement.mockResolvedValue({ ok: true, data: { active: false } });
 });
 
 describe('B-343-1 (Sol) a flow that outlived its screen or account never opens a sheet', () => {
@@ -166,6 +168,48 @@ describe('B-343-3 finished replays (backend #661)', () => {
 });
 
 describe('B-343-1 (Opus) an unclear one-time result is never "Payment received"', () => {
+  it('LS-PAYFAIL B7: an older paid purchase does not confirm a new failed or unknown payment of the same package', async () => {
+    mockPresent.mockResolvedValueOnce({ error: { code: 'Timeout' } });
+    mockPurchases.mockResolvedValue({
+      ok: true,
+      data: [
+        {
+          id: 'synthetic-current-attempt',
+          package_id: A.id,
+          status: 'payment_failed',
+          entitlement_active: false,
+          access_expires_at: null,
+          created_at: '2026-10-30T12:00:00.000Z',
+        },
+        {
+          id: 'synthetic-current-other-plan',
+          package_id: B.id,
+          status: 'paid',
+          entitlement_active: true,
+          access_expires_at: null,
+          created_at: '2026-10-15T12:00:00.000Z',
+        },
+        {
+          id: 'synthetic-older-purchase',
+          package_id: A.id,
+          status: 'paid',
+          entitlement_active: true,
+          access_expires_at: null,
+          created_at: '2026-10-01T12:00:00.000Z',
+        },
+      ],
+    });
+    const h = await mount();
+
+    await act(async () => { await h.result.current.start(A); });
+
+    expect(mockPresent).toHaveBeenCalledTimes(1);
+    expect(mockPurchases).toHaveBeenCalledTimes(1);
+    expect(h.result.current.state.success).toBeNull();
+    expect(h.result.current.state.notice?.checkAgain).toBe(true);
+    expect(h.onEntitled).not.toHaveBeenCalled();
+  });
+
   it('reading the purchase after a lost answer is flagged as checking', async () => {
     const held = deferred<{ ok: boolean; data: unknown[] }>();
     mockPresent.mockRejectedValueOnce(lostAnswer());
@@ -205,5 +249,73 @@ describe('B-343-4 a resumed trial keeps its pinned first-charge date', () => {
     await act(async () => { await h.result.current.confirmNewPrice(); });
     expect(keys()[1]).toBe(keys()[0]);
     expect(mockInitSheet).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('PF-1-M an unclear one-time result asks about its own purchase only', () => {
+  const row = (id: string, created_at: string, over: Record<string, unknown> = {}) => ({
+    id, package_id: A.id, status: 'paid', entitlement_active: true, access_expires_at: null, created_at, ...over,
+  });
+
+  it("this attempt's own paid purchase still confirms it, by its own id", async () => {
+    mockPresent.mockResolvedValueOnce({ error: { code: 'Timeout' } });
+    mockPurchases.mockResolvedValue({
+      ok: true,
+      data: [row('synthetic-own', '2026-10-30T12:00:00.000Z'), row('synthetic-older', '2026-10-01T12:00:00.000Z')],
+    });
+    const h = await mount();
+    await act(async () => { await h.result.current.start(A); });
+    expect(h.result.current.state.success).toEqual(
+      expect.objectContaining({ kind: 'one_time', packageId: A.id, purchaseId: 'synthetic-own' }),
+    );
+    expect(h.onEntitled).toHaveBeenCalledTimes(1);
+  });
+
+  it('Check again reads the same purchase: a newer row of the package never confirms it; its own paid row does', async () => {
+    mockPresent.mockResolvedValueOnce({ error: { code: 'Timeout' } });
+    const own = (over: Record<string, unknown> = {}) => row('synthetic-own', '2026-10-30T12:00:00.000Z', over);
+    const newer = row('synthetic-newer', '2026-10-31T12:00:00.000Z');
+    mockPurchases.mockResolvedValueOnce({ ok: true, data: [own({ status: 'pending', entitlement_active: false })] });
+    const h = await mount();
+    await act(async () => { await h.result.current.start(A); });
+    const unknown = h.result.current.state.notice;
+    expect(unknown?.checkAgain).toBe(true);
+
+    mockPurchases.mockResolvedValueOnce({ ok: true, data: [newer, own({ status: 'pending', entitlement_active: false })] });
+    await act(async () => { await h.result.current.checkAgain(); });
+    expect(h.result.current.state.success).toBeNull();
+    expect(h.result.current.state.notice).toEqual(expect.objectContaining({
+      checkAgain: true, message: unknown?.message, reference: unknown?.reference,
+    }));
+    expect(h.onEntitled).not.toHaveBeenCalled();
+
+    mockPurchases.mockResolvedValueOnce({ ok: true, data: [newer, own()] });
+    await act(async () => { await h.result.current.checkAgain(); });
+    expect(h.result.current.state.success).toEqual(expect.objectContaining({ purchaseId: 'synthetic-own' }));
+    expect(mockPost).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('LS-914R2 B3: clear one-time confirmation also belongs to the purchased package', () => {
+  it('another active package cannot announce the new pending package as active', async () => {
+    // The native sheet succeeded: payment is known, but new-package access
+    // has not arrived yet. The global entitlement is for the older other plan.
+    mockPresent.mockResolvedValueOnce({});
+    // Model the existing backend's optional package filter as well: a fix
+    // may use that filter instead of reading the purchase row.
+    mockEntitlement.mockImplementation(async (packageId?: string) => ({
+      ok: true, data: { active: !packageId || packageId === B.id },
+    }));
+    mockPurchases.mockResolvedValue({ ok: true, data: [
+      { id: 'synthetic-new-A', package_id: A.id, status: 'pending', entitlement_active: false,
+        access_expires_at: null, created_at: '2026-10-30T12:00:00Z' },
+      { id: 'synthetic-old-B', package_id: B.id, status: 'paid', entitlement_active: true,
+        access_expires_at: null, created_at: '2026-10-01T12:00:00Z' },
+    ] });
+    const h = await mount();
+    await act(async () => { await h.result.current.start(A); });
+    expect(mockPresent).toHaveBeenCalledTimes(1);
+    expect(h.result.current.state.success).toBeNull();
+    expect(h.result.current.state.phase).toBe('confirmed_pending');
   });
 });

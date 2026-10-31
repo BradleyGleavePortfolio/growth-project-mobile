@@ -10,7 +10,7 @@
  */
 import React from 'react';
 import { Alert, ScrollView, StyleSheet } from 'react-native';
-import { fireEvent, render, waitFor, within } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 
 jest.mock('../theme/ThemeProvider', () => {
   const realTokens = jest.requireActual('../theme/tokens').default;
@@ -135,6 +135,45 @@ beforeEach(() => {
   mockInitPaymentSheet.mockResolvedValue({});
 });
 
+it.each([true, false])('LS-914R3 B2: later paid actions stay pinned (closed during confirmation=%s)', async (closed) => {
+  mockBillingV2 = true;
+  let finish!: (value: unknown) => void;
+  const get = mockGet.getMockImplementation()!;
+  mockGet.mockImplementation((url: string) => (
+    url === '/v1/checkout/subscriptions/purchase-1'
+      ? new Promise((resolve) => { finish = resolve; })
+      : get(url)
+  ));
+  jest.mocked(clientPaymentsApi.getPurchases).mockResolvedValue({
+    ok: true,
+    data: [{
+      id: 'purchase-1', package_id: 'pkg-monthly',
+      amount_cents: 9900, currency: 'usd', status: 'paid', entitlement_active: true,
+      created_at: '2026-10-30T10:00:00Z', access_expires_at: null,
+      current_period_end: null, cancel_at_period_end: false, canceled_at: null,
+      billing_type: 'recurring', first_charge_cents: 9900,
+    }],
+  });
+  const r = await render(<ClientPackagesScreen />);
+  await fireEvent.press(await r.findByTestId('plan-offer-pkg-monthly-open'));
+  await fireEvent.press(r.getByTestId('buy-plan-pkg-monthly'));
+  await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/v1/checkout/subscriptions/purchase-1'));
+  // This enabled, real Back control closes the page, not its purchase.
+  if (closed) {
+    const backs = r.getAllByLabelText('Back');
+    await fireEvent.press(backs[backs.length - 1]);
+    expect(r.queryByTestId('client-plan-page')).toBeNull();
+  }
+  await act(async () => { finish({ data: PLAN }); });
+  await waitFor(() => expect(r.getByTestId('payment-see-unlocks')).toBeTruthy());
+  // Use public host test IDs, not a removed testing-library tree API.
+  const footer = r.queryByTestId('client-plan-page-footer')
+    ?? r.queryByTestId('payment-success-footer');
+  expect(footer).not.toBeNull();
+  expect(within(footer!).getByTestId('payment-see-unlocks')).toBeTruthy();
+  expect(within(footer!).getByTestId('payment-continue')).toBeTruthy();
+});
+
 it('Style C opens the plan without checkout, shows the server quote, and returns to the list', async () => {
   mockBillingV2 = true;
   const original = await defaultPackages?.();
@@ -249,6 +288,29 @@ it('Style C leads with the success moment, and Back from it finishes like Done (
   await waitFor(() => expect(jest.mocked(clientPaymentsApi.getPackages).mock.calls.length).toBeGreaterThan(reads));
   expect(mockGoBack).not.toHaveBeenCalled();
   haptic.mockRestore();
+});
+
+it('LS-914R2 B2: success keeps See what unlocks and Done in the pinned footer, outside scrolling content', async () => {
+  mockBillingV2 = true;
+  jest.mocked(clientPaymentsApi.getPurchases).mockResolvedValueOnce({ ok: true, data: [{
+    id: 'purchase-1', package_id: 'pkg-monthly', status: 'active', entitlement_active: true,
+    access_expires_at: null, current_period_end: PLAN.next_charge_at, cancel_at_period_end: false,
+    canceled_at: null, created_at: '2026-10-30T12:00:00Z', amount_cents: 9900, currency: 'usd',
+    first_charge_cents: 9900, billing_type: 'recurring',
+  }] });
+  const r = await render(<ClientPackagesScreen />);
+  await waitFor(() => expect(r.getByTestId('plan-offer-pkg-monthly-open')).toBeTruthy());
+  await fireEvent.press(r.getByTestId('plan-offer-pkg-monthly-open'));
+  // The sale already uses the shared fixed footer; success must preserve that placement.
+  expect(within(r.getByTestId('client-plan-page-footer')).getByTestId('buy-plan-pkg-monthly')).toBeTruthy();
+  await fireEvent.press(r.getByTestId('buy-plan-pkg-monthly'));
+  await waitFor(() => expect(r.getByTestId('payment-see-unlocks')).toBeTruthy());
+  const footer = r.getByTestId('client-plan-page-footer');
+  expect(within(footer).getByTestId('payment-see-unlocks')).toBeTruthy();
+  expect(within(footer).getByTestId('payment-continue')).toBeTruthy();
+  const body = within(r.getByTestId('client-plan-page-body'));
+  expect(body.queryByTestId('payment-see-unlocks')).toBeNull();
+  expect(body.queryByTestId('payment-continue')).toBeNull();
 });
 
 it('Style C cannot open a plan when the scoped list read is denied', async () => {
