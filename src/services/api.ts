@@ -774,8 +774,9 @@ export const logApi = {
     original_quantity?: number;
     original_unit?: string;
     notes?: string;
-    // Idempotency key from the offline queue so a flush retry doesn't create
-    // a duplicate LoggedFoodEntry. Optional — direct (non-queued) logs omit it.
+    // The save's client key (FOOD-1-M R3: the offline queue's entry id, or the online tap's key from
+    // utils/log/saveKey), so a retry upserts instead of creating a second LoggedFoodEntry. It is also
+    // sent as the Idempotency-Key header.
     client_uuid?: string;
     // FOODLINK: the plan meal (DailyMealPlanSlot id) this food was logged for, and the coachless usual
     // day's mark. Sent only through logSubmit's planLink(), i.e. only with featureFlags.foodPlanChecklist on.
@@ -783,7 +784,10 @@ export const logApi = {
     fills_usual_meal?: boolean;
     // Client tutorial: a 2xx food log is the real "first meal" action. The
     // response passes through untouched; a failure emits nothing.
-  }) => withTutorialSignal(api.post('/log/food', data), 'meal_logged'),
+  }) => withTutorialSignal(
+    data.client_uuid ? api.post('/log/food', data, { headers: { 'Idempotency-Key': data.client_uuid } }) : api.post('/log/food', data),
+    'meal_logged',
+  ),
   getDaily: (date: string) =>
     api.get(`/log/daily?date=${date}`),
   updateEntry: (id: string, data: Record<string, unknown>) =>
@@ -1084,8 +1088,9 @@ export interface WaterEntry {
 }
 
 export const waterApi = {
-  log: (data: { amount_ml: number; date?: string }) =>
-    api.post<WaterEntry>('/nutrition/water', data),
+  // `key` (FOOD-1-M R3): the add's client key, in the Idempotency-Key header only (the body takes no key).
+  log: (data: { amount_ml: number; date?: string }, key?: string) =>
+    key ? api.post<WaterEntry>('/nutrition/water', data, { headers: { 'Idempotency-Key': key } }) : api.post<WaterEntry>('/nutrition/water', data),
   getDaily: (date: string) =>
     api.get<{ total_ml: number; logs?: WaterEntry[] }>(`/nutrition/water?date=${date}`),
   getWeekly: (startDate: string) =>

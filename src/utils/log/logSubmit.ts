@@ -4,6 +4,7 @@ import { MealType } from '../../types';
 import { planLink, type PlanLink } from './planLink';
 import { SearchResult } from './types';
 import { parseQuantityInput, densityGramsFor } from './macros';
+import { withSaveKey } from './saveKey';
 
 const OZ_TO_GRAMS = 28.3495;
 
@@ -82,17 +83,11 @@ export function buildFoodPayload(food: SearchResult) {
   };
 }
 
-export async function submitSearchLogOffline({
-  food,
-  date,
-  mealType,
-  multiplier,
-  originalQuantity,
-  originalUnit,
-  link,
-}: SearchLogArgs) {
+export async function submitSearchLogOffline(args: SearchLogArgs) {
+  const { food, date, mealType, multiplier, originalQuantity, originalUnit, link } = args;
   const needsCreate = !food.id || food.id.startsWith('off_');
-  await enqueueFoodLog({
+  // FOOD-1-M R3: a key an online try of this same food already sent becomes the queue entry's id.
+  await withSaveKey(['search', args], (key) => enqueueFoodLog({
     kind: 'search',
     foodItemId: needsCreate ? undefined : food.id,
     food: needsCreate ? buildFoodPayload(food) : undefined,
@@ -104,31 +99,28 @@ export async function submitSearchLogOffline({
       original_unit: originalUnit,
       ...planLink(link),
     },
-  });
+  }, key));
 }
 
-export async function submitSearchLogOnline({
-  food,
-  date,
-  mealType,
-  multiplier,
-  originalQuantity,
-  originalUnit,
-  link,
-}: SearchLogArgs) {
-  let foodItemId = food.id || '';
-  if (!foodItemId || foodItemId.startsWith('off_')) {
-    const createRes = await foodApi.create(buildFoodPayload(food));
-    foodItemId = createRes.data.id;
-  }
-  await logApi.logFood({
-    date,
-    meal_type: mealType,
-    food_item_id: foodItemId,
-    quantity_multiplier: multiplier,
-    original_quantity: originalQuantity,
-    original_unit: originalUnit,
-    ...planLink(link),
+export async function submitSearchLogOnline(args: SearchLogArgs) {
+  const { food, date, mealType, multiplier, originalQuantity, originalUnit, link } = args;
+  // FOOD-1-M R3: one key per intended save; a tap again after a lost answer sends the same key.
+  await withSaveKey(['search', args], async (key) => {
+    let foodItemId = food.id || '';
+    if (!foodItemId || foodItemId.startsWith('off_')) {
+      const createRes = await foodApi.create(buildFoodPayload(food));
+      foodItemId = createRes.data.id;
+    }
+    await logApi.logFood({
+      date,
+      meal_type: mealType,
+      food_item_id: foodItemId,
+      quantity_multiplier: multiplier,
+      original_quantity: originalQuantity,
+      original_unit: originalUnit,
+      ...planLink(link),
+      client_uuid: key,
+    });
   });
 }
 
@@ -221,7 +213,7 @@ function buildManualPayload(args: ManualLogArgs) {
 
 export async function submitManualLogOffline(args: ManualLogArgs) {
   const { foodPayload, logPayload } = buildManualPayload(args);
-  await enqueueFoodLog({ kind: 'manual', food: foodPayload, log: logPayload });
+  await withSaveKey(['manual', args], (key) => enqueueFoodLog({ kind: 'manual', food: foodPayload, log: logPayload }, key));
   return foodPayload.name;
 }
 
@@ -229,11 +221,14 @@ export async function submitManualLogOffline(args: ManualLogArgs) {
 // can offer an in-place Undo (meal plan "Log this meal").
 export async function submitManualLogOnlineWithId(args: ManualLogArgs) {
   const { foodPayload, logPayload } = buildManualPayload(args);
-  const createRes = await foodApi.create(foodPayload);
-  const foodItemId = createRes.data.id;
-  const logRes = await logApi.logFood({ ...logPayload, food_item_id: foodItemId });
-  const id: unknown = logRes?.data?.id;
-  return { name: foodPayload.name, entryId: typeof id === 'string' ? id : null };
+  // FOOD-1-M R3: one key per intended save, kept for a tap again after a lost answer.
+  return withSaveKey(['manual', args], async (key) => {
+    const createRes = await foodApi.create(foodPayload);
+    const foodItemId = createRes.data.id;
+    const logRes = await logApi.logFood({ ...logPayload, food_item_id: foodItemId, client_uuid: key });
+    const id: unknown = logRes?.data?.id;
+    return { name: foodPayload.name, entryId: typeof id === 'string' ? id : null };
+  });
 }
 
 export async function submitManualLogOnline(args: ManualLogArgs) {

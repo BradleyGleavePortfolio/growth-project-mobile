@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  AppState,
   RefreshControl,
   Modal,
   TextInput,
@@ -39,6 +40,7 @@ import { mapFoodItem, type RawFoodItem } from '../../utils/log/mapFoodItem';
 import { matchLoggedFoods, mergeWithLoggedMatches, repeatPastMeal } from '../../utils/log/quickLog';
 import type { PlanLink } from '../../utils/log/planLink';
 import { addDays, getTodayString } from '../../utils/date';
+import { dayForNewLog } from '../../utils/logDay';
 import {
   submitSearchLogOffline,
   submitSearchLogOnline,
@@ -69,6 +71,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
 
   const {
     selectedDate,
+    selectedOn,
     foodLogs,
     dailyTotals,
     waterOz,
@@ -157,6 +160,25 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
       loadDayData(currentUser.id);
     }
   }, [currentUser?.id]);
+
+  // FOOD-1-M R2: the day a new log goes to (utils/logDay). A Food tab left on today past midnight
+  // moves to the new today, when the app comes back and again at the tap, before it takes the log.
+  const takeLogDay = () => {
+    const day = dayForNewLog({ selectedDate, selectedOn });
+    if (day !== selectedDate && currentUser) {
+      setSavedMessage(null);
+      void loadDayData(currentUser.id, day);
+    }
+    return day;
+  };
+  const takeLogDayRef = useRef(takeLogDay);
+  takeLogDayRef.current = takeLogDay;
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') takeLogDayRef.current();
+    });
+    return () => sub.remove();
+  }, []);
 
   const handleDateChange = (date: string) => {
     setSavedMessage(null);
@@ -297,9 +319,10 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
       return;
     }
     const multiplier = quantityMultiplier(selectedFood, qty, selectedUnit);
+    const day = takeLogDay();
     const args = {
       food: selectedFood,
-      date: selectedDate,
+      date: day,
       mealType: activeMealType,
       multiplier,
       originalQuantity: qty,
@@ -330,7 +353,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
 
     try {
       await submitSearchLogOnline(args);
-      await refreshShownDay(currentUser.id, selectedDate);
+      await refreshShownDay(currentUser.id, day);
       // Phase 11 / Track 3: success haptic on food logged
       HapticService.success();
       // Psych Report #4: Analytics — meal_logged (search flow)
@@ -356,7 +379,8 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
       Alert.alert('Missing info', 'Enter at least a food name and calories.');
       return;
     }
-    const args = { ...manualFields, date: selectedDate, mealType: activeMealType, link: sheetLink };
+    const day = takeLogDay();
+    const args = { ...manualFields, date: day, mealType: activeMealType, link: sheetLink };
     setFoodSaving(true);
 
     if (!online) {
@@ -376,7 +400,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
 
     try {
       await submitManualLogOnline(args);
-      await refreshShownDay(currentUser.id, selectedDate);
+      await refreshShownDay(currentUser.id, day);
       // Phase 11 / Track 3: success haptic on manual food logged
       HapticService.success();
       // Psych Report #4: Analytics — meal_logged (manual flow)
@@ -422,10 +446,11 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
       return;
     }
     const target = mealLabel(mealType);
+    const day = takeLogDay();
     setFoodSaving(true);
     try {
-      const { added, failedNames } = await repeatPastMeal(meal, selectedDate, mealType, link);
-      await refreshShownDay(currentUser.id, selectedDate);
+      const { added, failedNames } = await repeatPastMeal(meal, day, mealType, link);
+      await refreshShownDay(currentUser.id, day);
       if (failedNames.length === 0) {
         HapticService.success();
         track(AnalyticsEvents.MEAL_LOGGED, { meal_type: mealType, source: 'repeat_meal' });
@@ -449,9 +474,10 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
   const logPlanned = async (slot: DaySlot) => {
     if (!currentUser || foodSaving) return;
     const v = (x: number) => String(Math.round(x * 10) / 10);
+    const day = takeLogDay();
     const args = {
       foodName: slot.name, calories: v(slot.kcal), protein: v(slot.protein), carbs: v(slot.carbs), fat: v(slot.fat),
-      quantity: '1', unit: 'serving', date: selectedDate, mealType: slot.mealType, link: { planSlotId: slot.key },
+      quantity: '1', unit: 'serving', date: day, mealType: slot.mealType, link: { planSlotId: slot.key },
     };
     setFoodSaving(true);
     try {
@@ -463,7 +489,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
         return;
       }
       await submitManualLogOnline(args);
-      await refreshShownDay(currentUser.id, selectedDate);
+      await refreshShownDay(currentUser.id, day);
       HapticService.success();
       track(AnalyticsEvents.MEAL_LOGGED, { meal_type: slot.mealType, source: 'meal_plan' });
       setSavedMessage(`${slot.name} added to ${mealLabel(slot.mealType)}.`);

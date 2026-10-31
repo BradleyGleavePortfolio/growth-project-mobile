@@ -167,7 +167,7 @@ it('makes a newly saved quick add removable without another day read, and clears
   await screen.findByText('Rolled oats');
   await fireEvent.press(screen.getByLabelText('Add 8 ounces of water'));
   await screen.findByTestId('remove-water-water-new');
-  expect(waterApi.log).toHaveBeenCalledWith({ date, amount_ml: 237 });
+  expect(waterApi.log).toHaveBeenCalledWith({ date, amount_ml: 237 }, expect.stringMatching(/^pfl_/));
   await act(async () => useClientStore.getState().setSelectedDate('2026-10-05'));
   expect(useClientStore.getState().waterEntries).toEqual([]);
   await act(async () => useClientStore.setState({ waterEntries: [newEntry] }));
