@@ -2,20 +2,21 @@
  * useFirstPaymentNotification — ED.3 notification-subscriber contract (Option C).
  *
  * The dangerous client-side ClientPurchase counting was removed from PR #242;
- * the mobile client now reacts to the backend's FIRST_PAYMENT domain
+ * the mobile client now reacts to the backend's first-payment
  * notification instead. The notification stream (notificationsApi.fetchNotifications)
  * is mocked. We assert:
- *   1. A FIRST_PAYMENT notification with a well-formed payload fires
+ *   1. A first-payment row with a well-formed payload fires
  *      onFirstPayment EXACTLY ONCE with the parsed { amount, currency, clientId }.
  *   2. The same notification observed again on a later poll does NOT re-fire
  *      (synchronous per-coach latch).
- *   3. A FIRST_PAYMENT notification with a MALFORMED payload does NOT fire
+ *   3. A first-payment row with a MALFORMED payload does NOT fire
  *      (fail closed) and does NOT throw.
  *   4. When disabled (flag off) the stream is never read and nothing fires.
  *   5. A stream read error surfaces via the returned error state and does NOT
  *      fire onFirstPayment (Bradley Law #36 — logged, never swallowed).
- *   6. parseFirstPaymentPayload returns the typed payload for valid params and
- *      null for each missing/blank field.
+ *   (B-LSNOTIFY3-2: rows carry the decoded firstPayment the normalizer sets;
+ *   the decoder itself is tested in notificationsApi.firstPayment.test.ts and
+ *   end to end in useFirstPaymentNotification.backendRow.test.tsx.)
  *
  * No mock-echo (#17): the hook is driven through a mocked stream and we assert
  * specific behaviours (fires / does not, parsed shape), never that an input
@@ -37,24 +38,20 @@ jest.mock('../../services/notificationsApi', () => ({
   fetchNotifications: (...args: unknown[]) => mockFetchNotifications(...args),
 }));
 
-import {
-  useFirstPaymentNotification,
-  parseFirstPaymentPayload,
-  FIRST_PAYMENT_KIND,
-} from '../useNotifications';
+import { useFirstPaymentNotification } from '../useNotifications';
 
 function firstPaymentNotification(
-  params: Record<string, string> | undefined,
+  firstPayment: { amount: number; currency: string; clientId: string } | undefined,
   id = 'n_fp_1',
 ) {
   return {
     id,
-    kind: FIRST_PAYMENT_KIND,
-    title: 'First payment',
+    kind: 'system',
+    title: 'Update',
     body: 'A payment has cleared.',
     read: false,
     createdAt: new Date().toISOString(),
-    actionParams: params,
+    ...(firstPayment ? { firstPayment } : {}),
   };
 }
 
@@ -85,10 +82,10 @@ beforeEach(() => {
 });
 
 describe('useFirstPaymentNotification — ED.3 (Option C)', () => {
-  it('fires onFirstPayment once with the parsed payload on a well-formed FIRST_PAYMENT', async () => {
+  it('fires onFirstPayment once with the parsed payload on a well-formed first-payment row', async () => {
     mockPageItems = [
       firstPaymentNotification({
-        amount: '240',
+        amount: 240,
         currency: 'USD',
         clientId: 'client-dana',
       }),
@@ -108,7 +105,7 @@ describe('useFirstPaymentNotification — ED.3 (Option C)', () => {
   it('does not re-fire when the same notification is observed on a later poll', async () => {
     mockPageItems = [
       firstPaymentNotification({
-        amount: '240',
+        amount: 240,
         currency: 'USD',
         clientId: 'client-dana',
       }),
@@ -125,10 +122,10 @@ describe('useFirstPaymentNotification — ED.3 (Option C)', () => {
     expect(onFirstPayment).toHaveBeenCalledTimes(1);
   });
 
-  it('does NOT fire on a malformed payload (fail closed) and never throws', async () => {
+  it('does NOT fire on a row without a decoded first payment (fail closed) and never throws', async () => {
     mockPageItems = [
-      // Missing clientId — malformed per the fixed contract.
-      firstPaymentNotification({ amount: '240', currency: 'USD' }),
+      // A malformed first_payment row normalizes without firstPayment.
+      firstPaymentNotification(undefined),
     ];
     const onFirstPayment = jest.fn();
     await render(
@@ -143,7 +140,7 @@ describe('useFirstPaymentNotification — ED.3 (Option C)', () => {
   it('never reads the stream when disabled', async () => {
     mockPageItems = [
       firstPaymentNotification({
-        amount: '240',
+        amount: 240,
         currency: 'USD',
         clientId: 'client-dana',
       }),
@@ -173,52 +170,5 @@ describe('useFirstPaymentNotification — ED.3 (Option C)', () => {
       expect(getByTestId('err').props.children).toContain('stream down'),
     );
     expect(onFirstPayment).not.toHaveBeenCalled();
-  });
-});
-
-describe('parseFirstPaymentPayload', () => {
-  const base = firstPaymentNotification(undefined);
-
-  it('parses a well-formed params map into the typed payload', () => {
-    expect(
-      parseFirstPaymentPayload({
-        ...base,
-        actionParams: { amount: '99.5', currency: 'usd', clientId: 'c-1' },
-      }),
-    ).toEqual({ amount: 99.5, currency: 'usd', clientId: 'c-1' });
-  });
-
-  it('returns null when amount is missing or non-numeric', () => {
-    expect(
-      parseFirstPaymentPayload({
-        ...base,
-        actionParams: { currency: 'USD', clientId: 'c-1' },
-      }),
-    ).toBeNull();
-    expect(
-      parseFirstPaymentPayload({
-        ...base,
-        actionParams: { amount: 'free', currency: 'USD', clientId: 'c-1' },
-      }),
-    ).toBeNull();
-  });
-
-  it('returns null when currency or clientId is blank/absent', () => {
-    expect(
-      parseFirstPaymentPayload({
-        ...base,
-        actionParams: { amount: '10', currency: '', clientId: 'c-1' },
-      }),
-    ).toBeNull();
-    expect(
-      parseFirstPaymentPayload({
-        ...base,
-        actionParams: { amount: '10', currency: 'USD' },
-      }),
-    ).toBeNull();
-  });
-
-  it('returns null when there are no params at all', () => {
-    expect(parseFirstPaymentPayload(base)).toBeNull();
   });
 });

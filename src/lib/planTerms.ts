@@ -222,6 +222,23 @@ export function paidAmount(p: {
     : null;
 }
 
+/**
+ * LS-PAYFAIL B7: an attempt's own purchase row, never an older purchase of
+ * the same package. By id once known; before that, the newest row of the
+ * package: the server writes a new row for each new attempt key before the
+ * card sheet opens (a replayed key keeps its own row).
+ */
+export function attemptPurchase<
+  T extends { id: string; package_id: string; created_at: string },
+>(rows: T[], packageId: string, purchaseId: string | null): T | null {
+  if (purchaseId) return rows.find((p) => p.id === purchaseId) ?? null;
+  return rows.reduce<T | null>(
+    (cur, p) =>
+      p.package_id === packageId && (!cur || p.created_at > cur.created_at) ? p : cur,
+    null,
+  );
+}
+
 /** Short price label for a list row: "$49.00 a month", "$99.00 once", "Free". */
 export function priceLabel(pkg: PurchasablePackage): string {
   if (!pkg.renewing) {

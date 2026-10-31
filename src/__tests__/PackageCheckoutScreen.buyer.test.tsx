@@ -111,11 +111,12 @@ describe('PackageCheckoutScreen — buyer flow', () => {
   it('loads the package and renders it via PackageDetailSurface (buyer mode)', async () => {
     mockGetByShareToken.mockResolvedValue({ data: PKG });
     const props = makeProps();
-    const { getByText, getByLabelText } = await render(
+    const { getByText, getByLabelText, getByTestId } = await render(
       <PackageCheckoutScreen navigation={props.navigation} route={props.route} />,
     );
     await waitFor(() => expect(getByText('Strength Builder')).toBeTruthy());
-    expect(getByText('Coach Lee')).toBeTruthy();
+    // FR-1TO1 (LS B2): C5 Style C names the coach in the first included line (and the note), not a coach card.
+    expect(getByTestId('package-detail-one-to-one').props.children).toBe('1:1 coaching with Coach Lee');
     // Buyer mode → functional pay CTA present.
     expect(getByLabelText('Continue to payment')).toBeTruthy();
     const back = getByLabelText('Go back');

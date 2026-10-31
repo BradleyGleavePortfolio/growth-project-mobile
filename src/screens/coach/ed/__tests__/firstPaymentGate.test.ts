@@ -1,5 +1,5 @@
 /**
- * firstPaymentGate — ED.3 MMKV once-only gate evidence.
+ * firstPaymentGate — ED.3 once-only gate evidence.
  *
  * Proves the once-only contract directly at the storage seam (the gate the
  * Wow-screen owner consults): the FIRST consult is "unseen" → the celebration
@@ -7,10 +7,10 @@
  * a re-open / re-subscribe / duplicate INSERT is a no-op. The key is namespaced
  * per coach so two coaches do not share a gate.
  *
- * The repo's MMKV abstraction falls back to the AsyncStorage shim under Jest
- * (src/storage/mmkv.ts isMmkvAvailable() returns false in NODE_ENV=test), and
- * AsyncStorage is mocked globally (jest.setup.js), so these assertions exercise
- * the SAME async get/set surface the device MMKV instance presents.
+ * The gate is one raw AsyncStorage key per coach, outside the prefs / cache /
+ * secure namespaces that sign-out's clearAllStorage() wipes, so it is kept
+ * across sign-out (B-LONOTIFY5-1, B-LSNOTIFY5-M898-1). AsyncStorage is
+ * mocked globally (jest.setup.js).
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 

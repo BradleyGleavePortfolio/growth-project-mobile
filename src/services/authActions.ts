@@ -37,12 +37,17 @@ import { useClientStore } from '../store/clientStore';
 import { useFastingStore } from '../store/fastingStore';
 import { foregroundBannerStore } from '../store/foregroundBannerStore';
 import { dunningLockoutStore } from '../entitlements/dunning/dunningLockoutStore';
+import { useBlockedUsersStore } from '../store/blockedUsersStore';
 import { resetCrispIdentity } from './support/crisp.service';
 import { COACH_SIGNUP_UNCONFIRMED_KEY } from '../lib/coachSignupAttempt';
 import { SIGNUP_ROLE_NOTICE_KEY } from '../lib/signupRoleNotice';
 import { COACH_RECOVERY_GATE_KEY, ROLE_SELECTION_OWNER_KEY } from '../lib/roleSelectionGate';
 import { DAY1_ANSWERS_KEY_PREFIX } from '../screens/day-one/answers';
+import { firstPaymentSeenKey } from '../screens/coach/ed/firstPaymentGate';
+import { ROMAN_JOIN_OFFER_KEY_PREFIX } from '../lib/romanJoinOffer';
+import { deletionScheduledThisSession } from './deletionSchedule';
 import { releaseAgeHolds } from '../lib/ageGate';
+import { NOTIF_CATEGORY_PREFS_KEY } from '../storage/notificationCategoryPrefs';
 
 // Tokens live in SecureStore; everything else is plain AsyncStorage.
 const SECURE_SIGN_OUT_KEYS = [
@@ -96,6 +101,8 @@ const ASYNC_SIGN_OUT_KEYS = [
   // migrate it into their namespace and surface the previous user's
   // working set. See audit #2 / R15.
   '@activeWorkoutSession/v1',
+  // LS-908R2 B-R2-1 (STORE-B2): the notification category switches, the plan renewal offers yes among them.
+  NOTIF_CATEGORY_PREFS_KEY,
 ];
 // Prefixes whose every matching AsyncStorage key should be wiped on signOut.
 // Per-user namespaced data lives behind these prefixes; without enumeration the
@@ -409,6 +416,25 @@ export interface SignOutOptions {
    * out (a wait that never ends).
    */
   sessionFence?: SessionFencePass;
+  /**
+   * FR-898R3 (B-LS898R3-1): set only when the server has confirmed this
+   * account is deleted (the deletion screen's "deleted" state, or the deletion
+   * receipt after a failed refresh). Then the marks an ordinary sign-out keeps
+   * on purpose for a living account (deletedAccountKeys) are removed too.
+   * Never set for a scheduled or cancelled deletion, or any other sign-out
+   * (a deletion scheduled in this session is read from deletionSchedule).
+   */
+  accountDeleted?: boolean;
+}
+
+/**
+ * The signing-out account's keys that an ordinary sign-out keeps on purpose
+ * (the first-payment shown mark, firstPaymentGate; the Roman join-offer mark,
+ * lib/romanJoinOffer) and that only a confirmed or scheduled account deletion
+ * removes. Only that account's keys: another account on this phone keeps its own.
+ */
+function deletedAccountKeys(userId: string): string[] {
+  return [firstPaymentSeenKey(userId), `${ROMAN_JOIN_OFFER_KEY_PREFIX}${userId}`];
 }
 
 export async function signOut(userId?: string | null, opts: SignOutOptions = {}): Promise<void> {
@@ -436,6 +462,11 @@ async function signOutWhileHealthRetires(
   healthStateRetired: Promise<void>,
   opts: SignOutOptions,
 ): Promise<void> {
+  // JOINOFFER-DEL (LO-898R4 C-1): read before any await, while this is still
+  // the signing-out session. Signing out while this account's deletion is
+  // scheduled removes the kept marks too: the deletion completes later on the
+  // server and this phone may never hear of it (services/deletionSchedule).
+  const accountLeaving = opts.accountDeleted === true || deletionScheduledThisSession();
   // Clear all auth + session state and notify the root navigator.
   // We surface failures via console.error instead of Alert because a sign-out
   // button that appears to do nothing is worse than one that logs a warning.
@@ -503,7 +534,10 @@ async function signOutWhileHealthRetires(
   releaseOutbox();
   const prefixedKeys = await collectPrefixedKeys();
   const perUserKeys = signingOutUserId
-    ? PER_USER_KEY_PREFIXES.map((p) => `${p}${signingOutUserId}`)
+    ? [
+        ...PER_USER_KEY_PREFIXES.map((p) => `${p}${signingOutUserId}`),
+        ...(accountLeaving ? deletedAccountKeys(signingOutUserId) : []),
+      ]
     : [];
 
   // S6-P2 (S6-A-02): retire the identity persistence that is subscribed to the
@@ -612,6 +646,8 @@ export function resetUserScopedStores(): void {
     ['foregroundBannerStore', () => foregroundBannerStore.getState().reset()],
     // B-352-1: the payment lockout belongs to the signed-in account.
     ['dunningLockoutStore', () => dunningLockoutStore.retire()],
+    // LS-914 B1: the blocked list belongs to the signed-in account; a block answered later writes nothing.
+    ['blockedUsersStore', () => useBlockedUsersStore.getState().retire()],
   ];
   for (const [name, reset] of stores) {
     try {

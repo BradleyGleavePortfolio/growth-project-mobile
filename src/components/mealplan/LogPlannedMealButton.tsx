@@ -83,7 +83,7 @@ function refreshFoodLog() {
   void queryClient.invalidateQueries({ queryKey: ['food', 'log'] });
   const userId = readUserCacheSync()?.id;
   const store = useClientStore.getState();
-  if (userId) void store.loadDayData(userId, store.selectedDate);
+  if (userId) void store.refreshShownDay(userId, store.selectedDate);
 }
 
 type Phase = 'idle' | 'saving' | 'logged' | 'queued' | 'undoing';

@@ -201,4 +201,48 @@ describe('client day data failure state', () => {
     await useClientStore.getState().logWater('client', '', 8);
     expect(useClientStore.getState().loadError).toBe(notice);
   });
+
+  it.each(['day read', 'water add'] as const)(
+    'LS-PAYFAIL B10: an older account %s cannot repopulate the next account after sign-out reset',
+    async (surface) => {
+      const date = useClientStore.getState().selectedDate;
+      const privateFood = {
+        data: {
+          ...foodDay.data,
+          entries: [{
+            id: 'synthetic-old-food', user_id: 'synthetic-old-account',
+            food_item_id: 'synthetic-oats', meal_type: 'breakfast', quantity_multiplier: 1,
+            food_item: {
+              id: 'synthetic-oats', name: 'Synthetic prior account food',
+              calories: 420, protein_g: 30, carbs_g: 50, fat_g: 11,
+            },
+          }],
+        },
+      };
+      const privateWater = {
+        data: { id: 'synthetic-old-water', amount_ml: 237, logged_at: `${date}T12:00:00Z` },
+      };
+      let finishFood!: (response: typeof privateFood) => void;
+      let finishWater!: (response: typeof privateWater) => void;
+      const foodReply = new Promise<typeof privateFood>((resolve) => { finishFood = resolve; });
+      const waterReply = new Promise<typeof privateWater>((resolve) => { finishWater = resolve; });
+      if (surface === 'day read') mockGetFood.mockReturnValueOnce(foodReply);
+      else mockLogWater.mockReturnValueOnce(waterReply);
+      const oldWork = surface === 'day read'
+        ? useClientStore.getState().loadDayData('synthetic-old-account', date)
+        : useClientStore.getState().logWater('synthetic-old-account', '', 8);
+
+      // authActions.resetUserScopedStores invokes this exact reset at logout.
+      useClientStore.getState().reset();
+      await useClientStore.getState().loadDayData('synthetic-next-account', date);
+      const nextAccount = useClientStore.getState();
+      finishFood(privateFood);
+      finishWater(privateWater);
+      await oldWork;
+
+      expect(useClientStore.getState().foodLogs).toEqual(nextAccount.foodLogs);
+      expect(useClientStore.getState().waterEntries).toEqual(nextAccount.waterEntries);
+      expect(useClientStore.getState().dailyTotals).toEqual(nextAccount.dailyTotals);
+    },
+  );
 });

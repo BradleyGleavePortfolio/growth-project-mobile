@@ -78,6 +78,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
     loadError,
     setSelectedDate,
     loadDayData,
+    refreshShownDay,
     logWater,
     removeWaterEntry,
     removeFoodLogLocally,
@@ -329,7 +330,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
 
     try {
       await submitSearchLogOnline(args);
-      await loadDayData(currentUser.id, selectedDate);
+      await refreshShownDay(currentUser.id, selectedDate);
       // Phase 11 / Track 3: success haptic on food logged
       HapticService.success();
       // Psych Report #4: Analytics — meal_logged (search flow)
@@ -375,7 +376,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
 
     try {
       await submitManualLogOnline(args);
-      await loadDayData(currentUser.id, selectedDate);
+      await refreshShownDay(currentUser.id, selectedDate);
       // Phase 11 / Track 3: success haptic on manual food logged
       HapticService.success();
       // Psych Report #4: Analytics — meal_logged (manual flow)
@@ -424,7 +425,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
     setFoodSaving(true);
     try {
       const { added, failedNames } = await repeatPastMeal(meal, selectedDate, mealType, link);
-      await loadDayData(currentUser.id, selectedDate);
+      await refreshShownDay(currentUser.id, selectedDate);
       if (failedNames.length === 0) {
         HapticService.success();
         track(AnalyticsEvents.MEAL_LOGGED, { meal_type: mealType, source: 'repeat_meal' });
@@ -462,7 +463,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
         return;
       }
       await submitManualLogOnline(args);
-      await loadDayData(currentUser.id, selectedDate);
+      await refreshShownDay(currentUser.id, selectedDate);
       HapticService.success();
       track(AnalyticsEvents.MEAL_LOGGED, { meal_type: slot.mealType, source: 'meal_plan' });
       setSavedMessage(`${slot.name} added to ${mealLabel(slot.mealType)}.`);
@@ -514,7 +515,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
       setEditLog(null);
       setEditQty('');
       setEditUnit('');
-      await loadDayData(currentUser.id, selectedDate);
+      await refreshShownDay(currentUser.id, selectedDate);
     } catch (err) {
       console.error('LogScreen: handleEditSave failed', err);
       Alert.alert(
@@ -544,7 +545,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
             console.error('LogScreen: handleDeleteFood failed', err);
             Alert.alert("Couldn't remove food", errorMessage(err, `${log.foodName} is still in the log. Check the connection and try again.`));
           }
-          loadDayData(currentUser.id, selectedDate);
+          refreshShownDay(currentUser.id, selectedDate);
         },
       },
     ]);
@@ -591,7 +592,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
     setRefreshing(true);
     // Pull-to-refresh also sends foods saved offline (never rejects).
     if (online) await syncFoodLogQueue();
-    await loadDayData(currentUser.id, selectedDate);
+    await refreshShownDay(currentUser.id, selectedDate);
     setRefreshing(false);
   }, [currentUser?.id, selectedDate, online]);
 
@@ -780,7 +781,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
 
       {/* F-2: edit-log sheet. Inline so it works on iOS + Android without
           relying on Alert.prompt (iOS-only). Saves through the existing
-          logApi.updateEntry endpoint and triggers loadDayData on success. */}
+          logApi.updateEntry endpoint and triggers refreshShownDay on success. */}
       <Modal
         visible={!!editLog}
         animationType="fade"

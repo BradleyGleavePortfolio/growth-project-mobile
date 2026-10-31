@@ -76,6 +76,13 @@ jest.mock('../../../hooks/useCurrentUser', () => ({
 }));
 
 const mockGoBack = jest.fn();
+// FR-868: ContactView reaches the app's QueryClient to drop / restore the
+// person's coach-inbox rows. A real, empty client stands in for it here.
+jest.mock('../../../services/queryClient', () => {
+  const { QueryClient } = jest.requireActual('@tanstack/react-query');
+  return { queryClient: new QueryClient() };
+});
+
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ goBack: mockGoBack, navigate: jest.fn() }),
   useRoute: () => ({
@@ -180,5 +187,103 @@ describe('ContactView — block flow', () => {
 
     await waitFor(() => expect(mockUnblock).toHaveBeenCalled());
     expect(useBlockedUsersStore.getState().isBlocked('u1')).toBe(true);
+  });
+});
+
+describe('ContactView — coach inbox follows block and unblock (FR-868)', () => {
+  const { queryClient } = jest.requireMock('../../../services/queryClient');
+  const { coachCommunityKeys } = jest.requireActual('../../../hooks/useCoachCommunity');
+  const row = (id: string, client: string) => ({ id, client_user_id: client });
+  const seed = () =>
+    queryClient.setQueryData([...coachCommunityKeys.inbox(), 'all'], {
+      pages: [{ items: [row('m1', 'u1'), row('m2', 'u2')], next_cursor: null }],
+      pageParams: [null],
+    });
+  const rows = () =>
+    (queryClient.getQueryData([...coachCommunityKeys.inbox(), 'all']) as {
+      pages: Array<{ items: Array<{ client_user_id: string }> }>;
+    }).pages[0].items.map((i) => i.client_user_id);
+
+  it('blocking drops the person from the cached coach inbox at once', async () => {
+    seed();
+    mockBlock.mockResolvedValueOnce({ ok: true });
+    const { getByLabelText } = await render(<ContactView />);
+    await waitFor(() => expect(useBlockedUsersStore.getState().hydrated).toBe(true));
+    await pressDestructive('Block', async () => {
+      await fireEvent.press(getByLabelText('Block user'));
+    });
+    await waitFor(() => expect(rows()).toEqual(['u2']));
+  });
+
+  it('unblocking invalidates the coach community queries so rows come back', async () => {
+    const spy = jest.spyOn(queryClient, 'invalidateQueries');
+    await useBlockedUsersStore.getState().hydrate('me');
+    await useBlockedUsersStore.getState().block({ id: 'u1', displayName: 'Alice Smith', role: 'coach' });
+    mockUnblock.mockResolvedValueOnce({ ok: true });
+    const { getByLabelText } = await render(<ContactView />);
+    await waitFor(() => getByLabelText('Unblock user'));
+    await pressDestructive('Unblock', async () => {
+      await fireEvent.press(getByLabelText('Unblock user'));
+    });
+    await waitFor(() =>
+      expect(spy).toHaveBeenCalledWith({ queryKey: coachCommunityKeys.all }),
+    );
+    spy.mockRestore();
+  });
+});
+
+describe('ContactView — an answer after an account change stays with its account (LS-914 B1)', () => {
+  function held<T>() {
+    let release!: (value: T) => void;
+    const promise = new Promise<T>((resolve) => {
+      release = resolve;
+    });
+    return { promise, release };
+  }
+  const nextRow = { blockedId: 'u1', displayName: 'Next account name', blockedAt: '2026-10-30T09:00:00.000Z' };
+  async function nextAccountSignsIn(reset: boolean, rows: Array<typeof nextRow>) {
+    if (reset) await useBlockedUsersStore.getState().reset();
+    await useBlockedUsersStore.getState().hydrate('next-account');
+    await useBlockedUsersStore.getState().addFromServer(rows, { replace: true });
+  }
+
+  it.each([false, true])('a named block answered late never reaches the next account (reset=%s)', async (reset) => {
+    const request = held<{ ok: true }>();
+    mockBlock.mockImplementationOnce(() => request.promise);
+    const { getByLabelText } = await render(<ContactView />);
+    await waitFor(() => expect(useBlockedUsersStore.getState().hydrated).toBe(true));
+    await pressDestructive('Block', async () => {
+      await fireEvent.press(getByLabelText('Block user'));
+    });
+    await waitFor(() => expect(mockBlock).toHaveBeenCalledWith('u1'));
+
+    await nextAccountSignsIn(reset, []);
+    request.release({ ok: true });
+    await waitFor(() => expect(getByLabelText('Block user')).toBeTruthy());
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(useBlockedUsersStore.getState().userId).toBe('next-account');
+    expect(useBlockedUsersStore.getState().blocked).toEqual([]);
+    expect(mockGoBack).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])('an unblock answered late never unblocks in the next account (reset=%s)', async (reset) => {
+    await useBlockedUsersStore.getState().hydrate('me');
+    await useBlockedUsersStore.getState().block({ id: 'u1', displayName: 'Alice Smith', role: 'coach' });
+    const request = held<{ ok: true }>();
+    mockUnblock.mockImplementationOnce(() => request.promise);
+    const { getByLabelText } = await render(<ContactView />);
+    await waitFor(() => getByLabelText('Unblock user'));
+    await pressDestructive('Unblock', async () => {
+      await fireEvent.press(getByLabelText('Unblock user'));
+    });
+    await waitFor(() => expect(mockUnblock).toHaveBeenCalledWith('u1'));
+
+    await nextAccountSignsIn(reset, [nextRow]);
+    request.release({ ok: true });
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(useBlockedUsersStore.getState().userId).toBe('next-account');
+    expect(useBlockedUsersStore.getState().blocked.map((b) => b.displayName)).toEqual(['Next account name']);
   });
 });

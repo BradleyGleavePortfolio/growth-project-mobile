@@ -8,6 +8,7 @@ import { colors, layout, radius, typography } from '../../../theme/tokens';
 import { QuietOverline, Screen, footerBottomPadding, useScreenInsets } from '../../../ui';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { CoachMark } from '../../../components/purchase/PlanActiveMoment';
+import { oneToOneCoachingLabel } from '../../../config/purchaseSurfaces';
 
 export const CLIENT_PLAN_COPY = {
   about: 'About this plan',
@@ -52,7 +53,7 @@ export function PlanMasthead({ title, coach, price, onBack }: {
   );
 }
 
-function CoachNote({ description, coach, compact = false }: { description: string | null; coach: string | null; compact?: boolean }) {
+export function CoachNote({ description, coach, compact = false }: { description: string | null; coach: string | null; compact?: boolean }) {
   const { semanticColors: c } = useTheme();
   return description ? (
     <View style={s.note}>
@@ -91,6 +92,22 @@ export function PlanOfferCard({ name, price, description, features, coach, onOpe
   );
 }
 
+/** STORE-1TO1: every package includes 1:1 coaching with its coach, so this list always shows, W2 first. */
+export function PlanIncluded({ coach, features, testID }: { coach: string | null; features: string[]; testID: string }) {
+  const { semanticColors: c } = useTheme();
+  return (
+    <View style={s.section}>
+      <QuietOverline style={s.overline} accessibilityRole="header">{CLIENT_PLAN_COPY.included}</QuietOverline>
+      {[oneToOneCoachingLabel(coach), ...features].map((feature, i) => (
+        <View key={i} style={s.feature}>
+          <View style={[s.dot, { backgroundColor: colors.camel }]} />
+          <Text style={[s.body, { color: c.textPrimary }]} testID={i === 0 ? testID : undefined}>{feature}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export function ClientPlanPage({ name, price, description, features, coach, onBack, outcome, outcomeKey, children, footer }: {
   name: string; price: string; description: string | null; features: string[]; coach: string | null;
   onBack: () => void; outcome: React.ReactNode; outcomeKey: string | null; children: React.ReactNode; footer: React.ReactNode;
@@ -115,17 +132,7 @@ export function ClientPlanPage({ name, price, description, features, coach, onBa
         contentContainerStyle={[s.scroll, { paddingBottom: footer ? layout.gutter : footerBottomPadding(insets.bottom) }]}>
         {outcomeKey ? <View style={s.outcome} testID="client-plan-outcome">{outcome}</View> : null}
         <CoachNote description={description} coach={coach} />
-        {features.length ? (
-          <View style={s.section}>
-            <QuietOverline style={s.overline} accessibilityRole="header">{CLIENT_PLAN_COPY.included}</QuietOverline>
-            {features.map((feature, i) => (
-              <View key={i} style={s.feature}>
-                <View style={[s.dot, { backgroundColor: colors.camel }]} />
-                <Text style={[s.body, { color: c.textPrimary }]}>{feature}</Text>
-              </View>
-            ))}
-          </View>
-        ) : null}
+        <PlanIncluded coach={coach} features={features} testID="client-plan-one-to-one" />
         {children}
       </ScrollView>
     </Screen></PlanInk>

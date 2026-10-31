@@ -26,6 +26,7 @@ import {
   type PackageCreateInput,
 } from "../../../api/packagesApi";
 import { coachSetupApi } from "../../../api/coachSetupApi";
+import { EVERY_PACKAGE_INCLUDES_COACHING } from "../../../constants/packageCoachingCopy";
 import {
   describeError,
   type FriendlyError,
@@ -369,6 +370,9 @@ export default function FirstPackageForm({
         maxLength={80}
         testID={`${testID}-title`}
       />
+      <Text style={styles.help} testID={`${testID}-one-to-one`}>
+        {EVERY_PACKAGE_INCLUDES_COACHING}
+      </Text>
       <View
         style={styles.segment}
         accessibilityRole="radiogroup"

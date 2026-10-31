@@ -19,7 +19,12 @@ import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { layout, radius, typography } from '../../theme/tokens';
 import { Headline, Lede, Screen, ScreenTopBar } from '../../ui';
-import { useBlockedUsersStore, BlockedUser } from '../../store/blockedUsersStore';
+import {
+  useBlockedUsersStore,
+  BlockedUser,
+  blockListOwner,
+  ownsBlockList,
+} from '../../store/blockedUsersStore';
 import { messagesModerationApi } from '../../api/messagesApi';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 
@@ -51,11 +56,14 @@ export default function BlockedUsersScreen(): React.ReactElement {
       if (!s.hydrated || s.userId !== uid) {
         await s.hydrate(uid);
       }
+      // LS-914 B1: the list belongs to this account, or this load is over.
+      if (cancelled || useBlockedUsersStore.getState().userId !== uid) return;
+      const owner = blockListOwner();
       try {
         const res = await messagesModerationApi.listBlocked();
-        if (cancelled) return;
+        if (cancelled || !ownsBlockList(owner)) return;
         // Preserve the server-provided blockedAt instead of stamping new Date().
-        await useBlockedUsersStore.getState().addFromServer(res.blocked);
+        await useBlockedUsersStore.getState().addFromServer(res.blocked, { owner });
       } catch {
         if (!cancelled) {
           setFetchError(LOAD_FAILED);
@@ -81,9 +89,10 @@ export default function BlockedUsersScreen(): React.ReactElement {
           text: 'Unblock',
           onPress: async () => {
             setWorking(user.id);
+            const owner = blockListOwner();
             try {
               await messagesModerationApi.unblock(user.id);
-              await store.unblock(user.id);
+              await store.unblock(user.id, owner);
             } catch {
               Alert.alert('Could not unblock', 'Check your connection, then tap Unblock again.');
             } finally {

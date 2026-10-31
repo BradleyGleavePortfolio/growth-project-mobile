@@ -15,7 +15,7 @@
  * the original block timestamp is what Settings → Blocked Users should show.
  */
 import { useEffect, useState } from 'react';
-import { useBlockedUsersStore } from '../store/blockedUsersStore';
+import { useBlockedUsersStore, blockListOwner } from '../store/blockedUsersStore';
 import { messagesModerationApi } from '../api/messagesApi';
 
 export interface UseBlockedUsersHydrationOptions {
@@ -54,7 +54,9 @@ export function useBlockedUsersHydration(
       if (!s.hydrated || s.userId !== userId) {
         await s.hydrate(userId);
       }
-      if (cancelled) return;
+      // LS-914 B1: the list belongs to this account, or this run is over.
+      if (cancelled || useBlockedUsersStore.getState().userId !== userId) return;
+      const owner = blockListOwner();
       if (!fetchServer) {
         setServerHydrationComplete(true);
         return;
@@ -63,7 +65,7 @@ export function useBlockedUsersHydration(
         const res = await messagesModerationApi.listBlocked();
         if (cancelled) return;
         // FX-872: the server's list replaces the local one (one block cache; an unblock elsewhere reopens here).
-        await useBlockedUsersStore.getState().addFromServer(res.blocked, { replace: true });
+        await useBlockedUsersStore.getState().addFromServer(res.blocked, { replace: true, owner });
       } catch {
         // Non-fatal — local cache + server-side enforcement still apply.
         // Fail open: we still flip serverHydrationComplete to true so the DM

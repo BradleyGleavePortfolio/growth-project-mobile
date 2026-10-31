@@ -38,7 +38,8 @@ import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import { usePackagePurchase } from '../../hooks/usePackagePurchase';
 import { usePaymentSheetAppearance } from '../../components/purchase/usePaymentSheetAppearance';
 import PlanTermsBlock from '../../components/purchase/PlanTermsBlock';
-import PurchaseFeedback from '../../components/purchase/PurchaseFeedback';
+import PurchaseFeedback, { styleCSuccess } from '../../components/purchase/PurchaseFeedback';
+import { PlanActiveBar, usePlanMoment } from '../../components/purchase/PlanActiveMoment';
 import { planTerms, purchasableFromPublicPackage } from '../../lib/planTerms';
 import { track } from '../../lib/analytics';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -193,19 +194,25 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
     phase === 'confirm_slow' ||
     phase === 'confirmed_pending' ||
     purchase.state.priceChange !== null;
+  // LS-914R2 B2: the success actions sit in a pinned bar under the detail (C5).
+  const successShown = pkg ? styleCSuccess(purchase) : null;
+  const moment = usePlanMoment(successShown);
 
+  // FR-1TO1 (LS B2): with the package shown, the bar joins the C5 Style C deep-forest masthead below.
+  const onMast = !!pkg && !loading && !error;
+  const barInk = onMast ? semanticColors.textOnAccent : semanticColors.textPrimary;
   return (
     <Screen edges={MODAL_EDGES} scroll={false} contentStyle={styles.bare}>
-      <View style={styles.topBar}>
+      <View style={[styles.topBar, onMast && { backgroundColor: semanticColors.surface.masthead }]}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backBtn}
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Ionicons name="close" size={24} color={semanticColors.textPrimary} />
+          <Ionicons name="close" size={24} color={barInk} />
         </TouchableOpacity>
-        <Text style={styles.topTitle} testID="package-checkout-title">
+        <Text style={[styles.topTitle, { color: barInk }]} testID="package-checkout-title">
           {oneToOneCoachingLabel(pkg?.coach?.displayName)}
         </Text>
         <View style={styles.backBtn} />
@@ -240,10 +247,14 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
                 onContinue={leave}
                 onOpenPlan={leave}
                 onSeeUnlocks={seeUnlocks}
+                moment={successShown ? moment : undefined}
               />
             </>
           }
         />
+      ) : null}
+      {successShown ? (
+        <PlanActiveBar moment={moment} onContinue={leave} onSeeUnlocks={seeUnlocks} />
       ) : null}
     </Screen>
   );
