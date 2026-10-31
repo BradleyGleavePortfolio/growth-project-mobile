@@ -84,16 +84,33 @@ export function EntitlementProvider({ children, onOpenPlans, onMessageCoach }: E
   // B-353-1: synced after mount from the store, which every identity
   // boundary retires (sign-out, sign-in, the client tree unmounting).
   const [dunningLocked, setDunningLocked] = useState(false);
+  // PF-4-M (LS-PAYFAIL B1): when the lock clears for the same account (a
+  // payment in the app, or on the web and read on foreground) the plan is read
+  // again here, so paid screens open without leaving the app. A retire (sign-out,
+  // sign-in, the client tree unmounting) moves the generation and reads nothing.
+  const refreshRef = useRef<() => Promise<boolean>>(async () => false);
   useEffect(() => {
-    const unsubscribe = dunningLockoutStore.subscribe((locked) => setDunningLocked(locked));
+    let lockedIn = dunningLockoutStore.isLocked() ? dunningLockoutStore.currentGeneration() : null;
+    const unsubscribe = dunningLockoutStore.subscribe((locked) => {
+      setDunningLocked(locked);
+      const generation = dunningLockoutStore.currentGeneration();
+      const cleared = !locked && lockedIn === generation;
+      lockedIn = locked ? generation : null;
+      if (cleared) void refreshRef.current();
+    });
     setDunningLocked(dunningLockoutStore.isLocked());
     return unsubscribe;
   }, []);
 
+  // Each read (and each identity) takes a number; only the latest may write, so
+  // an older answer, or the previous account's, never lands over a newer one.
+  const readSeqRef = useRef(0);
   const refreshEntitlement = useCallback(async (): Promise<boolean> => {
     if (!isStudent) return true;
+    const seq = ++readSeqRef.current;
     setStatus(hasSettledRef.current ? 'checking' : 'loading');
     const result = await clientPaymentsApi.getEntitlement();
+    if (seq !== readSeqRef.current) return false;
     hasSettledRef.current = true;
     if (!result.ok) {
       // Defense in depth (Option B): transport / config failures must fail
@@ -115,6 +132,7 @@ export function EntitlementProvider({ children, onOpenPlans, onMessageCoach }: E
     }
     return active;
   }, [isStudent]);
+  refreshRef.current = refreshEntitlement;
 
   const openPlans = useCallback(() => {
     setPaywallVisible(true);
@@ -136,6 +154,7 @@ export function EntitlementProvider({ children, onOpenPlans, onMessageCoach }: E
     // A new identity never inherits the previous user's confirmation (or renewal).
     setConfirmedActive(false);
     setRenewal(undefined);
+    readSeqRef.current += 1;
     if (isStudent) {
       void refreshEntitlement();
     } else {
