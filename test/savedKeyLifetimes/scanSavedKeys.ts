@@ -180,11 +180,21 @@ function isNothing(e: ts.Expression): boolean {
   return e.kind === ts.SyntaxKind.NullKeyword || (ts.isIdentifier(e) && e.text === 'undefined');
 }
 
-function returned(fn: Fn): ts.Expression | null {
-  if (!fn.body) return null;
-  if (!ts.isBlock(fn.body)) return fn.body;
-  const ret = fn.body.statements.find(ts.isReturnStatement);
-  return ret?.expression ?? null;
+/**
+ * Every value a function can return: each `return` in its body (inside if, switch, loops and try too, but
+ * not in nested functions), or the arrow's expression. A `return` with no value or null names no key.
+ */
+function returned(fn: Fn): ts.Expression[] {
+  if (!fn.body) return [];
+  if (!ts.isBlock(fn.body)) return [fn.body];
+  const out: ts.Expression[] = [];
+  const visit = (n: ts.Node) => {
+    if (ts.isFunctionLike(n) || ts.isClassLike(n)) return;
+    if (ts.isReturnStatement(n) && n.expression && !isNothing(n.expression)) out.push(n.expression);
+    ts.forEachChild(n, visit);
+  };
+  fn.body.statements.forEach(visit);
+  return out;
 }
 
 /** Every key an expression can be, with dynamic parts as `*`. */
@@ -224,22 +234,22 @@ function keys(e: ts.Expression, p: Parsed, env: Map<ts.Node, string[]>, depth = 
   }
   if (ts.isCallExpression(e) && ts.isIdentifier(e.expression) && /^use(Memo|Callback)$/.test(e.expression.text)) {
     const fn = e.arguments[0];
-    const ret = fn && ts.isFunctionLike(fn) ? returned(fn as Fn) : null;
-    return ret ? keys(ret, p, env, depth + 1) : ['*'];
+    const rets = fn && ts.isFunctionLike(fn) ? returned(fn as Fn) : [];
+    return rets.length ? rets.flatMap((r) => keys(r, p, env, depth + 1)) : ['*'];
   }
   if (ts.isCallExpression(e) && ts.isIdentifier(e.expression)) {
     const f = lookup(e.expression.text, e, p, env);
     if (Array.isArray(f) || !ts.isFunctionLike(f.node)) return ['*'];
     const fn = f.node as Fn;
-    const ret = returned(fn);
-    if (!ret) return ['*'];
+    const rets = returned(fn);
+    if (!rets.length) return ['*'];
     const inner = new Map(env);
     fn.parameters.forEach((q, i) => {
       const arg = e.arguments[i];
       const v = arg ? keys(arg, p, env, depth + 1) : ['*'];
       inner.set(q, v.map((k) => (P.test(k) ? '*' : k)));
     });
-    return keys(ret, f.p, inner, depth + 1);
+    return rets.flatMap((r) => keys(r, f.p, inner, depth + 1));
   }
   return ['*'];
 }
