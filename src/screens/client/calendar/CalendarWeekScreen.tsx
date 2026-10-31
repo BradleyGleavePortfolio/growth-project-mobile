@@ -100,6 +100,22 @@ export default function CalendarWeekRoot(props: Props) {
   return useClientNeedsCoach() ? <CalendarWeekScreen {...props} coachless /> : <ProtectedWeek {...props} />;
 }
 
+/** The saved workouts left to show once each done assignment is paired with its own. */
+function pairDoneAssignments(
+  workouts: ClientWorkoutAssignmentWithPlan[],
+  logs: ApiWorkoutSession[],
+  planName: (w: ClientWorkoutAssignmentWithPlan) => string,
+): ApiWorkoutSession[] {
+  const left = [...logs];
+  for (const w of workouts) {
+    if (!w.completed_at) continue;
+    const days = w.started_at ? [instantDay(w.started_at)] : [assignmentDay(w), instantDay(w.completed_at)];
+    const at = left.findIndex((l) => l.workout_name === planName(w) && days.includes(workoutDay(l)));
+    if (at >= 0) left.splice(at, 1);
+  }
+  return left;
+}
+
 /** Shared real view for fixture-backed web previews; no fixtures in the app. */
 export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
   data: CalendarWeekData;
@@ -130,9 +146,13 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
   const coach = data.coaches[0];
   const sessionDay = (s: CoachingSession) => bucketDateLocal(new Date(s.start_at));
   const planName = (w: ClientWorkoutAssignmentWithPlan) => w.snapshot?.plan_name || w.workout_plan.name;
-  // Finishing a coach plan also saves its log (same day, same name): show that workout once.
-  const logs = (data.logs ?? []).filter((l) => !data.workouts.some((w) => w.completed_at &&
-    instantDay(w.completed_at) === workoutDay(l) && planName(w) === l.workout_name));
+  // Finishing a coach plan also saves its log: show that workout once. A done
+  // assignment pairs with one saved workout of its plan begun the same day
+  // (started_at is the session's start, the workout's date its start day), so
+  // a late upload or a finish after midnight still pairs, and a second workout
+  // of the plan that day still shows. Older rows without started_at pair on
+  // the day assigned or the day completed.
+  const logs = pairDoneAssignments(data.workouts, data.logs ?? [], planName);
   const workoutsOn = (day: string) => [
     ...data.workouts.filter((w) => assignmentDay(w) === day).map((w) => ({
       id: w.id, testID: `week-workout-${w.id}`, name: planName(w), done: !!w.completed_at,
