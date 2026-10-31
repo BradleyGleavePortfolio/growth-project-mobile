@@ -35,6 +35,7 @@ loaded
   ─ scroll past 70% → loadingMore → loaded (appended)
   ─ tap row → markNotificationRead (optimistic) → navigate to actionScreen
   ─ tap "Mark all read" → markAllNotificationsRead (optimistic) → unreadCount=0
+  ─ a block or unblock (blocked-users store changes) → rows cleared → loadingFirst
   ↓ fetchNotifications rejects
 error (message shown in empty state)
 ```
@@ -43,6 +44,7 @@ error (message shown in empty state)
 
 - Infinite scroll, cursor-based, 25 items per page.
 - Pull-to-refresh resets cursor and replaces the list.
+- The screen stays mounted under Messages and ContactView, so a block or unblock clears the loaded rows at once and reads the list again; the server decides which rows a block hides (B-LSNOTIFY4-B1171-1).
 - Empty state: "No notifications."; failed loads show the notification-specific error instead.
 - Rows use theme hairlines without fills; unread is a small forest dot and medium Inter title. Titles/body remain fully visible; relative times are 13 pt.
 - Back, mark-all, and the notification-preferences text link have 44 pt minimum targets. Existing refresh, pagination and role-aware destinations are unchanged.
@@ -80,6 +82,7 @@ Semantic-theme bone page, unfilled hairline groups, small-caps overlines and 44 
 | Mute all | Turns off all push, in-app and email notifications, session reminders included (the backend `muted` gate blocks every channel). The channel switches wait while it is on. |
 | Quiet hours | Read-only (B-NOTIF-6): 9:00 PM to 8:00 AM in the user's own zone, the window the backend applies to everyone (OR-113-5). Overnight notifications wait until 8:00 AM; a reminder for a session starting within the hour still comes through. Nothing is sent for it. |
 | Per-kind × per-channel | The kinds with a backend switch (`KIND_PREFS_PREFIX`: messages, milestones, check-in reminders, build week) × 3 channels. Each has a 1-sentence description. One save at a time: the switches wait while a save is in flight (B-341-1). A failed save puts the switch back and says what happened by status, with a reference and the support address for a server failure, and shows the server's row when the change may have reached it (B-341-2, `notificationPreferenceErrors.ts`). |
+| Plan renewal offers | STORE-B2 (App Store 4.5.4), FR-B2 B1: the yes to the Day 1 and Day 7 plan renewal offers, last under Notification types. Every client route here (You > Notifications, Settings > Notification preferences, Preferences, the notification center's settings) reaches it. Clients only, while the entitlement read carries `renewal`, and only when `GET /notifications/preferences` returns `plan_renewal_offers_opt_in_at` (an older server keeps it hidden). It starts at the server's answer and is never on before the server says so; if that read fails, the whole screen shows the failed-load state and Try again reads both again. If the entitlement read itself failed (an offline launch), the screen reads it again when it opens and on every Try again (`screens/settings/usePlanRenewalGate.ts`, LO-908R2 B1); while it still fails, the failed-load sentence and a Try again sit where the row would be. On writes `plan_renewal_offers: true`, off `false`, nothing else. Same one-save fence and failure words as the other switches, said under the row. Mute all does not lock it, so the yes can always be taken back. Words and parsing: `screens/settings/planRenewalOffers.ts`. Test: `__tests__/NotificationPreferencesScreen.planRenewalOffers.test.tsx`. |
 
 ---
 

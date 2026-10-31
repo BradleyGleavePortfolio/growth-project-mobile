@@ -128,3 +128,64 @@ describe('BlockedUsersScreen', () => {
     expect(screen.getByText('Sam Lee')).toBeTruthy();
   });
 });
+
+describe('BlockedUsersScreen — answers after an account change stay with their account (LS-914 B1)', () => {
+  function held<T>() {
+    let release!: (value: T) => void;
+    const promise = new Promise<T>((resolve) => {
+      release = resolve;
+    });
+    return { promise, release };
+  }
+  const NEXT = { blockedId: 'b-next', displayName: 'Next account block', blockedAt: '2026-10-30T09:00:00.000Z' };
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    api.listBlocked.mockReset();
+    api.unblock.mockReset();
+    await useBlockedUsersStore.getState().reset();
+  });
+
+  it('the earlier account’s list answered late is never merged into the next account’s list', async () => {
+    const list = held<{ blocked: Array<typeof ROW> }>();
+    api.listBlocked.mockImplementationOnce(() => list.promise);
+    const screen = await render(<BlockedUsersScreen />);
+    await waitFor(() => expect(api.listBlocked).toHaveBeenCalledTimes(1));
+
+    await useBlockedUsersStore.getState().hydrate('next-account');
+    await useBlockedUsersStore.getState().addFromServer([NEXT], { replace: true });
+    await act(async () => {
+      list.release({ blocked: [ROW] });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(useBlockedUsersStore.getState().blocked.map((b) => b.id)).toEqual(['b-next']);
+    expect(screen.queryByText('Sam Lee')).toBeNull();
+  });
+
+  it('an unblock answered late never removes the same person from the next account’s list', async () => {
+    api.listBlocked.mockResolvedValue({ blocked: [ROW] });
+    const request = held<{ ok: true }>();
+    api.unblock.mockImplementationOnce(() => request.promise);
+    const screen = await render(<BlockedUsersScreen />);
+    await waitFor(() => expect(screen.getByText('Sam Lee')).toBeTruthy());
+    const spy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    await fireEvent.press(screen.getByLabelText('Unblock Sam Lee'));
+    const buttons = spy.mock.calls[0][2] as AlertButtons;
+    spy.mockRestore();
+    let pressed: void | Promise<void> = undefined;
+    await act(async () => {
+      pressed = buttons[1].onPress?.();
+    });
+
+    await useBlockedUsersStore.getState().reset();
+    await useBlockedUsersStore.getState().hydrate('next-account');
+    await useBlockedUsersStore.getState().addFromServer([{ ...ROW, displayName: 'Next account name' }], { replace: true });
+    await act(async () => {
+      request.release({ ok: true });
+      await pressed;
+    });
+
+    expect(useBlockedUsersStore.getState().blocked.map((b) => b.displayName)).toEqual(['Next account name']);
+  });
+});

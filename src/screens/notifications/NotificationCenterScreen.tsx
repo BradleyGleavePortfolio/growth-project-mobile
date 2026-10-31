@@ -36,7 +36,9 @@ import {
   markAllNotificationsRead,
 } from '../../services/notificationsApi';
 import { routeInAppNotification, routePushTap } from '../../services/pushTapRouter';
+import { incomingLinkPath, isPublicLinkPath } from '../../navigation/incomingLinks';
 import { featureFlags } from '../../config/featureFlags';
+import { useBlockedUsersStore } from '../../store/blockedUsersStore';
 
 function relativeTime(iso: string): string {
   const minutes = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
@@ -59,6 +61,23 @@ function relativeTime(iso: string): string {
 // app navigator is not ready does the screen fall back to a direct navigate.
 
 type NavWithNavigate = Pick<NavigationProp<ParamListBase>, 'navigate'>;
+
+/**
+ * LINK1 (B-LSNOTIFY5-M898-LINK1): does a tap on this row go somewhere? One answer for the
+ * row's enabled state, role and hint, read the way routeNotification and routePushTap
+ * follow a row: an unreadable link goes nowhere; with no specific screen (or only the inbox
+ * fallback) a readable link that is not a sign-in page is the destination; otherwise the
+ * screen name is.
+ */
+export function notificationOpens(notification: AppNotification): boolean {
+  const { actionScreen, deepLink } = notification;
+  if (deepLink !== undefined) {
+    const path = incomingLinkPath(deepLink);
+    if (path === null) return false;
+    if (!actionScreen || actionScreen === 'NotificationCenter') return !isPublicLinkPath(path);
+  }
+  return actionScreen !== undefined;
+}
 
 export function routeNotification(
   notification: AppNotification,
@@ -102,7 +121,8 @@ type Action =
   | { type: 'REFRESH_START' }
   | { type: 'REFRESH_SUCCESS'; payload: NotificationPage; unreadCount: number }
   | { type: 'MARK_READ'; id: string }
-  | { type: 'MARK_ALL_READ' };
+  | { type: 'MARK_ALL_READ' }
+  | { type: 'BLOCK_CHANGED' };
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
@@ -153,6 +173,9 @@ function reducer(state: State, action: Action): State {
         notifications: state.notifications.map((n) => ({ ...n, read: true })),
         unreadCount: 0,
       };
+    case 'BLOCK_CHANGED':
+      // B-LSNOTIFY4-B1171-1: drop every loaded row (and its words) at once; the fresh read decides what stays.
+      return { ...INITIAL_STATE, isLoadingFirst: true };
     default:
       return state;
   }
@@ -194,6 +217,17 @@ export default function NotificationCenterScreen() {
   useEffect(() => {
     loadFirst();
   }, [loadFirst]);
+
+  // B-LSNOTIFY4-B1171-1: this screen stays mounted under Messages -> ContactView. A block or unblock
+  // anywhere clears the loaded rows and reads the list again, so a blocked person's words never linger.
+  const blocked = useBlockedUsersStore((st) => st.blocked);
+  const seenBlocked = useRef(blocked);
+  useEffect(() => {
+    if (seenBlocked.current === blocked) return;
+    seenBlocked.current = blocked;
+    dispatch({ type: 'BLOCK_CHANGED' });
+    void loadFirst();
+  }, [blocked, loadFirst]);
 
   // Infinite scroll — load next page
   const loadMore = useCallback(async () => {
@@ -251,22 +285,25 @@ export default function NotificationCenterScreen() {
   }, []);
 
   const renderItem = useCallback(
-    ({ item }: { item: AppNotification }) => (
-      <HapticPressable intent="light" onPress={() => handlePress(item)} style={styles.row}
-        disabled={item.read && !item.actionScreen}
-        accessibilityRole={item.read && !item.actionScreen ? 'text' : 'button'}
-        accessibilityLabel={`${item.read ? '' : 'Unread. '}${item.title}${item.body ? `. ${item.body}` : ''}`}
-        accessibilityHint={item.actionScreen ? 'Open notification' : item.read ? undefined : 'Mark as read'}>
-        <View style={styles.rowContent}>
-          <View style={styles.rowTitleLine}>
-            {!item.read && <View style={styles.unreadDot} accessibilityLabel="Unread" />}
-            <Text style={[styles.rowTitle, !item.read && styles.rowTitleUnread]}>{item.title}</Text>
-            <Text style={styles.rowTime}>{relativeTime(item.createdAt)}</Text>
+    ({ item }: { item: AppNotification }) => {
+      const opens = notificationOpens(item);
+      return (
+        <HapticPressable intent="light" onPress={() => handlePress(item)} style={styles.row}
+          disabled={item.read && !opens}
+          accessibilityRole={item.read && !opens ? 'text' : 'button'}
+          accessibilityLabel={`${item.read ? '' : 'Unread. '}${item.title}${item.body ? `. ${item.body}` : ''}`}
+          accessibilityHint={opens ? 'Open notification' : item.read ? undefined : 'Mark as read'}>
+          <View style={styles.rowContent}>
+            <View style={styles.rowTitleLine}>
+              {!item.read && <View style={styles.unreadDot} accessibilityLabel="Unread" />}
+              <Text style={[styles.rowTitle, !item.read && styles.rowTitleUnread]}>{item.title}</Text>
+              <Text style={styles.rowTime}>{relativeTime(item.createdAt)}</Text>
+            </View>
+            {item.body ? <Text style={styles.rowBody}>{item.body}</Text> : null}
           </View>
-          {item.body ? <Text style={styles.rowBody}>{item.body}</Text> : null}
-        </View>
-      </HapticPressable>
-    ),
+        </HapticPressable>
+      );
+    },
     [handlePress, styles],
   );
 

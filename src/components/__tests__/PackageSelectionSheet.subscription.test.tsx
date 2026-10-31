@@ -141,6 +141,7 @@ beforeEach(() => {
   planResponses = [planView('active')];
   mockGet.mockImplementation(async (url: string) => {
     if (url === '/v1/clients/me/coach/packages') return { data: { packages: PACKAGES } };
+    if (url === '/v1/clients/me/coach') return { data: { id: 'coach-1', name: 'Avery Stone' } }; // FR-1TO1R2: the sheet sells once the coach is named
     if (url === `/v1/checkout/subscriptions/${PURCHASE}`) {
       const next = planResponses.length > 1 ? planResponses.shift() : planResponses[0];
       return { data: next };

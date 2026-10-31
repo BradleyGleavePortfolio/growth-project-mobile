@@ -12,8 +12,15 @@
  *     backend is the source of truth (workout_reminder_push/_inapp); the
  *     server value is read on mount so the switch never shows a stale state.
  *     Hidden for coach and owner accounts (reminders go to clients only).
- *   - Plan renewal reminders (plan_renewal_push, RENEWAL-M): Day 0, 1, 7 after a plan ends; clients, once the server
- *     has it and the plan read carries `renewal` (the server flag is on).
+ *   - Plan renewal offers (STORE-B2, App Store 4.5.4): the person's yes to the Day 1 and Day 7 app notifications
+ *     after a plan ends. Off until the person turns it on (PATCH plan_renewal_offers; the server keeps the time of
+ *     the yes in plan_renewal_offers_opt_in_at, null = no). Clients, once the server has it and the plan read
+ *     carries `renewal` (the server flag is on). The Day 0 notice keeps plan_renewal_push and has no switch here.
+ *     Every client route opens screens/notifications/NotificationPreferencesScreen, which carries the same switch
+ *     (FR-B2 B1); words and the server field live in planRenewalOffers.ts.
+ *
+ * FR-B2 B2: a failed first read is told, with Try again that reads the server again; it never shows a renewal yes
+ * (the row stays hidden until the server answers). An older server (no field) still hides the row.
  *
  * A failed save rolls the switch back and shows an inline notice chosen by
  * status (notificationPreferenceErrors.ts), never a generic alert.
@@ -46,9 +53,16 @@ import { AnalyticsEvents } from '../../analytics/events';
 import type { NotificationPreferenceChangedProps } from '../../analytics/events';
 import { mediumTap } from '../../utils/haptics';
 import { readUserCacheSync } from '../../lib/userCache';
-import { useEntitlement } from '../../entitlements/EntitlementProvider';
+import { NOTIF_CATEGORY_PREFS_KEY } from '../../storage/notificationCategoryPrefs';
+import { usePlanRenewalGate } from './usePlanRenewalGate';
 import { preferenceSaveFailureOf, PreferenceSaveFailure } from './notificationPreferenceErrors';
 import { SupportEmailFallback, useSupportEmail } from '../../components/support/SupportEmailFallback';
+import {
+  PLAN_RENEWAL_OFFERS_COPY,
+  PLAN_RENEWAL_OFFERS_WRITE_FIELD,
+  planRenewalOffersForRole,
+  planRenewalOffersFromServer,
+} from './planRenewalOffers';
 
 function usePreferenceColors() {
   const { semanticColors: sc } = useTheme();
@@ -77,12 +91,13 @@ const DEFAULT_PREFS: CategoryPrefs = {
   coach_direct: true,
   client_bot: true,
   workout_reminders: true,
-  plan_renewal: true,
+  plan_renewal: false, // STORE-B2: no yes to renewal offers until the person turns it on
   milestones: true,
   system: true,
 };
 
-const STORAGE_KEY = 'gp_notif_category_prefs';
+// Removed by signOut() with the other session keys (LS-908R2 B-R2-1).
+const STORAGE_KEY = NOTIF_CATEGORY_PREFS_KEY;
 
 // Map from category ID to backend notification preference fields.
 // Each category maps to one or more backend fields that are sent as a
@@ -93,8 +108,9 @@ const BACKEND_FIELD_MAP: Record<NotifCategory, Record<string, boolean>> = {
   milestones: { milestone_push: true, milestone_inapp: true },
   system: { digest_email: true },
   workout_reminders: { workout_reminder_push: true, workout_reminder_inapp: true },
-  // RENEWAL-M (backend #1127): the plan renewal app notifications only; Home's pop-up and banner stay.
-  plan_renewal: { plan_renewal_push: true },
+  // STORE-B2: the yes or no to the Day 1 and Day 7 renewal offers only; the Day 0 notice, Home's pop-up and
+  // banner stay.
+  plan_renewal: { [PLAN_RENEWAL_OFFERS_WRITE_FIELD]: true },
 };
 
 // Read the server value of the workout reminder toggle. Returns null when the
@@ -111,6 +127,8 @@ export function workoutRemindersFromServer(data: unknown): boolean | null {
  */
 export function serverValueOf(category: NotifCategory, data: unknown): boolean | null {
   if (typeof data !== 'object' || data === null) return null;
+  // STORE-B2: the server keeps the yes to renewal offers as a time (null = no); an older server lacks the field.
+  if (category === 'plan_renewal') return planRenewalOffersFromServer(data);
   const field = Object.keys(BACKEND_FIELD_MAP[category])[0];
   const value = (data as Record<string, unknown>)[field];
   return typeof value === 'boolean' ? value : null;
@@ -153,9 +171,7 @@ const CATEGORIES: CategoryMeta[] = [
   },
   {
     id: 'plan_renewal',
-    noun: 'plan renewal reminder',
-    label: 'Plan renewal reminders',
-    description: 'A few reminders after your plan ends, so you can choose a new one.',
+    ...PLAN_RENEWAL_OFFERS_COPY,
     icon: 'refresh-circle-outline',
   },
   {
@@ -201,10 +217,12 @@ export default function NotificationPreferencesScreen({
 }) {
   const colors = usePreferenceColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  // RENEWAL-M: the plan renewal row only once the server carries its setting (older servers reject the field)
+  // RENEWAL-M, STORE-B2: the plan renewal offers row only once the server carries its setting (older servers reject
+  // the field)
   // and renewal is switched on: the plan read carries `renewal` only then (B1, the one phone rollout gate).
   const [renewalOnServer, setRenewalOnServer] = useState(false);
-  const renewalOn = useEntitlement().renewal !== undefined;
+  // LO-908R2 B1: a failed plan read is read again on open and on Try again, and told while it still fails.
+  const { renewalOn, gateFailed, rereadIfFailed } = usePlanRenewalGate(planRenewalOffersForRole(role()));
   const categories = useMemo(
     () => categoriesForRole(role()).filter((c) => c.id !== 'plan_renewal' || (renewalOn && renewalOnServer)),
     [role, renewalOn, renewalOnServer],
@@ -219,6 +237,11 @@ export default function NotificationPreferencesScreen({
   const pendingRef = useRef<Set<NotifCategory>>(new Set());
   const [pending, setPending] = useState<ReadonlySet<NotifCategory>>(() => new Set());
   const [loading, setLoading] = useState(true);
+  // FR-B2 B2: the last read of the server failed (offline or no answer), told with Try again.
+  const [readFailed, setReadFailed] = useState(false);
+  const readingRef = useRef(false);
+  // LO-908R2 C1: Try again shows that it is reading.
+  const [retrying, setRetrying] = useState(false);
   const [saveFailure, setSaveFailure] = useState<
     (PreferenceSaveFailure & { category: NotifCategory; attempted: boolean }) | null
   >(null);
@@ -243,7 +266,10 @@ export default function NotificationPreferencesScreen({
 
   // Load persisted prefs on mount.
   const loadPrefs = useCallback(async () => {
+    if (readingRef.current) return;
+    readingRef.current = true;
     try {
+      await rereadIfFailed();
       const raw = await AsyncStorage.getItem(STORAGE_KEY);
       let next: CategoryPrefs = raw ? { ...DEFAULT_PREFS, ...JSON.parse(raw) } : DEFAULT_PREFS;
       try {
@@ -253,17 +279,22 @@ export default function NotificationPreferencesScreen({
           if (server !== null) next = { ...next, [category.id]: server };
         }
         setRenewalOnServer(serverValueOf('plan_renewal', res?.data) !== null);
+        setReadFailed(false);
       } catch {
-        // Offline or older backend: keep the locally stored value.
+        // Offline or no answer: the other rows keep the locally stored value; the renewal row stays hidden (never a
+        // yes the server has not given) and the notice offers Try again (FR-B2 B2).
+        setRenewalOnServer(false);
+        setReadFailed(true);
       }
       prefsRef.current = next;
       setPrefs(next);
     } catch {
       // Fall back to defaults — preference loss is non-fatal.
     } finally {
+      readingRef.current = false;
       setLoading(false);
     }
-  }, []);
+  }, [rereadIfFailed]);
 
   useEffect(() => {
     loadPrefs();
@@ -352,7 +383,38 @@ export default function NotificationPreferencesScreen({
           Choose which alerts to receive.
         </Text>
 
-        <Text style={styles.overline}>Categories</Text>
+        {readFailed || gateFailed || retrying ? (
+          <View style={styles.notice} accessibilityLiveRegion="polite" testID="notif-pref-read-error">
+            <Ionicons name="cloud-offline-outline" size={18} color={colors.textPrimary} style={styles.noticeIcon} />
+            <View style={styles.noticeBody}>
+              <Text selectable style={styles.noticeText}>
+                Notification preferences could not be loaded. Check your connection, then try again.
+              </Text>
+              <View style={styles.noticeActions}>
+                <HapticPressable
+                  onPress={() => {
+                    setRetrying(true);
+                    void loadPrefs().finally(() => setRetrying(false));
+                  }}
+                  disabled={retrying}
+                  accessibilityRole="button"
+                  accessibilityLabel="Try again"
+                  accessibilityState={{ disabled: retrying, busy: retrying }}
+                  testID="notif-pref-read-error-retry"
+                  style={styles.noticeAction}
+                >
+                  {retrying ? (
+                    <ActivityIndicator color={colors.primary} accessibilityLabel="Loading preferences" />
+                  ) : (
+                    <Text style={styles.noticeActionText}>Try again</Text>
+                  )}
+                </HapticPressable>
+              </View>
+            </View>
+          </View>
+        ) : null}
+
+        <Text style={[styles.overline, (readFailed || gateFailed || retrying) && styles.overlineAfterNotice]}>Categories</Text>
         <View style={styles.card}>
           {categories.map((cat, idx) => (
             <View
@@ -547,6 +609,7 @@ function makeStyles(colors: ReturnType<typeof usePreferenceColors>) {
       marginBottom: 16,
     },
     overline: { fontFamily: 'Inter_500Medium', fontSize: 11, letterSpacing: 1.8, textTransform: 'uppercase', color: colors.textMuted, marginBottom: 8 },
+    overlineAfterNotice: { marginTop: 20 },
     row: {
       flexDirection: 'row',
       alignItems: 'center',

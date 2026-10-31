@@ -63,6 +63,8 @@ import {
 import { CommunityApiError } from '../../api/communityApi';
 import { contentRejectedMessage } from '../../api/communitySafetyApi';
 import SafetyMenu from '../../components/community/SafetyMenu';
+import VoiceRemovedPlaceholder from '../../components/community/removed/VoiceRemovedPlaceholder';
+import { removedRowLine } from '../../components/community/removed/removedRowLine';
 import { dedupeById } from '../../utils/dedupeById';
 import type { CommunityRoute } from './communityNavTypes';
 import { describeCommunityFailure, type CommunityAction } from '../../api/communityErrors';
@@ -536,6 +538,8 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
 
   const renderComment = ({ item }: { item: CommunityChallengeComment }) => {
     const mine = item.author_user_id === client?.id;
+    // REMOVED-BY-M3: a comment a coach removed reads as one quiet line, with no words and no menu.
+    const removedLine = removedRowLine(item, 'comment', client?.id);
     return (
       <View
         // The wrapper carries `listitem` semantics so assistive tech receives
@@ -546,10 +550,16 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
         style={[styles.comment, { borderColor: semanticColors.border }]}
         testID={`community-challenge-comment-${item.id}`}
       >
-        <Text style={[styles.commentBody, { color: semanticColors.textPrimary }]}>{item.body}</Text>
+        {removedLine ? (
+          <View style={styles.flexFill}>
+            <VoiceRemovedPlaceholder line={removedLine} testID={`community-challenge-comment-${item.id}-removed`} />
+          </View>
+        ) : (
+          <Text style={[styles.commentBody, { color: semanticColors.textPrimary }]}>{item.body}</Text>
+        )}
         {/* One report entry per comment (C-314-1): the SafetyMenu, with the
             reason list and the 24-hour review copy. */}
-        {!mine ? (
+        {!mine && !removedLine ? (
           <SafetyMenu
             targetType="comment"
             targetId={item.id}
@@ -1013,6 +1023,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   commentBody: { fontFamily: typography.body.fontFamily, flex: 1, fontSize: 14, lineHeight: 20 },
+  flexFill: { flex: 1 },
   emptyComments: {
     paddingVertical: spacing.lg,
     alignItems: 'center',

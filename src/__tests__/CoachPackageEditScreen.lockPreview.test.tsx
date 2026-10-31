@@ -190,6 +190,21 @@ describe('CoachPackageEditScreen — preview as buyer', () => {
   });
 });
 
+// STORE-1TO1 (owner #183-S1): every package includes 1:1 coaching with its coach.
+describe('CoachPackageEditScreen — STORE-1TO1 1:1 coaching line', () => {
+  it('says every package includes 1:1 coaching with the coach, and the buyer preview lists it first', async () => {
+    const props = makeProps(pkg({ subscriberCount: 0 }));
+    const { getByTestId, getByLabelText, findByTestId } = await render(
+      <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
+    );
+    expect(getByTestId('package-one-to-one-note').props.children).toBe(
+      'Every package includes 1:1 coaching with you.',
+    );
+    await fireEvent.press(getByLabelText('Preview as buyer'));
+    expect((await findByTestId('package-detail-one-to-one')).props.children).toMatch(/^1:1 coaching with \S/);
+  });
+});
+
 describe('CoachPackageEditScreen — S-FEE price rule ($19.99 minimum or free)', () => {
   it('shows the price rule under the price field', async () => {
     const props = makeProps(pkg({ billingInterval: 'one_time' }));
