@@ -1,0 +1,5 @@
+src/screens/community/__tests__/CommunitySpaceChatScreen.test.tsx
+--testNamePattern
+LS-909 B-TEST|B-TEST:|FR-909 \(agent 189\)
+--runInBand
+--forceExit
