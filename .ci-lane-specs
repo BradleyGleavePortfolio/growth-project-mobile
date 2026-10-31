@@ -1,0 +1,14 @@
+src/store
+src/services/__tests__/auth
+src/hooks/__tests__/usePackagePurchase
+src/components/purchase
+src/components/__tests__/PackageSelectionSheet
+src/__tests__/ClientPackagesScreen
+src/__tests__/PackageCheckoutScreen
+src/__tests__/JoinPackageScreen
+src/screens/messaging
+src/screens/settings/__tests__/BlockedUsersScreen
+src/screens/client/__tests__/Log
+src/lib/__tests__/block
+src/hooks/__tests__/useBlocked
+--runInBand
