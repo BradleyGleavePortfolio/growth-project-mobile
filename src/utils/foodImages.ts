@@ -97,8 +97,8 @@ const CATEGORY_FALLBACKS: Record<string, string> = {
 };
 
 // FOOD-1-M R1 (operator ruling): a food shows a photo only when the photo is of that food. Words a
-// food name may add without becoming another food: "Pineapple, raw" and "Large eggs" are still the map's
-// pineapple and egg, while "Banana chips" and "Egg, Benedict" are not the map's banana and egg.
+// food name may add without becoming another food: "Pineapple, raw" and "Large bananas" are still the map's
+// pineapple and banana, while "Banana chips" and "Pineapple, canned" are not the map's banana and pineapple.
 const PLAIN_WORDS = new Set([
   'raw', 'fresh', 'frozen', 'cooked', 'uncooked', 'dry', 'boiled', 'baked', 'roasted', 'grilled', 'steamed',
   'drained', 'whole', 'plain', 'large', 'medium', 'small', 'sliced', 'chopped', 'diced', 'peeled', 'nonfat',
