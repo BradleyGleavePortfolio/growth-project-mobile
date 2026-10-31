@@ -1,0 +1,2 @@
+src/.*([Hh]ome[Ss]creen|[Rr]ings[Hh]ome|[Hh]ome[Rr]ings|[Cc]alendar[Ww]eek|[Cc]lient[Pp]eek|[Tt]his[Ww]eek|[Yy]ou[Ss]creen|[Ww]eek[Rr]eview)
+src/.*/date.test
