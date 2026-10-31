@@ -2029,3 +2029,51 @@ describe('FR-909 (agent 189): words that leave stay gone; a refused reply never 
     expect(within(r.getByLabelText('Replying to Sam Okafor')).getByText('body m1')).toBeTruthy();
   });
 });
+
+describe('LS-909R2B independent B-TESTS', () => {
+  const os = Platform.OS;
+  beforeEach(() => Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'android' }));
+  afterEach(() => Object.defineProperty(Platform, 'OS', { configurable: true, get: () => os }));
+
+  it.each(['empty', 'newer-only'])('LS-909R2B B1: a complete online refresh (%s) retires a missing selected parent', async (remaining) => {
+    const root = msg('only-root', '2026-10-22T10:05:00.000Z', JO, { body: 'Last parent private words' });
+    const newer = msg('newer-root', '2026-10-22T10:06:00.000Z', ME);
+    page = remaining === 'empty' ? [root] : [newer, root];
+    const r = await open();
+    await r.findByTestId('space-chat-row-only-root');
+    await fireEvent(r.getByTestId('space-chat-row-only-root'), 'longPress');
+    await fireEvent.press(r.getByTestId('space-chat-sheet-reply'));
+    expect(r.getByLabelText(`Replying to ${JO.name}`)).toBeTruthy();
+    // Ordinary online poll after the author deletes their message elsewhere.
+    // The API fixture's null next_before proves the complete remaining history.
+    page = remaining === 'empty' ? [] : [newer];
+    await act(async () => { await client.invalidateQueries({ queryKey: ['community', 'space-chat', 'me-1', 'c-every'] }); });
+    await waitFor(() => expect(r.queryByTestId('space-chat-row-only-root')).toBeNull());
+    await waitFor(() => expect(r.queryByLabelText(`Replying to ${JO.name}`)).toBeNull());
+  });
+
+  it('LS-909R2B B1: polling an empty complete page retires a selected last parent and its persisted offline quote', async () => {
+    page = [msg('only-root', '2026-10-22T10:05:00.000Z', JO, { body: 'Last parent private words' })];
+    const r = await open();
+    await r.findByTestId('space-chat-row-only-root');
+    await fireEvent(r.getByTestId('space-chat-row-only-root'), 'longPress');
+    await fireEvent.press(r.getByTestId('space-chat-sheet-reply'));
+    mockNet.isOnline = false;
+    mockNet.reachable = false;
+    await r.rerender(<QueryClientProvider client={client}><Screen /></QueryClientProvider>);
+    await fireEvent.changeText(r.getByTestId('space-chat-composer-field'), 'My retained draft');
+    await fireEvent.press(r.getByTestId('space-chat-composer-send'));
+    await waitFor(() => expect(mockDisk.get('space_outbox_me-1')).toContain('Last parent private words'));
+    // Select it again as a second, unsent reply. Another client deletes the root;
+    // the complete poll correctly returns no messages, not a tombstone.
+    await fireEvent(r.getByTestId('space-chat-row-only-root'), 'longPress');
+    await fireEvent.press(r.getByTestId('space-chat-sheet-reply'));
+    page = [];
+    await act(async () => { await client.invalidateQueries({ queryKey: ['community', 'space-chat', 'me-1', 'c-every'] }); });
+    await waitFor(() => expect(r.queryByTestId('space-chat-row-only-root')).toBeNull());
+    expect(mockDisk.get('space_outbox_me-1')).toContain('My retained draft');
+    await waitFor(() => expect(mockDisk.get('space_outbox_me-1')).not.toContain('Last parent private words'));
+    expect(r.queryByLabelText(`Replying to ${JO.name}`)).toBeNull();
+  });
+
+});
