@@ -36,7 +36,7 @@ export const REGISTRY: Row[] = [
   ['async', 'gp_coach_bio_{uid}', 'ACCOUNT', 'screens/coach/SettingsScreen.tsx', 'copy of the coach bio'],
   ['async', 'gp_coach_settings_{uid}', 'ACCOUNT', 'screens/coach/SettingsScreen.tsx', 'copy of the coach settings'],
   ['async', 'gp_last_app_version', 'DEVICE', 'services/appLifecycleEvents.ts', 'last app version opened'],
-  ['async', 'gp_notif_category_prefs', 'DEVICE', 'screens/settings/NotificationPreferencesScreen.tsx', 'notification kinds on this phone'],
+  ['async', 'gp_notif_category_prefs', 'ACCOUNT', 'storage/notificationCategoryPrefs.ts', 'notification kinds the account chose'],
   ['async', 'gp_synced_timezone', 'DEVICE', 'services/timezoneSync.ts', '"<account>|<zone>" last sent'],
   ['async', 'import_offer_decision:{uid}', 'ACCOUNT', 'storage/importOfferDecision.ts', "coach's answer to the import offer"],
   ['async', 'import_pairing_session:{uid}', 'ACCOUNT', 'storage/importPairingMirror.ts', 'import pairing in progress'],
@@ -56,6 +56,7 @@ export const REGISTRY: Row[] = [
   ['async', 'pending_food_logs_anonymous', 'QUEUE', 'services/foodLogQueue.ts', 'food logs from before an id was known'],
   ['async', 'pending_invite_code', 'ACCOUNT', 'lib/pendingInviteCode.ts', 'invite code from a link'],
   ['async', 'pending_join_package.v1', 'ACCOUNT', 'lib/joinPackage.ts', 'unpaid package join'],
+  ['async', 'roman.ed3.first-payment-seen.{uid}', 'MARK', 'screens/coach/ed/firstPaymentGate.ts', 'first payment celebration seen'],
   ['async', 'roman.p3.completion-consumed:{uid}:*', 'MARK', 'screens/client/WorkoutScreen.tsx', 'a workout finish already answered'],
   ['async', 'roman_join_offer:{uid}', 'MARK', 'lib/romanJoinOffer.ts', 'Roman join offer due or answered'],
   ['async', 'signup_coach_recovery_gate', 'ACCOUNT', 'lib/roleSelectionGate.ts', 'coach sign-up recovery step'],
@@ -94,7 +95,6 @@ export const REGISTRY: Row[] = [
   ['prefs', 'plan_renewal.seen:{uid}', 'MARK', 'lib/planRenewal.ts', 'renewal step already shown'],
   ['prefs', 'plan_renewal.shown_once:{uid}', 'MARK', 'lib/planRenewal.ts', 'first renewal offer shown once'],
   ['prefs', 'push_primer_dismissed:{uid}', 'MARK', 'components/home/PushPermissionCard.tsx', 'push permission card dismissed'],
-  ['prefs', 'roman.ed3.first-payment-seen.{uid}', 'MARK', 'screens/coach/ed/firstPaymentGate.ts', 'first payment celebration seen'],
   ['prefs', 'support.crisp_session_owner', 'ACCOUNT', 'services/support/crisp.service.ts', 'who the support chat is bound to'],
   ['secure', 'biometric_fail_count', 'ACCOUNT', 'security/biometric-lock.service.ts', 'wrong PIN count'],
   ['secure', 'biometric_pin_hash', 'ACCOUNT', 'security/biometric-lock.service.ts', 'app PIN hash'],
@@ -118,8 +118,6 @@ export const RULES: Record<Rule, string> = {
   restart: 'a MARK, QUEUE or DEVICE key is read back with an async read (a sync getString on the AsyncStorage shim reads nothing after a restart)',
 };
 
-const M898 = 'https://github.com/BradleyGleavePortfolio/growth-project-mobile/pull/898';
-const JOINOFFER_DEL = "closed by M898-FOLLOW's JOINOFFER-DEL PR m#906 (base op180/first-payment-m, not main)";
 /** store, key pattern, rule it misses, one-line why, AUDIT link or the PR that closes it. Found, not fixed. */
 export type Gap = [Store, string, Rule, string, string?];
 
@@ -132,7 +130,6 @@ export const KNOWN_GAPS: Gap[] = [
   ['async', 'gp_coach_settings_{uid}', 'signout', 'not in any sign-out sweep (its sibling gp_coach_bio_ is)'],
   ['async', 'onboarding_standard_path:{uid}', 'deletion', 'kept across sign out by design; no deletion cleanup'],
   ['async', 'roman.p3.completion-consumed:{uid}:*', 'deletion', 'kept across sign out by design; no deletion cleanup'],
-  ['async', 'roman_join_offer:{uid}', 'deletion', 'kept across sign out by design; deletion leaves it', `${M898}#issuecomment-6492516366; ${JOINOFFER_DEL}`],
   ['async', 'tgp.clientTutorial.v1:{uid}', 'deletion', 'tour state and its numbers stay after deletion'],
   ['async', 'tgp.coachCredits.moment.v1:{uid}:*:*', 'deletion', 'no deletion cleanup'],
   ['async', 'tgp.macroDisplay.v1:{uid}', 'deletion', 'no deletion cleanup'],
@@ -145,6 +142,5 @@ export const KNOWN_GAPS: Gap[] = [
   ['prefs', 'plan_renewal.seen:{uid}', 'signout', 'prefs wipe at sign out: the renewal step shows again'],
   ['prefs', 'plan_renewal.shown_once:{uid}', 'signout', 'prefs wipe at sign out: the once-only offer shows again'],
   ['prefs', 'push_primer_dismissed:{uid}', 'signout', 'prefs wipe at sign out: the push card shows again'],
-  ['prefs', 'roman.ed3.first-payment-seen.{uid}', 'signout', 'prefs wipe at sign out: the celebration shows again', `${M898}#issuecomment-6487393324; closed by m#898 (moves it to AsyncStorage) and ${JOINOFFER_DEL}`],
   ['secure-store', 'bloodwork_disclaimer_ack_v1_{uid}', 'deletion', 'SecureStore mark kept across sign out; no deletion cleanup'],
 ];
