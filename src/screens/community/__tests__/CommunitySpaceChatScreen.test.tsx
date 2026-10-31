@@ -1696,3 +1696,47 @@ describe('SC-M3 (agent 184): press and hold for Reply and Copy, reply mode, a re
     expect(r.queryByTestId('space-chat-error')).toBeNull();
   });
 });
+
+describe('LO-909 B1 (m#909 round 1, Claude Opus lens): reply mode outlives the message it answers', () => {
+  type R = Awaited<ReturnType<typeof open>>;
+  const realOS = Platform.OS;
+  const setOS = (os: string) => Object.defineProperty(Platform, 'OS', { configurable: true, get: () => os });
+  const hold = async (r: R, id: string) => { await fireEvent(r.getByTestId(`space-chat-row-${id}`), 'longPress'); };
+  const reply = async (r: R, id: string) => {
+    await hold(r, id);
+    await fireEvent.press(r.getByTestId('space-chat-sheet-reply'));
+  };
+  afterEach(() => setOS(realOS));
+
+  it('B-TEST: blocking the person being answered ends reply mode; their words leave the page and nothing is sent to them', async () => {
+    setOS('android');
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    await reply(r, 'm3');
+    expect(r.getByLabelText('Replying to jo b.')).toBeTruthy();
+    // Block jo b. from the row's own ••• (SafetyMenu's onBlocked): the rows leave at once.
+    await fireEvent.press(r.getByTestId('space-chat-menu-m3'));
+    await waitFor(() => expect(r.queryByTestId('space-chat-row-m3')).toBeNull());
+    expect(r.queryByLabelText('Replying to jo b.')).toBeNull();
+    expect(r.queryByText('body m3', { includeHiddenElements: true })).toBeNull();
+  });
+
+  it('B-TEST: the coach removes the message being answered for everyone; reply mode ends and its words leave the page', async () => {
+    setOS('android');
+    mockRole = 'owner';
+    mockUser = { id: 'coach-1', name: 'Sam Okafor', coach_id: '' };
+    mockStack.routes = ['CoachCommunityCohorts', 'CoachCommunityCohortDetail', 'CommunitySpaceChat'];
+    mockApi.delete.mockImplementation(async () => {
+      page = page.map((m) => ((m as { id: string }).id === 'm3' ? removed('m3', (m as { created_at: string }).created_at, JO) : m));
+      return { data: { ok: true } };
+    });
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    await reply(r, 'm3');
+    expect(r.getByLabelText('Replying to jo b.')).toBeTruthy();
+    await fireEvent.press(r.getByTestId('space-chat-menu-m3-remove'));
+    await waitFor(() => expect(r.getByTestId('space-chat-removed-m3')).toBeTruthy());
+    expect(r.queryByLabelText('Replying to jo b.')).toBeNull();
+    expect(r.queryByText('body m3', { includeHiddenElements: true })).toBeNull();
+  });
+});
