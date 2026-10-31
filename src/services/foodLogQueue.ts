@@ -157,12 +157,14 @@ function changeQueue(owner: string | undefined, change: (q: PendingFoodLog[]) =>
 
 export async function enqueue(
   entry: PendingSearchLog | PendingManualLog,
+  // FOOD-1-M R3: the save's client key when an online try already sent one (utils/log/saveKey).
+  id: string = `pfl_${randomUUID()}`,
 ): Promise<void> {
   const item: PendingFoodLog = {
     ...entry,
     // Crypto UUID instead of Math.random so two parallel enqueues on a fast
     // device can never collide and produce duplicate idempotency keys (R19).
-    id: `pfl_${randomUUID()}`,
+    id,
     createdAt: Date.now(),
   };
   await changeQueue(currentOwnerId(), (queue) => [...queue, item]);

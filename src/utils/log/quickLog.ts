@@ -3,6 +3,7 @@ import { MealType } from '../../types';
 import type { PastMeal } from '../../hooks/useFoodBrowse';
 import { SearchResult } from './types';
 import { planLink, type PlanLink } from './planLink';
+import { withSaveKey } from './saveKey';
 
 // Words in a search that describe the amount rather than the food
 // ("2 eggs", "150 g chicken"). They are ignored when matching foods the
@@ -61,8 +62,8 @@ export interface RepeatMealResult {
 /** `link`: the plan meal or usual-day meal this repeat fills (FOODLINK), sent on every food. */
 export async function repeatPastMeal(meal: PastMeal, date: string, mealType: MealType, link?: PlanLink): Promise<RepeatMealResult> {
   const settled = await Promise.allSettled(
-    meal.entries.map((e) =>
-      logApi.logFood({
+    meal.entries.map((e, i) => {
+      const save = {
         date,
         meal_type: mealType,
         food_item_id: e.foodItemId,
@@ -70,8 +71,11 @@ export async function repeatPastMeal(meal: PastMeal, date: string, mealType: Mea
         original_quantity: e.originalQuantity,
         original_unit: e.originalUnit,
         ...planLink(link),
-      }),
-    ),
+      };
+      // FOOD-1-M R3: each food of the meal is its own save with its own key; repeating the meal
+      // again after a lost answer sends the same keys, so a food that did save is not saved twice.
+      return withSaveKey(['repeat', i, save], (key) => logApi.logFood({ ...save, client_uuid: key }));
+    }),
   );
   const failedNames = meal.entries
     .filter((_e, i) => settled[i].status === 'rejected')

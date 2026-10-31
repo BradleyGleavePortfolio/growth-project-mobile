@@ -81,7 +81,7 @@ it('queues the plan meal offline with its plan_slot_id, so it survives a relaunc
   mockOnline = false;
   await show();
   await fireEvent.press(await screen.findByText('Ate it as planned'));
-  await waitFor(() => expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({ kind: 'manual', log: linked })));
+  await waitFor(() => expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({ kind: 'manual', log: linked }), expect.stringMatching(/^pfl_/)));
   expect(logApi.logFood).not.toHaveBeenCalled();
 });
 
@@ -127,7 +127,7 @@ it('repeats the usual meal of a client with no coach with the saved portions', a
   await fireEvent.press(await screen.findByText("Repeat yesterday's snack"));
   await waitFor(() => expect(logApi.logFood).toHaveBeenCalledWith({
     date: mockToday, meal_type: 'snack', food_item_id: 'apple', quantity_multiplier: 1, original_quantity: 1, original_unit: 'medium',
-    fills_usual_meal: true,
+    fills_usual_meal: true, client_uuid: expect.stringMatching(/^pfl_/),
   }));
   expect(await screen.findByText('1 food added to Snacks.')).toBeTruthy();
 });

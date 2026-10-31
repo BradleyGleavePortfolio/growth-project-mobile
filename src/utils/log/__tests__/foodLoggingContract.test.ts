@@ -140,7 +140,7 @@ describe('manual and packaged save payloads', () => {
       kind: 'manual',
       food: expect.objectContaining({ nutrient_basis: 'PER_SERVING', serving_size_grams: 0, protein_g: 12 }),
       log: expect.objectContaining({ quantity_multiplier: 1, original_quantity: 2 }),
-    }));
+    }), expect.stringMatching(/^pfl_/));
   });
 
   it('rejects a cleared portion instead of silently saving one serving', async () => {

@@ -195,7 +195,7 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     await waitFor(() => expect(useClientStore.getState().foodLogs).toHaveLength(1));
     expect(logApi.logFood).toHaveBeenCalledWith({
       food_item_id: 'oats', date: mockDate, meal_type: 'breakfast',
-      quantity_multiplier: 0.6, original_quantity: 60, original_unit: 'g',
+      quantity_multiplier: 0.6, original_quantity: 60, original_unit: 'g', client_uuid: expect.stringMatching(/^pfl_/),
     });
     expect(useClientStore.getState().dailyTotals.calories).toBeCloseTo(227.4);
     expect(screen.queryByLabelText('Food quantity')).toBeNull();
@@ -233,7 +233,7 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     await waitFor(() => expect(useClientStore.getState().foodLogs).toHaveLength(1));
     expect(logApi.logFood).toHaveBeenLastCalledWith({
       date: mockDate, meal_type: 'breakfast', food_item_id: 'oats',
-      quantity_multiplier: 0.6, original_quantity: 60, original_unit: 'g',
+      quantity_multiplier: 0.6, original_quantity: 60, original_unit: 'g', client_uuid: expect.stringMatching(/^pfl_/),
     });
     expect(useClientStore.getState().dailyTotals.calories).toBeCloseTo(227.4);
     expect(await screen.findByText('1 food added to Breakfast.')).toBeTruthy();
