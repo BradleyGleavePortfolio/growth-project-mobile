@@ -208,7 +208,7 @@ jest.mock('../lib/userCache', () => ({
 
 import { createWorkoutOnce } from '../offline/sync/workoutSaveKey';
 import { __resetDatabaseForTests } from '../offline/database';
-import { queueWorkout, releaseQueuedWorkout, triggerSync, pushQueuedWorkouts } from '../offline/sync/sync-engine';
+import { queueWorkout, releaseQueuedWorkout, settleQueuedWorkout, triggerSync, pushQueuedWorkouts } from '../offline/sync/sync-engine';
 
 // The body ActiveWorkoutScreen builds for "Push Day" (bench 135x8, 145x6).
 function pushDayBody() {
@@ -259,4 +259,48 @@ describe('LO-WORKOUT B1: lost reply on Finish', () => {
     // The client trained once; the coach and the history must show one workout.
     expect(mockServer.workouts).toHaveLength(1);
   });
+});
+
+it('LS-917 B2: a corrected Finish during a slow background retry retains the corrected sets on the server', async () => {
+  const key = 'client-1:1761867000017';
+  const first = pushDayBody();
+  await queueWorkout({ clientKey: key, payload: first, userId: 'client-1' });
+  // A busy/refused Finish keeps the editor open. A later foreground sync
+  // starts sending its durable row while the client corrects a weight.
+  await releaseQueuedWorkout(key, mockHttpError(429));
+  let answer!: () => void;
+  const delayedAnswer = new Promise<void>((resolve) => { answer = resolve; });
+  const send = mockCreate.getMockImplementation()!;
+  mockCreate.mockImplementationOnce(async (body, config) => {
+    const response = await send(body, config); // server committed first body
+    await delayedAnswer; // slow network: phone has not learned the row id
+    return response;
+  });
+  const background = pushQueuedWorkouts();
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  expect(mockCreate).toHaveBeenCalledTimes(1);
+
+  const corrected = pushDayBody();
+  corrected.exercises[0].weight_per_set = [155, 145];
+  try {
+    // Real queue decision used by ActiveWorkoutScreen: an unsynced row
+    // returns alreadySynced=false, so Finish POSTs again, not PUT.
+    const finishing = queueWorkout({ clientKey: key, payload: corrected, userId: 'client-1' });
+    // Permit a fixed queue to await the first response before scheduling PUT.
+    setImmediate(answer);
+    const queued = await finishing;
+    if (!queued.alreadySynced) {
+      const saved = await createWorkoutOnce(corrected, key);
+      await settleQueuedWorkout(key, saved.data.id);
+    }
+  } finally {
+    answer();
+    await background;
+  }
+  await pushQueuedWorkouts();
+  expect(mockServer.workouts).toHaveLength(1);
+  expect(mockDb.rows[0]).toMatchObject({ sync_status: 'synced' });
+  // First-body-wins is the real backend contract. The phone must sequence
+  // a correction as PUT after the first POST resolves, not lose the edit.
+  expect(mockServer.workouts[0]).toMatchObject({ exercises: corrected.exercises });
 });
