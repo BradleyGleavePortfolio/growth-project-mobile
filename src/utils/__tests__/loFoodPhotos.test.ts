@@ -17,7 +17,8 @@ describe('LO-FOOD B4 food photos', () => {
       ['Hamburger', 'Ham, sliced'],
     ];
     const clashes = pairs
-      .filter(([food, other]) => PHOTO_ID(getFoodImageUrl(food)) === PHOTO_ID(getFoodImageUrl(other)))
+      // FR-916 F2: egg has no photo now (its photo was avocado toast); two letter tiles are not a shared photo.
+      .filter(([food, other]) => getFoodImageUrl(other) !== '' && PHOTO_ID(getFoodImageUrl(food)) === PHOTO_ID(getFoodImageUrl(other)))
       .map(([food, other]) => `${food} shows the ${other} photo`);
     expect(clashes).toEqual([]);
   });

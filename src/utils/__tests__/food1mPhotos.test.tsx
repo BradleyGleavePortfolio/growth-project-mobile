@@ -17,7 +17,7 @@ describe('FOOD-1-M R1 food photos', () => {
   it('a name whose words are a photo key, or that key with plain words around it, gets that photo', () => {
     const cases: Array<[string, string]> = [
       ['Pineapple, raw', 'pineapple'], ['Grapefruit, raw', 'grapefruit'], ['Grapes, raw', 'grape'],
-      ['Large eggs', 'egg'], ['Blueberries', 'blueberry'], ['Strawberries, fresh', 'strawberry'],
+      ['Broccoli, raw', 'broccoli'], ['Blueberries', 'blueberry'], ['Strawberries, fresh', 'strawberry'],
       ['Hamburger', 'hamburger'], ['Bell pepper, chopped', 'bell_pepper'], ['Apple, raw', 'apple'],
     ];
     expect(cases.filter(([name, key]) => !getFoodImageUrl(name) || getFoodImageUrl(name) !== photoOf(key))).toEqual([]);
@@ -41,7 +41,7 @@ describe('FOOD-1-M R1 food photos', () => {
     }
     const shared = [...byPhoto.values()].filter((keys) => keys.length > 1).map((keys) => keys.join(' '));
     expect(shared.sort()).toEqual([
-      'blueberry berry', 'burger hamburger', 'coffee latte', 'milk whole_milk skim_milk', 'white_rice jasmine_rice',
+      'blueberry berry', 'burger hamburger', 'coffee latte', 'white_rice jasmine_rice', // FR-916 F2: milk photos out
     ]);
   });
 
