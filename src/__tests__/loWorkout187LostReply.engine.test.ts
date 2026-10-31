@@ -206,7 +206,7 @@ jest.mock('../lib/userCache', () => ({
   readUserCache: jest.fn(async () => ({ id: 'client-1' })),
 }));
 
-import { workoutApi } from '../services/api';
+import { createWorkoutOnce } from '../offline/sync/workoutSaveKey';
 import { __resetDatabaseForTests } from '../offline/database';
 import { queueWorkout, releaseQueuedWorkout, triggerSync, pushQueuedWorkouts } from '../offline/sync/sync-engine';
 
@@ -238,12 +238,13 @@ describe('LO-WORKOUT B1: lost reply on Finish', () => {
     const key = 'client-1:1761867000000';
     // ActiveWorkoutScreen.finishWorkout: queue the body on the phone first...
     await queueWorkout({ clientKey: key, payload: pushDayBody(), userId: 'client-1', sessionName: 'Push Day', durationMinutes: 42 });
-    // ...then its own POST (useCreateWorkout -> workoutApi.create(body)). The
-    // server commits it; the answer never arrives.
+    // ...then its own POST (useCreateWorkout -> createWorkoutOnce(body, key),
+    // the keyed send the sync retry also uses). The server commits it; the
+    // answer never arrives.
     mockServer.loseNextReply = true;
     let lost: unknown = null;
     try {
-      await (workoutApi.create as (b: Record<string, unknown>) => Promise<unknown>)(pushDayBody());
+      await createWorkoutOnce(pushDayBody(), key);
     } catch (e) {
       lost = e;
     }

@@ -823,8 +823,9 @@ export const aiApi = {
 };
 
 export const workoutApi = {
-  create: (data: Record<string, unknown>) =>
-    api.post('/workouts', data),
+  // `config` carries the save's Idempotency-Key (offline/sync/workoutSaveKey.ts).
+  create: (data: Record<string, unknown>, config?: AxiosRequestConfig) =>
+    api.post('/workouts', data, config),
   update: (id: string, data: Record<string, unknown>) =>
     api.put(`/workouts/${encodeURIComponent(id)}`, data),
   getAll: (limit = 10) =>

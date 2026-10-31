@@ -218,7 +218,8 @@ export default function ActiveWorkoutScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredExercises, setFilteredExercises] = useState<Exercise[]>([]);
   const [selectedMuscle, setSelectedMuscle] = useState('All');
-  const createWorkout = useCreateWorkout();
+  // The Finish save sends the session's queue key, as the queued retry does.
+  const createWorkout = useCreateWorkout(() => queueKeyRef.current);
   const summary = useMemo(() => workoutSummary(sessionExercises, history), [sessionExercises, history]);
 
   useEffect(() => {
@@ -870,6 +871,12 @@ export default function ActiveWorkoutScreen() {
           // Analytics gets the event name only, never workout values.
           track('workout_logged');
 
+          // Refresh the "From your coach" card and the assignment detail so a
+          // finished workout stops being offered again.
+          const refreshAssignments = () => {
+            queryClient?.invalidateQueries({ queryKey: ['assignments'] }).catch(() => undefined);
+          };
+
           // Attempt the server save now. Without signal the queued row is
           // sent by the sync engine on the next reconnect / foreground.
           createWorkout.mutate(
@@ -913,9 +920,14 @@ export default function ActiveWorkoutScreen() {
                 track(AnalyticsEvents.WORKOUT_COMPLETED);
                 // The queued copy of this workout is now on the server: mark it
                 // sent so the background sync never posts it a second time.
+                // The engine then sends the coach-assignment completion and
+                // keeps it queued until the server answers it.
                 if (queued) {
                   Promise.resolve()
                     .then(() => settleQueuedWorkout(queueKey, serverId))
+                    .then((assignmentAnswered) => {
+                      if (assignmentAnswered) refreshAssignments();
+                    })
                     .catch((error: unknown) => {
                       logger.warn('mwb.completion.mark-session-synced', {
                         ...buildCompletionLogBase({ ...completionLogBaseCtx, justCompletedId }),
@@ -941,19 +953,16 @@ export default function ActiveWorkoutScreen() {
                   });
                 });
 
-                // If this workout is linked to a coach assignment, call the
-                // assignment completion endpoint with the full exercise/set
-                // payload. Non-fatal — the generic workout is already saved.
-                if (assignmentId) {
+                // If this workout is linked to a coach assignment and the phone
+                // could not queue it (settleQueuedWorkout sends a queued one),
+                // call the assignment completion endpoint with the full
+                // exercise/set payload. Non-fatal — the workout is already saved.
+                if (assignmentId && !queued) {
                   workoutBuilderApi.completeMyAssignment(assignmentId, {
                     completion_payload: completionPayload,
                     idempotency_key: idempotencyKeyRef.current,
                     started_at: sessionStartTimeRef.current.toISOString(),
-                  }).then(() => {
-                    // Refresh the "From your coach" card and the assignment
-                    // detail so a finished workout stops being offered again.
-                    queryClient?.invalidateQueries({ queryKey: ['assignments'] }).catch(() => undefined);
-                  }).catch((error: unknown) => {
+                  }).then(refreshAssignments).catch((error: unknown) => {
                     // Non-fatal: generic workout already saved above.
                     logger.warn('mwb.completion.assignment-sync', {
                       ...buildCompletionLogBase({ ...completionLogBaseCtx, justCompletedId }),

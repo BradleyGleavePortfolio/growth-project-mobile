@@ -37,6 +37,7 @@ import {
   coachApi,
   messagesApi,
 } from '../services/api';
+import { createWorkoutOnce } from '../offline/sync/workoutSaveKey';
 import { bucketDateLocal } from '../utils/date';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -303,10 +304,15 @@ export function useWeeklyVolumeBreakdown(weekStart: string, weekEnd: string, lim
   });
 }
 
-export function useCreateWorkout() {
+/**
+ * `saveKey` returns the finished session's queue key, read when the save is
+ * sent, so this POST carries the same Idempotency-Key as the queued retry.
+ */
+export function useCreateWorkout(saveKey?: () => string | null | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) => workoutApi.create(data).then((r) => r.data),
+    mutationFn: (data: Record<string, unknown>) =>
+      createWorkoutOnce(data, saveKey?.()).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['workouts'] });
     },
