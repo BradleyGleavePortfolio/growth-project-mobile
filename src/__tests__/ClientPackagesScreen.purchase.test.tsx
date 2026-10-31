@@ -10,7 +10,7 @@
  */
 import React from 'react';
 import { Alert, ScrollView, StyleSheet } from 'react-native';
-import { fireEvent, render, waitFor, within } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 
 jest.mock('../theme/ThemeProvider', () => {
   const realTokens = jest.requireActual('../theme/tokens').default;
@@ -133,6 +133,39 @@ beforeEach(() => {
     throw new Error(`unexpected POST ${url}`);
   });
   mockInitPaymentSheet.mockResolvedValue({});
+});
+
+it('LS-914R3 B2: closing the plan during confirmation still pins the later paid actions', async () => {
+  mockBillingV2 = true;
+  let finish!: (value: unknown) => void;
+  const get = mockGet.getMockImplementation()!;
+  mockGet.mockImplementation((url: string) => (
+    url === '/v1/checkout/subscriptions/purchase-1'
+      ? new Promise((resolve) => { finish = resolve; })
+      : get(url)
+  ));
+  jest.mocked(clientPaymentsApi.getPurchases).mockResolvedValue({
+    ok: true,
+    data: [{
+      id: 'purchase-1', package_id: 'pkg-monthly', package_name: 'Monthly coaching',
+      amount_cents: 9900, currency: 'usd', status: 'paid', entitlement_active: true,
+      paid_at: '2026-10-30T10:00:00Z', created_at: '2026-10-30T10:00:00Z',
+      interval: 'month', current_period_end: null, cancel_at_period_end: false,
+    }],
+  });
+  const r = await render(<ClientPackagesScreen />);
+  await fireEvent.press(await r.findByTestId('plan-offer-pkg-monthly-open'));
+  await fireEvent.press(r.getByTestId('buy-plan-pkg-monthly'));
+  await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/v1/checkout/subscriptions/purchase-1'));
+  // This enabled, real Back control closes the page, not its purchase.
+  const backs = r.getAllByLabelText('Back');
+  await fireEvent.press(backs[backs.length - 1]);
+  expect(r.queryByTestId('client-plan-page')).toBeNull();
+  await act(async () => { finish({ data: PLAN }); });
+  await waitFor(() => expect(r.getByTestId('payment-see-unlocks')).toBeTruthy());
+  const scrollingActions = r.UNSAFE_getAllByType(ScrollView)
+    .filter((scroll) => within(scroll).queryByTestId('payment-see-unlocks') !== null);
+  expect(scrollingActions).toHaveLength(0);
 });
 
 it('Style C opens the plan without checkout, shows the server quote, and returns to the list', async () => {
