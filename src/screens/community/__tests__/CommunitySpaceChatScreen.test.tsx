@@ -103,7 +103,7 @@ jest.mock('../../../components/community/SafetyMenu', () => {
   };
   return (p: MockMenuProps) => (
     mockRealSafety
-      ? React.createElement(jest.requireActual('../../../components/community/SafetyMenu').default, p)
+      ? require('react').createElement(jest.requireActual('../../../components/community/SafetyMenu').default, p)
       : <>
       <Text testID={p.testID} accessibilityLabel="Report or block" onPress={() => p.onBlocked?.(p.authorUserId)}>menu</Text>
       {p.onDelete ? <Text testID={`${p.testID}-delete`} onPress={() => { p.onDelete?.().catch(() => undefined); }}>delete</Text> : null}
