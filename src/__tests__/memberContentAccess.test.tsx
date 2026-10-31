@@ -339,7 +339,7 @@ const registered = (file: string, kind: Kind) =>
 it('LS-911 B2: NotificationCenter must use live proof, not the obsolete pre-898 gap', () => {
   const row = REGISTRY.find((s) => s.file === 'screens/notifications/NotificationCenterScreen.tsx' && s.kind === 'list');
   expect(row).toBeDefined();
-  expect(row?.proof.type).not.toBe('gap');
+  expect(row?.proof.by).not.toBe('gap');
 });
 
 describe('LS-911 B1: source discovery must recognize member content independent of call spelling', () => {
