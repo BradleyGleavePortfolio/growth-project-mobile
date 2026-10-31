@@ -357,7 +357,8 @@ it('LS-917 control: legacy row replays use a stable valid key, and an incompatib
     created_at: '2026-10-26T20:00:00.000Z', updated_at: '2026-10-26T20:00:00.000Z',
     sync_status: 'pending', server_id: null, client_key: null, payload_json: null,
     assignment_json: null,
-  });
+    // A legacy row as an old build stored it (an ISO logged_at, the old column names).
+  } as unknown as Row);
   mockCreate.mockRejectedValueOnce(new Error('network timeout'));
   await triggerSync();
   expect(mockDb.rows[0].sync_status).toBe('pending');
