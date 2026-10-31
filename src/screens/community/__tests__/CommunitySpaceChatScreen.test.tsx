@@ -11,7 +11,7 @@
 import React from 'react';
 import { Alert, FlatList, Keyboard, Platform, StyleSheet, TextInput } from 'react-native';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import NetInfo from '@react-native-community/netinfo';
 import { authEvents } from '../../../utils/authEvents';
 import { forestPop as fp, spacing, voiceShades } from '../../../theme/tokens';
@@ -2169,5 +2169,180 @@ describe('LO-909R2 B1 (m#909 round 2, Claude Opus lens): the oldest loaded messa
     await waitFor(() => expect(disk()).not.toContain('body m1'));
     expect(disk()).toContain('Queued reply');
     expect(r.queryByText('body m1', { includeHiddenElements: true })).toBeNull();
+  });
+});
+
+// FR-909R2 (agent 190): the other paths of F1 (a whole read leaves a message out: it is gone) and F2 (a Block goes by
+// the member's id, kept from before SafetyMenu reads the spaces again).
+describe('FR-909R2 a whole read and a Block, the other paths', () => {
+  type R = Awaited<ReturnType<typeof open>>;
+  const os = Platform.OS;
+  const disk = () => mockDisk.get('space_outbox_me-1') ?? '[]';
+  const select = async (r: R, id: string) => {
+    await fireEvent(r.getByTestId(`space-chat-row-${id}`), 'longPress');
+    await fireEvent.press(r.getByTestId('space-chat-sheet-reply'));
+  };
+  const q = (id: string, name: string, text: string) => ({ id, gone: false, kind: 'text', sender_name: name, snippet: text, voice_duration_ms: null });
+  const waiting = (reply: Record<string, unknown>, cohortId = 'c-every') => ({
+    localId: `k-${String(reply.id)}`, key: `k-${String(reply.id)}`, cohortId, body: 'Kept reply', createdAt: '2026-10-22T10:20:00.000Z', state: 'sending', reply,
+  });
+  const reread = () => act(async () => { await client.invalidateQueries({ queryKey: ['community', 'space-chat'] }); });
+  // The real SafetyMenu: its Block reads every active space again (without the member) before it tells the screen.
+  const block = async (r: R, rowId: string, name: string, who: { id: string }) => {
+    const ok = mockApi.post.getMockImplementation()!;
+    mockApi.post.mockImplementation(async (url: string, ...args: unknown[]) => {
+      if (url !== '/community/blocks') return ok(url, ...args);
+      page = page.filter((m) => (m as { sender_user_id: string }).sender_user_id !== who.id);
+      return { data: { blocked_user_id: who.id, blocked: true } };
+    });
+    let done: Promise<unknown> | undefined;
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, buttons) => {
+      const confirm = buttons?.find((b) => b.text === 'Block');
+      if (confirm) done = Promise.resolve(confirm.onPress?.());
+    });
+    try {
+      await fireEvent.press(r.getByTestId(`space-chat-menu-${rowId}`));
+      await fireEvent.press(r.getAllByText(`Block ${name}`)[0]);
+      expect(done).toBeDefined();
+      await act(async () => { await done; });
+    } finally {
+      alert.mockRestore();
+    }
+  };
+  beforeEach(() => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'android' });
+    readAnswer = fail(404);
+  });
+  afterEach(() => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, get: () => os });
+    onlineManager.setOnline(true);
+  });
+
+  it('F1: a space whose whole history is one page; its only message leaves; reply mode ends and the open sheet closes', async () => {
+    page = [msg('solo', '2026-10-22T10:05:00.000Z', COACH, { body: 'The only words here' })];
+    const r = await open();
+    await r.findByTestId('space-chat-row-solo');
+    await select(r, 'solo');
+    expect(r.getByLabelText('Replying to Sam Okafor')).toBeTruthy();
+    await fireEvent(r.getByTestId('space-chat-row-solo'), 'longPress');
+    expect(r.getByTestId('space-chat-sheet')).toBeTruthy();
+    page = [];
+    await reread();
+    await waitFor(() => expect(r.queryByTestId('space-chat-row-solo')).toBeNull());
+    await waitFor(() => expect(r.queryByTestId('space-chat-sheet')).toBeNull());
+    expect(r.queryByLabelText('Replying to Sam Okafor')).toBeNull();
+    expect(r.queryByText('The only words here', { includeHiddenElements: true })).toBeNull();
+  });
+
+  it('F1: a read that failed, or one that has not answered (offline), leaves a waiting reply\'s quote as it is', async () => {
+    mockNet.isOnline = false;
+    mockNet.reachable = false;
+    mockDisk.set('space_outbox_me-1', JSON.stringify([waiting({ id: 'm0', body: 'Kept quote words', authorLabel: 'Sam Okafor', authorId: COACH.id, at: '2026-10-21T08:00:00.000Z' })]));
+    onlineManager.setOnline(false);
+    client = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } });
+    const r = await render(<QueryClientProvider client={client}><Screen /></QueryClientProvider>);
+    // The phone's own copy of the space (a write here, not a read) holds the whole stretch but not m0.
+    await act(async () => {
+      client.setQueryData(['community', 'space-chat', 'me-1', 'c-every'], { pages: [{ messages: page, next_before: null }], pageParams: [null] });
+    });
+    await r.findByTestId('space-chat-row-m3');
+    await waitFor(() => expect(r.getByText('Kept quote words', { includeHiddenElements: true })).toBeTruthy());
+    expect(disk()).toContain('Kept quote words');
+    // Back online, the read fails: still unknown.
+    const ok = mockApi.get.getMockImplementation()!;
+    mockApi.get.mockImplementation(async (url: string, ...args: unknown[]) => {
+      if (url.endsWith('/messages')) throw fail(500);
+      return ok(url, ...args);
+    });
+    onlineManager.setOnline(true);
+    await reread();
+    await waitFor(() => expect(mockApi.get.mock.calls.some(([u]) => String(u).endsWith('/messages'))).toBe(true));
+    await act(async () => { await new Promise((res) => setTimeout(res, 50)); });
+    expect(disk()).toContain('Kept quote words');
+    expect(r.getByText('Kept quote words', { includeHiddenElements: true })).toBeTruthy();
+    // The read answers the whole space without m0: now it is gone.
+    mockApi.get.mockImplementation(ok);
+    await reread();
+    await waitFor(() => expect(disk()).not.toContain('Kept quote words'));
+    expect(disk()).toContain('Kept reply');
+    expect(r.queryByText('Kept quote words', { includeHiddenElements: true })).toBeNull();
+  });
+
+  it('F1: a reply kept on the device across a restart, to a message the whole read no longer holds, keeps only the id', async () => {
+    mockNet.isOnline = false;
+    mockNet.reachable = false;
+    mockDisk.set('space_outbox_me-1', JSON.stringify([waiting({ id: 'm0', body: 'Restored quote words', authorLabel: 'jo b.', authorId: JO.id, at: '2026-10-21T08:00:00.000Z' })]));
+    const r = await open();
+    await r.findByTestId('space-chat-row-m1');
+    await waitFor(() => expect(disk()).not.toContain('Restored quote words'));
+    expect(disk()).toContain('Kept reply');
+    expect(r.queryByText('Restored quote words', { includeHiddenElements: true })).toBeNull();
+  });
+
+  it('F1: a space with an older page keeps a message older than the loaded stretch unknown', async () => {
+    mockNet.isOnline = false;
+    mockNet.reachable = false;
+    mockDisk.set('space_outbox_me-1', JSON.stringify([waiting({ id: 'm0', body: 'Older quote words', authorLabel: 'jo b.', authorId: JO.id, at: '2026-10-21T08:00:00.000Z' })]));
+    const ok = mockApi.get.getMockImplementation()!;
+    mockApi.get.mockImplementation(async (url: string, ...args: unknown[]) => (url.endsWith('/messages')
+      ? { data: { messages: page, next_before: 'cur-1' } } : ok(url, ...args)));
+    const r = await open();
+    await r.findByTestId('space-chat-row-m1');
+    await reread();
+    await act(async () => { await new Promise((res) => setTimeout(res, 50)); });
+    expect(disk()).toContain('Older quote words');
+  });
+
+  it('F2: a Block takes the quotes of the member, and a waiting reply to them, in a space that is not open, by id', async () => {
+    mockNet.isOnline = false;
+    mockNet.reachable = false;
+    // A reply waiting in another space to m3, the member's message held in this one; that space labels them differently.
+    mockDisk.set('space_outbox_me-1', JSON.stringify([waiting({ id: 'm3', body: 'Waiting quote elsewhere', authorLabel: 'Jo Bee' }, 'c-other')]));
+    mockRealSafety = true;
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    client.setQueryData(['community', 'space-chat', 'me-1', 'c-other'], {
+      pages: [{ messages: [
+        msg('reply-other', '2026-10-22T10:09:00.000Z', ME, { cohort_id: 'c-other', parent_message_id: 'm3', parent: q('m3', 'Jo Bee', 'Quoted elsewhere') }),
+      ], next_before: 'older-page' }],
+      pageParams: [null],
+    });
+    await waitFor(() => expect(disk()).toContain('Waiting quote elsewhere'));
+    await block(r, 'm3', JO.name, JO);
+    await waitFor(() => expect(r.queryByTestId('space-chat-row-m3')).toBeNull());
+    const saved = JSON.stringify(client.getQueryData(['community', 'space-chat', 'me-1', 'c-other']));
+    expect(saved).not.toContain('Quoted elsewhere');
+    expect(saved).not.toContain('Jo Bee');
+    expect(saved).toContain('reply-other');
+    await waitFor(() => expect(disk()).not.toContain('Waiting quote elsewhere'));
+    expect(disk()).toContain('Kept reply');
+  });
+
+  it('F2: two members with the same name; a Block of one leaves the other\'s rows, quotes and a waiting reply to them', async () => {
+    const TWIN = { id: 'u-3', name: JO.name };
+    page = [
+      msg('reply-twin', '2026-10-22T10:12:00.000Z', ME, { parent_message_id: 'm4', parent: q('m4', TWIN.name, 'Twin quoted words') }),
+      msg('m4', '2026-10-22T10:10:00.000Z', TWIN, { body: 'Twin own words' }),
+      ...page,
+    ];
+    mockNet.isOnline = false;
+    mockNet.reachable = false;
+    mockDisk.set('space_outbox_me-1', JSON.stringify([waiting({ id: 'm4', body: 'Twin waiting quote', authorLabel: TWIN.name })]));
+    mockRealSafety = true;
+    const r = await open();
+    await r.findByTestId('space-chat-row-m4');
+    // The blocked member also wrote in another space this phone holds, under the same label.
+    client.setQueryData(['community', 'space-chat', 'me-1', 'c-other'], {
+      pages: [{ messages: [msg('jo-other', '2026-10-22T10:08:00.000Z', JO, { cohort_id: 'c-other', body: 'Jo words elsewhere' })], next_before: null }],
+      pageParams: [null],
+    });
+    await waitFor(() => expect(disk()).toContain('Twin waiting quote'));
+    await block(r, 'm3', JO.name, JO);
+    await waitFor(() => expect(r.queryByTestId('space-chat-row-m3')).toBeNull());
+    expect(r.getByTestId('space-chat-row-m4')).toBeTruthy();
+    expect(r.getByText('Twin quoted words', { includeHiddenElements: true })).toBeTruthy();
+    expect(JSON.stringify(client.getQueryData(['community', 'space-chat', 'me-1', 'c-every']))).toContain('Twin quoted words');
+    expect(disk()).toContain('Twin waiting quote');
+    expect(JSON.stringify(client.getQueryData(['community', 'space-chat', 'me-1', 'c-other']))).not.toContain('Jo words elsewhere');
   });
 });
