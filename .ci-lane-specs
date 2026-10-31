@@ -1,0 +1,7 @@
+src/components/community
+src/screens/community
+src/components/messaging
+src/hooks
+src/api
+--runInBand
+--forceExit
