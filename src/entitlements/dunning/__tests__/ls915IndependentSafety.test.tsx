@@ -157,4 +157,26 @@ describe('LS-915 independent canonical recovery controls', () => {
     await clear();
     expect(mockRead).toHaveBeenCalledTimes(1);
   });
+
+  it('seeds a lock already present before mount and reads again when it clears', async () => {
+    await lock();
+    mockRead.mockResolvedValueOnce(answer(false));
+    const view = await render(tree());
+    await waitFor(() => expect(view.getByTestId('state').props.children).toBe('inactive'));
+    mockRead.mockResolvedValueOnce(answer(true));
+    await clear();
+    await waitFor(() => expect(view.queryByTestId('paid')).not.toBeNull());
+    expect(mockRead).toHaveBeenCalledTimes(2);
+  });
+
+  it('reads canonical access on cold restore rather than inheriting an old inactive value', async () => {
+    const previous = await initiallyInactive();
+    await previous.unmount();
+    await act(async () => { dunningLockoutStore.retire(); });
+    mockRead.mockResolvedValue(answer(true));
+    const restored = await render(tree());
+    await waitFor(() => expect(restored.getByTestId('state').props.children).toBe('active'));
+    expect(restored.queryByTestId('paid')).not.toBeNull();
+    expect(mockRead).toHaveBeenCalledTimes(1);
+  });
 });
