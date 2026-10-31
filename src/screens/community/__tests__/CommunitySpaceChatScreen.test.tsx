@@ -2039,6 +2039,24 @@ describe('LS-909R2 independent B-TESTS', () => {
   beforeEach(() => Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'android' }));
   afterEach(() => Object.defineProperty(Platform, 'OS', { configurable: true, get: () => os }));
 
+  it('LS-909R2 B3: a poll that retires the visible reply also makes the next message a plain send', async () => {
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    await fireEvent(r.getByTestId('space-chat-row-m3'), 'longPress');
+    await fireEvent.press(r.getByTestId('space-chat-sheet-reply'));
+    expect(r.getByLabelText(`Replying to ${JO.name}`)).toBeTruthy();
+    // The newer loaded root is now deleted elsewhere; older readable messages
+    // remain, so the existing isGone coverage rule does retire the visible strip.
+    page = page.filter((m) => (m as { id: string }).id !== 'm3');
+    await act(async () => { await client.invalidateQueries({ queryKey: ['community', 'space-chat', 'me-1', 'c-every'] }); });
+    await waitFor(() => expect(r.queryByTestId('space-chat-row-m3')).toBeNull());
+    await waitFor(() => expect(r.queryByLabelText(`Replying to ${JO.name}`)).toBeNull());
+    await fireEvent.changeText(r.getByTestId('space-chat-composer-field'), 'A new plain message');
+    await fireEvent.press(r.getByTestId('space-chat-composer-send'));
+    await waitFor(() => expect(sends()).toHaveLength(1));
+    expect(sends()[0][1]).toEqual({ body: 'A new plain message' });
+  });
+
   it('LS-909R2 B1: polling an empty complete page retires a selected last parent and its persisted offline quote', async () => {
     page = [msg('only-root', '2026-10-22T10:05:00.000Z', JO, { body: 'Last parent private words' })];
     const r = await open();
