@@ -269,6 +269,8 @@ export function routineSessionExercises(exercisesJson: string): SessionExercise[
         // each set at it so the client only edits what changed.
         weight: re.weightLbs && re.weightLbs > 0 ? re.weightLbs : 0,
         completed: false,
+        // A coach's 0 lb is a value: Done never fills it with the last weight.
+        ...(re.weightLbs === 0 ? { prescribedZero: true } : {}),
       })),
       restSec: re.restSec,
       workoutPlanExerciseId: re.workoutPlanExerciseId,

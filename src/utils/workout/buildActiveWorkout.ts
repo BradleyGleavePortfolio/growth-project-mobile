@@ -20,7 +20,7 @@ export interface SessionExerciseSeed {
   reps: number;
   restSec: number;
   workoutPlanExerciseId?: string;
-  /** Coach target weight (lb); ActiveWorkout pre-fills each set with it. */
+  /** Coach target weight (lb, 0 = bodyweight); ActiveWorkout pre-fills each set with it. */
   weightLbs?: number;
   /** The coach's note for this exercise, shown during the live workout. */
   coachNote?: string;
@@ -46,7 +46,8 @@ function exerciseToSessionSeed(ex: SeedRow): SessionExerciseSeed {
     reps: ex.reps_or_duration_seconds,
     restSec: ex.rest_seconds ?? 60,
     ...(ex.id ? { workoutPlanExerciseId: ex.id } : {}),
-    ...(ex.weight_lbs && ex.weight_lbs > 0 ? { weightLbs: ex.weight_lbs } : {}),
+    // The coach's weight as written, 0 (bodyweight) included; null = left empty.
+    ...(typeof ex.weight_lbs === 'number' && ex.weight_lbs >= 0 ? { weightLbs: ex.weight_lbs } : {}),
     ...(ex.notes && ex.notes.trim() ? { coachNote: ex.notes.trim() } : {}),
   };
 }

@@ -558,6 +558,8 @@ export default function ActiveWorkoutScreen() {
     const wasCompleted = sessionExercises[exIdx].sets[setIdx].completed;
     updateSet(exIdx, setIdx, 'completed', !wasCompleted);
     if (!wasCompleted) {
+      const lastOrder = Math.max(0, ...sessionExercises.flatMap((e) => e.sets.map((s) => s.doneOrder ?? 0)));
+      updateSet(exIdx, setIdx, 'doneOrder', lastOrder + 1);
       // Set just marked complete — start rest timer.
       const rest = sessionExercises[exIdx].restSec ?? 0;
       startRest(rest, exIdx);
@@ -577,7 +579,13 @@ export default function ActiveWorkoutScreen() {
       const lastSet = updated[exIdx].sets[updated[exIdx].sets.length - 1];
       updated[exIdx] = {
         ...updated[exIdx],
-        sets: [...updated[exIdx].sets, { reps: lastSet?.reps || 10, weight: lastSet?.weight || 0, completed: false }],
+        sets: [...updated[exIdx].sets, {
+          reps: lastSet?.reps || 10,
+          weight: lastSet?.weight || 0,
+          completed: false,
+          // Another set of a coach's bodyweight exercise stays at the coach's 0.
+          ...(lastSet?.prescribedZero ? { prescribedZero: true } : {}),
+        }],
       };
       return updated;
     });
@@ -1182,15 +1190,16 @@ export default function ActiveWorkoutScreen() {
   const totalSets = sessionExercises.reduce((sum, ex) => sum + ex.sets.length, 0);
   const completedSets = sessionExercises.reduce((sum, ex) => sum + ex.sets.filter((s) => s.completed).length, 0);
 
-  // §2.9 most recently completed set (last completed set, scanning exercises in
-  // order). Drives Roman's readback with the real logged weight/reps. A set
-  // with a zero weight (e.g. bodyweight) is still a valid readback, so the only
-  // gate is `completed`.
+  // §2.9 the set the client marked done last (highest doneOrder, wherever it
+  // sits in the list, so going back to an earlier exercise reads that set; sets
+  // saved without an order keep list order). Drives Roman's readback with the
+  // real logged weight/reps. A set with a zero weight (e.g. bodyweight) is still
+  // a valid readback, so the only gate is `completed`.
   const lastCompletedSet: SessionSet | null = (() => {
     let found: SessionSet | null = null;
     for (const ex of sessionExercises) {
       for (const s of ex.sets) {
-        if (s.completed) found = s;
+        if (s.completed && (!found || (s.doneOrder ?? 0) >= (found.doneOrder ?? 0))) found = s;
       }
     }
     return found;
