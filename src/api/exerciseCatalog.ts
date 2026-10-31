@@ -23,6 +23,7 @@ import api from '../services/api';
 import type { AxiosResponse } from 'axios';
 import { exerciseLibraryApi } from './exerciseLibraryApi';
 import type { Exercise as LibraryExercise } from './exerciseLibraryApi';
+import { libraryExerciseId, slugifyExerciseName } from '../utils/workout/exerciseId';
 import type {
   Exercise,
   ExerciseDetail,
@@ -114,6 +115,18 @@ export const exerciseCatalogApi = {
         gifUrl: exercise.gifUrl || null,
       };
       return { ...response, data };
+    }
+  },
+
+  // The library item's id for an exercise name (looked up by its slug, as
+  // Watch video does), or null when the library has none or can't be reached.
+  libraryId: async (name: string): Promise<string | null> => {
+    const slug = slugifyExerciseName(name);
+    if (!slug) return null;
+    try {
+      return libraryExerciseId((await exerciseCatalogApi.getByIdOrSlug(slug)).data?.id);
+    } catch {
+      return null;
     }
   },
 };

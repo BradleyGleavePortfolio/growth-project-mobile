@@ -32,12 +32,27 @@ export function manualExerciseId(name: string): string {
 }
 
 /**
+ * A library item's id (the exercise catalog's uuid), or null. A saved routine
+ * keeps it per exercise (catalog_exercise_id); the server takes a uuid only,
+ * so an id the phone made for itself is never sent or used as one.
+ */
+const LIBRARY_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export function libraryExerciseId(value: unknown): string | null {
+  return typeof value === 'string' && LIBRARY_ID.test(value) ? value : null;
+}
+
+// Every id the phone makes for itself: the fallbacks above, coach-plan rows
+// without a catalog id, logged and coach-session rows, and the phone's own
+// exercise list (`ex_` + random). The catalog can never resolve one.
+const PHONE_MADE_ID = /^(routine|manual|plan-exercise|assignment-exercise|logged|session)[:/]|^ex_/;
+
+/**
  * The key the exercise catalog resolves (id, slug or source reference) for an
- * exercise's Watch video and instructions: its catalog id, or, for a fallback
- * id above (no catalog identity, e.g. a saved routine), the name's slug. A
- * fallback id is never sent to the catalog.
+ * exercise's Watch video and instructions: its catalog id (a saved routine's
+ * library id included), or, for an id the phone made (no catalog identity),
+ * the name's slug. A made-up id is never sent to the catalog.
  */
 export function catalogKey(exerciseId: string | undefined, name: string): string {
   const id = (exerciseId ?? '').trim();
-  return id && !/^(routine|manual)[:/]/.test(id) ? id : slugifyExerciseName(name);
+  return id && !PHONE_MADE_ID.test(id) ? id : slugifyExerciseName(name);
 }

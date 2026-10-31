@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp, NavigationProp, ParamListBase } from '@react-navigation/native';
 
 import { getAllExercises } from '../../db/workoutDb';
+import { exerciseCatalogApi } from '../../api/exerciseCatalog';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { typography, radius } from '../../theme/tokens';
 import { Screen } from '../../ui';
@@ -132,9 +133,17 @@ export default function RoutineBuilderScreen() {
         reps: 10,
         restSec: 60,
         muscleGroup: toServerMuscleGroup(exercise.muscle),
+        catalogExerciseId: null,
       },
     ]);
     setShowAddModal(false);
+    // This list is the phone's own (its ids are not library ids): keep the
+    // library item's id on the row so the saved routine carries it.
+    void exerciseCatalogApi.libraryId(exercise.name).then((catalogExerciseId) => {
+      if (!catalogExerciseId) return;
+      setExercises((prev) => prev.map((row) => (row.exerciseId === exercise.id && !row.catalogExerciseId
+        ? { ...row, catalogExerciseId } : row)));
+    });
   };
 
   const removeExercise = (idx: number) => {

@@ -236,7 +236,7 @@ export type ApiRoutine = {
   creator_id: string;
   name: string;
   description?: string | null;
-  exercises: Array<{ exercise_name: string; sets: number; reps: number }>;
+  exercises: Array<{ exercise_name: string; sets: number; reps: number; catalog_exercise_id?: string | null }>;
   created_at: string;
 };
 
