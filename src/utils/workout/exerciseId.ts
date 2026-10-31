@@ -30,3 +30,14 @@ export function manualExerciseId(name: string): string {
   const slug = slugifyExerciseName(name);
   return slug ? `manual:${slug}` : 'manual:unnamed';
 }
+
+/**
+ * The key the exercise catalog resolves (id, slug or source reference) for an
+ * exercise's Watch video and instructions: its catalog id, or, for a fallback
+ * id above (no catalog identity, e.g. a saved routine), the name's slug. A
+ * fallback id is never sent to the catalog.
+ */
+export function catalogKey(exerciseId: string | undefined, name: string): string {
+  const id = (exerciseId ?? '').trim();
+  return id && !/^(routine|manual)[:/]/.test(id) ? id : slugifyExerciseName(name);
+}

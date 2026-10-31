@@ -29,7 +29,7 @@ import { DayMark, SegmentedRing, type DayState } from '../../../ui/charts/StyleC
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { assignmentPrescription } from '../../../utils/workout/assignmentPrescription';
 import { buildActiveWorkoutExercises, prettifyExerciseName } from '../../../utils/workout/buildActiveWorkout';
-import { bucketDateLocal } from '../../../utils/date';
+import { assignmentDay, dayStart } from '../../../utils/workout/workoutDay';
 import { doneLine, workoutWeek, type WorkoutWeek } from '../../coach/client-detail/thisWeek';
 import { DAY_LABELS } from '../habits/constants';
 
@@ -69,7 +69,8 @@ export interface TrainWorkout extends ClientWorkoutAssignmentWithPlan { client_n
 type Change = { order: number; sets_before?: number | null; client_reason?: string | null };
 
 const DAY = 86_400_000;
-const dayOf = (a: Row) => bucketDateLocal(new Date(a.scheduled_for));
+// The day it was assigned for: a calendar date, never moved west (utils/workout/workoutDay).
+const dayOf = (a: Row) => assignmentDay(a);
 const firstName = (name?: string) => name?.trim().split(/\s+/)[0] || null;
 
 /** The ring and strip, Monday to Sunday around `today`; a skipped day reads missed (the coach's This week rule). */
@@ -83,7 +84,7 @@ export function trainWeek(rows: ReadonlyArray<Row>, today: string): WorkoutWeek 
 
 /** Today's open workout; else the next open one; else the latest still open (a missed day). A skipped day is not open. */
 export function featuredWorkout<T extends Row>(rows: ReadonlyArray<T>, today: string): T | null {
-  const open = rows.filter((a) => !a.completed_at && !a.skipped_at).sort((a, b) => Date.parse(a.scheduled_for) - Date.parse(b.scheduled_for));
+  const open = rows.filter((a) => !a.completed_at && !a.skipped_at).sort((a, b) => dayOf(a).localeCompare(dayOf(b)));
   return open.find((a) => dayOf(a) >= today) ?? open[open.length - 1] ?? null;
 }
 
@@ -234,7 +235,7 @@ export function TrainDay({ workout, hasAny, state, coachless, coachId, userId, o
   const isToday = dayOf(workout) === today;
   const when = isToday
     ? c.today
-    : new Date(workout.scheduled_for).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    : dayStart(dayOf(workout))?.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) ?? '';
   const minutes = plan.durationMinutes ? ` · ${c.minutes(plan.durationMinutes)}` : '';
   const start = () => {
     if (namesLoading) return;

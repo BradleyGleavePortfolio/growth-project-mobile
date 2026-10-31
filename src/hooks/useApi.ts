@@ -37,7 +37,8 @@ import {
   coachApi,
   messagesApi,
 } from '../services/api';
-import { bucketDateLocal } from '../utils/date';
+import { createWorkoutOnce } from '../offline/sync/workoutSaveKey';
+import { workoutDay } from '../utils/workout/workoutDay';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Habits
@@ -269,23 +270,17 @@ export function useWeeklyVolumeBreakdown(weekStart: string, weekEnd: string, lim
       type Session = { date?: string; created_at?: string; exercises?: { sets?: number | string; reps?: number | string; weight_lbs?: number | string }[] };
       const data = res.data as { workouts?: Session[] } | Session[] | undefined;
       const sessions: Session[] = Array.isArray(data) ? data : (data?.workouts ?? []);
-      const start = new Date(weekStart).getTime();
-      const end = new Date(weekEnd).getTime();
+      // Each workout on its recorded day (utils/workout/workoutDay): a
+      // calendar date is never moved west; only a row without one uses the
+      // local day it was stored.
       const inRange = sessions.filter((s) => {
-        const stamp = s.date || s.created_at || '';
-        const t = stamp ? new Date(stamp).getTime() : NaN;
-        return t >= start && t <= end;
+        const day = workoutDay(s);
+        return !!day && day >= weekStart.slice(0, 10) && day <= weekEnd.slice(0, 10);
       });
       const totals: Record<string, number> = {};
       let total = 0;
       for (const s of inRange) {
-        const stamp = s.date || s.created_at || '';
-        // A bare YYYY-MM-DD is already a calendar day — feeding it through
-        // `new Date()` parses as UTC midnight and would shift west-of-UTC
-        // users back a day. Only call `bucketDateLocal` on real timestamps.
-        const day = /^\d{4}-\d{2}-\d{2}$/.test(stamp)
-          ? stamp
-          : bucketDateLocal(new Date(stamp));
+        const day = workoutDay(s);
         let sessionVol = 0;
         for (const ex of (s.exercises || [])) {
           const sets = Number(ex.sets || 0);
@@ -303,10 +298,15 @@ export function useWeeklyVolumeBreakdown(weekStart: string, weekEnd: string, lim
   });
 }
 
-export function useCreateWorkout() {
+/**
+ * `saveKey` returns the finished session's queue key, read when the save is
+ * sent, so this POST carries the same Idempotency-Key as the queued retry.
+ */
+export function useCreateWorkout(saveKey?: () => string | null | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) => workoutApi.create(data).then((r) => r.data),
+    mutationFn: (data: Record<string, unknown>) =>
+      createWorkoutOnce(data, saveKey?.()).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['workouts'] });
     },

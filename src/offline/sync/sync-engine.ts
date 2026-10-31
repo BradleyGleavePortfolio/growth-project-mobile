@@ -44,6 +44,7 @@ import type { CompleteAssignmentInput } from '../../api/workoutBuilderApi';
 import { generateId } from '../../utils/date';
 import { readUserCache, readUserCacheSync } from '../../lib/userCache';
 import { isHeld, isRetryLater, retryAfterMs } from './retryLater';
+import { createWorkoutOnce } from './workoutSaveKey';
 
 // ---------------------------------------------------------------------------
 // Conflict toast event bus
@@ -264,19 +265,25 @@ export async function queueWorkout(
 
 /**
  * The Finish screen's own POST succeeded: mark the queued row sent so the
- * background sync never posts it again. The screen sends the assignment
- * completion itself on this path, so the stored copy is dropped.
+ * background sync never posts it again, then send its coach-assignment
+ * completion the way the background sync does (sendAssignmentCompletion).
+ * The stored completion is kept until the server answers it, so a lost or
+ * failed done call is retried by the next sync without reposting the
+ * workout. Resolves true when the server answered the completion.
  */
 export async function settleQueuedWorkout(
   clientKey: string,
   serverId: string,
-): Promise<void> {
+): Promise<boolean> {
   try {
     const db = await getDatabase();
-    await db.runAsync(
-      `UPDATE workout_logs SET sync_status = 'synced', server_id = ?, assignment_json = NULL WHERE client_key = ?`,
-      [serverId, clientKey],
+    const row = await db.getFirstAsync<{ id: string; assignment_json?: string | null }>(
+      `SELECT id, assignment_json FROM workout_logs WHERE client_key = ? LIMIT 1`,
+      [clientKey],
     );
+    if (!row) return false;
+    await markSynced(row.id, serverId);
+    return row.assignment_json ? await sendAssignmentCompletion(row.id, row.assignment_json) : false;
   } finally {
     heldKeys.delete(clientKey);
   }
@@ -461,8 +468,11 @@ async function pushPending(): Promise<void> {
     const log: WorkoutLog = rowToWorkoutLog(row);
     try {
       const serverPayload = toServerPayload(log);
-      const response = await workoutApi.create(
+      // A legacy row's own id is made once when it was written and kept
+      // through every retry: it is the save's Idempotency-Key.
+      const response = await createWorkoutOnce(
         serverPayload as unknown as Record<string, unknown>,
+        log.id,
       );
       const data = response.data as { id?: string; workout?: { id?: string } };
       const serverId: string = data?.id ?? data?.workout?.id ?? '';
@@ -540,7 +550,7 @@ async function pushQueuedRow(
       // server_id is set when an earlier copy is on the server: update it.
       const response = row.server_id
         ? await workoutApi.update(row.server_id, body)
-        : await workoutApi.create(body);
+        : await createWorkoutOnce(body, key);
       const data = response.data as { id?: string; workout?: { id?: string } };
       await markSynced(row.id, row.server_id || (data?.id ?? data?.workout?.id ?? ''));
     } catch (err: unknown) {

@@ -24,6 +24,8 @@ export interface WorkoutSession {
   routineName: string;
   startTime: string;
   endTime?: string;
+  /** The day the workout counts on, YYYY-MM-DD (utils/workout/workoutDay). */
+  day?: string;
   completed: boolean;
   exercises: string; // JSON array of SessionExercise
   /** The client's note on the whole workout ('' when none). */

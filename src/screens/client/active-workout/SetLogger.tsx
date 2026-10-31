@@ -124,7 +124,7 @@ export function SetLogger({
   hideCompletion?: boolean;
 }) {
   // An explicitly typed zero is an entry, not a blank ghost to replace.
-  const [weightBlank, setWeightBlank] = useState(set.weight <= 0);
+  const [weightBlank, setWeightBlank] = useState(set.weight <= 0 && !set.prescribedZero);
   const [repsBlank, setRepsBlank] = useState(set.reps <= 0);
   return (
     <View style={[styles.setRow, set.completed && styles.setRowCompleted]} pointerEvents={editable ? 'auto' : 'none'}>
@@ -137,7 +137,7 @@ export function SetLogger({
         onChangeValue={(v) => onUpdate(exIdx, setIdx, 'weight', v)}
         onBlankChange={setWeightBlank}
         placeholder={String(previous?.weight ?? 0)}
-        showZero={set.completed && previous?.weight === 0}
+        showZero={!!set.prescribedZero || (set.completed && previous?.weight === 0)}
         keyboardType="decimal-pad"
         placeholderTextColor={sc.textMuted}
         accessibilityLabel={`Set ${setIdx + 1} weight in pounds`}

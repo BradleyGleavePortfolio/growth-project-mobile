@@ -6,7 +6,7 @@
  */
 import { weightPeriod, weightTrend, type WeightPeriod, type WeightSample } from '../../../components/progress/weightTrend';
 import { workoutWeek, type WorkoutWeek } from '../../coach/client-detail/thisWeek';
-import { bucketDateLocal } from '../../../utils/date';
+import { assignmentDay, workoutDay } from '../../../utils/workout/workoutDay';
 import type { WeightLog } from '../../../types';
 
 export type WeightUnit = 'lb' | 'kg';
@@ -79,12 +79,12 @@ export function latestBest(sessions: Session[], today: string): BestSet | null {
   const whole = sessions.length < SESSIONS;
   const best = new Map<string, BestSet>();
   const sets: BestSet[] = [];
-  [...sessions].sort((a, b) => a.date.localeCompare(b.date)).forEach((s) => s.exercises?.forEach((e) => {
+  [...sessions].sort((a, b) => workoutDay(a).localeCompare(workoutDay(b))).forEach((s) => s.exercises?.forEach((e) => {
     const top = (e.weight_per_set ?? []).map((w, i) => ({ w, r: e.reps_per_set?.[i] ?? 0 }))
       .filter((x) => x.w > 0 && x.r > 0).sort((a, b) => b.w - a.w || b.r - a.r)[0];
     const prev = best.get(e.exercise_name);
     if (!top || (prev && (top.w < prev.weight || (top.w === prev.weight && top.r <= prev.reps)))) return;
-    const set = { name: e.exercise_name, weight: top.w, reps: top.r, date: s.date.slice(0, 10), isNew: !!prev && whole && dayX(s.date) > dayX(today) - 30 * DAY };
+    const set = { name: e.exercise_name, weight: top.w, reps: top.r, date: workoutDay(s), isNew: !!prev && whole && dayX(workoutDay(s)) > dayX(today) - 30 * DAY };
     best.set(e.exercise_name, set);
     sets.push(set);
   }));
@@ -96,7 +96,7 @@ const mondayOf = (today: string) => dayX(today) - ((utc(dayX(today)).getUTCDay()
 /** This week's planned sessions as the coach file's ring (Monday first); null when none is planned. */
 export function trainingWeek(rows: Array<{ scheduled_for: string; completed_at: string | null }>, today: string): WorkoutWeek | null {
   const start = mondayOf(today);
-  const week = rows.map((a) => ({ day: bucketDateLocal(new Date(a.scheduled_for)), completed_at: a.completed_at }))
+  const week = rows.map((a) => ({ day: assignmentDay(a), completed_at: a.completed_at }))
     .filter((a) => dayX(a.day) >= start && dayX(a.day) < start + 7 * DAY);
   if (!week.length) return null;
   return workoutWeek({ week_start: new Date(start).toISOString().slice(0, 10), today, assignments: week });
@@ -107,7 +107,7 @@ export function weeklyWorkouts(sessions: Session[], today: string): number[] {
   const start = mondayOf(today);
   const counts = Array<number>(8).fill(0);
   sessions.forEach((s) => {
-    const x = dayX(s.date);
+    const x = dayX(workoutDay(s));
     const ago = Math.max(0, Math.ceil((start - x) / (7 * DAY)));
     if (ago < 8 && x <= dayX(today)) counts[7 - ago] += 1;
   });
