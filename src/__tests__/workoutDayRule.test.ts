@@ -128,28 +128,75 @@ describe.each(SAVES_AND_READS)('%s', (file, what, uses) => {
   });
 });
 
-// Product files that name scheduled_for only as a type or schema field.
-const TYPES_ONLY = new Set([
-  'src/api/programsApi.ts',
-  'src/api/romanAdjustApi.ts',
-  'src/api/workoutBuilderApi.ts',
-  'src/utils/workout/workoutDay.ts',
-]);
+// Part 3 (LS-917 B3, LO-917 C1): the list is found, not trusted. A product
+// file is in this class when it names a workout or assignment type, one of
+// their hooks or API entry points, scheduled_for or the day rule. Each such
+// file that reads a day field (date, scheduled_for, created_at, completed_at,
+// started_at, logged_at) must be on SAVES_AND_READS or placed below with every
+// day-field line it reads accounted for. Anything the guard cannot place fails.
+const IN_CLASS = [
+  /\b(?:ApiWorkoutSession|WorkoutLog|WorkoutSession|ClientWorkoutAssignment\w*|TrainWorkout|LoggedWorkout|WorkoutRowLike)\b/,
+  /\b(?:useWorkouts|useMyWorkoutAssignments?|workoutApi|listMyAssignments|getMyAssignments?)\b/,
+  /['"`]\/(?:coach\/clients\/[^'"`]*\/)?workouts\b/,
+  /scheduled_for/,
+  RULE_IMPORT,
+  /isWorkoutDoneToday\(/,
+];
+const DAY_FIELD = /\.(?:date|scheduled_for|created_at|completed_at|started_at|logged_at)\b|\b(?:date|scheduled_for|created_at|completed_at|started_at|logged_at)\??:/;
+// A type or schema field declaration (`created_at: string;`), not a read.
+const TYPE_FIELD = /^\s*(?:readonly\s+)?(?:date|scheduled_for|created_at|completed_at|started_at|logged_at)\??:\s*[\w\s|'"<>[\].]+[;,]?\s*(?:\/\/.*|\/\*.*)?$/;
+
+// In-class files that are not day readers: every day-field line that is not a
+// type field must contain one of its listed snippets.
+const PLACED: Record<string, { why: string; lines: string[] }> = {
+  'src/api/programsApi.ts': { why: 'types and request shapes only', lines: [] },
+  'src/api/romanAdjustApi.ts': { why: 'types and response schemas only', lines: ['scheduled_for: z.string()', 'created_at: z.string()'] },
+  'src/api/workoutBuilderApi.ts': { why: 'types and request shapes only', lines: [] },
+  'src/screens/coach/client-detail/types.ts': { why: 'types only', lines: [] },
+  'src/utils/workout/workoutDay.ts': { why: 'the rule itself', lines: ['workoutDay(row: { date?', 'row.date', '{ scheduled_for?: string | null } | string', 'row?.scheduled_for'] },
+  'src/services/api.ts': { why: 'request shapes; workout and assignment dates pass through unread', lines: ['(date: string)', 'created_at?: string }', 'date?: string'] },
+  'src/api/coachAiExecutionApi.ts': { why: 'AI action rows ordered by when they were made, not a workout day', lines: ['created_at: now', 'a.created_at < b.created_at'] },
+  'src/db/workoutDb.ts': { why: 'on-device exercise volume; getDailyVolumeBreakdown has no caller (checked below)', lines: ['Array<{ date: string; volume: number }>', 'date: r.day'] },
+  'src/screens/client/WorkoutAssignmentDetailScreen.tsx': { why: 'completed_at read only as done or not done', lines: ['!!data.completed_at'] },
+  'src/screens/client/home/RingsHomeScreen.tsx': { why: "today's date line and a style name; ring counts come from homeRings.ts", lines: ['homeDateLine(new Date())', 'date: { marginBottom'] },
+  'src/screens/client/progress/ProgressV2.tsx': { why: 'weigh-in days and bests already dated by progressV2.ts', lines: ['a.date.localeCompare(b.date)', 'l.date !== today', "date: today, weight: lbs", 'P.monthDay(logs[0].date)', 'short(best.date)', 'short(l.date)'] },
+};
+
+// fr917DayDiscovery.test.ts writes fr917DayProbe* files for one child run of
+// this guard (FR917_DAY_PROBE=1); any other run of the guard skips them.
+const PROBE = /^fr917DayProbe\w*\.ts$/;
 
 function productFiles(dir: string): string[] {
   return fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true }).flatMap((entry) => {
     const rel = `${dir}/${entry.name}`;
     if (entry.isDirectory()) return entry.name === '__tests__' ? [] : productFiles(rel);
+    if (PROBE.test(entry.name) && process.env.FR917_DAY_PROBE !== '1') return [];
     return /\.(ts|tsx)$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name) ? [rel] : [];
   });
 }
 
-it('every product file that reads scheduled_for or the day rule is on the list', () => {
+const dayLines = (source: string) => source.split('\n').filter((line) => DAY_FIELD.test(line) && !TYPE_FIELD.test(line));
+
+it('every product file in the workout and assignment class that reads a day is listed or placed', () => {
   const listed = new Set(SAVES_AND_READS.map(([file]) => file));
-  const unlisted = productFiles('src').filter((file) => {
-    if (listed.has(file) || TYPES_ONLY.has(file)) return false;
+  const unplaced = productFiles('src').filter((file) => {
+    if (listed.has(file)) return false;
     const source = read(file);
-    return /scheduled_for/.test(source) || RULE_IMPORT.test(source) || /isWorkoutDoneToday\(/.test(source);
+    if (!IN_CLASS.some((pattern) => pattern.test(source))) return false;
+    const reads = dayLines(source);
+    if (!reads.length) return false;
+    const placed = PLACED[file];
+    return !placed || reads.some((line) => !placed.lines.some((snippet) => line.includes(snippet)));
   });
-  expect(unlisted).toEqual([]);
+  expect(unplaced).toEqual([]);
+});
+
+it.each(Object.entries(PLACED))('%s stays placed', (file, { lines }) => {
+  const source = read(file);
+  lines.forEach((snippet) => expect(source).toContain(snippet));
+});
+
+it('the unplaced on-device volume reader still has no caller', () => {
+  const callers = productFiles('src').filter((file) => file !== 'src/db/workoutDb.ts' && /getDailyVolumeBreakdown/.test(read(file)));
+  expect(callers).toEqual([]);
 });
