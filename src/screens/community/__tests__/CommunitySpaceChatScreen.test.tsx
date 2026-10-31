@@ -2029,3 +2029,49 @@ describe('FR-909 (agent 189): words that leave stay gone; a refused reply never 
     expect(within(r.getByLabelText('Replying to Sam Okafor')).getByText('body m1')).toBeTruthy();
   });
 });
+
+describe('LO-909R2 B1 (m#909 round 2, Claude Opus lens): the oldest loaded message, deleted by its author, keeps its words in a reply', () => {
+  type R = Awaited<ReturnType<typeof open>>;
+  const realOS = Platform.OS;
+  const setOS = (os: string) => Object.defineProperty(Platform, 'OS', { configurable: true, get: () => os });
+  const reply = async (r: R, id: string) => {
+    await fireEvent(r.getByTestId(`space-chat-row-${id}`), 'longPress');
+    await fireEvent.press(r.getByTestId('space-chat-sheet-reply'));
+  };
+  const disk = () => mockDisk.get('space_outbox_me-1') ?? '[]';
+  // The coach deletes their own first message (an author's delete: the next read leaves the row out).
+  const coachDeletesM1 = async () => {
+    page = page.filter((m) => (m as { id: string }).id !== 'm1');
+    await act(async () => { await client.invalidateQueries({ queryKey: ['community', 'space-chat'] }); });
+  };
+  afterEach(() => setOS(realOS));
+
+  it('B-TEST: the coach deletes the first message of a small space while a member answers it; reply mode ends and its words leave', async () => {
+    setOS('android');
+    const r = await open();
+    await r.findByTestId('space-chat-row-m1');
+    await reply(r, 'm1');
+    expect(r.getByLabelText('Replying to Sam Okafor')).toBeTruthy();
+    await coachDeletesM1();
+    await waitFor(() => expect(r.queryByTestId('space-chat-row-m1')).toBeNull());
+    expect(r.queryByLabelText('Replying to Sam Okafor')).toBeNull();
+    expect(r.queryByText('body m1', { includeHiddenElements: true })).toBeNull();
+  });
+
+  it('B-TEST: a reply waiting offline to that first message keeps none of its words, on screen or on the device, once a read leaves it out', async () => {
+    setOS('android');
+    mockNet.isOnline = false;
+    mockNet.reachable = false;
+    const r = await open();
+    await r.findByTestId('space-chat-row-m1');
+    await reply(r, 'm1');
+    await fireEvent.changeText(r.getByTestId('space-chat-composer-field'), 'Queued reply');
+    await fireEvent.press(r.getByTestId('space-chat-composer-send'));
+    await waitFor(() => expect(disk()).toContain('body m1'));
+    await coachDeletesM1();
+    await waitFor(() => expect(r.queryByTestId('space-chat-row-m1')).toBeNull());
+    await waitFor(() => expect(disk()).not.toContain('body m1'));
+    expect(disk()).toContain('Queued reply');
+    expect(r.queryByText('body m1', { includeHiddenElements: true })).toBeNull();
+  });
+});
