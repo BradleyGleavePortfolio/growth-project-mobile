@@ -5,22 +5,18 @@
  * unread counts) or holds a composer (typed text, voice, photo, reactions) is a row in REGISTRY below, with how it
  * applies a block (both ways), a ban, a removal, a departure and a closed conversation, and the test that proves it.
  *
- * What makes a file a surface (the inventory scan, src/ without tests):
- *   composer  COMPOSER_SIGNS: a composer part (<ComposerInput, <ReplyComposer, <ReactionBar, <VoiceNotesSection,
- *             <VoiceRecordSheet, <VoiceNoteComposer), a member-content send (useSendDm, useCreatePost, useAddComment,
- *             useReactToPost, useVoiceUpload, useVoiceOutbox, useMessageOutbox, communityApi createPost / addComment /
- *             reactToPost / sendDm / openDmThread / postWin, communityWinsApi.postWin, messagingV2Api sendMessage / editMessage, sendReply,
- *             messagesApi.send, coachApi sendClientMessage / sendNudge, communityVoiceApi create / issueUploadUrl /
- *             uploadBytes, communityChallengesApi.addComment, broadcastsApi.create, api.post('/messages')), or a
- *             <TextInput in a community or messaging folder or in a file named for messages, inboxes, chats, threads,
- *             DMs, comments, voice, posts, replies or broadcasts.
- *   list      LIST_SIGNS: a member-content read (usePosts, usePostComments, useDmThreads, useDmMessages,
- *             useCommunityToday, useCommunityBadge, useVoiceFeed, useVoiceCatchUp, useCommunitySearch, useThreadV2,
- *             useCoachInbox, useCoachPostDetail, useCoachFlagged, useClientUnreadCount, useInboxTriage, the matching
- *             communityApi / messagingV2Api / communityVoiceApi / communityChallengesApi / communitySearchApi /
- *             coachCommunityApi reads, messagesApi list / unreadCount, coachApi getClientMessages / getUnreadCounts,
- *             fetchNotifications / fetchUnreadCount, communityApi.getFeed, api.get('/messages' or a client's messages)).
- *
+ * What makes a file a surface (the inventory scan, src/ without tests, read as TypeScript, not as text):
+ *   composer  a composer part drawn (COMPOSER_PARTS: ComposerInput, ReplyComposer, ReactionBar, VoiceNotesSection,
+ *             VoiceRecordSheet, VoiceNoteComposer, ...), a member-content send called or taken (COMPOSER_CALLS, any
+ *             non-read method of a member API in MEMBER_APIS or named like one), a raw POST / PUT / PATCH on
+ *             services/api into a content collection (SEND_PATH), or a TextInput drawn in a MEMBER_PLACE file.
+ *   list      a member-content read called or taken (LIST_CALLS, any read method of a member API, incl. removedRowsApi),
+ *             a raw GET on services/api of a content collection (MEMBER_PATH), or a FlatList / SectionList / FlashList
+ *             or useInfiniteQuery in a MEMBER_PLACE file.
+ *   The scan follows bindings, not spellings: an import under another name, a namespace import, a destructured or
+ *   re-assigned method, import() / require() / React.lazy, re-exports and export *, and a local helper or hook that
+ *   holds a kind all carry the kind to the file that uses them (a REGISTRY row that is not a host and an EXEMPT row
+ *   without `passes` stop it). A relative import from a member place that the scan cannot read is named (fail closed).
  * WHEN THIS GOES RED (say which one in your PR):
  *   - "not in the KT-2 registry": you added a composer or a content list. Make it apply the rules (a composer draws
  *     nothing typeable unless useConversationClosed says open, ConversationClosedLine in its place; a list drops a
@@ -28,13 +24,16 @@
  *     filter), then register it in REGISTRY with a proof. If it cannot apply a rule yet, ask the operator for a
  *     KNOWN GAP row. Never add a KNOWN GAP row or an EXEMPT row yourself to make this pass.
  *   - a behavior case failed: a registered surface stopped applying a rule. Apply the rule again; never loosen the case.
- *   - "KNOWN GAP ... now holds": you fixed a known gap. Delete its KNOWN GAP row so the rule is enforced from now on.
+ *   - "KNOWN GAP ... still holds" / "still lacks": a known gap case asserts the leak as it is today. Red means you fixed
+ *     the gap (delete its KNOWN GAP row so the rule is enforced from now on) or broke the harness (fix the harness).
  *   - "stale row": a registered file moved, or no longer reads or sends member content. Update or remove the row.
  * The composers are drawn in memberContentAccess.composers.test.tsx (the same registry rows, by file).
- * Space chat (m#871, m#879, m#887, m#897) is not on main: its composers and lists join REGISTRY when it merges.
+ * Space chat (m#871, m#879, m#887, m#897) is not on main: when it merges the scan names its screen and its hook
+ *   (screens/community/CommunitySpaceChatScreen.tsx, components/community/space-chat/useSpaceChat.ts) until they are rows.
  */
 import fs from 'fs';
 import path from 'path';
+import ts from 'typescript';
 import React from 'react';
 import { render, act, waitFor } from '@testing-library/react-native';
 import { QueryClient, type InfiniteData } from '@tanstack/react-query';
@@ -92,7 +91,7 @@ type Proof =
   /** STATE_CASES below: lists kept in screen state, drawn, or (where a draw needs the whole navigator) read in the source. */
   | { by: 'state'; id: string };
 
-/** where = file:function that misses the rule; shows = a CACHE_CASES id (run as it.failing) or a source check. */
+/** where = file:function that misses the rule; shows = a CACHE_CASES id (asserted still holding the rows) or a source check. */
 type KnownGap = { where: string; rule: string; why: string; shows: { cache: string } | { lacks: RegExp } };
 /** file under src/; what it shows or sends; how it applies a block (mine / theirs), a ban, a removal, a departure, a
  * closed conversation and the cache after a block; the proof. */
@@ -233,8 +232,21 @@ const REGISTRY: Surface[] = [
   { file: 'screens/client/CommunityScreen.tsx', kind: 'list', what: 'the wins feed (other members\' wins)', how: 'kept in screen state; no block filter',
     proof: gap('screens/client/CommunityScreen.tsx:CommunityScreen', 'block (cache after a block), ban', 'the wins feed has no block-store filter, so a person I just blocked keeps their wins on screen until the next read', { lacks: /useBlockedUsersStore|blockedIds/ }) },
   { file: 'screens/notifications/NotificationCenterScreen.tsx', kind: 'list', what: 'notification rows (titles and bodies, which can quote a message)',
-    how: 'kept in screen state; rows carry no person id the phone can match to a block',
-    proof: gap('screens/notifications/NotificationCenterScreen.tsx:NotificationCenterScreen', 'block (cache after a block)', 'a notice from a person I just blocked stays until the next read; the phone cannot match it to the block', { lacks: /useBlockedUsersStore|blockedIds/ }) },
+    how: 'm#898 (95e98a74): a change in the block store clears the loaded rows and reads the list again, so a notice from a person I just blocked leaves; the server read (backend #1171) leaves out their rows',
+    proof: { by: 'suite', file: '__tests__/notificationCenter.blockReturn.test.tsx', titles: [
+      'does not retain the blocked coach words when the existing centre regains focus; unrelated rows stay',
+    ] } },
+  // FR-911: named by the fail-closed scan (a send through services/messageOutbox, a coach inbox drawn in a FlatList).
+  { file: 'components/share/ShareSheet.tsx', kind: 'composer', what: '"Send to {coach}": a share card sent into the coaching chat (sendCardViaOutbox)',
+    how: 'none before the send: a refused card leaves the outbox and Send goes away (shareB156), but nothing asks whether the chat is closed first',
+    proof: gap('components/share/ShareSheet.tsx:ShareSheet', 'block (both ways), closed conversation',
+      'Send to {coach} is offered while my coach blocked me or I blocked my coach; nothing on the phone asks useConversationClosed or the coaching row before the card is sent (the server refuses it)',
+      { lacks: /useConversationClosed|useCoachingRow|useCoachChatClosed|useBlockedUsersStore/ }) },
+  { file: 'screens/coach/command-center/InboxScreen.tsx', kind: 'list', what: 'the command center inbox: client threads with the last message preview and unread (commandCenterApi.getInbox)',
+    how: 'kept in screen state, read on open and on a pull; no block-store filter',
+    proof: gap('screens/coach/command-center/InboxScreen.tsx:InboxScreen', 'block (rows and previews after a block)',
+      'a client I just blocked keeps their row and last message preview until the next read; nothing filters my blocks or closed_client_ids',
+      { lacks: /useBlockedUsersStore|blockedIds|closed_client_ids/ }) },
   { file: 'screens/coach/cross-pillar/CrossPillarMessagesScreen.tsx', kind: 'list', what: 'the coach\'s total unread messages', how: 'read once when opened',
     proof: gap('screens/coach/cross-pillar/CrossPillarMessagesScreen.tsx:load', 'block (count after a block)', 'the total is read once on open and not again on a block, so a just-blocked client\'s unread stays counted until a pull to refresh', { lacks: /useBlockedUsersStore|useFocusEffect|isFocused/ }) },
   { file: 'screens/coach/home-v11/useCoachHomeV11.ts', kind: 'list', what: 'coach home unread counts',
@@ -244,22 +256,23 @@ const REGISTRY: Surface[] = [
 ];
 
 /** Files that match a sign but are not a surface: plumbing the registered surfaces call, or no member words. */
-const EXEMPT: { file: string; kinds: Kind[]; why: string }[] = [
-  { file: 'services/api.ts', kinds: ['composer', 'list'], why: 'wire wrappers; the registered screens call them' },
-  { file: 'api/messagesApi.ts', kinds: ['composer'], why: 'wire wrapper (sendReply); block / unblock report to blockSync' },
-  { file: 'api/messagingV2Api.ts', kinds: ['list'], why: 'wire wrapper and schema' },
-  { file: 'api/coachCommunityApi.ts', kinds: ['list'], why: 'wire wrapper' },
-  { file: 'services/messageOutbox.ts', kinds: ['composer'], why: 'sends what a registered chat queued; it draws nothing' },
-  { file: 'services/notificationsApi.ts', kinds: ['list'], why: 'wire wrapper' },
-  { file: 'hooks/useCommunity.ts', kinds: ['composer', 'list'], why: 'query and send hooks the registered community screens call' },
-  { file: 'hooks/useMessageOutbox.ts', kinds: ['composer'], why: 'queue hook of the registered coaching chats' },
-  { file: 'hooks/useThreadV2.ts', kinds: ['composer', 'list'], why: 'thread hook of the registered coaching chats' },
-  { file: 'hooks/useVoiceOutbox.ts', kinds: ['composer'], why: 'voice queue hook of the registered voice composer' },
-  { file: 'hooks/useVoiceUpload.ts', kinds: ['composer'], why: 'voice upload hook of the registered voice composer' },
-  { file: 'hooks/useVoiceFeed.ts', kinds: ['list'], why: 'voice read hooks of the registered voice lists' },
-  { file: 'hooks/useCommunitySearch.ts', kinds: ['list'], why: 'search hook of the registered search screen' },
-  { file: 'hooks/useCoachCommunity.ts', kinds: ['list'], why: 'coach community read hooks of the registered coach screens' },
-  { file: 'hooks/useInboxTriage.ts', kinds: ['list'], why: 'triage hook of the registered coach community inbox' },
+/** passes: plumbing whose exports carry member content on to their callers, so the files that use them are named. A
+ * row without it (and any REGISTRY row but a `host` part) stops that: its users are not named for it. */
+const EXEMPT: { file: string; kinds: Kind[]; why: string; passes?: true }[] = [
+  { file: 'services/api.ts', kinds: ['composer', 'list'], why: 'wire wrappers; the registered screens call them', passes: true },
+  { file: 'api/messagesApi.ts', kinds: ['composer'], why: 'wire wrapper (sendReply); block / unblock report to blockSync', passes: true },
+  { file: 'api/messagingV2Api.ts', kinds: ['list'], why: 'wire wrapper and schema', passes: true },
+  { file: 'api/coachCommunityApi.ts', kinds: ['list'], why: 'wire wrapper', passes: true },
+  { file: 'services/messageOutbox.ts', kinds: ['composer'], why: 'sends what a registered chat queued; it draws nothing', passes: true },
+  { file: 'hooks/useCommunity.ts', kinds: ['composer', 'list'], why: 'query and send hooks the registered community screens call', passes: true },
+  { file: 'hooks/useMessageOutbox.ts', kinds: ['composer'], why: 'queue hook of the registered coaching chats', passes: true },
+  { file: 'hooks/useThreadV2.ts', kinds: ['composer', 'list'], why: 'thread hook of the registered coaching chats', passes: true },
+  { file: 'hooks/useVoiceOutbox.ts', kinds: ['composer'], why: 'voice queue hook of the registered voice composer', passes: true },
+  { file: 'hooks/useVoiceUpload.ts', kinds: ['composer'], why: 'voice upload hook of the registered voice composer', passes: true },
+  { file: 'hooks/useVoiceFeed.ts', kinds: ['list'], why: 'voice read hooks of the registered voice lists', passes: true },
+  { file: 'hooks/useCommunitySearch.ts', kinds: ['list'], why: 'search hook of the registered search screen', passes: true },
+  { file: 'hooks/useCoachCommunity.ts', kinds: ['list'], why: 'coach community read hooks of the registered coach screens', passes: true },
+  { file: 'hooks/useInboxTriage.ts', kinds: ['list'], why: 'triage hook of the registered coach community inbox', passes: true },
   { file: 'hooks/useCoachChatClosed.ts', kinds: ['list'], why: 'the closed gate itself (reads only the closed header)' },
   { file: 'hooks/useNotifications.ts', kinds: ['list'], why: 'first payment notice only (money, no member words)' },
   { file: 'components/messaging/ConversationClosed.tsx', kinds: ['list'], why: 'the closed gate itself (reads the coaching row)' },
@@ -270,46 +283,404 @@ const EXEMPT: { file: string; kinds: Kind[]; why: string }[] = [
   { file: 'screens/coach/MessagesScreen.tsx', kinds: ['composer'], why: 'its only field searches clients' },
   { file: 'screens/coach/CoachBookingInboxScreen.tsx', kinds: ['composer'], why: 'a call link for a booking, not a chat' },
   { file: 'screens/coach/broadcasts/BroadcastComposerScreen.tsx', kinds: ['composer'], why: 'one to many: the server picks who gets it (the backend half of KT-2); the coach never types into a member\'s conversation here' },
-  { file: 'screens/community/CoachCommunityCohortsScreen.tsx', kinds: ['composer'], why: 'coach admin: a space name' },
-  { file: 'screens/community/CoachCommunityCohortDetailScreen.tsx', kinds: ['composer'], why: 'coach admin: invites and members' },
-  { file: 'screens/community/CoachCommunityEventsScreen.tsx', kinds: ['composer'], why: 'coach admin: event details' },
+  { file: 'screens/community/CoachCommunityCohortsScreen.tsx', kinds: ['composer', 'list'], why: 'coach admin: a space name; the list of the coach\'s own spaces' },
+  { file: 'screens/community/CoachCommunityCohortDetailScreen.tsx', kinds: ['composer', 'list'], why: 'coach admin: invites and the roster the coach needs to remove a member' },
+  { file: 'screens/community/CoachCommunityEventsScreen.tsx', kinds: ['composer', 'list'], why: 'coach admin: event details; the coach\'s own events' },
   { file: 'screens/settings/RomanChatsConfirmSheet.tsx', kinds: ['composer'], why: 'Roman (the assistant), not a member' },
   { file: 'screens/community/CoachCommunityModerationScreen.tsx', kinds: ['list'], why: 'moderation: the coach must see reported words to remove them (the removal path itself)' },
   { file: 'screens/coach/CommunityReportsEntry.tsx', kinds: ['list'], why: 'moderation: the count of reports waiting' },
+  // FR-911: the wire modules the scan now reads (a raw /community or /messages call); their callers are named.
+  ...([
+    ['api/communityApi.ts', ['composer', 'list']], ['api/communityRemovedRows.ts', ['list']], ['api/communityChallengesApi.ts', ['composer', 'list']],
+    ['api/communityVoiceApi.ts', ['composer', 'list']], ['api/communitySearchApi.ts', ['list']], ['api/communityWinsApi.ts', ['composer', 'list']],
+    ['api/communityAiTriageApi.ts', ['list']], ['api/communityEventsApi.ts', ['list']], ['api/communityClassroomApi.ts', ['list']],
+    ['api/communitySafetyApi.ts', ['list']], ['api/communityWearablePromptsApi.ts', ['list']],
+  ] as [string, Kind[]][]).map(([file, kinds]) => ({ file, kinds, why: 'wire wrapper: the registered screens call it', passes: true as const })),
+  { file: 'screens/coach/broadcasts/CoachBroadcastsScreen.tsx', kinds: ['list'], why: 'the coach\'s own broadcasts (one to many; the server picks who gets them)' },
+  { file: 'screens/community/CommunityChallengesScreen.tsx', kinds: ['list'], why: 'coach-made challenges of a space; the notes are the registered challenge screen' },
+  { file: 'screens/community/CommunityClassroomScreen.tsx', kinds: ['list'], why: 'coach-made lessons' },
+  { file: 'screens/community/CommunityWearablePromptsScreen.tsx', kinds: ['list'], why: 'coach-only prompts the server drafts from a client\'s own opted-in wearable insights' },
+  { file: 'screens/roman/RomanChatScreen.tsx', kinds: ['list'], why: 'Roman (the assistant), not a member' },
 ];
 
 // ─── The inventory scan ──────────────────────────────────────────────────────────────────────────────────────────
+//
+// FR-911 (LO-911 B2, LS-911 B1): the scan reads each file's syntax (the TypeScript parser), not its spelling. A name is
+// followed to where it was declared: through `as` aliases, default exports, re-exports (`export { A as B } from`,
+// `export *`, barrels), namespace imports, destructuring (`const { sendDm } = communityApi`), import(), require() and
+// lazy(). A file is named by what it uses there:
+//   - a sign below, by its declared name (so `usePosts as useFeed` and `usePosts\n(` are usePosts);
+//   - a raw call on services/api to a member path (/community, /messages, /coach/messages, a client's messages): a GET
+//     is a list, any other verb a composer;
+//   - any method of an API object whose own body makes such a call (spaceChatApi.list), unless NOT_CONTENT below says
+//     why that one method carries no member words;
+//   - any function, hook or component exported from another file whose own body (followed the same way) holds one of
+//     these: a shared wrapper, a new hook in hooks/useCommunity.ts, useSpaceChat. A file with its own REGISTRY row
+//     (proof other than `host`) stops this: its row proves it, so the screens that draw it need none;
+//   - inside MEMBER_PLACE: a <TextInput (composer), a <FlatList, <SectionList, <FlashList or useInfiniteQuery( (list);
+//   - fail closed: a name imported from a member place the scan cannot read, an import() or require() it cannot follow,
+//     or an API object it cannot find but named for member content, counts as both (or by its verb).
 
-const COMPOSER_SIGNS: RegExp[] = [
-  /<(ComposerInput|ReplyComposer|ReactionBar|VoiceNotesSection|VoiceRecordSheet|VoiceNoteComposer)\b/,
-  /\b(useSendDm|useCreatePost|useAddComment|useReactToPost|useVoiceUpload|useVoiceOutbox|useMessageOutbox)\(/,
-  /\bcommunityApi\.(createPost|addComment|reactToPost|sendDm|openDmThread|postWin)\(/,
-  /\bmessagingV2Api\.(sendMessage|editMessage)\(/,
-  /\bmessages(Moderation)?Api\.(sendReply|send)\(/,
-  /\bcoachApi\.(sendClientMessage|sendNudge)\(/,
-  /\bcommunityVoiceApi\.(create|issueUploadUrl|uploadBytes)\(/,
-  /\bcommunityChallengesApi\.addComment\(/,
-  /\bcommunityWinsApi\.postWin\(/,
-  /\bbroadcastsApi\.create\(/,
-  /\bapi\.post\(\s*[`'"]\/messages/,
-];
-/** A plain text box counts as a composer where member words live. */
+const COMPOSER_PARTS = new Set(['ComposerInput', 'ReplyComposer', 'ReactionBar', 'VoiceNotesSection', 'VoiceRecordSheet', 'VoiceNoteComposer']);
+const COMPOSER_CALLS = new Set([
+  'useSendDm', 'useCreatePost', 'useAddComment', 'useReactToPost', 'useVoiceUpload', 'useVoiceOutbox', 'useMessageOutbox',
+  ...['createPost', 'addComment', 'reactToPost', 'sendDm', 'openDmThread', 'postWin'].map((m) => `communityApi.${m}`),
+  'messagingV2Api.sendMessage', 'messagingV2Api.editMessage',
+  ...['messagesApi', 'messagesModerationApi'].flatMap((o) => [`${o}.sendReply`, `${o}.send`]),
+  'coachApi.sendClientMessage', 'coachApi.sendNudge',
+  'communityVoiceApi.create', 'communityVoiceApi.issueUploadUrl', 'communityVoiceApi.uploadBytes',
+  'communityChallengesApi.addComment', 'communityWinsApi.postWin', 'broadcastsApi.create',
+]);
+const LIST_CALLS = new Set([
+  'usePosts', 'usePostComments', 'useDmThreads', 'useDmMessages', 'useCommunityToday', 'useCommunityBadge', 'useVoiceFeed',
+  'useVoiceCatchUp', 'useCommunitySearch', 'useThreadV2', 'useCoachInbox', 'useCoachPostDetail', 'useCoachFlagged',
+  'useClientUnreadCount', 'useInboxTriage',
+  ...['listPosts', 'getPost', 'listComments', 'listDmThreads', 'listDmMessages', 'getToday', 'getFeed'].map((m) => `communityApi.${m}`),
+  ...['listPosts', 'getPost', 'listComments'].map((m) => `removedRowsApi.${m}`),
+  'messagingV2Api.getCoachInbox', 'messagingV2Api.getClientInbox', 'messagingV2Api.listPins',
+  'communityVoiceApi.listFeed', 'communityVoiceApi.getOne', 'communityChallengesApi.listComments',
+  'communityChallengesApi.getLeaderboard', 'communitySearchApi.search', 'communityWinsApi.getFeed',
+  'coachCommunityApi.getInbox', 'coachCommunityApi.getCoachPostDetail', 'coachCommunityApi.getFlagged',
+  'messagesApi.list', 'messagesApi.unreadCount', 'coachApi.getClientMessages', 'coachApi.getUnreadCounts',
+  'fetchNotifications', 'fetchUnreadCount',
+]);
+/** The API objects of the signs above: any method of these counts (by its verb) unless NOT_CONTENT names it. */
+const MEMBER_APIS = new Set([...COMPOSER_CALLS, ...LIST_CALLS].filter((s) => s.includes('.')).map((s) => s.split('.')[0]));
+/** An API object the scan cannot find (a file not read, a snippet) counts when its name speaks of member content. */
+const MEMBER_API_NAME = /^\w*(community|space|chat|dm|message|voice|post|comment|inbox|thread|reply|removedRows|wins|broadcast)\w*Api$/i;
+/** A read by its verb; anything else on a member API is a send. */
+const READ_VERB = /^(get|list|fetch|search|load|read|peek|find|count|unread|poll)/i;
+/** A raw member-content path on services/api: the first argument's text. */
+const MEMBER_PATH = /^\/(community|messages|coach\/messages|coach\/clients\/\$\{[^}]+\}\/messages)(\/|\?|$|\$\{)/;
+const WIRE_VERBS = new Set(['get', 'post', 'put', 'patch', 'delete']);
+/** A send of member words: a POST, PUT or PATCH into a collection of them (not a mark, a block, a report or a delete). */
+const SEND_PATH = /\/(posts|comments|messages|dms?|threads|voice-notes|voice|reactions|chat|wins|replies|notes)\/?(\?.*)?$/;
+/** A plain text box counts as a composer, and a list part as a list, where member words live. */
 const MEMBER_PLACE = /(^|\/)(community|messaging)\/|\/[^/]*(Messag|Inbox|Chat|Thread|Dm|Comment|Voice|Post|Reply|Broadcast)[^/]*$/;
-const LIST_SIGNS: RegExp[] = [
-  /\b(usePosts|usePostComments|useDmThreads|useDmMessages|useCommunityToday|useCommunityBadge|useVoiceFeed|useVoiceCatchUp|useCommunitySearch|useThreadV2|useCoachInbox|useCoachPostDetail|useCoachFlagged|useClientUnreadCount|useInboxTriage)\(/,
-  /\bcommunityApi\.(listPosts|getPost|listComments|listDmThreads|listDmMessages|getToday|getFeed)\(/,
-  /\bmessagingV2Api\.(getCoachInbox|getClientInbox|listPins)\(/,
-  /\bcommunityVoiceApi\.(listFeed|getOne)\(/,
-  /\bcommunityChallengesApi\.(listComments|getLeaderboard)\(/,
-  /\bcommunitySearchApi\.search\(/,
-  /\bcommunityWinsApi\.getFeed\(/,
-  /\bcoachCommunityApi\.(getInbox|getCoachPostDetail|getFlagged)\(/,
-  /\bmessagesApi\.(list|unreadCount)\(/,
-  /\bcoachApi\.(getClientMessages|getUnreadCounts)\(/,
-  /\b(fetchNotifications|fetchUnreadCount)\(/,
-  /\bapi\.get[^(]*\(\s*[`'"]\/(coach\/)?messages/,
-  /\bapi\.get[^(]*\(\s*`\/coach\/clients\/\$\{[^}]+\}\/messages/,
-];
+const LIST_PARTS = new Set(['FlatList', 'SectionList', 'FlashList']);
+
+/**
+ * Methods of a member API (or exports of a member module) that carry no member words, so using them names nothing.
+ * Reviewed rows only, each with why: `${object}.${method}` (or `${module}:${export}`) -> why.
+ */
+const NOT_CONTENT: Record<string, string> = {
+  'communityApi.getMe': 'my own workspace id and unread totals; the totals are the Community badge rows (useCommunityBadge, cache case badge-community-me)',
+  'services/messageOutbox.ts:sendOutboxBeforeSignOut': 'sends at sign-out what a registered chat already queued; nothing is typed or drawn',
+  'hooks/useMessageOutbox.ts:useMessageOutboxDrain': 'sends in the background what a registered chat already queued; nothing is typed or drawn where it runs',
+  communityEventsApi: 'coach-made events and my own RSVP (v2-3 events): no member\'s words or rows',
+  communityClassroomApi: 'coach-made lessons (v3-2 classroom): no member\'s words or rows',
+  communityWearablePromptsApi: 'coach-only prompts the server drafts from a client\'s own opted-in wearable insights: no other member\'s words',
+  communitySafetyApi: 'my own safety notices and the people I blocked (that list exists to unblock them); a report or block goes to the safety team, never to the person',
+  'communityChallengesApi.listChallenges': 'coach-made challenges of a space (title, goal); the notes and leaderboard are the registered challenge screen',
+  'coachCommunityApi.getDashboard': 'the coach\'s own spaces and totals, no row, name or words of a member; the rows behind them are the registered coach community inbox',
+  'coachCommunityApi.getCohorts': 'coach admin: the coach\'s own spaces (names)',
+  'coachCommunityApi.getCohortDetail': 'coach admin: a space and its roster, which the coach needs to invite or remove a member',
+  'coachCommunityApi.getCoachEmptyStates': 'which empty states to draw (flags only)',
+};
+
+const notContent = (o: Origin) =>
+  !!(NOT_CONTENT[o.name] || NOT_CONTENT[o.name.split('.')[0]] || (o.mod && (NOT_CONTENT[`${o.mod}:${o.name}`] || NOT_CONTENT[`${o.mod}:${o.name.split('.')[0]}`])));
+type Kinds = { composer: boolean; list: boolean };
+const NONE = (): Kinds => ({ composer: false, list: false });
+const add = (a: Kinds, b: Kinds) => { a.composer ||= b.composer; a.list ||= b.list; return a; };
+/** mod: the src file that declares it (null: not read; `pkg:` a package); name: its declared name (dotted for a method). */
+type Origin = { mod: string | null; name: string; spec?: string };
+type Binding = { from: string; name: string } | { ns: string } | { obj: string; prop: string } | { lazy: string };
+type ModInfo = {
+  sf: ts.SourceFile;
+  bindings: Map<string, Binding>;
+  /** exported name -> local name, or a re-export */
+  exports: Map<string, { local: string } | { from: string; name: string }>;
+  stars: string[];
+  /** top-level declarations: local name -> node (an object literal's methods as `name.method`) */
+  decls: Map<string, ts.Node>;
+  /** every name declared anywhere in the file (parameters, locals): such a name is never an unread member API */
+  declared: Set<string>;
+};
+
+const parsed = new Map<string, { text: string; info: ModInfo }>();
+function modInfo(file: string, text: string): ModInfo {
+  const hit = parsed.get(file);
+  if (hit && hit.text === text) return hit.info;
+  const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, file.endsWith('.ts') ? ts.ScriptKind.TS : ts.ScriptKind.TSX);
+  const info: ModInfo = { sf, bindings: new Map(), exports: new Map(), stars: [], decls: new Map(), declared: new Set() };
+  const specOf = (n: ts.Node | undefined): string | null => {
+    let e = n;
+    while (e && (ts.isAwaitExpression(e) || ts.isParenthesizedExpression(e))) e = e.expression;
+    if (e && ts.isCallExpression(e) && e.arguments.length && ts.isStringLiteralLike(e.arguments[0]) &&
+      (e.expression.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(e.expression) && e.expression.text === 'require'))) {
+      return e.arguments[0].text;
+    }
+    return null;
+  };
+  const bindPattern = (p: ts.BindingName, target: (prop: string) => Binding) => {
+    if (ts.isIdentifier(p)) return;
+    if (ts.isObjectBindingPattern(p)) {
+      for (const el of p.elements) {
+        const prop = el.propertyName && ts.isIdentifier(el.propertyName) ? el.propertyName.text : ts.isIdentifier(el.name) ? el.name.text : null;
+        if (prop && ts.isIdentifier(el.name)) info.bindings.set(el.name.text, target(prop));
+      }
+    }
+  };
+  const visit = (n: ts.Node) => {
+    if ((ts.isParameter(n) || ts.isVariableDeclaration(n) || ts.isBindingElement(n)) && ts.isIdentifier(n.name)) info.declared.add(n.name.text);
+    if (ts.isImportDeclaration(n) && ts.isStringLiteral(n.moduleSpecifier) && n.importClause && !n.importClause.isTypeOnly) {
+      const from = n.moduleSpecifier.text;
+      const c = n.importClause;
+      if (c.name) info.bindings.set(c.name.text, { from, name: 'default' });
+      if (c.namedBindings && ts.isNamespaceImport(c.namedBindings)) info.bindings.set(c.namedBindings.name.text, { ns: from });
+      if (c.namedBindings && ts.isNamedImports(c.namedBindings)) {
+        for (const el of c.namedBindings.elements) info.bindings.set(el.name.text, { from, name: (el.propertyName ?? el.name).text });
+      }
+    }
+    if (ts.isExportDeclaration(n) && !n.isTypeOnly) {
+      const from = n.moduleSpecifier && ts.isStringLiteral(n.moduleSpecifier) ? n.moduleSpecifier.text : null;
+      if (!n.exportClause && from) info.stars.push(from);
+      if (n.exportClause && ts.isNamedExports(n.exportClause)) {
+        for (const el of n.exportClause.elements) {
+          const inner = (el.propertyName ?? el.name).text;
+          info.exports.set(el.name.text, from ? { from, name: inner } : { local: inner });
+        }
+      }
+      if (n.exportClause && ts.isNamespaceExport(n.exportClause) && from) info.bindings.set(n.exportClause.name.text, { ns: from });
+    }
+    if (ts.isExportAssignment(n)) {
+      if (ts.isIdentifier(n.expression)) info.exports.set('default', { local: n.expression.text });
+      else { info.exports.set('default', { local: 'default' }); info.decls.set('default', n.expression); }
+    }
+    const exported = ts.canHaveModifiers(n) && (ts.getModifiers(n) ?? []).some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
+    const isDefault = ts.canHaveModifiers(n) && (ts.getModifiers(n) ?? []).some((m) => m.kind === ts.SyntaxKind.DefaultKeyword);
+    if ((ts.isFunctionDeclaration(n) || ts.isClassDeclaration(n)) && n.parent === sf) {
+      const local = n.name?.text ?? 'default';
+      info.decls.set(local, n);
+      if (exported) info.exports.set(isDefault ? 'default' : local, { local });
+    }
+    if (ts.isVariableDeclaration(n)) {
+      const top = n.parent?.parent?.parent === sf;
+      const spec = specOf(n.initializer);
+      const init = n.initializer;
+      const propSpec = init && ts.isPropertyAccessExpression(init) ? specOf(init.expression) : null;
+      if (propSpec && init && ts.isPropertyAccessExpression(init) && ts.isIdentifier(n.name)) info.bindings.set(n.name.text, { from: propSpec, name: init.name.text });
+      else if (spec && ts.isIdentifier(n.name)) info.bindings.set(n.name.text, { ns: spec });
+      else if (spec) bindPattern(n.name, (prop) => ({ from: spec, name: prop }));
+      else if (n.initializer && ts.isIdentifier(n.initializer) && !ts.isIdentifier(n.name)) {
+        const obj = n.initializer.text;
+        bindPattern(n.name, (prop) => ({ obj, prop }));
+      } else if (n.initializer && ts.isCallExpression(n.initializer) && /^(React\.)?lazy$/.test(n.initializer.expression.getText(sf)) && ts.isIdentifier(n.name)) {
+        const f = n.initializer.arguments[0];
+        const body = f && (ts.isArrowFunction(f) || ts.isFunctionExpression(f)) ? (ts.isBlock(f.body) ? undefined : f.body) : undefined;
+        const lazySpec = specOf(body);
+        if (lazySpec) info.bindings.set(n.name.text, { lazy: lazySpec });
+      }
+      if (top && ts.isIdentifier(n.name)) {
+        const local = n.name.text;
+        info.decls.set(local, n);
+        let init = n.initializer;
+        while (init && (ts.isAsExpression(init) || ts.isSatisfiesExpression(init) || ts.isParenthesizedExpression(init))) init = init.expression;
+        if (init && ts.isObjectLiteralExpression(init)) {
+          for (const p of init.properties) if (p.name && (ts.isIdentifier(p.name) || ts.isStringLiteral(p.name))) info.decls.set(`${local}.${p.name.text}`, p);
+        }
+        const stmt = n.parent.parent;
+        if (ts.canHaveModifiers(stmt) && (ts.getModifiers(stmt) ?? []).some((m) => m.kind === ts.SyntaxKind.ExportKeyword)) info.exports.set(local, { local });
+      }
+    }
+    // import('m').then(({ usePosts }) => ...) and .then((m) => m.usePosts)
+    if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && n.expression.name.text === 'then') {
+      const spec = specOf(n.expression.expression);
+      const cb = n.arguments[0];
+      if (spec && cb && (ts.isArrowFunction(cb) || ts.isFunctionExpression(cb)) && cb.parameters[0]) {
+        const p = cb.parameters[0].name;
+        if (ts.isIdentifier(p)) info.bindings.set(p.text, { ns: spec });
+        else bindPattern(p, (prop) => ({ from: spec, name: prop }));
+      }
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(sf);
+  parsed.set(file, { text, info });
+  return info;
+}
+
+type ScanCtx = { files: Map<string, string>; memo: Map<string, Kinds>; busy: Set<string> };
+function resolveSpec(ctx: ScanCtx, from: string, spec: string): string | null {
+  if (!spec.startsWith('.')) return `pkg:${spec}`;
+  const base = path.posix.normalize(path.posix.join(path.posix.dirname(from), spec));
+  for (const c of [base, `${base}.ts`, `${base}.tsx`, `${base}/index.ts`, `${base}/index.tsx`]) if (ctx.files.has(c)) return c;
+  return null;
+}
+const infoOf = (ctx: ScanCtx, mod: string) => modInfo(mod, ctx.files.get(mod) as string);
+
+/** Where an exported name of `mod` was declared. */
+function resolveExport(ctx: ScanCtx, mod: string | null, name: string, spec: string, depth = 0): Origin {
+  if (!mod) return { mod: null, name, spec };
+  if (mod.startsWith('pkg:') || depth > 12) return { mod, name };
+  const info = infoOf(ctx, mod);
+  const e = info.exports.get(name);
+  if (e && 'from' in e) return resolveExport(ctx, resolveSpec(ctx, mod, e.from), e.name, e.from, depth + 1);
+  if (e) return resolveLocal(ctx, mod, e.local, depth + 1);
+  for (const s of info.stars) {
+    const m = resolveSpec(ctx, mod, s);
+    if (m && !m.startsWith('pkg:') && (infoOf(ctx, m).exports.has(name) || infoOf(ctx, m).stars.length)) {
+      const o = resolveExport(ctx, m, name, s, depth + 1);
+      if (o.mod !== m || infoOf(ctx, m).decls.has(o.name)) return o;
+    }
+  }
+  return { mod, name };
+}
+/** Where a name used in `mod` was declared (an import followed to its declaration, or this file, or not found). */
+function resolveLocal(ctx: ScanCtx, mod: string, local: string, depth = 0): Origin {
+  const info = infoOf(ctx, mod);
+  const b = info.bindings.get(local);
+  if (b && 'from' in b) return resolveExport(ctx, resolveSpec(ctx, mod, b.from), b.name, b.from, depth + 1);
+  if (b && 'lazy' in b) return resolveExport(ctx, resolveSpec(ctx, mod, b.lazy), 'default', b.lazy, depth + 1);
+  if (b && 'obj' in b) {
+    const o = resolveLocal(ctx, mod, b.obj, depth + 1);
+    return { ...o, name: `${o.name}.${b.prop}` };
+  }
+  if (b && 'ns' in b) return { mod, name: local, spec: b.ns };
+  if (info.decls.has(local)) return { mod, name: local };
+  return { mod: null, name: local };
+}
+
+/** The kinds a declaration's own body holds (followed into what it calls), less the kinds its file's own row proves. */
+function declKinds(ctx: ScanCtx, o: Origin): Kinds {
+  if (!o.mod || o.mod.startsWith('pkg:')) return NONE();
+  const key = `${o.mod}:${o.name}`;
+  if (notContent(o)) return NONE();
+  const memo = ctx.memo.get(key);
+  if (memo) return memo;
+  if (ctx.busy.has(key)) return NONE();
+  const node = infoOf(ctx, o.mod).decls.get(o.name);
+  if (!node) return NONE();
+  ctx.busy.add(key);
+  const k = nodeKinds(ctx, o.mod, node);
+  ctx.busy.delete(key);
+  for (const kind of ['composer', 'list'] as Kind[]) {
+    if (REGISTRY.some((s) => s.file === o.mod && s.kind === kind && s.proof.by !== 'host')) k[kind] = false;
+    if (EXEMPT.some((e) => e.file === o.mod && e.kinds.includes(kind) && !e.passes)) k[kind] = false;
+  }
+  ctx.memo.set(key, k);
+  return k;
+}
+
+/** What a use of `o` (called, drawn, or a method taken) names. */
+function useKinds(ctx: ScanCtx, mod: string, o: Origin, how: 'call' | 'jsx' | 'method', followLocal: boolean): Kinds {
+  const k = NONE();
+  const [obj, method] = o.name.includes('.') ? [o.name.slice(0, o.name.lastIndexOf('.')), o.name.slice(o.name.lastIndexOf('.') + 1)] : [null, null];
+  if (notContent(o)) return k;
+  if (how === 'jsx' && COMPOSER_PARTS.has(o.name)) k.composer = true;
+  if (how !== 'jsx' && COMPOSER_CALLS.has(o.name)) k.composer = true;
+  if (how !== 'jsx' && LIST_CALLS.has(o.name)) k.list = true;
+  if (how === 'jsx' && LIST_PARTS.has(o.name) && MEMBER_PLACE.test(mod)) k.list = true;
+  if (how === 'call' && o.name === 'useInfiniteQuery' && MEMBER_PLACE.test(mod)) k.list = true;
+  // a method of a member API the scan cannot read (no file, or not a method it can find): by its verb (fail closed)
+  const unread = (!o.mod && !infoOf(ctx, mod).declared.has(obj ?? '')) || (!!o.mod && !o.mod.startsWith('pkg:') && !infoOf(ctx, o.mod).decls.has(o.name));
+  if (obj && method && unread && (MEMBER_APIS.has(obj) || MEMBER_API_NAME.test(obj))) {
+    if (READ_VERB.test(method)) k.list = true; else k.composer = true;
+  }
+  if (o.mod && (o.mod !== mod || followLocal)) add(k, declKinds(ctx, o));
+  if (!o.mod && o.spec && o.spec.startsWith('.') && MEMBER_PLACE.test(path.posix.join(path.posix.dirname(mod), o.spec))) {
+    // fail closed: imported from a member place the scan cannot read
+    if (how === 'call' && /^use[A-Z]/.test(o.name)) k.list = true;
+    else add(k, { composer: true, list: true });
+  }
+  return k;
+}
+
+/** The kinds a node holds: everything in it that is called, drawn, sent on the wire, or a member API method taken. */
+function nodeKinds(ctx: ScanCtx, mod: string, root: ts.Node): Kinds {
+  const info = infoOf(ctx, mod);
+  const sf = info.sf;
+  const k = NONE();
+  const followLocal = root !== sf;
+  /** a namespace (import * as, await import(), require(), .then((m) => ...)) or import()/require() call: its spec */
+  const nsSpec = (e: ts.Expression): string | null => {
+    while (ts.isAwaitExpression(e) || ts.isParenthesizedExpression(e) || ts.isNonNullExpression(e)) e = e.expression;
+    if (ts.isIdentifier(e)) { const b = info.bindings.get(e.text); return b && 'ns' in b ? b.ns : null; }
+    if (ts.isCallExpression(e) && e.arguments.length && ts.isStringLiteralLike(e.arguments[0]) &&
+      (e.expression.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(e.expression) && e.expression.text === 'require'))) return e.arguments[0].text;
+    return null;
+  };
+  const origin = (e: ts.Expression): Origin | null => {
+    while (ts.isParenthesizedExpression(e) || ts.isNonNullExpression(e) || ts.isAsExpression(e)) e = e.expression;
+    if (ts.isIdentifier(e)) return resolveLocal(ctx, mod, e.text);
+    if (ts.isPropertyAccessExpression(e)) {
+      const spec = nsSpec(e.expression);
+      if (spec) return resolveExport(ctx, resolveSpec(ctx, mod, spec), e.name.text, spec);
+      const o = origin(e.expression);
+      return o ? { ...o, name: `${o.name}.${e.name.text}` } : null;
+    }
+    return null;
+  };
+  const tagName = (t: ts.JsxTagNameExpression): Origin | null => (ts.isIdentifier(t) || ts.isPropertyAccessExpression(t) ? origin(t as ts.Expression) : null);
+  const visit = (n: ts.Node) => {
+    if (ts.isCallExpression(n)) {
+      if (n.expression.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(n.expression) && n.expression.text === 'require')) {
+        const a = n.arguments[0];
+        if (!a || !ts.isStringLiteralLike(a)) add(k, { composer: true, list: true }); // fail closed: cannot follow
+        else if (!usedAsBinding(n)) {
+          // fail closed: an import() or require() whose use the scan does not follow counts as all its module holds
+          const m = resolveSpec(ctx, mod, a.text);
+          if (m && !m.startsWith('pkg:')) for (const name of infoOf(ctx, m).exports.keys()) add(k, declKinds(ctx, resolveExport(ctx, m, name, a.text)));
+        }
+      } else {
+        const o = origin(n.expression);
+        if (o) add(k, useKinds(ctx, mod, o, 'call', followLocal));
+        // a raw call on services/api to a member path
+        if (ts.isPropertyAccessExpression(n.expression) && WIRE_VERBS.has(n.expression.name.text) && n.arguments[0]) {
+          const api = origin(n.expression.expression);
+          const isApi = api && ((api.mod === 'services/api.ts' && /^(default|api)$/.test(api.name)) || (!api.mod && /^(api|apiClient|http|client)$/.test(api.name)));
+          const a0 = n.arguments[0];
+          const text = ts.isStringLiteralLike(a0) ? a0.text : ts.isTemplateExpression(a0) ? a0.getText(sf).slice(1, -1) : null;
+          if (isApi && text !== null && MEMBER_PATH.test(text)) {
+            const verb = n.expression.name.text;
+            if (verb === 'get') k.list = true;
+            else if (verb !== 'delete' && SEND_PATH.test(text)) k.composer = true;
+          }
+        }
+      }
+    } else if (ts.isPropertyAccessExpression(n) && !(ts.isCallExpression(n.parent) && n.parent.expression === n)) {
+      // a member API method taken without a call (queryFn: communityApi.listPosts)
+      const o = origin(n);
+      if (o && o.name.includes('.')) add(k, useKinds(ctx, mod, o, 'method', followLocal));
+    }
+    if (ts.isIdentifier(n) && isReference(n) && info.bindings.has(n.text)) {
+      // an imported function passed on, not called here (queryFn: fetchInboxTriage): it runs, so it counts
+      const o = resolveLocal(ctx, mod, n.text);
+      if (o.mod !== mod) add(k, useKinds(ctx, mod, o, 'call', followLocal));
+    }
+    if (ts.isJsxOpeningElement(n) || ts.isJsxSelfClosingElement(n)) {
+      const o = tagName(n.tagName);
+      if (o) add(k, useKinds(ctx, mod, o, 'jsx', followLocal));
+      if (o?.name === 'TextInput' && MEMBER_PLACE.test(mod)) k.composer = true;
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(root);
+  return k;
+}
+/** An identifier read as a value, not called or drawn here (those count on their own), not a name being declared. */
+function isReference(n: ts.Identifier): boolean {
+  const p = n.parent;
+  if ((ts.isCallExpression(p) || ts.isNewExpression(p)) && p.expression === n) return false;
+  if (ts.isPropertyAccessExpression(p)) return false; // X.m counts as the method; obj.X is a property name
+  if (ts.isJsxOpeningElement(p) || ts.isJsxSelfClosingElement(p) || ts.isJsxClosingElement(p)) return false;
+  if (ts.isImportSpecifier(p) || ts.isImportClause(p) || ts.isNamespaceImport(p) || ts.isExportSpecifier(p) || ts.isExportAssignment(p)) return false;
+  if ((ts.isVariableDeclaration(p) || ts.isBindingElement(p) || ts.isParameter(p) || ts.isFunctionDeclaration(p) || ts.isPropertyAssignment(p) ||
+    ts.isShorthandPropertyAssignment(p) || ts.isMethodDeclaration(p) || ts.isPropertySignature(p) || ts.isJsxAttribute(p)) && (p as { name?: ts.Node }).name === n) {
+    return ts.isShorthandPropertyAssignment(p); // { fetchInboxTriage } passes the value on
+  }
+  if (ts.isTypeReferenceNode(p) || ts.isTypeQueryNode(p) || ts.isQualifiedName(p)) return false;
+  return true;
+}
+/** import()/require() read as a binding (const x = ..., .then(cb), require(...).x, lazy(() => import(...))). */
+function usedAsBinding(call: ts.CallExpression): boolean {
+  let p: ts.Node = call.parent;
+  while (ts.isAwaitExpression(p) || ts.isParenthesizedExpression(p)) p = p.parent;
+  if (ts.isVariableDeclaration(p) || ts.isPropertyAccessExpression(p)) return true;
+  if (ts.isArrowFunction(p) && ts.isCallExpression(p.parent) && /^(React\.)?lazy$/.test(p.parent.expression.getText())) return true;
+  return false;
+}
 
 function sourceFiles(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
@@ -322,13 +693,23 @@ function sourceFiles(dir: string): string[] {
 const rel = (f: string) => path.relative(SRC, f).split(path.sep).join('/');
 const read = (file: string) => fs.readFileSync(path.join(SRC, file), 'utf8');
 
+function scanCtx(extra: Record<string, string> = {}): ScanCtx {
+  const files = new Map(sourceFiles(SRC).map((f) => [rel(f), fs.readFileSync(f, 'utf8')] as const));
+  for (const [f, t] of Object.entries(extra)) files.set(f, t);
+  return { files, memo: new Map(), busy: new Set() };
+}
+/** What one file holds, read against src/ as it is (`text` stands in for the file, which need not exist). */
+function classify(file: string, text: string, ctx: ScanCtx = scanCtx({ [file]: text })): Kinds {
+  if (ctx.files.get(file) !== text) ctx.files.set(file, text);
+  return nodeKinds(ctx, file, infoOf(ctx, file).sf);
+}
 function scan(): { composer: string[]; list: string[] } {
+  const ctx = scanCtx();
   const out = { composer: [] as string[], list: [] as string[] };
-  for (const f of sourceFiles(SRC)) {
-    const file = rel(f);
-    const text = fs.readFileSync(f, 'utf8');
-    if (COMPOSER_SIGNS.some((r) => r.test(text)) || (MEMBER_PLACE.test(file) && /<TextInput\b/.test(text))) out.composer.push(file);
-    if (LIST_SIGNS.some((r) => r.test(text))) out.list.push(file);
+  for (const [file, text] of ctx.files) {
+    const k = classify(file, text, ctx);
+    if (k.composer) out.composer.push(file);
+    if (k.list) out.list.push(file);
   }
   return out;
 }
@@ -462,6 +843,7 @@ const gapCaches = new Set(REGISTRY.flatMap((s) => (s.proof.by === 'gap' && 'cach
 
 describe('KT-2 lists: a blocked person already in the cache drops out after a block made on another screen', () => {
   beforeEach(() => {
+    mockPost.mockClear();
     mockPost.mockResolvedValue({ data: {} });
     useBlockedUsersStore.setState({ blocked: [] });
   });
@@ -469,11 +851,18 @@ describe('KT-2 lists: a blocked person already in the cache drops out after a bl
   for (const [id, c] of Object.entries(CACHE_CASES)) {
     const gap = gapCaches.has(id);
     const title = gap
-      ? `KNOWN GAP ${id}: still holds a blocked author's rows after a block (when this fails, the gap is fixed: delete its KNOWN GAP row)`
+      ? `KNOWN GAP ${id}: still holds a blocked author's rows after a block (red = the gap is fixed, delete its KNOWN GAP row; or the harness broke)`
       : `${id}: ${c.check === 'dropped' ? 'their rows, previews and unread leave the cache at once' : 'the count is read again at once'}`;
-    (gap ? it.failing : it)(title, async () => {
+    it(title, async () => {
       const qc = new QueryClient();
       await blockFromAnotherScreen(qc, c);
+      // the block reached the server and the one block cache: a gap case that holds rows is the gap, not a harness slip
+      expect(mockPost.mock.calls.map((a) => a[0])).toContainEqual(expect.stringContaining(`/users/${BLOCKED}/block`));
+      if (gap) {
+        expect(holdsBlocked(qc.getQueryData(c.key))).toBe(true);
+        qc.clear();
+        return;
+      }
       if (c.check === 'reread') {
         expect(qc.getQueryState(c.key)?.isInvalidated).toBe(true);
         return;
@@ -526,7 +915,7 @@ describe('KT-2 lists kept in screen state', () => {
   });
 });
 
-describe('KT-2 known gaps shown in the source (when one fails, the gap is fixed: delete its KNOWN GAP row)', () => {
+describe('KT-2 known gaps shown in the source (red = the gap is fixed, delete its KNOWN GAP row)', () => {
   const sourceGaps = REGISTRY.flatMap((s) => (s.proof.by === 'gap' && 'lacks' in s.proof.gap.shows ? [{ s, gap: s.proof.gap }] : []));
   it.each(sourceGaps.map(({ s, gap }) => [`${s.kind} ${gap.where}`, s.file, (gap.shows as { lacks: RegExp }).lacks] as const))(
     'KNOWN GAP %s still lacks the rule',
@@ -537,9 +926,9 @@ describe('KT-2 known gaps shown in the source (when one fails, the gap is fixed:
 });
 
 // ─── LO-911 B2 (B-TEST, review only): forms the inventory scan must read ─────────────────────────────────────────
-// Each form is real code a builder can write today. The scan names a file only by the exact names in COMPOSER_SIGNS
-// and LIST_SIGNS (and a bare <TextInput inside MEMBER_PLACE), so every form below goes through unnamed and the
-// registry tests stay green. The first two are the space chat unit (m#871 to m#897 head 718aa171) as written.
+// Each form is real code a builder can write today. At 05a79ab4 the scan named a file only by exact names, so every
+// form below went through unnamed. FR-911: the scan reads bindings, so each is named. The first two are the space
+// chat unit (m#871 to m#897 head 718aa171) as written.
 describe('LO-911 B2: the inventory scan names every form a member list or composer can take', () => {
   const FORMS: { file: string; kind: Kind; text: string }[] = [
     { file: 'screens/community/CommunitySpaceChatScreen.tsx', kind: 'list',
@@ -557,10 +946,8 @@ describe('LO-911 B2: the inventory scan names every form a member list or compos
     { file: 'components/home/DestructuredSend.tsx', kind: 'composer',
       text: 'const { sendDm } = communityApi;\n<CopilotComposer onSend={(text) => sendDm(ws, thread, text)} />' },
   ];
-  const named = (f: { file: string; kind: Kind; text: string }) =>
-    f.kind === 'list'
-      ? LIST_SIGNS.some((r) => r.test(f.text))
-      : COMPOSER_SIGNS.some((r) => r.test(f.text)) || (MEMBER_PLACE.test(f.file) && /<TextInput\b/.test(f.text));
+  // FR-911: the scan is a function now (classify), so the seven texts run through it as the file they stand for.
+  const named = (f: { file: string; kind: Kind; text: string }) => classify(f.file, f.text)[f.kind];
   it('every form is named by the scan', () => {
     expect(FORMS.filter((f) => !named(f)).map((f) => `${f.kind} ${f.file}`)).toEqual([]);
   });
