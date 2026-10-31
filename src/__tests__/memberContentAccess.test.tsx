@@ -336,6 +336,12 @@ function scan(): { composer: string[]; list: string[] } {
 const registered = (file: string, kind: Kind) =>
   REGISTRY.some((s) => s.file === file && s.kind === kind) || EXEMPT.some((e) => e.file === file && e.kinds.includes(kind));
 
+it('LS-911 B2: NotificationCenter must use live proof, not the obsolete pre-898 gap', () => {
+  const row = REGISTRY.find((s) => s.file === 'screens/notifications/NotificationCenterScreen.tsx' && s.kind === 'list');
+  expect(row).toBeDefined();
+  expect(row?.proof.type).not.toBe('gap');
+});
+
 describe('LS-911 B1: source discovery must recognize member content independent of call spelling', () => {
   it.each([
     ['composer', "import { ComposerInput as MemberDraft } from '../../components/community'; export default () => <MemberDraft placeholder=\"Reply\" maxLength={2000} onSubmit={async () => undefined} />;"],
