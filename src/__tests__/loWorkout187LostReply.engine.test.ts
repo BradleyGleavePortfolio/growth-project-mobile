@@ -467,7 +467,8 @@ describe('FR-917 F6: the background done call', () => {
     await pushQueuedWorkouts();
     expect(mockDb.rows[0].assignment_json).toBeNull();
     expect(mockCapture).toHaveBeenCalledTimes(1);
-    expect(JSON.stringify(mockCapture.mock.calls[0])).toContain('assignment completion refused');
+    expect((mockCapture.mock.calls[0][0] as Error).message).toContain('assignment completion refused');
+    expect(mockCapture.mock.calls[0][1]).toEqual({ area: 'sync-engine', status: 400 });
   });
 
   it('writes a production log line when the server refuses a queued workout (same class)', async () => {
@@ -477,7 +478,8 @@ describe('FR-917 F6: the background done call', () => {
     await pushQueuedWorkouts();
     expect(mockDb.rows[0]).toMatchObject({ sync_status: 'dead_letter' });
     expect(mockCapture).toHaveBeenCalledTimes(1);
-    expect(JSON.stringify(mockCapture.mock.calls[0])).toContain('queued workout refused');
+    expect((mockCapture.mock.calls[0][0] as Error).message).toContain('queued workout refused');
+    expect(mockCapture.mock.calls[0][1]).toEqual({ area: 'sync-engine', status: 400 });
   });
 
   it('control: a done call with no answer is kept, logged nowhere and refreshes nothing', async () => {
