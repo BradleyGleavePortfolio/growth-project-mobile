@@ -343,22 +343,36 @@ it('LS-911 B2: NotificationCenter must use live proof, not the obsolete pre-898 
 });
 
 describe('LS-911 B1: source discovery must recognize member content independent of call spelling', () => {
+  function checkSource(kind: Kind, source: string, shared = false) {
+    const dir = fs.mkdtempSync(path.join(SRC, 'screens', 'LS911Inventory-'));
+    const file = path.join(dir, 'Fixture.tsx');
+    try {
+      fs.writeFileSync(file, source);
+      if (shared) {
+        fs.writeFileSync(path.join(dir, 'SharedReply.tsx'), "export { ComposerInput as MemberReply } from '../../components/community';");
+      }
+      expect(registered(rel(file), kind)).toBe(false);
+      expect(scan()[kind]).toContain(rel(file));
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
   it.each([
-    ['composer', "import { ComposerInput as MemberDraft } from '../../components/community'; export default () => <MemberDraft placeholder=\"Reply\" maxLength={2000} onSubmit={async () => undefined} />;"],
-    ['list', "import { usePosts as useMemberPosts } from '../../hooks/useCommunity'; export default function Feed() { const feed = useMemberPosts('ws'); return <Text>{feed.data?.[0]?.body}</Text>; }"],
-    ['list', "import { usePosts } from '../../hooks/useCommunity'; export default function Feed() { const feed = usePosts\n('ws'); return <Text>{feed.data?.[0]?.body}</Text>; }"],
-    ['list', "import { removedRowsApi } from '../../api/communityRemovedRows'; export default function Peek() { const post = useQuery({ queryKey: ['community', 'post', 'p'], queryFn: () => removedRowsApi.getPost('p') }); return <Text>{post.data?.body}</Text>; }"],
-  ] as const)('recognizes unregistered %s fixture %#', (kind, source) => {
-    const signs = kind === 'composer' ? COMPOSER_SIGNS : LIST_SIGNS;
-    expect(signs.some((r) => r.test(source))).toBe(true);
+    ['composer', "import React from 'react'; import { ComposerInput as MemberDraft } from '../../components/community'; export default () => <MemberDraft placeholder=\"Reply\" maxLength={2000} onSubmit={async () => undefined} />;", false],
+    ['list', "import React from 'react'; import { Text } from 'react-native'; import { usePosts as useMemberPosts } from '../../hooks/useCommunity'; export default function Feed() { const feed = useMemberPosts('ws'); return <Text>{feed.data?.[0]?.body}</Text>; }", false],
+    ['list', "import React from 'react'; import { Text } from 'react-native'; import { usePosts } from '../../hooks/useCommunity'; export default function Feed() { const feed = usePosts\n('ws'); return <Text>{feed.data?.[0]?.body}</Text>; }", false],
+    ['list', "import React from 'react'; import { Text } from 'react-native'; import { useQuery } from '@tanstack/react-query'; import { removedRowsApi } from '../../api/communityRemovedRows'; export default function Peek() { const post = useQuery({ queryKey: ['community', 'post', 'p'], queryFn: () => removedRowsApi.getPost('p') }); return <Text>{post.data?.body}</Text>; }", false],
+    ['composer', "import React from 'react'; import { MemberReply } from './SharedReply'; export default () => <MemberReply placeholder=\"Reply\" maxLength={2000} onSubmit={async () => undefined} />;", true],
+  ] as const)('recognizes unregistered %s fixture %#', (kind, source, shared) => {
+    checkSource(kind, source, shared);
   });
 
   it.each([
-    ['composer', '<ComposerInput placeholder="Reply" maxLength={2000} onSubmit={async () => undefined} />'],
-    ['list', "usePosts('ws')"],
+    ['composer', "import React from 'react'; import { ComposerInput } from '../../components/community'; export default () => <ComposerInput placeholder=\"Reply\" maxLength={2000} onSubmit={async () => undefined} />;"],
+    ['list', "import React from 'react'; import { Text } from 'react-native'; import { usePosts } from '../../hooks/useCommunity'; export default function Feed() { const feed = usePosts('ws'); return <Text>{feed.data?.[0]?.body}</Text>; }"],
   ] as const)('recognizes the canonical %s spelling as a positive control', (kind, source) => {
-    const signs = kind === 'composer' ? COMPOSER_SIGNS : LIST_SIGNS;
-    expect(signs.some((r) => r.test(source))).toBe(true);
+    checkSource(kind, source);
   });
 });
 
