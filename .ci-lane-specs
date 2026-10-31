@@ -1,0 +1,3 @@
+src/screens/community/__tests__/CommunitySpaceChatScreen.test.tsx
+--runInBand
+--forceExit
