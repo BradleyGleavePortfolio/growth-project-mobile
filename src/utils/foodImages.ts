@@ -117,9 +117,9 @@ const FOOD_PHOTOS: Record<string, string> = {
   banana: 'https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=100&h=100&fit=crop',
   plantain: 'https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=100&h=100&fit=crop',
   orange: 'https://images.unsplash.com/photo-1547514701-42782101795e?w=100&h=100&fit=crop',
-  blueberr: 'https://images.unsplash.com/photo-1498557850523-fd3d118b962e?w=100&h=100&fit=crop',
-  strawberr: 'https://images.unsplash.com/photo-1464965911861-746a04b4bca6?w=100&h=100&fit=crop',
-  raspberr: 'https://images.unsplash.com/photo-1577069861033-55d04cec4ef5?w=100&h=100&fit=crop',
+  blueberry: 'https://images.unsplash.com/photo-1498557850523-fd3d118b962e?w=100&h=100&fit=crop',
+  strawberry: 'https://images.unsplash.com/photo-1464965911861-746a04b4bca6?w=100&h=100&fit=crop',
+  raspberry: 'https://images.unsplash.com/photo-1577069861033-55d04cec4ef5?w=100&h=100&fit=crop',
   grape: 'https://images.unsplash.com/photo-1537640538966-79f369143f8f?w=100&h=100&fit=crop',
   watermelon: 'https://images.unsplash.com/photo-1563114773-84221bd62daa?w=100&h=100&fit=crop',
   pineapple: 'https://images.unsplash.com/photo-1550258987-190a2d41a8ba?w=100&h=100&fit=crop',
@@ -127,7 +127,7 @@ const FOOD_PHOTOS: Record<string, string> = {
   peach: 'https://images.unsplash.com/photo-1595124216702-4aff11be3a00?w=100&h=100&fit=crop',
   pear: 'https://images.unsplash.com/photo-1514756331096-242fdeb70d4a?w=100&h=100&fit=crop',
   kiwi: 'https://images.unsplash.com/photo-1585059895524-72359e06133a?w=100&h=100&fit=crop',
-  cherr: 'https://images.unsplash.com/photo-1528821128474-27f963b062bf?w=100&h=100&fit=crop',
+  cherry: 'https://images.unsplash.com/photo-1528821128474-27f963b062bf?w=100&h=100&fit=crop',
   cantaloupe: 'https://images.unsplash.com/photo-1563114773-84221bd62daa?w=100&h=100&fit=crop',
   melon: 'https://images.unsplash.com/photo-1563114773-84221bd62daa?w=100&h=100&fit=crop',
   grapefruit: 'https://images.unsplash.com/photo-1577234286642-fc512a5f8f11?w=100&h=100&fit=crop',
@@ -142,7 +142,7 @@ const FOOD_PHOTOS: Record<string, string> = {
   avocado: 'https://images.unsplash.com/photo-1523049673857-eb18f1d7b578?w=100&h=100&fit=crop',
   berry: 'https://images.unsplash.com/photo-1498557850523-fd3d118b962e?w=100&h=100&fit=crop',
   applesauce: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=100&h=100&fit=crop',
-  cranberr: 'https://images.unsplash.com/photo-1577069861033-55d04cec4ef5?w=100&h=100&fit=crop',
+  cranberry: 'https://images.unsplash.com/photo-1577069861033-55d04cec4ef5?w=100&h=100&fit=crop',
 
   // === VEGETABLES - Specific first ===
   bell_pepper: 'https://images.unsplash.com/photo-1563565375-f3fdfdbefa83?w=100&h=100&fit=crop',
@@ -278,6 +278,7 @@ const FOOD_PHOTOS: Record<string, string> = {
   // === PREPARED FOODS & MEALS ===
   pizza: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=100&h=100&fit=crop',
   burger: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=100&h=100&fit=crop',
+  hamburger: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=100&h=100&fit=crop',
   sandwich: 'https://images.unsplash.com/photo-1528736235302-52922df5c122?w=100&h=100&fit=crop',
   wrap: 'https://images.unsplash.com/photo-1528736235302-52922df5c122?w=100&h=100&fit=crop',
   taco: 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=100&h=100&fit=crop',
@@ -325,35 +326,39 @@ const CATEGORY_FALLBACKS: Record<string, string> = {
   default: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=100&h=100&fit=crop',
 };
 
+// FOOD-1-M R1 (operator ruling): a food shows a photo only when the photo is of that food. Words a
+// food name may add without becoming another food: "Pineapple, raw" and "Large eggs" are still the map's
+// pineapple and egg, while "Banana chips" and "Egg, Benedict" are not the map's banana and egg.
+const PLAIN_WORDS = new Set([
+  'raw', 'fresh', 'frozen', 'cooked', 'uncooked', 'dry', 'boiled', 'baked', 'roasted', 'grilled', 'steamed',
+  'drained', 'whole', 'plain', 'large', 'medium', 'small', 'sliced', 'chopped', 'diced', 'peeled', 'nonfat',
+  'lowfat', 'skinless', 'boneless', 'unsweetened', 'unsalted', 'organic',
+]);
+
+function mapKey(words: string[]): string | null {
+  if (words.length === 0) return null;
+  const last = words[words.length - 1];
+  const singular = last.replace(/ies$/, 'y').replace(/(ch|sh|x|ss|o)es$/, '$1').replace(/([^s])s$/, '$1');
+  for (const w of [last, singular]) {
+    const key = [...words.slice(0, -1), w].join('_');
+    if (Object.prototype.hasOwnProperty.call(FOOD_PHOTOS, key)) return key;
+  }
+  return null;
+}
+
+/**
+ * The phone's photo for a food, only on an exact match: the name (its first part, before a comma, in
+ * the "Food, kind" order USDA uses) is a food in the map, singular or plural, and every other word is
+ * a plain word above. No word inside another word, no nearest word and no category photo: '' means
+ * there is no photo of this food, and FoodImage shows the plain placeholder.
+ */
 export function getFoodImageUrl(foodName: string): string {
-  const lower = foodName.toLowerCase().replace(/[()]/g, '');
-
-  // Normalize for multi-word matching: "Chicken Breast" -> also check "chicken_breast"
-  const underscored = lower.replace(/\s+/g, '_');
-
-  // Check specific compound keywords first (e.g. chicken_breast, brown_rice, greek_yogurt)
-  for (const [keyword, url] of Object.entries(FOOD_PHOTOS)) {
-    if (keyword.includes('_')) {
-      const spaced = keyword.replace(/_/g, ' ');
-      if (lower.includes(spaced) || underscored.includes(keyword)) return url;
-    }
-  }
-
-  // Then check single-word keywords
-  for (const [keyword, url] of Object.entries(FOOD_PHOTOS)) {
-    if (!keyword.includes('_') && lower.includes(keyword)) return url;
-  }
-
-  // Check category fallbacks
-  if (/chicken|beef|steak|pork|turkey|lamb|bacon|ham|sausage|bison|duck|jerky/.test(lower)) return CATEGORY_FALLBACKS.meat;
-  if (/apple|banana|orange|berry|mango|grape|melon|pear|peach|kiwi|plum|fig|cherry|papaya|pineapple|coconut|lemon|lime|date|raisin|cranberr/.test(lower)) return CATEGORY_FALLBACKS.fruit;
-  if (/broccoli|spinach|kale|carrot|pepper|onion|tomato|lettuce|celery|cucumber|zucchini|cauliflower|asparagus|mushroom|cabbage|eggplant|artichoke|beet|radish|squash|pea|bean/.test(lower)) return CATEGORY_FALLBACKS.vegetable;
-  if (/milk|cheese|yogurt|cream|butter|ghee|kefir|ricotta|feta|mozzarella|parmesan|cheddar/.test(lower)) return CATEGORY_FALLBACKS.dairy;
-  if (/rice|bread|pasta|oat|wheat|flour|cereal|tortilla|naan|quinoa|bagel|pita|granola|pancake|waffle|cracker|couscous|farro|buckwheat|muesli|pretzel/.test(lower)) return CATEGORY_FALLBACKS.grain;
-  if (/bar|chip|cracker|cookie|cake|candy|snack|brownie|gummy|muffin/.test(lower)) return CATEGORY_FALLBACKS.snack;
-  if (/juice|soda|water|tea|coffee|shake|smoothie|drink|latte|kombucha|matcha|chai/.test(lower)) return CATEGORY_FALLBACKS.drink;
-
-  return CATEGORY_FALLBACKS.default;
+  const parts = foodName.toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/[^a-z,\s]/g, ' ').split(',')
+    .map((part) => part.split(/\s+/).filter(Boolean));
+  const [head = [], ...rest] = parts;
+  if (rest.some((part) => part.some((w) => !PLAIN_WORDS.has(w)))) return '';
+  const key = mapKey(head) ?? mapKey(head.filter((w) => !PLAIN_WORDS.has(w)));
+  return key ? FOOD_PHOTOS[key] : '';
 }
 
 // Recipe-specific images for all 75 recipes
