@@ -10,6 +10,12 @@
  * quoting it as gone or leaving it out of the loaded stretch, or the space closed. Reply mode ends, the sheet closes,
  * quotes read as removed and a waiting reply keeps only the id. A message older than the loaded page is never taken as
  * gone for that alone.
+ * FR-909R2 (LO-909R2 B1, LS-909R2B B1): a read that answered this visit with no older page holds the whole space, so a
+ * message it leaves out is gone, the first one and the last one included. While the read is loading, failed or has an
+ * older page, a message it does not hold stays unknown.
+ * FR-909R2 (LS-909R2B B2, LO-909R2 C1, C2): a Block finds its member's messages by id, from every row of this person's
+ * spaces the phone has held this visit (SafetyMenu reads the spaces again before it tells the screen). A quote of a
+ * message the phone never held carries no author id: only there it goes by the name it carries.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useInfiniteQuery, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
@@ -47,6 +53,27 @@ export function useSpaceChat(cohortId: string, userId: string | null, isOnline: 
     gcTime: 0,
     retry: false,
   });
+
+  // FR-909R2: who wrote each message held in any of this person's spaces this visit (kept across reads), and the space
+  // whose own read answered since it opened (a write on the phone is not a read).
+  const authors = useRef(new Map<string, { authorId: string; name?: string }>());
+  const [reads, setReads] = useState<ReadonlySet<string>>(() => new Set());
+  const here = `${uid}\n${cohortId}`;
+  useEffect(() => {
+    authors.current = new Map();
+    const note = (data?: InfiniteData<SpaceMessagePage>) => data?.pages?.forEach((p) => p.messages?.forEach((m) => {
+      if (m.sender_user_id) authors.current.set(m.id, { authorId: m.sender_user_id, name: m.sender?.name });
+    }));
+    for (const [, data] of qc.getQueriesData<InfiniteData<SpaceMessagePage>>({ queryKey: ['community', 'space-chat', uid] })) note(data);
+    return qc.getQueryCache().subscribe((e) => {
+      const k = e.query.queryKey;
+      if (k[0] !== 'community' || k[1] !== 'space-chat' || k[2] !== uid) return;
+      note(e.query.state.data as InfiniteData<SpaceMessagePage> | undefined);
+      if (e.type !== 'updated' || e.action.type !== 'success' || e.action.manual) return;
+      const read = `${uid}\n${String(k[3])}`;
+      setReads((r) => (r.has(read) ? r : new Set(r).add(read)));
+    });
+  }, [qc, uid]);
 
   const me = useCommunityMe();
   const lastPing = useRef(me.dataUpdatedAt);
@@ -100,8 +127,10 @@ export function useSpaceChat(cohortId: string, userId: string | null, isOnline: 
       if (m.parent?.gone) gone.add(m.parent.id);
       if (!oldest || m.created_at < oldest) oldest = m.created_at;
     }
-    return (t: SpaceReplyTarget) => noAccess || !!t.gone || gone.has(t.id) || (!!t.at && !!oldest && t.at > oldest && !shown.has(t.id));
-  }, [messages, noAccess]);
+    const whole = reads.has(here) && list.isSuccess && !list.hasNextPage;
+    return (t: SpaceReplyTarget) => noAccess || !!t.gone || gone.has(t.id)
+      || (!shown.has(t.id) && (whole || (!!t.at && !!oldest && t.at > oldest)));
+  }, [messages, noAccess, reads, here, list.isSuccess, list.hasNextPage]);
   const pending = useMemo(() => outbox.map((r) => (r.reply && !r.reply.gone && isGone(r.reply)
     ? { ...r, reply: { id: r.reply.id, body: '', authorLabel: '', gone: true } } : r)), [outbox, isGone]);
   useEffect(() => spaceOutbox.forget((r) => r.cohortId === cohortId && !!r.reply && isGone(r.reply)), [outbox, isGone, cohortId]);
@@ -116,10 +145,13 @@ export function useSpaceChat(cohortId: string, userId: string | null, isOnline: 
 
   /** A removal, a delete or a block, at once: `keep` changes or drops the rows; their quotes, a waiting reply's words,
    *  reply mode and the open sheet go with them, in every space of this person's kept lists. A block also takes the
-   *  quotes of the person's messages not loaded here, by the name the quote carries (`names`; the next read settles). */
+   *  quotes of the person's messages the phone never held, by the name the quote carries (`names`; the next read
+   *  settles); a message held this visit goes by who wrote it, so someone else of the same name keeps theirs. */
   const retire = useCallback((ids: ReadonlySet<string>, keep: (m: SpaceMessage) => SpaceMessage | null, authorId?: string,
     names?: ReadonlySet<string>) => {
-    const went = (q: SpaceMessage['parent']) => !!q && !q.gone && (ids.has(q.id) || (!!names && !!q.sender_name && names.has(q.sender_name)));
+    const unheld = (id: string) => !authors.current.has(id);
+    const went = (q: SpaceMessage['parent']) => !!q && !q.gone && (ids.has(q.id)
+      || (!!names && !!q.sender_name && unheld(q.id) && names.has(q.sender_name)));
     qc.setQueriesData<InfiniteData<SpaceMessagePage>>({ queryKey: ['community', 'space-chat', uid] }, (data) => data && {
       ...data,
       pages: data.pages.map((p) => ({ ...p, messages: p.messages.flatMap((m) => {
@@ -129,7 +161,7 @@ export function useSpaceChat(cohortId: string, userId: string | null, isOnline: 
       }) })),
     });
     const hit = (t?: SpaceReplyTarget | null) => !!t && (ids.has(t.id) || (!!authorId && t.authorId === authorId)
-      || (!!names && !t.authorId && names.has(t.authorLabel)));
+      || (!!names && !t.authorId && unheld(t.id) && names.has(t.authorLabel)));
     spaceOutbox.forget((r) => hit(r.reply));
     setReply((t) => (hit(t) ? null : t));
     setHeld((h) => (h && ids.has(h) ? null : h));
@@ -156,19 +188,18 @@ export function useSpaceChat(cohortId: string, userId: string | null, isOnline: 
   }, [qc, key, uid, retire]);
 
   // Block: the blocked person's rows and every quote of them leave the stream and the cache at once (the server list
-  // leaves them out after, and quotes their older messages as gone).
+  // leaves them out after, and quotes their older messages as gone). FR-909R2 (LS-909R2B B2): their messages come from
+  // every row held this visit, not the lists as they are now (SafetyMenu has read them again, without the person).
   const dropAuthor = useCallback((authorId: string) => {
     const ids = new Set<string>();
     const names = new Set<string>();
-    for (const [, data] of qc.getQueriesData<InfiniteData<SpaceMessagePage>>({ queryKey: ['community', 'space-chat', uid] })) {
-      data?.pages.forEach((p) => p.messages.forEach((m) => {
-        if (m.sender_user_id !== authorId) return;
-        ids.add(m.id);
-        if (m.sender?.name) names.add(m.sender.name);
-      }));
+    for (const [id, a] of authors.current) {
+      if (a.authorId !== authorId) continue;
+      ids.add(id);
+      if (a.name) names.add(a.name);
     }
     retire(ids, (m) => (m.sender_user_id === authorId ? null : m), authorId, names);
-  }, [qc, uid, retire]);
+  }, [retire]);
 
   /** Resolves false when the mark did not land, so the page tries again with the next row seen (FR-871 Sol B1 C). */
   const markRead = useCallback(async (messageId: string): Promise<boolean> => {
