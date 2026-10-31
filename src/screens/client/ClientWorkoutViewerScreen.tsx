@@ -30,7 +30,7 @@ import { useTheme } from '../../theme/ThemeProvider';
 import type { SemanticTokens } from '../../theme/tokens';
 import { formatPlanType } from '../../utils/workout/formatPlanType';
 import { assignmentPrescription } from '../../utils/workout/assignmentPrescription';
-import { calendarDay, dayStart } from '../../utils/workout/workoutDay';
+import { assignmentDay, dayStart } from '../../utils/workout/workoutDay';
 
 export default function ClientWorkoutViewerScreen() {
   const { semanticColors: sc } = useTheme();
@@ -46,7 +46,7 @@ export default function ClientWorkoutViewerScreen() {
   const sorted = useMemo<ClientWorkoutAssignmentWithPlan[]>(() => {
     return (data ?? [])
       .slice()
-      .sort((a, b) => calendarDay(a.scheduled_for).localeCompare(calendarDay(b.scheduled_for)));
+      .sort((a, b) => assignmentDay(a).localeCompare(assignmentDay(b)));
   }, [data]);
 
   const pending = sorted.filter((a) => !a.completed_at);
@@ -200,8 +200,8 @@ function AssignmentCard({
 }
 
 function formatScheduled(iso: string): string {
-  // The day it was assigned for, as written (utils/workout/workoutDay).
-  const d = dayStart(calendarDay(iso)) ?? new Date(NaN);
+  // The day it was assigned for (utils/workout/workoutDay assignmentDay).
+  const d = dayStart(assignmentDay(iso)) ?? new Date(NaN);
   if (Number.isNaN(d.getTime())) return 'scheduled';
   return d.toLocaleString(undefined, {
     weekday: 'short',

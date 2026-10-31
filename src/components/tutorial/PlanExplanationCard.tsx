@@ -23,7 +23,7 @@ import { useTutorialStore } from '../../tutorial/tutorialStore';
 import type { OnboardingProgram } from '../../tutorial/types';
 import { useCoachlessClient } from '../../hooks/useCoachlessClient';
 import TutorialTarget from './TutorialTarget';
-import { calendarDay, dayStart } from '../../utils/workout/workoutDay';
+import { assignmentDay, dayStart } from '../../utils/workout/workoutDay';
 
 /**
  * The closing line under "Why this plan". A coached client's coach can change
@@ -52,10 +52,10 @@ export interface PlanNextDay {
   onPress: () => void;
 }
 
-/** Weekday of a YYYY-MM-DD (or ISO) day, read as a calendar day. */
+/** Weekday of an assignment's scheduled_for (YYYY-MM-DD or ISO). */
 export function weekdayOf(day: string | null | undefined): string | null {
-  // The day it was assigned for, as written (utils/workout/workoutDay).
-  const d = dayStart(calendarDay(day));
+  // The day it was assigned for (utils/workout/workoutDay assignmentDay).
+  const d = dayStart(assignmentDay(day));
   return d && !Number.isNaN(d.getTime()) ? d.toLocaleDateString('en-US', { weekday: 'long' }) : null;
 }
 
