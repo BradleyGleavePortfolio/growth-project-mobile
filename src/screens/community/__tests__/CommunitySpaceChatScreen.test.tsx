@@ -1984,6 +1984,21 @@ describe('FR-909 (agent 189): words that leave stay gone; a refused reply never 
     expect(r.getByLabelText(/^Replying to: Message removed\. Dana Reyes, Waiting to send\. Queued reply$/)).toBeTruthy();
   });
 
+  it('a block also takes the quote of the person\'s older message not loaded here', async () => {
+    setOS('android');
+    page = [msg('m5', '2026-10-22T10:20:00.000Z', COACH, {
+      body: 'Answering an old one', parent_message_id: 'old', parent: { id: 'old', gone: false, kind: 'text', sender_name: JO.name, snippet: 'Older words', voice_duration_ms: null },
+    }), ...page];
+    const r = await open();
+    await r.findByTestId('space-chat-row-m5');
+    expect(within(r.getByTestId('space-chat-quote-m5', { includeHiddenElements: true })).getByText('Older words', { includeHiddenElements: true })).toBeTruthy();
+    await fireEvent.press(r.getByTestId('space-chat-menu-m3'));
+    await waitFor(() => expect(r.queryByTestId('space-chat-row-m3')).toBeNull());
+    const quote = within(r.getByTestId('space-chat-quote-m5', { includeHiddenElements: true }));
+    expect(quote.queryByText('Older words', { includeHiddenElements: true })).toBeNull();
+    expect(quote.getByText('Message removed', { includeHiddenElements: true })).toBeTruthy();
+  });
+
   it('in Announcements a reply refused while a newer one is chosen waits for it; the newer one is never switched', async () => {
     setOS('android');
     mockParams.current = { cohortId: 'c-ann' };

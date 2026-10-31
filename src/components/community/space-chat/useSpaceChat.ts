@@ -115,17 +115,21 @@ export function useSpaceChat(cohortId: string, userId: string | null, isOnline: 
   const readable = useCallback((id: string) => now.current(id), []);
 
   /** A removal, a delete or a block, at once: `keep` changes or drops the rows; their quotes, a waiting reply's words,
-   *  reply mode and the open sheet go with them, in every space of this person's kept lists. */
-  const retire = useCallback((ids: ReadonlySet<string>, keep: (m: SpaceMessage) => SpaceMessage | null, authorId?: string) => {
+   *  reply mode and the open sheet go with them, in every space of this person's kept lists. A block also takes the
+   *  quotes of the person's messages not loaded here, by the name the quote carries (`names`; the next read settles). */
+  const retire = useCallback((ids: ReadonlySet<string>, keep: (m: SpaceMessage) => SpaceMessage | null, authorId?: string,
+    names?: ReadonlySet<string>) => {
+    const went = (q: SpaceMessage['parent']) => !!q && !q.gone && (ids.has(q.id) || (!!names && !!q.sender_name && names.has(q.sender_name)));
     qc.setQueriesData<InfiniteData<SpaceMessagePage>>({ queryKey: ['community', 'space-chat', uid] }, (data) => data && {
       ...data,
       pages: data.pages.map((p) => ({ ...p, messages: p.messages.flatMap((m) => {
         const k = keep(m);
         if (!k) return [];
-        return [k.parent && !k.parent.gone && ids.has(k.parent.id) ? { ...k, parent: { id: k.parent.id, gone: true } } : k];
+        return [k.parent && went(k.parent) ? { ...k, parent: { id: k.parent.id, gone: true } } : k];
       }) })),
     });
-    const hit = (t?: SpaceReplyTarget | null) => !!t && (ids.has(t.id) || (!!authorId && t.authorId === authorId));
+    const hit = (t?: SpaceReplyTarget | null) => !!t && (ids.has(t.id) || (!!authorId && t.authorId === authorId)
+      || (!!names && !t.authorId && names.has(t.authorLabel)));
     spaceOutbox.forget((r) => hit(r.reply));
     setReply((t) => (hit(t) ? null : t));
     setHeld((h) => (h && ids.has(h) ? null : h));
@@ -155,10 +159,15 @@ export function useSpaceChat(cohortId: string, userId: string | null, isOnline: 
   // leaves them out after, and quotes their older messages as gone).
   const dropAuthor = useCallback((authorId: string) => {
     const ids = new Set<string>();
+    const names = new Set<string>();
     for (const [, data] of qc.getQueriesData<InfiniteData<SpaceMessagePage>>({ queryKey: ['community', 'space-chat', uid] })) {
-      data?.pages.forEach((p) => p.messages.forEach((m) => { if (m.sender_user_id === authorId) ids.add(m.id); }));
+      data?.pages.forEach((p) => p.messages.forEach((m) => {
+        if (m.sender_user_id !== authorId) return;
+        ids.add(m.id);
+        if (m.sender?.name) names.add(m.sender.name);
+      }));
     }
-    retire(ids, (m) => (m.sender_user_id === authorId ? null : m), authorId);
+    retire(ids, (m) => (m.sender_user_id === authorId ? null : m), authorId, names);
   }, [qc, uid, retire]);
 
   /** Resolves false when the mark did not land, so the page tries again with the next row seen (FR-871 Sol B1 C). */
