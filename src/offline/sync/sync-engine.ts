@@ -468,8 +468,11 @@ async function pushPending(): Promise<void> {
     const log: WorkoutLog = rowToWorkoutLog(row);
     try {
       const serverPayload = toServerPayload(log);
-      const response = await workoutApi.create(
+      // A legacy row's own id is made once when it was written and kept
+      // through every retry: it is the save's Idempotency-Key.
+      const response = await createWorkoutOnce(
         serverPayload as unknown as Record<string, unknown>,
+        log.id,
       );
       const data = response.data as { id?: string; workout?: { id?: string } };
       const serverId: string = data?.id ?? data?.workout?.id ?? '';
