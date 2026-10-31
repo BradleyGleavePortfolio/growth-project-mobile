@@ -438,6 +438,21 @@ describe('FR-917 F2: a correction after an earlier send under the same key reach
     expect(mockServer.workouts).toHaveLength(1);
     expect(mockDb.rows[0]).toMatchObject({ sync_status: 'synced' });
   });
+
+  it('LS-917R2 C observation: a cold restart before learning the saved id loses a pending correction', async () => {
+    const key = 'client-1:1761867000955';
+    await backgroundSendLosesItsAnswer(key);
+    await queueWorkout({ clientKey: key, payload: corrected(), userId: 'client-1' });
+    // The corrected payload is durable, but its "POST then PUT" intent is not.
+    expect(JSON.parse(mockDb.rows[0].payload as string).exercises).toEqual(corrected().exercises);
+    let cold!: typeof import('../offline/sync/sync-engine');
+    jest.isolateModules(() => { cold = require('../offline/sync/sync-engine'); });
+    await cold.pushQueuedWorkouts();
+    expect(mockServer.workouts).toHaveLength(1);
+    expect(mockDb.rows[0]).toMatchObject({ sync_status: 'synced', server_id: 'srv-1' });
+    expect(mockServer.workouts[0]).toMatchObject({ exercises: pushDayBody().exercises });
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
 });
 
 // FR-917 F6 (LO-917 C5, C6): the done call's background retry.
