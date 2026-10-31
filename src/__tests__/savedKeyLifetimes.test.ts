@@ -59,7 +59,7 @@ jest.mock('../theme/ThemeProvider', () => ({
 
 const A = 'acct-a-1111';
 const B = 'acct-b-2222';
-const ASYNC_READS = new Set(['getItem', 'getItemAsync', 'getStringAsync']);
+const ASYNC_READS = new Set(['getItem', 'getItemAsync', 'getStringAsync', 'multiGet', 'getMany']);
 const secure = (SecureStore as unknown as { __store: Map<string, string> }).__store;
 
 const glob = (pattern: string) =>
@@ -114,7 +114,10 @@ describe('KT-13 saved key lifetimes', () => {
   it('every saved key in src/ is in the registry', () => {
     const missing = scan.sites
       .filter((s) => !rowOf(s))
-      .map((s) => `${s.file}:${s.line} ${where(s.store, s.key)} is not in the registry: register it with its lifetime (${kt13})`);
+      .map((s) => s.key !== '*'
+        ? `${s.file}:${s.line} ${where(s.store, s.key)} is not in the registry: register it with its lifetime (${kt13})`
+        : `${s.file}:${s.line} ${s.store}: the scan cannot read this saved key (${s.method.replace(/^unsupported: /, '')}): ` +
+          `name the key where the store is called (a literal, a const or a key function) (${kt13})`);
     expect(missing).toEqual([]);
     expect(scan.sites.length).toBeGreaterThan(200);
   });
