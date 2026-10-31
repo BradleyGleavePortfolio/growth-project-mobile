@@ -304,3 +304,42 @@ it('LS-917 B2: a corrected Finish during a slow background retry retains the cor
   // a correction as PUT after the first POST resolves, not lose the edit.
   expect(mockServer.workouts[0]).toMatchObject({ exercises: corrected.exercises });
 });
+
+it('LS-917 control: cold restart sends the durable body once with its unchanged valid key', async () => {
+  const key = 'client-1:1761867000099';
+  const body = pushDayBody();
+  await queueWorkout({ clientKey: key, payload: body, userId: 'client-1' });
+  // No release: the old process died while holding this row in memory.
+  let cold!: typeof import('../offline/sync/sync-engine');
+  jest.isolateModules(() => { cold = require('../offline/sync/sync-engine'); });
+  await cold.pushQueuedWorkouts();
+  expect(mockCreate).toHaveBeenCalledTimes(1);
+  expect(mockCreate.mock.calls[0][0]).toEqual(body);
+  expect(mockCreate.mock.calls[0][1]).toEqual({ headers: { 'Idempotency-Key': key } });
+  expect(key).toMatch(/^[A-Za-z0-9._:-]{8,128}$/);
+  expect(mockDb.rows[0]).toMatchObject({ sync_status: 'synced' });
+});
+
+it('LS-917 control: legacy row replays use a stable valid key, and an incompatible old DTO is parked', async () => {
+  const key = '9f858f52-7f91-4bfd-9b29-46456957f917';
+  mockDb.rows.push({
+    id: key, exercise_id: 'Bench Press', weight: 135, reps: 8,
+    sets_data: JSON.stringify([{ weight: 135, reps: 8 }]), duration_s: 60,
+    user_id: 'client-1', logged_at: '2026-10-26T20:00:00.000Z',
+    created_at: '2026-10-26T20:00:00.000Z', updated_at: '2026-10-26T20:00:00.000Z',
+    sync_status: 'pending', server_id: null, client_key: null, payload_json: null,
+    assignment_json: null,
+  });
+  mockCreate.mockRejectedValueOnce(new Error('network timeout'));
+  await triggerSync();
+  expect(mockDb.rows[0].sync_status).toBe('pending');
+  await triggerSync();
+  expect(mockCreate).toHaveBeenCalledTimes(2);
+  for (const [, config] of mockCreate.mock.calls) {
+    expect(config).toEqual({ headers: { 'Idempotency-Key': key } });
+  }
+  expect(key).toMatch(/^[A-Za-z0-9._:-]{8,128}$/);
+  // The unchanged legacy exercise DTO is incompatible with current create.
+  // Do not misreport a valid header as proof that such data was uploaded.
+  expect(mockDb.rows[0].sync_status).toBe('dead_letter');
+});
