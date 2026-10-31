@@ -2036,7 +2036,12 @@ describe('FR-909 (agent 189): words that leave stay gone; a refused reply never 
 
 describe('LS-909R2B independent B-TESTS', () => {
   const os = Platform.OS;
-  beforeEach(() => Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'android' }));
+  beforeEach(() => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'android' });
+    // These assertions concern message freshness, not unread-position retries.
+    // No read cursor prevents an unrelated delayed scroll after the fixture shrinks.
+    readAnswer = fail(404);
+  });
   afterEach(() => Object.defineProperty(Platform, 'OS', { configurable: true, get: () => os }));
 
   it.each(['empty', 'newer-only'])('LS-909R2B B1: a complete online refresh (%s) retires a missing selected parent', async (remaining) => {
