@@ -2039,7 +2039,7 @@ describe('LS-909R2 independent B-TESTS', () => {
   beforeEach(() => Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'android' }));
   afterEach(() => Object.defineProperty(Platform, 'OS', { configurable: true, get: () => os }));
 
-  it('LS-909R2 B3: a poll that retires the visible reply also makes the next message a plain send', async () => {
+  it('LS-909R2 guard: a poll that retires the visible reply also makes the next message a plain send', async () => {
     const r = await open();
     await r.findByTestId('space-chat-row-m3');
     await fireEvent(r.getByTestId('space-chat-row-m3'), 'longPress');
@@ -2077,7 +2077,7 @@ describe('LS-909R2 independent B-TESTS', () => {
     await act(async () => { await client.invalidateQueries({ queryKey: ['community', 'space-chat', 'me-1', 'c-every'] }); });
     await waitFor(() => expect(r.queryByTestId('space-chat-row-only-root')).toBeNull());
     expect(mockDisk.get('space_outbox_me-1')).toContain('My retained draft');
-    expect(mockDisk.get('space_outbox_me-1')).not.toContain('Last parent private words');
+    await waitFor(() => expect(mockDisk.get('space_outbox_me-1')).not.toContain('Last parent private words'));
     expect(r.queryByLabelText(`Replying to ${JO.name}`)).toBeNull();
   });
 
@@ -2089,7 +2089,7 @@ describe('LS-909R2 independent B-TESTS', () => {
     // An inactive cached space from an earlier visit. The older parent was not
     // loaded, and the backend quote contract contains no author id.
     client.setQueryData(['community', 'space-chat', 'me-1', 'c-other'], {
-      pages: [{ messages: [msg('other-member-reply', '2026-10-22T10:08:00.000Z', ME, { parent_message_id: oldQuote.id, parent: oldQuote })], next_before: 'older-page' }],
+      pages: [{ messages: [msg('other-member-reply', '2026-10-22T10:08:00.000Z', ME, { cohort_id: 'c-other', parent_message_id: oldQuote.id, parent: oldQuote })], next_before: 'older-page' }],
       pageParams: [null],
     });
     const ok = mockApi.post.getMockImplementation()!;
