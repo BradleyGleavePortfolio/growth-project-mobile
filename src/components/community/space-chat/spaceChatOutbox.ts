@@ -7,6 +7,9 @@
  * first, whichever page is open. After an app restart they go out once the outbox starts again.
  * A refusal keeps only its class on the row, never the error (FR-871R6, m#871 Sol B871-2 / Opus B3): `rejected` (422
  * community.content.rejected: the composer takes the text back to rephrase) or `closed` (403 / 404: the page closes).
+ * SC-M3 (agent 184): a reply keeps the message it answers (`reply`: its id and the quote drawn until the list has it).
+ * FR-909 (LS-909 B1, LO-909 B1): once that message goes (removed, deleted, its author blocked, the space closed) the
+ * row keeps only its id: the quoted words leave the row and the device (`forget`).
  */
 import { useMemo, useSyncExternalStore } from 'react';
 import NetInfo from '@react-native-community/netinfo';
@@ -17,6 +20,10 @@ import { isEffectivelyOnline } from '../../../hooks/useNetworkStatus';
 import { describeCommunityFailure } from '../../../api/communityErrors';
 import { CONTENT_REJECTED_CODE, communityErrorCode } from '../../../api/communitySafetyApi';
 import { isNoAccess, spaceChatApi } from './spaceChatApi';
+import type { ReplyTarget } from '../../messaging/ReplyComposer';
+
+/** SC-M3: what a reply answers. FR-909: its author and time, so a block or a removal finds it; `gone` once it went. */
+export interface SpaceReplyTarget extends ReplyTarget { authorId?: string; at?: string; gone?: boolean }
 
 export type PendingState = 'sending' | 'waiting' | 'failed' | 'sent';
 /** Why the server refused a send: its words (422 content rejected), or the person is no longer let in (403 / 404). */
@@ -24,6 +31,8 @@ export type Refusal = 'rejected' | 'closed';
 export interface PendingRow {
   localId: string; key: string; cohortId: string; body: string; createdAt: string; state: PendingState; serverId?: string;
   reason?: Refusal;
+  /** SC-M3: the message this text answers, with the quote the row shows until the server list carries it. */
+  reply?: SpaceReplyTarget;
 }
 
 export const SPACE_OUTBOX_PREFIX = 'space_outbox_';
@@ -67,7 +76,7 @@ async function flush(): Promise<void> {
       if (!next || !online || gen !== g) break;
       patch(next.localId, { state: 'sending' });
       try {
-        const sent = await spaceChatApi.send(next.cohortId, next.body, next.key);
+        const sent = await spaceChatApi.send(next.cohortId, next.body, next.key, next.reply?.id);
         if (gen !== g) break;
         patch(next.localId, { state: 'sent', serverId: sent.id });
         onSent.forEach((fn) => fn(next.cohortId));
@@ -77,7 +86,9 @@ async function flush(): Promise<void> {
         const dropped = (err as { kind?: string })?.kind === 'network' && !online;
         const reason = dropped ? undefined : refusal(err);
         patch(next.localId, { state: dropped ? 'waiting' : 'failed', reason });
-        if (reason === 'closed') onRefused.forEach((fn) => fn(next.cohortId));
+        // SC-M3: a reply's 404 can be its message gone (the server answers both alike): Not sent here, and the next
+        // read of the list says whether the space closed.
+        if (reason === 'closed' && !next.reply) onRefused.forEach((fn) => fn(next.cohortId));
       }
     }
   } finally {
@@ -108,7 +119,8 @@ try {
 
 const valid = (r: Partial<PendingRow>): r is PendingRow =>
   typeof r?.localId === 'string' && typeof r.key === 'string' && typeof r.cohortId === 'string' &&
-  typeof r.body === 'string' && typeof r.createdAt === 'string';
+  typeof r.body === 'string' && typeof r.createdAt === 'string' &&
+  (r.reply === undefined || (typeof r.reply?.id === 'string' && typeof r.reply.body === 'string' && typeof r.reply.authorLabel === 'string'));
 const REFUSALS: readonly unknown[] = ['rejected', 'closed'];
 
 /** Starts (or keeps) the outbox for the signed-in user: reads the kept rows and follows the connection. */
@@ -135,9 +147,9 @@ export function startSpaceOutbox(userId: string | null): void {
 }
 
 export const spaceOutbox = {
-  add(cohortId: string, body: string): void {
+  add(cohortId: string, body: string, reply?: SpaceReplyTarget): void {
     const k = generateIdempotencyKey();
-    set([...rows, { localId: k, key: k, cohortId, body, createdAt: new Date().toISOString(), state: 'waiting' }]);
+    set([...rows, { localId: k, key: k, cohortId, body, createdAt: new Date().toISOString(), state: 'waiting', ...(reply ? { reply } : {}) }]);
     void flush();
   },
   retry(localId: string): void {
@@ -150,6 +162,11 @@ export const spaceOutbox = {
    */
   discard(localId: string): void {
     set(rows.filter((r) => r.localId !== localId || r.state === 'sending' || r.state === 'sent'));
+  },
+  /** FR-909: the rows whose answered message went keep its id only (no words in memory or on the device). */
+  forget(gone: (r: PendingRow) => boolean): void {
+    const hit = (r: PendingRow) => !!r.reply && !r.reply.gone && gone(r);
+    if (rows.some(hit)) set(rows.map((r) => (hit(r) && r.reply ? { ...r, reply: { id: r.reply.id, body: '', authorLabel: '', gone: true } } : r)));
   },
   /** A sent row leaves once the server list carries it. */
   settle(serverIds: Set<string>): void {
