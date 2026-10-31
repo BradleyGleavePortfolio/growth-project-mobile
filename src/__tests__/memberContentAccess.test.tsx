@@ -336,6 +336,26 @@ function scan(): { composer: string[]; list: string[] } {
 const registered = (file: string, kind: Kind) =>
   REGISTRY.some((s) => s.file === file && s.kind === kind) || EXEMPT.some((e) => e.file === file && e.kinds.includes(kind));
 
+describe('LS-911 B1: source discovery must recognize member content independent of call spelling', () => {
+  it.each([
+    ['composer', "import { ComposerInput as MemberDraft } from '../../components/community'; export default () => <MemberDraft placeholder=\"Reply\" maxLength={2000} onSubmit={async () => undefined} />;"],
+    ['list', "import { usePosts as useMemberPosts } from '../../hooks/useCommunity'; export default function Feed() { const feed = useMemberPosts('ws'); return <Text>{feed.data?.[0]?.body}</Text>; }"],
+    ['list', "import { usePosts } from '../../hooks/useCommunity'; export default function Feed() { const feed = usePosts\n('ws'); return <Text>{feed.data?.[0]?.body}</Text>; }"],
+    ['list', "import { removedRowsApi } from '../../api/communityRemovedRows'; export default function Peek() { const post = useQuery({ queryKey: ['community', 'post', 'p'], queryFn: () => removedRowsApi.getPost('p') }); return <Text>{post.data?.body}</Text>; }"],
+  ] as const)('recognizes unregistered %s fixture %#', (kind, source) => {
+    const signs = kind === 'composer' ? COMPOSER_SIGNS : LIST_SIGNS;
+    expect(signs.some((r) => r.test(source))).toBe(true);
+  });
+
+  it.each([
+    ['composer', '<ComposerInput placeholder="Reply" maxLength={2000} onSubmit={async () => undefined} />'],
+    ['list', "usePosts('ws')"],
+  ] as const)('recognizes the canonical %s spelling as a positive control', (kind, source) => {
+    const signs = kind === 'composer' ? COMPOSER_SIGNS : LIST_SIGNS;
+    expect(signs.some((r) => r.test(source))).toBe(true);
+  });
+});
+
 describe('KT-2 registry: every content list and composer on the phone is registered', () => {
   const found = scan();
   it.each(['composer', 'list'] as Kind[])('every %s in src/ is in the KT-2 registry', (kind) => {
