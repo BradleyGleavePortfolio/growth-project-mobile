@@ -64,6 +64,7 @@ jest.mock('../../../hooks/useNetworkStatus', () => ({
   isEffectivelyOnline: jest.requireActual('../../../hooks/useNetworkStatus').isEffectivelyOnline,
 }));
 let mockRole = 'client';
+let mockRealSafety = false;
 // FR-871R7: the space's purpose on the member-readable list (SC-PURPOSE-BE, backend#1178); undefined = the field is absent.
 let mockPurpose: unknown;
 const cohorts = () => [
@@ -101,7 +102,9 @@ jest.mock('../../../components/community/SafetyMenu', () => {
     context?: { name: string; detail: string }; reported?: boolean; onReported?: () => void; onRemove?: () => Promise<void>;
   };
   return (p: MockMenuProps) => (
-    <>
+    mockRealSafety
+      ? React.createElement(jest.requireActual('../../../components/community/SafetyMenu').default, p)
+      : <>
       <Text testID={p.testID} accessibilityLabel="Report or block" onPress={() => p.onBlocked?.(p.authorUserId)}>menu</Text>
       {p.onDelete ? <Text testID={`${p.testID}-delete`} onPress={() => { p.onDelete?.().catch(() => undefined); }}>delete</Text> : null}
       {/* FR-871R6 (m#879 B4): the card the report sheet draws above the reasons, and Report, done once sent. */}
@@ -139,6 +142,7 @@ let membersAnswer: unknown = { members: [], next_cursor: null };
 const sends = () => mockApi.post.mock.calls.filter(([u]) => String(u).endsWith('/messages'));
 
 beforeEach(() => {
+  mockRealSafety = false;
   authEvents.emit('logout');
   mockDisk.clear();
   mockStack.routes = ['CommunityTab', 'CommunitySpaceChat'];
@@ -2027,5 +2031,67 @@ describe('FR-909 (agent 189): words that leave stay gone; a refused reply never 
     await waitFor(() => expect(alert).toHaveBeenCalledWith('Please rephrase', expect.any(String)));
     expect(r.getByTestId('space-chat-composer-field').props.value).toBe('This kicked my ass');
     expect(within(r.getByLabelText('Replying to Sam Okafor')).getByText('body m1')).toBeTruthy();
+  });
+});
+
+describe('LS-909R2 independent B-TESTS', () => {
+  it('LS-909R2 B1: polling an empty complete page retires a selected last parent and its persisted offline quote', async () => {
+    page = [msg('only-root', '2026-10-22T10:05:00.000Z', JO, { body: 'Last parent private words' })];
+    const r = await open();
+    await r.findByTestId('space-chat-row-only-root');
+    await fireEvent(r.getByTestId('space-chat-row-only-root'), 'longPress');
+    await fireEvent.press(r.getByTestId('space-message-reply'));
+    mockNet.isOnline = false;
+    await r.rerender(<QueryClientProvider client={client}><Screen /></QueryClientProvider>);
+    await fireEvent.changeText(r.getByTestId('space-chat-composer-field'), 'My retained draft');
+    await fireEvent.press(r.getByTestId('space-chat-composer-send'));
+    await waitFor(() => expect(mockDisk.get('space_outbox_me-1')).toContain('Last parent private words'));
+    // Select it again as a second, unsent reply. Another client deletes the root;
+    // the complete poll correctly returns no messages, not a tombstone.
+    await fireEvent(r.getByTestId('space-chat-row-only-root'), 'longPress');
+    await fireEvent.press(r.getByTestId('space-message-reply'));
+    page = [];
+    await act(async () => { await client.invalidateQueries({ queryKey: ['community', 'space-chat', 'me-1', 'c-every'] }); });
+    expect(r.queryByTestId('space-chat-row-only-root')).toBeNull();
+    expect(mockDisk.get('space_outbox_me-1')).toContain('My retained draft');
+    expect(mockDisk.get('space_outbox_me-1')).not.toContain('Last parent private words');
+    expect(r.queryByTestId('space-chat-replying')).toBeNull();
+  });
+
+  it('LS-909R2 B2: the real block menu refreshes active rows before onBlocked; older cached quotes in another space still retire', async () => {
+    mockRealSafety = true;
+    const oldQuote = { id: 'older-jo-root', kind: 'text', gone: false, author_name: JO.name, body: 'Other space private quote' };
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    // An inactive cached space from an earlier visit. The older parent was not
+    // loaded, and the backend quote contract contains no author id.
+    client.setQueryData(['community', 'space-chat', 'me-1', 'c-other'], {
+      pages: [{ messages: [msg('other-member-reply', '2026-10-22T10:08:00.000Z', ME, { parent: oldQuote })], next_before: 'older-page' }],
+      pageParams: [null],
+    });
+    const ok = mockApi.post.getMockImplementation()!;
+    mockApi.post.mockImplementation(async (url: string, ...args: unknown[]) => {
+      if (url === '/community/blocks') {
+        // SafetyMenu.invalidateBlockAffected() awaits this active page refresh
+        // before invoking the screen's dropAuthor().
+        page = page.filter((m) => (m as { author: { id: string } }).author.id !== JO.id);
+        return { data: { blocked_user_id: JO.id, blocked: true } };
+      }
+      return ok(url, ...args);
+    });
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
+      buttons?.find((b) => b.text === 'Block')?.onPress?.();
+    });
+    try {
+      await fireEvent.press(r.getByTestId('space-chat-menu-m3'));
+      await fireEvent.press(r.getByText('Block jo b.'));
+      await waitFor(() => expect(r.queryByTestId('space-chat-row-m3')).toBeNull());
+      await waitFor(() => expect(alert).toHaveBeenCalledWith('Person blocked', expect.any(String)));
+      const saved = JSON.stringify(client.getQueryData(['community', 'space-chat', 'me-1', 'c-other']));
+      expect(saved).not.toContain('Other space private quote');
+      expect(saved).not.toContain('jo b.');
+    } finally {
+      alert.mockRestore();
+    }
   });
 });
