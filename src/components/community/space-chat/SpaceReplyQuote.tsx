@@ -11,7 +11,7 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { formatDuration } from '../voiceFormat';
 import { colors, forestPop as fp, neutral, radius, spacing, voiceShades } from '../../../theme/tokens';
-import type { ReplyTarget } from '../../messaging/ReplyComposer';
+import type { SpaceReplyTarget } from './spaceChatOutbox';
 import type { SpaceMessage } from './spaceChatApi';
 
 export type SpaceQuote = { gone: true } | { gone: false; name: string; text: string; voiceMs?: number | null };
@@ -29,7 +29,8 @@ export function quoteOf(parent: SpaceMessage['parent']): SpaceQuote | null {
   return { gone: false, name: parent.sender_name ?? '', text: voiceMs != null ? voiceLine(voiceMs) : firstLine(parent.snippet), voiceMs };
 }
 /** A reply still on the phone: the quote it was written against. */
-export const quoteOfTarget = (t: ReplyTarget): SpaceQuote => ({ gone: false, name: t.authorLabel, text: t.body });
+/** FR-909: a waiting reply whose message went keeps no words; it reads "Message removed", as the server's quote does. */
+export const quoteOfTarget = (t: SpaceReplyTarget): SpaceQuote => (t.gone ? { gone: true } : { gone: false, name: t.authorLabel, text: t.body });
 
 /** What a screen reader hears before the row's name (plan SC-M3: "Replying to {name}: ..."; SC-W06 for a voice note). */
 export function spokenQuote(q: SpaceQuote): string {
