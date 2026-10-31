@@ -14,6 +14,23 @@ export const forgetSaveKeys = (): void => unanswered.clear();
 /** The same shape as the offline queue's ids, so one key can pass from the online try to the queue. */
 export const newSaveKey = (): string => `pfl_${randomUUID()}`;
 
+/** A value with its object keys in one order, so the same save always reads as the same intent. */
+const canonical = (v: unknown): unknown =>
+  Array.isArray(v) ? v.map(canonical)
+    : v && typeof v === 'object'
+      ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canonical((v as Record<string, unknown>)[k])]))
+      : v;
+
+/**
+ * FR-916 F1: one food save, one intent, whichever path sends it (repeat, Recent, search, manual; online or
+ * queued). The intent is what the save sends: the log fields (day, meal, portion, plan link) and the food
+ * (its server id, or the food it creates). `nth` tells apart the same food twice in one repeated meal.
+ */
+export function foodSaveIntent(log: { quantity_multiplier?: number }, food: unknown, nth = 0): unknown {
+  const m = log.quantity_multiplier;
+  return ['food', canonical({ ...log, quantity_multiplier: typeof m === 'number' ? Math.round(m * 1e6) / 1e6 : m }), canonical(food), nth];
+}
+
 /** Runs one intended save with its key. `intent` is everything the save sends except the key. */
 export async function withSaveKey<T>(intent: unknown, save: (key: string) => Promise<T>): Promise<T> {
   const id = JSON.stringify(intent);

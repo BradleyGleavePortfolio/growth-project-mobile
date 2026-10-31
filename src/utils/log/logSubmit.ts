@@ -4,7 +4,7 @@ import { MealType } from '../../types';
 import { planLink, type PlanLink } from './planLink';
 import { SearchResult } from './types';
 import { parseQuantityInput, densityGramsFor } from './macros';
-import { withSaveKey } from './saveKey';
+import { foodSaveIntent, withSaveKey } from './saveKey';
 
 const OZ_TO_GRAMS = 28.3495;
 
@@ -83,44 +83,39 @@ export function buildFoodPayload(food: SearchResult) {
   };
 }
 
-export async function submitSearchLogOffline(args: SearchLogArgs) {
+/** FR-916 F1: the log fields of a search or Recent add, and its intent (foodSaveIntent), shared online and queued. */
+function searchSave(args: SearchLogArgs) {
   const { food, date, mealType, multiplier, originalQuantity, originalUnit, link } = args;
   const needsCreate = !food.id || food.id.startsWith('off_');
+  const log = {
+    date,
+    meal_type: mealType,
+    quantity_multiplier: multiplier,
+    original_quantity: originalQuantity,
+    original_unit: originalUnit,
+    ...planLink(link),
+  };
+  const created = needsCreate ? buildFoodPayload(food) : undefined;
+  return { food, log, created, intent: foodSaveIntent(log, created ?? food.id) };
+}
+
+export async function submitSearchLogOffline(args: SearchLogArgs) {
+  const { food, log, created, intent } = searchSave(args);
   // FOOD-1-M R3: a key an online try of this same food already sent becomes the queue entry's id.
-  await withSaveKey(['search', args], (key) => enqueueFoodLog({
+  await withSaveKey(intent, (key) => enqueueFoodLog({
     kind: 'search',
-    foodItemId: needsCreate ? undefined : food.id,
-    food: needsCreate ? buildFoodPayload(food) : undefined,
-    log: {
-      date,
-      meal_type: mealType,
-      quantity_multiplier: multiplier,
-      original_quantity: originalQuantity,
-      original_unit: originalUnit,
-      ...planLink(link),
-    },
+    foodItemId: created ? undefined : food.id,
+    food: created,
+    log,
   }, key));
 }
 
 export async function submitSearchLogOnline(args: SearchLogArgs) {
-  const { food, date, mealType, multiplier, originalQuantity, originalUnit, link } = args;
+  const { food, log, created, intent } = searchSave(args);
   // FOOD-1-M R3: one key per intended save; a tap again after a lost answer sends the same key.
-  await withSaveKey(['search', args], async (key) => {
-    let foodItemId = food.id || '';
-    if (!foodItemId || foodItemId.startsWith('off_')) {
-      const createRes = await foodApi.create(buildFoodPayload(food));
-      foodItemId = createRes.data.id;
-    }
-    await logApi.logFood({
-      date,
-      meal_type: mealType,
-      food_item_id: foodItemId,
-      quantity_multiplier: multiplier,
-      original_quantity: originalQuantity,
-      original_unit: originalUnit,
-      ...planLink(link),
-      client_uuid: key,
-    });
+  await withSaveKey(intent, async (key) => {
+    const foodItemId = created ? (await foodApi.create(created)).data.id : food.id;
+    await logApi.logFood({ ...log, food_item_id: foodItemId, client_uuid: key });
   });
 }
 
@@ -213,7 +208,7 @@ function buildManualPayload(args: ManualLogArgs) {
 
 export async function submitManualLogOffline(args: ManualLogArgs) {
   const { foodPayload, logPayload } = buildManualPayload(args);
-  await withSaveKey(['manual', args], (key) => enqueueFoodLog({ kind: 'manual', food: foodPayload, log: logPayload }, key));
+  await withSaveKey(foodSaveIntent(logPayload, foodPayload), (key) => enqueueFoodLog({ kind: 'manual', food: foodPayload, log: logPayload }, key));
   return foodPayload.name;
 }
 
@@ -222,7 +217,7 @@ export async function submitManualLogOffline(args: ManualLogArgs) {
 export async function submitManualLogOnlineWithId(args: ManualLogArgs) {
   const { foodPayload, logPayload } = buildManualPayload(args);
   // FOOD-1-M R3: one key per intended save, kept for a tap again after a lost answer.
-  return withSaveKey(['manual', args], async (key) => {
+  return withSaveKey(foodSaveIntent(logPayload, foodPayload), async (key) => {
     const createRes = await foodApi.create(foodPayload);
     const foodItemId = createRes.data.id;
     const logRes = await logApi.logFood({ ...logPayload, food_item_id: foodItemId, client_uuid: key });
