@@ -43,6 +43,10 @@ describe('the day rule (Pacific time)', () => {
     ['a workout date sent as UTC midnight is not the day before', () => workoutDay({ date: '2026-10-26T00:00:00.000Z' }), '2026-10-26'],
     ['a workout without a date counts on the local day it was stored', () => workoutDay({ date: null, created_at: '2026-10-26T03:00:00.000Z' }), '2026-10-25'],
     ['an assignment counts on its assigned day', () => assignmentDay({ scheduled_for: '2026-10-26T00:00:00.000Z' }), '2026-10-26'],
+    ['an assignment stored date-only keeps its day', () => assignmentDay('2026-10-26'), '2026-10-26'],
+    ['an assignment stored at another moment is the local day it falls on', () => assignmentDay('2026-10-27T01:30:00.000Z'), '2026-10-26'],
+    ['an assignment stored at 12:00 UTC is that local day', () => assignmentDay({ scheduled_for: '2026-10-26T12:00:00.000Z' }), '2026-10-26'],
+    ['an unreadable assigned value is no day', () => assignmentDay('not a day'), ''],
     ['an assignment without a day is no day', () => assignmentDay({}), ''],
   ])('%s', (_label, value, day) => {
     expect(value()).toBe(day);
@@ -62,7 +66,7 @@ const SAVES_AND_READS: Array<[file: string, what: string, uses: RegExp]> = [
   ['src/screens/client/ActiveWorkoutScreen.tsx', 'Finish save: date is the local day the workout began', /date: workoutStartDay\(/],
   ['src/offline/models/WorkoutLog.ts', 'legacy queued row: date is the local day it was logged', /date: instantDay\(/],
   ['src/components/coach/ai-entry/ClientCopyBar.tsx', "coach assigns a client copy: scheduled_for is the coach's local today", /scheduled_for: getTodayString\(\)/],
-  ['src/screens/coach/programs/ProgramAssignScreen.tsx', 'program start day (local picker) and the assigned span shown back', /calendarDay\(r\.first_scheduled_for\)/],
+  ['src/screens/coach/programs/ProgramAssignScreen.tsx', 'program start day (local picker) and the assigned span shown back', /assignmentDay\(r\.first_scheduled_for\)/],
   // Client reads
   ['src/utils/workout/workoutDoneToday.ts', 'done today (Home, Train)', /workoutDay\(r\)/],
   ['src/screens/client/HomeScreen.tsx', 'Home: done today', /isWorkoutDoneToday\(rows, getTodayString\(\)\)/],
@@ -73,8 +77,8 @@ const SAVES_AND_READS: Array<[file: string, what: string, uses: RegExp]> = [
   ['src/screens/client/progress/progressV2.ts', 'progress: training week and workout days', /assignmentDay\(/],
   ['src/screens/client/progress/weekReview.ts', 'week review: workouts this week', /workoutDay\(/],
   ['src/screens/client/YouScreen.tsx', 'You: next coach workout day', /assignmentDay\(/],
-  ['src/screens/client/ClientWorkoutViewerScreen.tsx', 'assigned plans: order and day label', /calendarDay\(/],
-  ['src/components/tutorial/PlanExplanationCard.tsx', 'plan card: weekday of the assigned day', /calendarDay\(/],
+  ['src/screens/client/ClientWorkoutViewerScreen.tsx', 'assigned plans: order and day label', /assignmentDay\(/],
+  ['src/components/tutorial/PlanExplanationCard.tsx', 'plan card: weekday of the assigned day', /assignmentDay\(/],
   ['src/hooks/useApi.ts', 'weekly volume: workouts this week', /workoutDay\(/],
   // Coach reads
   ['src/utils/workout/workoutLogging.ts', "coach view: each session's recorded day", /day: workoutDay\(s\)/],
@@ -93,6 +97,9 @@ const OLD_PATTERNS: Array<[what: string, pattern: RegExp]> = [
   ['the stored-at time preferred over the recorded day', /(?:date:\s*|\(\s*)\w+\??\.created_at\s*(?:\|\||\?\?)\s*\w+\??\.date\b/],
   ['a workout saved on the day it finished', /date:\s*(?:localCalendarDate|bucketDateLocal)\(\s*new Date\(\)\s*\)/],
   ['an assigned day sent as the UTC instant of now', /scheduled_for:\s*new Date\(\)\.toISOString\(\)/],
+  // LO-917 B1: scheduled_for is a moment; only assignmentDay reads it.
+  ['an assigned moment read as a calendar date', /calendarDay\([^)]*scheduled_for/],
+  ['an assigned day cut from its text', /scheduled_for\??\.(?:slice|substring|split)\(/],
 ];
 
 // Lines in listed files that match an old pattern but are not a workout or

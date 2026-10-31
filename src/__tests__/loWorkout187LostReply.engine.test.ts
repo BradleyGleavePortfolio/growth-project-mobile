@@ -88,6 +88,13 @@ function mockFakeDatabase() {
         if (r) r.sync_status = status;
         return { changes: r ? 1 : 0 };
       }
+      // FR-917 F2: a POST answer for a corrected row keeps it queued with its server id.
+      if (/^UPDATE workout_logs SET server_id = \? WHERE id = \?$/.test(sql)) {
+        const [server_id, id] = params as [string, string];
+        const r = rows.find((x) => x.id === id);
+        if (r) Object.assign(r, { server_id });
+        return { changes: r ? 1 : 0 };
+      }
       if (/^UPDATE workout_logs SET assignment_json = NULL WHERE id = \?$/.test(sql)) {
         const r = rows.find((x) => x.id === (params[0] as string));
         if (r) r.assignment_json = null;
@@ -192,13 +199,30 @@ const mockCreate = jest.fn(async (body: Record<string, unknown>, config?: { head
 jest.mock('../services/api', () => ({
   workoutApi: {
     create: (body: Record<string, unknown>, config?: { headers?: Record<string, unknown> }) => mockCreate(body, config),
-    update: jest.fn(async (id: string) => ({ data: { id } })),
+    update: (id: string, body: Record<string, unknown>) => mockUpdate(id, body),
     getAll: jest.fn(async () => ({ data: [] })),
   },
 }));
+// PUT /workouts/:id replaces the stored workout's fields (backend updateWorkout).
+const mockUpdate = jest.fn(async (id: string, body: Record<string, unknown>) => {
+  const stored = mockServer.workouts.find((w) => w.id === id);
+  if (!stored) throw mockHttpError(404);
+  Object.assign(stored, body);
+  return { data: { id } };
+});
 
+const mockComplete = jest.fn(async (_id: string, _input: unknown) => ({ data: {} }));
 jest.mock('../api/workoutBuilderApi', () => ({
-  workoutBuilderApi: { completeMyAssignment: jest.fn(async () => ({ data: {} })) },
+  workoutBuilderApi: { completeMyAssignment: (id: string, input: unknown) => mockComplete(id, input) },
+}));
+const mockInvalidate = jest.fn(async (_filters: unknown) => undefined);
+jest.mock('../services/queryClient', () => ({
+  queryClient: { invalidateQueries: (filters: unknown) => mockInvalidate(filters) },
+}));
+const mockCapture = jest.fn();
+jest.mock('../services/sentry', () => ({
+  captureError: (...args: unknown[]) => mockCapture(...args),
+  captureErrorWithoutPii: (...args: unknown[]) => mockCapture(...args),
 }));
 
 jest.mock('../lib/userCache', () => ({
@@ -230,6 +254,10 @@ beforeEach(async () => {
   mockServer.keys = new Map();
   mockServer.loseNextReply = false;
   mockCreate.mockClear();
+  mockUpdate.mockClear();
+  mockComplete.mockClear();
+  mockInvalidate.mockClear();
+  mockCapture.mockClear();
   await __resetDatabaseForTests();
 });
 
@@ -342,4 +370,122 @@ it('LS-917 control: legacy row replays use a stable valid key, and an incompatib
   // The unchanged legacy exercise DTO is incompatible with current create.
   // Do not misreport a valid header as proof that such data was uploaded.
   expect(mockDb.rows[0].sync_status).toBe('dead_letter');
+});
+
+// FR-917 F2 (LS-917 B2, LO-917 C4): every way a corrected Finish can follow a
+// body already sent under the same key. The server keeps the first body for a
+// key, so the correction must reach it as an update (PUT), never as a second
+// key. Each row: how the earlier send ended, then how the corrected body goes.
+describe('FR-917 F2: a correction after an earlier send under the same key reaches the server', () => {
+  const corrected = () => {
+    const body = pushDayBody();
+    body.exercises[0].weight_per_set = [155, 145];
+    return body;
+  };
+  async function backgroundSendLosesItsAnswer(key: string) {
+    await queueWorkout({ clientKey: key, payload: pushDayBody(), userId: 'client-1' });
+    await releaseQueuedWorkout(key, mockHttpError(429)); // editor stays open
+    mockServer.loseNextReply = true; // the background POST is stored, its answer lost
+    await pushQueuedWorkouts();
+    expect(mockServer.workouts).toHaveLength(1);
+    expect(mockDb.rows[0]).toMatchObject({ sync_status: 'pending', server_id: null });
+  }
+
+  it.each([
+    ['the screen POSTs the correction and the server answers', async (key: string) => {
+      const queued = await queueWorkout({ clientKey: key, payload: corrected(), userId: 'client-1' });
+      expect(queued.alreadySynced).toBe(false);
+      const saved = await createWorkoutOnce(corrected(), key);
+      await settleQueuedWorkout(key, saved.data.id);
+    }],
+    ['the update after the answer gets no answer once, then the background sync resends it', async (key: string) => {
+      await queueWorkout({ clientKey: key, payload: corrected(), userId: 'client-1' });
+      const saved = await createWorkoutOnce(corrected(), key);
+      mockUpdate.mockRejectedValueOnce(mockHttpError(503));
+      await settleQueuedWorkout(key, saved.data.id);
+      expect(mockDb.rows[0]).toMatchObject({ sync_status: 'pending', server_id: saved.data.id });
+      await pushQueuedWorkouts();
+    }],
+    ["the screen's own POST gets no answer, then the background sync sends it", async (key: string) => {
+      await queueWorkout({ clientKey: key, payload: corrected(), userId: 'client-1' });
+      mockServer.loseNextReply = true;
+      const lost = await createWorkoutOnce(corrected(), key).catch((e: unknown) => e);
+      await releaseQueuedWorkout(key, lost);
+      await pushQueuedWorkouts();
+    }],
+  ])('%s', async (_how, finishCorrected) => {
+    const key = 'client-1:1761867000155';
+    await backgroundSendLosesItsAnswer(key);
+    await finishCorrected(key);
+    expect(mockServer.workouts).toHaveLength(1);
+    expect(mockServer.workouts[0]).toMatchObject({ exercises: corrected().exercises });
+    expect(mockDb.rows[0]).toMatchObject({ sync_status: 'synced', server_id: 'srv-1' });
+    expect(new Set(mockCreate.mock.calls.map(([, config]) => JSON.stringify(config)))).toEqual(
+      new Set([JSON.stringify({ headers: { 'Idempotency-Key': key } })]),
+    );
+  });
+
+  it('control: an ordinary Finish and a Finish again with the same sets send no update', async () => {
+    const key = 'client-1:1761867000156';
+    await queueWorkout({ clientKey: key, payload: pushDayBody(), userId: 'client-1' });
+    await releaseQueuedWorkout(key, mockHttpError(429));
+    await queueWorkout({ clientKey: key, payload: pushDayBody(), userId: 'client-1' });
+    const saved = await createWorkoutOnce(pushDayBody(), key);
+    await settleQueuedWorkout(key, saved.data.id);
+    await pushQueuedWorkouts();
+    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(mockServer.workouts).toHaveLength(1);
+    expect(mockDb.rows[0]).toMatchObject({ sync_status: 'synced' });
+  });
+});
+
+// FR-917 F6 (LO-917 C5, C6): the done call's background retry.
+describe('FR-917 F6: the background done call', () => {
+  const assignment = { assignmentId: 'assignment-1', input: { started_at: '2026-10-30T16:00:00.000Z' } };
+  async function savedWithDoneCallPending(key: string) {
+    await queueWorkout({ clientKey: key, payload: pushDayBody(), userId: 'client-1', assignment });
+    await releaseQueuedWorkout(key, mockHttpError(429));
+    // The done call gets no answer, after the POST and in the same cycle's retry.
+    mockComplete.mockRejectedValueOnce(mockHttpError(503)).mockRejectedValueOnce(mockHttpError(503));
+    await pushQueuedWorkouts();
+    expect(mockDb.rows[0]).toMatchObject({ sync_status: 'synced' });
+    expect(mockDb.rows[0].assignment_json).not.toBeNull();
+    mockInvalidate.mockClear();
+  }
+
+  it('refreshes the assignments list when the retry gets the done call through', async () => {
+    await savedWithDoneCallPending('client-1:1761867000201');
+    await pushQueuedWorkouts();
+    expect(mockComplete).toHaveBeenCalledTimes(3);
+    expect(mockDb.rows[0].assignment_json).toBeNull();
+    expect(mockInvalidate).toHaveBeenCalledWith({ queryKey: ['assignments'] });
+  });
+
+  it('writes a production log line when the server refuses the done call', async () => {
+    await savedWithDoneCallPending('client-1:1761867000202');
+    mockComplete.mockRejectedValueOnce(mockHttpError(400));
+    await pushQueuedWorkouts();
+    expect(mockDb.rows[0].assignment_json).toBeNull();
+    expect(mockCapture).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(mockCapture.mock.calls[0])).toContain('assignment completion refused');
+  });
+
+  it('writes a production log line when the server refuses a queued workout (same class)', async () => {
+    const key = 'client-1:1761867000204';
+    await queueWorkout({ clientKey: key, payload: { ...pushDayBody(), extra: 1 }, userId: 'client-1' });
+    await releaseQueuedWorkout(key, mockHttpError(429));
+    await pushQueuedWorkouts();
+    expect(mockDb.rows[0]).toMatchObject({ sync_status: 'dead_letter' });
+    expect(mockCapture).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(mockCapture.mock.calls[0])).toContain('queued workout refused');
+  });
+
+  it('control: a done call with no answer is kept, logged nowhere and refreshes nothing', async () => {
+    await savedWithDoneCallPending('client-1:1761867000203');
+    mockComplete.mockRejectedValueOnce(mockHttpError(503));
+    await pushQueuedWorkouts();
+    expect(mockDb.rows[0].assignment_json).not.toBeNull();
+    expect(mockCapture).not.toHaveBeenCalled();
+    expect(mockInvalidate).not.toHaveBeenCalled();
+  });
 });
