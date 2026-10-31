@@ -76,7 +76,7 @@ import { usePackagePurchase } from '../../hooks/usePackagePurchase';
 import { usePaymentSheetAppearance } from '../../components/purchase/usePaymentSheetAppearance';
 import PlanTermsBlock from '../../components/purchase/PlanTermsBlock';
 import PurchaseFeedback, { styleCSuccess } from '../../components/purchase/PurchaseFeedback';
-import { PlanActiveActions, usePlanMoment } from '../../components/purchase/PlanActiveMoment';
+import { PlanActiveActions, PlanActiveBar, usePlanMoment } from '../../components/purchase/PlanActiveMoment';
 import YourPlansPanel from '../../components/purchase/YourPlansPanel';
 import { SupportEmailFallback, useSupportEmail } from '../../components/support/SupportEmailFallback';
 import { PACKAGE_PAYMENT_COPY } from '../../lib/packagePayment';
@@ -297,11 +297,13 @@ export default function ClientPackagesScreen() {
     },
     [finishPurchase, navigation],
   );
-  // LS-914R2 B2: on the open plan page the success actions sit in its pinned
-  // footer (C5); the moment is read once here for the content and the footer.
+  // LS-914R2 B2 / LS-914R3 B2: the success actions always sit in one pinned
+  // host (C5): the plan page footer while that page is open, else a bar pinned
+  // under the list (the page was closed while the payment was confirming).
+  // The moment is read once here for the content and the actions.
   const successShown = styleCSuccess(purchase);
-  const pinnedSuccess = successShown && openPlanId === successShown.packageId ? successShown : null;
-  const moment = usePlanMoment(pinnedSuccess);
+  const moment = usePlanMoment(successShown);
+  const listSuccess = successShown && openPlanId !== successShown.packageId;
 
   const handleUpdateCard = useCallback(() => {
     // OR-110-2: the native card screen (Stripe PaymentSheet, TGP theme)
@@ -529,7 +531,7 @@ export default function ClientPackagesScreen() {
                 onContinue={finishPurchase}
                 onOpenPlan={finishPurchase}
                 onSeeUnlocks={seeUnlocks}
-                moment={pinnedSuccess ? moment : undefined}
+                moment={successShown ? moment : undefined}
               />
             ) : null;
             // FR-1TO1 (LS B1): no sale while the coach's name is unknown.
@@ -589,7 +591,7 @@ export default function ClientPackagesScreen() {
                     <ClientPlanPage name={pkg.name} price={displayPrice} description={pkg.description}
                       features={pkg.features ?? []} coach={coachName} onBack={closePlan}
                       outcome={feedback} outcomeKey={shown ? purchase.state.phase : null}
-                      footer={active && pinnedSuccess ? (
+                      footer={active && successShown ? (
                         <PlanActiveActions moment={moment} onContinue={finishPurchase} onSeeUnlocks={seeUnlocks} />
                       ) : action ? <>
                         {sellable?.quote && !current ? (
@@ -669,7 +671,9 @@ export default function ClientPackagesScreen() {
         testID="plans-refund-support-fallback"
         centered
       />
-    </Screen></>
+    </Screen>{listSuccess ? (
+      <PlanActiveBar moment={moment} onContinue={finishPurchase} onSeeUnlocks={seeUnlocks} ownsBottom={false} />
+    ) : null}</>
   );
 }
 

@@ -225,16 +225,21 @@ export function PlanActiveActions({ moment, onContinue, onSeeUnlocks }: PlanActi
 
 /**
  * The pinned, inset-safe bottom bar for hosts whose layout has no footer
- * (the package sheet and the package detail). Same padding as Screen's footer.
+ * (the package sheet, the package detail, and Your plans when the plan page
+ * was closed while paying). Same padding as Screen's footer; `ownsBottom`
+ * false is a tab screen, whose tab bar already clears the gesture bar.
  */
-export function PlanActiveBar(props: PlanActiveActionsProps) {
+export function PlanActiveBar({ ownsBottom = true, ...props }: PlanActiveActionsProps & { ownsBottom?: boolean }) {
   const { semanticColors } = useTheme();
   const insets = useScreenInsets();
   return (
     <View
       style={[
         styles.bar,
-        { backgroundColor: semanticColors.bgPrimary, paddingBottom: footerBottomPadding(insets.bottom) },
+        {
+          backgroundColor: semanticColors.bgPrimary,
+          paddingBottom: ownsBottom ? footerBottomPadding(insets.bottom) : layout.gutter,
+        },
       ]}
       testID="payment-success-footer"
     >
