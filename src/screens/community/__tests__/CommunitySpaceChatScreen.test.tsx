@@ -2040,8 +2040,9 @@ describe('LS-909R2 independent B-TESTS', () => {
     const r = await open();
     await r.findByTestId('space-chat-row-only-root');
     await fireEvent(r.getByTestId('space-chat-row-only-root'), 'longPress');
-    await fireEvent.press(r.getByTestId('space-message-reply'));
+    await fireEvent.press(r.getByTestId('space-chat-sheet-reply'));
     mockNet.isOnline = false;
+    mockNet.reachable = false;
     await r.rerender(<QueryClientProvider client={client}><Screen /></QueryClientProvider>);
     await fireEvent.changeText(r.getByTestId('space-chat-composer-field'), 'My retained draft');
     await fireEvent.press(r.getByTestId('space-chat-composer-send'));
@@ -2049,18 +2050,18 @@ describe('LS-909R2 independent B-TESTS', () => {
     // Select it again as a second, unsent reply. Another client deletes the root;
     // the complete poll correctly returns no messages, not a tombstone.
     await fireEvent(r.getByTestId('space-chat-row-only-root'), 'longPress');
-    await fireEvent.press(r.getByTestId('space-message-reply'));
+    await fireEvent.press(r.getByTestId('space-chat-sheet-reply'));
     page = [];
     await act(async () => { await client.invalidateQueries({ queryKey: ['community', 'space-chat', 'me-1', 'c-every'] }); });
     expect(r.queryByTestId('space-chat-row-only-root')).toBeNull();
     expect(mockDisk.get('space_outbox_me-1')).toContain('My retained draft');
     expect(mockDisk.get('space_outbox_me-1')).not.toContain('Last parent private words');
-    expect(r.queryByTestId('space-chat-replying')).toBeNull();
+    expect(r.queryByLabelText(`Replying to ${JO.name}`)).toBeNull();
   });
 
   it('LS-909R2 B2: the real block menu refreshes active rows before onBlocked; older cached quotes in another space still retire', async () => {
     mockRealSafety = true;
-    const oldQuote = { id: 'older-jo-root', kind: 'text', gone: false, author_name: JO.name, body: 'Other space private quote' };
+    const oldQuote = { id: 'older-jo-root', kind: 'text', gone: false, sender_name: JO.name, snippet: 'Other space private quote' };
     const r = await open();
     await r.findByTestId('space-chat-row-m3');
     // An inactive cached space from an earlier visit. The older parent was not
@@ -2074,7 +2075,7 @@ describe('LS-909R2 independent B-TESTS', () => {
       if (url === '/community/blocks') {
         // SafetyMenu.invalidateBlockAffected() awaits this active page refresh
         // before invoking the screen's dropAuthor().
-        page = page.filter((m) => (m as { author: { id: string } }).author.id !== JO.id);
+        page = page.filter((m) => (m as { sender_user_id: string }).sender_user_id !== JO.id);
         return { data: { blocked_user_id: JO.id, blocked: true } };
       }
       return ok(url, ...args);
