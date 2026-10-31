@@ -7,6 +7,7 @@ import { weightTrend } from '../../../components/progress/weightTrend';
 import type { WeightLog } from '../../../types';
 import { parseWeightLogRow, weightHistoryRows } from './weightHistory';
 import * as P from './progressV2';
+import { workoutDay } from '../../../utils/workout/workoutDay';
 
 export interface ReviewWeek { start: string; end: string }
 export interface FoodDay { date: string; protein_g: number }
@@ -73,7 +74,7 @@ export async function loadWeekReview(userId: string, week: ReviewWeek): Promise<
     return watch !== null ? [watch] : hours > 0 ? [hours * 60] : [];
   });
   const sleep = mean(nights);
-  const done = sessions.filter((s) => inWeek(s.date, week)).length;
+  const done = sessions.filter((s) => inWeek(workoutDay(s), week)).length;
   const training = P.trainingWeek(assignments, week.end);
   return {
     workouts: done, training, food: new Set(foodDays.map((d) => d.date.slice(0, 10))).size,

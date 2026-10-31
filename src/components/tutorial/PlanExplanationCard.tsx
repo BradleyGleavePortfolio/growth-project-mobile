@@ -23,6 +23,7 @@ import { useTutorialStore } from '../../tutorial/tutorialStore';
 import type { OnboardingProgram } from '../../tutorial/types';
 import { useCoachlessClient } from '../../hooks/useCoachlessClient';
 import TutorialTarget from './TutorialTarget';
+import { calendarDay, dayStart } from '../../utils/workout/workoutDay';
 
 /**
  * The closing line under "Why this plan". A coached client's coach can change
@@ -53,10 +54,9 @@ export interface PlanNextDay {
 
 /** Weekday of a YYYY-MM-DD (or ISO) day, read as a calendar day. */
 export function weekdayOf(day: string | null | undefined): string | null {
-  const m = typeof day === 'string' ? /^(\d{4})-(\d{2})-(\d{2})/.exec(day) : null;
-  if (!m) return null;
-  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString('en-US', { weekday: 'long' });
+  // The day it was assigned for, as written (utils/workout/workoutDay).
+  const d = dayStart(calendarDay(day));
+  return d && !Number.isNaN(d.getTime()) ? d.toLocaleDateString('en-US', { weekday: 'long' }) : null;
 }
 
 export function PlanExplanationCardView({

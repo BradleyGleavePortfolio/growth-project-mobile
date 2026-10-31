@@ -21,6 +21,7 @@ import { useNetworkStatus } from '../../../hooks/useNetworkStatus';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { formatDayLabel, formatRange, formatTime, zonesDiffer } from '../../../calendar/calendarTime';
 import { addDays, bucketDateLocal, getLocalWeekStart, getTodayString } from '../../../utils/date';
+import { assignmentDay, instantDay, workoutDay } from '../../../utils/workout/workoutDay';
 import type { CalendarStackParamList } from '../../../navigation/calendarRoutes';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { colors, layout, radius, spacing, typography } from '../../../theme/tokens';
@@ -131,13 +132,13 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
   const planName = (w: ClientWorkoutAssignmentWithPlan) => w.snapshot?.plan_name || w.workout_plan.name;
   // Finishing a coach plan also saves its log (same day, same name): show that workout once.
   const logs = (data.logs ?? []).filter((l) => !data.workouts.some((w) => w.completed_at &&
-    bucketDateLocal(new Date(w.completed_at)) === l.date.slice(0, 10) && planName(w) === l.workout_name));
+    instantDay(w.completed_at) === workoutDay(l) && planName(w) === l.workout_name));
   const workoutsOn = (day: string) => [
-    ...data.workouts.filter((w) => bucketDateLocal(new Date(w.scheduled_for)) === day).map((w) => ({
+    ...data.workouts.filter((w) => assignmentDay(w) === day).map((w) => ({
       id: w.id, testID: `week-workout-${w.id}`, name: planName(w), done: !!w.completed_at,
       open: () => nav.navigate('MoreTab', { screen: 'WorkoutAssignmentDetail', params: { assignmentId: w.id }, initial: false }),
     })),
-    ...logs.filter((l) => l.date.slice(0, 10) === day).map((l) => ({
+    ...logs.filter((l) => workoutDay(l) === day).map((l) => ({
       id: l.id, testID: `week-log-${l.id}`, name: l.workout_name || c['C4-S-84'], done: true,
       open: () => nav.navigate('WorkoutTab', { screen: 'WorkoutHistoryEdit', params: { workout: JSON.stringify(l) }, initial: false }),
     })),

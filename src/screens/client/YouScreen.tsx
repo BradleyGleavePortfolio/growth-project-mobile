@@ -44,6 +44,7 @@ import {
   type MoreItem,
 } from './MoreScreen';
 import { LearnDoor } from './learn/LearnParts';
+import { assignmentDay, dayStart } from '../../utils/workout/workoutDay';
 
 export const YOU_COPY = {
   title: 'You',
@@ -89,7 +90,8 @@ export function weekSegments(
   end.setDate(end.getDate() + 7);
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   return assignments
-    .map((a) => ({ a, at: new Date(a.scheduled_for) }))
+    // The day it was assigned for, at local midnight: a calendar date never moves west.
+    .map((a) => ({ a, at: dayStart(assignmentDay(a)) ?? new Date(NaN) }))
     .filter(({ at }) => !Number.isNaN(at.getTime()) && at >= start && at < end)
     .sort((x, y) => x.at.getTime() - y.at.getTime())
     .map(({ a, at }) => (a.completed_at ? 'done' : at < today ? 'missed' : 'planned'));

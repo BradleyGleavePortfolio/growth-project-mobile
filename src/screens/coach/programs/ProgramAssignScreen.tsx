@@ -52,6 +52,7 @@ import {
   plural,
 } from "./ProgramUi";
 import type { ProgramsScreenProps } from "./types";
+import { calendarDay } from "../../../utils/workout/workoutDay";
 
 export default function ProgramAssignScreen({
   route,
@@ -433,7 +434,7 @@ function resultLabel(r: BulkAssignResult): string {
   if (r.status === "assigned") {
     const span =
       r.first_scheduled_for && r.last_scheduled_for
-        ? `, ${r.first_scheduled_for.slice(0, 10)} to ${r.last_scheduled_for.slice(0, 10)}`
+        ? `, ${calendarDay(r.first_scheduled_for)} to ${calendarDay(r.last_scheduled_for)}`
         : "";
     return `${r.replayed ? "Assigned (earlier attempt)" : "Assigned"}${r.workouts ? `: ${plural(r.workouts, "workout", "workouts")}` : ""}${span}`;
   }

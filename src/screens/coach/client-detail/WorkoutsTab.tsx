@@ -55,7 +55,7 @@ export function WorkoutsTab({
   weekStart.setDate(now.getDate() - (now.getDay() + 6) % 7);
   // Each workout on the day it counts on (its recorded day), as the client's own screens count it.
   const dayOfSession = (s: WorkoutSession) => s.day || instantDay(s.startTime);
-  const dayText = (day: string) => (dayStart(day) ?? new Date(day)).toLocaleDateString();
+  const dayText = (day: string) => dayStart(day)?.toLocaleDateString() ?? '';
   const [monday, today] = [instantDay(weekStart), instantDay(now)];
   // This input is workout history, not an assignment ledger. No target or missed days are inferred.
   const weeklyCount = workoutSessions.filter((s) => s.completed && dayOfSession(s) >= monday && dayOfSession(s) <= today).length;
