@@ -1020,7 +1020,7 @@ const makeChart = (sc: SemanticTokens) =>
   barLabel: {
     ...chartLabel,
     color: sc.textMuted,
-    height: 14,
+    minHeight: 14,
     textAlign: 'center',
   },
   barTrack: {
