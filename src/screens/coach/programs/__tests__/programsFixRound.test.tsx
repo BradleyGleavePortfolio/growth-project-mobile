@@ -56,6 +56,7 @@ jest.mock("../../../../api/programsApi", () => ({
 
 import ProgramFormScreen from "../ProgramFormScreen";
 import ProgramAssignScreen from "../ProgramAssignScreen";
+import { toIsoDate } from "../../../../api/programsApi";
 
 /** Test seam: hand a partial navigation fake to the typed screen prop. */
 function fake<T>(v: unknown): T {
@@ -100,29 +101,54 @@ function assignScreen() {
 
 const keyOf = (call: number) => mockAssign.mock.calls[call][2];
 
-// FR-917R2: the screen's first start date is the next Monday after today. On Monday 2 Nov 2026 (UTC)
-// that is 2026-11-09, so a fixed 2026-11-09 was no new intent on that day. Use a date that is never
-// the first one.
-const NEW_START = "2031-01-06";
+/** Seven days after a YYYY-MM-DD day, so never the day it started from. */
+function weekAfter(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return toIsoDate(new Date(y, m - 1, d + 7));
+}
+
+// The screen's default start date comes from today, so the typed date is worked
+// out from the default the field shows, and the case also runs with the clock
+// pinned (only Date is faked): this week, the default day itself, a Sunday, a
+// Monday, a month end and a year end. null = the real clock.
+const PINNED_DAYS: (Date | null)[] = [
+  null,
+  new Date(2026, 10, 2, 9), // Mon 2026-11-02: default 2026-11-09
+  new Date(2026, 10, 8, 23, 30), // Sun 2026-11-08 late evening
+  new Date(2026, 10, 9, 0, 15), // Mon 2026-11-09 just after midnight
+  new Date(2026, 10, 30, 12), // Mon 2026-11-30, month end
+  new Date(2026, 11, 31, 12), // Thu 2026-12-31, year end
+];
 
 describe("ProgramAssignScreen request keys (B-328-1)", () => {
-  it("a new start date is a new intent: fresh key and the old results are cleared", async () => {
-    const screen = await assignScreen();
-    await fireEvent.press(screen.getByLabelText("Select all shown (1)"));
-    await fireEvent.press(screen.getByLabelText("Assign to 1 client"));
-    expect(await screen.findByText(/1 assigned/)).toBeTruthy();
-    await fireEvent.changeText(
-      screen.getByLabelText("Start date, year month day"),
-      NEW_START,
-    );
-    expect(screen.queryByText(/1 assigned/)).toBeNull();
-    await fireEvent.press(screen.getByLabelText("Assign to 1 client"));
-    expect(mockAssign).toHaveBeenCalledTimes(2);
-    expect(mockAssign.mock.calls[1][1]).toMatchObject({
-      start_date: NEW_START,
-    });
-    expect(keyOf(1)).not.toBe(keyOf(0));
-  });
+  describe.each(PINNED_DAYS.map((d) => [d ? toIsoDate(d) : "real clock", d] as const))(
+    "today = %s",
+    (_label, now) => {
+      beforeEach(() => {
+        // Only Date is faked; every timer stays real so async finds still work.
+        if (now) jest.useFakeTimers({ now, doNotFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "setImmediate", "clearImmediate", "nextTick", "queueMicrotask", "requestAnimationFrame", "cancelAnimationFrame", "performance", "hrtime"] });
+      });
+      afterEach(() => jest.useRealTimers());
+
+      it("a new start date is a new intent: fresh key and the old results are cleared", async () => {
+        const screen = await assignScreen();
+        const field = () => screen.getByLabelText("Start date, year month day");
+        const first = field().props.value as string;
+        const next = weekAfter(first);
+        expect(next).not.toBe(first);
+        await fireEvent.press(screen.getByLabelText("Select all shown (1)"));
+        await fireEvent.press(screen.getByLabelText("Assign to 1 client"));
+        expect(await screen.findByText(/1 assigned/)).toBeTruthy();
+        expect(mockAssign.mock.calls[0][1]).toMatchObject({ start_date: first });
+        await fireEvent.changeText(field(), next);
+        expect(screen.queryByText(/1 assigned/)).toBeNull();
+        await fireEvent.press(screen.getByLabelText("Assign to 1 client"));
+        expect(mockAssign).toHaveBeenCalledTimes(2);
+        expect(mockAssign.mock.calls[1][1]).toMatchObject({ start_date: next });
+        expect(keyOf(1)).not.toBe(keyOf(0));
+      });
+    },
+  );
 
   it("a run with no failures retires its key, so the next press is a new assignment", async () => {
     const screen = await assignScreen();
