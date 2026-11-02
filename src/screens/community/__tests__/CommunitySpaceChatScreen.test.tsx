@@ -2346,3 +2346,64 @@ describe('FR-909R2 a whole read and a Block, the other paths', () => {
     expect(JSON.stringify(client.getQueryData(['community', 'space-chat', 'me-1', 'c-other']))).not.toContain('Jo words elsewhere');
   });
 });
+
+it('LS-909R3: 101 rows across timestamp-cursor pages preserve an unknown older quote until the final complete answer', async () => {
+  readAnswer = fail(404);
+  mockNet.isOnline = false;
+  mockNet.reachable = false;
+  onlineManager.setOnline(true);
+  const history = Array.from({ length: 101 }, (_, i) => msg(
+    `00000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`,
+    new Date(Date.UTC(2026, 9, 22, 12, 0) - i * 60_000).toISOString(),
+    JO,
+  ));
+  const targetId = '00000000-0000-4000-8000-000000009999';
+  mockDisk.set('space_outbox_me-1', JSON.stringify([{
+    localId: 'ls909r3-pages', cohortId: 'c-every', body: 'My own queued reply',
+    createdAt: '2026-10-22T12:30:00.000Z', state: 'waiting',
+    reply: {
+      id: targetId, body: 'Words of the unknown older root', authorLabel: JO.name,
+      at: '2026-10-20T08:00:00.000Z',
+    },
+  }]));
+  const original = mockApi.get.getMockImplementation()!;
+  mockApi.get.mockImplementation(async (url: string, cfg?: { params?: { before?: string } }) => {
+    if (url.endsWith('/messages')) {
+      const before = cfg?.params?.before;
+      const offset = before ? history.findIndex((m) => m.created_at === before) + 1 : 0;
+      const messages = history.slice(offset, offset + 30);
+      return { data: {
+        messages,
+        next_before: offset + messages.length < history.length ? messages[messages.length - 1].created_at : null,
+      } };
+    }
+    return original(url, cfg);
+  });
+  const key = ['community', 'space-chat', 'me-1', 'c-every'];
+  const pages = () => client.getQueryData<{
+    pages: Array<{ messages: Array<{ id: string; created_at: string }>; next_before: string | null }>;
+  }>(key)?.pages ?? [];
+  const r = await open();
+  await waitFor(() => expect(pages()).toHaveLength(1));
+  await waitFor(() => expect(mockDisk.get('space_outbox_me-1')).toContain('Words of the unknown older root'));
+  for (let count = 2; count <= 4; count += 1) {
+    await fireEvent(r.getByTestId('space-chat-list'), 'onEndReached');
+    await waitFor(() => expect(pages()).toHaveLength(count));
+    if (count < 4) {
+      expect(mockDisk.get('space_outbox_me-1')).toContain('Words of the unknown older root');
+    }
+  }
+  expect(pages().flatMap((p) => p.messages)).toHaveLength(101);
+  expect(pages().map((p) => p.messages.length)).toEqual([30, 30, 30, 11]);
+  expect(pages()[3].next_before).toBeNull();
+  for (const at of [29, 59, 89]) {
+    expect(mockApi.get).toHaveBeenCalledWith('/community/cohorts/c-every/messages', {
+      params: { limit: 30, before: history[at].created_at },
+    });
+  }
+  await waitFor(() => expect(mockDisk.get('space_outbox_me-1')).not.toContain('Words of the unknown older root'));
+  const saved = JSON.parse(mockDisk.get('space_outbox_me-1')!);
+  expect(saved[0].reply).toEqual({ id: targetId, body: '', authorLabel: '', gone: true });
+  expect(saved[0].body).toBe('My own queued reply');
+  expect(sends()).toHaveLength(0);
+});
