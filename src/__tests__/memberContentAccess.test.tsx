@@ -1001,3 +1001,46 @@ describe('LO-911R2 B3: every raw services/api read of a member path is named, wh
     expect(RAW.filter((f) => !classify(f.file, f.text).list).map((f) => f.file)).toEqual([]);
   });
 });
+
+describe('LS-911R2 independent scanner probes', () => {
+  const file = 'screens/community/IndependentMemberHost.tsx';
+  it.each([
+    ['static API URL constant', "import api from '../../services/api'; const url = '/community/workspaces/ws/posts'; export const read = () => api.get(url);"],
+    ['computed raw API method', "import api from '../../services/api'; export const read = () => api['get']('/community/workspaces/ws/posts');"],
+    ['side-effect dynamic import of unread member module', "export const load = () => import('../../components/community/UnreadMemberPart');"],
+    ['namespace dynamic import of unread member module', "export const load = async () => { const parts = await import('../../components/community/UnreadMemberPart'); return parts; };"],
+    ['side-effect require of unread member module', "export const load = () => require('../../components/community/UnreadMemberPart');"],
+    ['namespace require of unread member module', "export const load = () => { const parts = require('../../components/community/UnreadMemberPart'); return parts; };"],
+    ['computed require export that is drawn', "import React from 'react'; const Feed = require('../../components/community/UnreadMemberPart')['Feed']; export const Host = () => <Feed />;"],
+    ['raw literal API read control', "import api from '../../services/api'; export const read = () => api.get('/community/workspaces/ws/posts');"],
+    ['unread named member import control', "import { Feed } from '../../components/community/UnreadMemberPart'; export const load = () => Feed();"],
+    ['nonliteral dynamic import control', "export const load = (specifier: string) => import(specifier);"],
+  ])('%s cannot disappear', (_label, text) => {
+    const kinds = classify(file, text);
+    expect(kinds.composer || kinds.list).toBe(true);
+  });
+
+  it.each([
+    ['shared hook', 'hooks/IndependentMemberRows.ts', "import { usePosts } from './useCommunity'; export const useIndependentRows = () => usePosts('ws');",
+      "import { useIndependentRows } from '../../hooks/IndependentMemberRows'; export const Feed = () => useIndependentRows();", 'list'],
+    ['shared wrapper', 'components/community/IndependentDraft.tsx', "import React from 'react'; import { ComposerInput } from './ComposerInput'; export const IndependentDraft = () => <ComposerInput placeholder=\"Reply\" maxLength={2000} onSubmit={async () => undefined} />;",
+      "import React from 'react'; import { IndependentDraft } from '../../components/community/IndependentDraft'; export const Feed = () => <IndependentDraft />;", 'composer'],
+    ['default re-export', 'components/community/IndependentDraft.tsx', "export { ComposerInput as default } from './ComposerInput';",
+      "import React from 'react'; import Draft from '../../components/community/IndependentDraft'; export const Feed = () => <Draft placeholder=\"Reply\" maxLength={2000} onSubmit={async () => undefined} />;", 'composer'],
+  ] as const)('new caller of %s remains visible', (_label, shared, sharedText, text, kind) => {
+    const ctx = scanCtx({ [file]: text, [shared]: sharedText });
+    expect(classify(file, text, ctx)[kind]).toBe(true);
+  });
+
+  it.each([
+    ['namespace imported component passed to createElement', "import React from 'react'; import * as Parts from '../../components/community/IndependentDraft'; export const Feed = () => React.createElement(Parts.IndependentDraft);"],
+    ['computed namespace component', "import React from 'react'; import * as Parts from '../../components/community/IndependentDraft'; const Draft = Parts['IndependentDraft']; export const Feed = () => <Draft />;"],
+  ])('%s remains visible', (_label, text) => {
+    const ctx = scanCtx({
+      [file]: text,
+      'components/community/IndependentDraft.tsx': "import React from 'react'; import { ComposerInput } from './ComposerInput'; export const IndependentDraft = () => <ComposerInput placeholder=\"Reply\" maxLength={2000} onSubmit={async () => undefined} />;",
+    });
+    const kinds = classify(file, text, ctx);
+    expect(kinds.composer || kinds.list).toBe(true);
+  });
+});
