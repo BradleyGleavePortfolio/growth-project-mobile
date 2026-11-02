@@ -2359,7 +2359,7 @@ it('LS-909R3: 101 rows across timestamp-cursor pages preserve an unknown older q
   ));
   const targetId = '00000000-0000-4000-8000-000000009999';
   mockDisk.set('space_outbox_me-1', JSON.stringify([{
-    localId: 'ls909r3-pages', cohortId: 'c-every', body: 'My own queued reply',
+    localId: 'ls909r3-pages', key: 'ls909r3-pages', cohortId: 'c-every', body: 'My own queued reply',
     createdAt: '2026-10-22T12:30:00.000Z', state: 'waiting',
     reply: {
       id: targetId, body: 'Words of the unknown older root', authorLabel: JO.name,
