@@ -1044,3 +1044,84 @@ describe('LS-911R2 independent scanner probes', () => {
     expect(kinds.composer || kinds.list).toBe(true);
   });
 });
+
+// ─── FR-911R2: the other forms of each class (red at 06d2faeb, green at the fix) ─────────────────────────────────
+// F1: a services/api path or a module the scan cannot read fails closed (by its verb); what it can read it follows.
+describe('FR-911R2 F1: the other raw services/api forms are named by their verb, readable or not', () => {
+  const host = 'screens/client/FR911R2WireHost.tsx';
+  const head = "import api from '../../services/api';\n";
+  it.each([
+    ['request without a method (a GET)', `${head}export const read = () => api.request({ url: '/community/posts' });`, 'list'],
+    ['callable client with a config', `${head}export const read = () => api({ method: 'get', url: '/messages' });`, 'list'],
+    ['a verb picked by a key the scan cannot read', `${head}export const call = (verb: 'get' | 'post') => api[verb]('/community/posts');`, 'list'],
+    ['a path a local function builds', `${head}const chatPath = (id: string) => \`/community/cohorts/\${id}/chat\`;\nexport const read = (id: string) => api.get(chatPath(id));`, 'list'],
+    ['a path held in an object of paths', `${head}const PATHS = { chat: '/community/chat' } as const;\nexport const read = () => api.get(PATHS.chat);`, 'list'],
+    ['a path picked by a condition', `${head}export const read = (mine: boolean) => api.get(mine ? '/v1/clients/me/coach' : '/messages/coach-review');`, 'list'],
+    ['a path the scan cannot read (a parameter) read', `${head}export const read = (path: string) => api.get(path);`, 'list'],
+    ['a path the scan cannot read (a parameter) sent', `${head}export const send = (path: string, body: unknown) => api.post(path, body);`, 'composer'],
+    ['a client kept under another name in a function', `${head}export const read = () => { const w = api; return w.get('/community/posts'); };`, 'list'],
+  ] as const)('%s', (_label, text, kind) => {
+    expect(classify(host, text)[kind]).toBe(true);
+  });
+  it('a path built from a base imported from another file is read through it', () => {
+    const ctx = scanCtx({ 'screens/client/fr911r2Paths.ts': "export const CHAT_BASE = '/community/cohorts';\n" });
+    const text = `${head}import { CHAT_BASE } from './fr911r2Paths';\nexport const read = (id: string) => api.get(\`\${CHAT_BASE}/\${id}/chat\`);`;
+    expect(classify(host, text, ctx).list).toBe(true);
+  });
+  it.each([
+    ['a readable path that is not member content', `${head}export const read = () => api.get('/v1/clients/me/coach');`],
+    ['a readable path behind a const that is not member content', `${head}const url = '/me/ai-consent/roman';\nexport const read = () => api.get(url);`],
+    ['a delete the scan cannot read', `${head}export const drop = (path: string) => api.delete(path);`],
+    ['an image required by a relative path', "export const img = require('../../assets/fr911r2-missing.png');"],
+    ['a client method that is no request', `${head}api.interceptors.request.use((c) => c);`],
+  ])('control, not named: %s', (_label, text) => {
+    const k = classify(host, text);
+    expect(k.composer || k.list).toBe(false);
+  });
+  it.each([
+    ['a whole namespace passed on', "import * as Parts from '../../components/community/FR911R2Draft';\nexport const parts = () => register(Parts);"],
+    ['a namespace part kept under a name, then drawn', "import React from 'react';\nimport * as Parts from '../../components/community/FR911R2Draft';\nconst Draft = Parts.FR911R2Draft;\nexport const Feed = () => <Draft />;"],
+    ['a namespace part picked by a key the scan cannot read', "import * as Parts from '../../components/community/FR911R2Draft';\nexport const pick = (name: 'FR911R2Draft') => Parts[name];"],
+    ['an import() of a code module the scan cannot read, outside a member place', "export const load = () => import('../settings/FR911R2Missing');"],
+  ])('%s is named', (_label, text) => {
+    const ctx = scanCtx({ 'components/community/FR911R2Draft.tsx': "import React from 'react'; import { ComposerInput } from './ComposerInput'; export const FR911R2Draft = () => <ComposerInput placeholder=\"Reply\" maxLength={2000} onSubmit={async () => undefined} />;" });
+    const k = classify('screens/client/FR911R2NsHost.tsx', text, ctx);
+    expect(k.composer || k.list).toBe(true);
+  });
+});
+
+// F2: a row stops only the exports it proves; a KNOWN GAP row stops nothing.
+describe('FR-911R2 F2: a row stops only what it proves', () => {
+  const screen = (imp: string, use: string) => `import React from 'react';\nimport { Text } from 'react-native';\n${imp}\nexport default function FR911R2Peek() {\n  ${use}\n}\n`;
+  it('a new export of an EXEMPT file (hooks/useNotifications.ts) that reads member words names its caller', () => {
+    const hook = `${read('hooks/useNotifications.ts')}\nexport function useCoachWords() {\n  return useQuery({ queryKey: ['messages', 'words'], queryFn: async () => (await messagesApi.list()).data });\n}\n`;
+    const text = screen("import { useCoachWords } from '../../hooks/useNotifications';", 'const q = useCoachWords();\n  return <Text>{String(q.data)}</Text>;');
+    const ctx = scanCtx({ 'hooks/useNotifications.ts': `import { messagesApi } from '../services/api';\nimport { useQuery } from '@tanstack/react-query';\n${hook}`, 'screens/client/FR911R2Peek.tsx': text });
+    expect(classify('screens/client/FR911R2Peek.tsx', text, ctx).list).toBe(true);
+  });
+  it('a new export of a registered list part (components/community/SpaceTree.tsx) that reads posts names its caller', () => {
+    const part = `${read('components/community/SpaceTree.tsx')}\nexport function useSpacePeek(ws: string) {\n  return usePosts(ws);\n}\nimport { usePosts } from '../../hooks/useCommunity';\n`;
+    const text = screen("import { useSpacePeek } from '../../components/community/SpaceTree';", "const q = useSpacePeek('ws');\n  return <Text>{String(q.data)}</Text>;");
+    const ctx = scanCtx({ 'components/community/SpaceTree.tsx': part, 'screens/client/FR911R2Peek.tsx': text });
+    expect(classify('screens/client/FR911R2Peek.tsx', text, ctx).list).toBe(true);
+  });
+  it.each([
+    ['ShareSheet (its row is a KNOWN GAP)', "import ShareSheet from '../../components/share/ShareSheet';", 'return <ShareSheet card={null} onClose={() => undefined} />;'],
+    ['useLookupNudge (its row is a KNOWN GAP)', "import { useLookupNudge } from '../coach/lookup/useLookupNudge';", 'const n = useLookupNudge({} as never);\n  return <Text>{String(n)}</Text>;'],
+  ])('a new caller of %s is named a composer', (_label, imp, use) => {
+    const text = screen(imp, use);
+    expect(classify('screens/client/FR911R2Peek.tsx', text).composer).toBe(true);
+  });
+});
+
+// F3: my coach's nudges are signs of the scan, through the API object or a raw read.
+describe('FR-911R2 F3: a new read of my coach\'s nudges is named a list', () => {
+  it.each([
+    ['nudgesApi.list', "import { nudgesApi } from '../../services/api';\nexport const read = () => nudgesApi.list({ limit: 5 });"],
+    ['nudgesApi.unreadCount taken as a queryFn', "import { useQuery } from '@tanstack/react-query';\nimport { nudgesApi } from '../../services/api';\nexport const useCount = () => useQuery({ queryKey: ['nudges', 'n'], queryFn: nudgesApi.unreadCount });"],
+    ['a raw read of /nudges', "import api from '../../services/api';\nexport const read = () => api.get('/nudges?limit=5');"],
+    ['useNudges from hooks/useApi.ts', "import { useNudges } from '../../hooks/useApi';\nexport const useMine = () => useNudges(5);"],
+  ])('%s', (_label, text) => {
+    expect(classify('screens/client/FR911R2Nudges.tsx', text).list).toBe(true);
+  });
+});
