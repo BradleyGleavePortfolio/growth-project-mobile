@@ -151,7 +151,8 @@ describe('Food Log fast paths', () => {
       fireEvent.changeText(screen.getByPlaceholderText('Search foods...'), 'oats');
     });
     expect(screen.getByText('Rolled oats')).toBeTruthy();
-    expect(screen.getByText('From your log · Last time 60 g')).toBeTruthy();
+    // STYLEC-916: a food from the log shows its last portion on the row's one line.
+    expect(screen.getByText(/^60 g, .* g protein$/)).toBeTruthy();
   });
 
   it('takes a deleted entry off the day before the server answers', async () => {

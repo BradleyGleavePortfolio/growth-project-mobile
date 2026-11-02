@@ -7,6 +7,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  useWindowDimensions,
 } from 'react-native';
 import { colors, gold, layout, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/useTheme';
@@ -76,13 +77,16 @@ export function QuantityPickerContent({
   const quantity = parseQuantityInput(quantityInput);
   const { semanticColors: sc } = useTheme();
   const styles = makeStyles(sc);
+  // The amount field is as wide as its digits (Cormorant figures are about 0.5 em) so the unit sits beside it.
+  const amountWidth = Math.ceil(Math.max(1, quantityInput.length) * 28 * Math.min(useWindowDimensions().fontScale || 1, 1.3)) + 12;
   const previewMacros = selectedFood
     ? calcMacros(selectedFood, quantity ?? 0, selectedUnit)
     : { calories: 0, protein: 0, carbs: 0, fat: 0 };
   const shown = (value: number) => Number.isFinite(value) ? String(value) : '—';
   const units = [...unitOptionsFor(selectedFood)].sort((a, b) => UNIT_ORDER.indexOf(a) - UNIT_ORDER.indexOf(b));
-  const summary = `${shown(previewMacros.calories)} kcal, ${shown(previewMacros.protein)} g protein, `
-    + `${shown(previewMacros.carbs)} g carbs, ${shown(previewMacros.fat)} g fat.`;
+  // No-break spaces keep each number with its unit when the line wraps (320 pt, 130% text).
+  const summary = `${shown(previewMacros.calories)}\u00A0kcal, ${shown(previewMacros.protein)}\u00A0g protein, `
+    + `${shown(previewMacros.carbs)}\u00A0g carbs, ${shown(previewMacros.fat)}\u00A0g fat.`;
 
   return (
     <KeyboardAvoidingView
@@ -121,7 +125,7 @@ export function QuantityPickerContent({
         <View style={styles.amountRow}>
           <TextInput
             accessibilityLabel="Food quantity"
-            style={styles.quantityInput}
+            style={[styles.quantityInput, { width: amountWidth }]}
             value={quantityInput}
             onChangeText={onQuantityChange}
             keyboardType="decimal-pad"
@@ -221,7 +225,7 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     marginTop: 20,
   },
   quantityInput: {
-    minWidth: 72,
+    minWidth: 48,
     minHeight: layout.buttonHeight,
     paddingVertical: 0,
     paddingHorizontal: 4,

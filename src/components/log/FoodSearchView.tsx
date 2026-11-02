@@ -335,6 +335,7 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   searchInput: {
     minHeight: 44, fontFamily: 'Inter_400Regular',
     flex: 1,
+    minWidth: 0,
     fontSize: 17,
     color: sc.textPrimary,
   },

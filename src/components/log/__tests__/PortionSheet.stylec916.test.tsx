@@ -86,7 +86,8 @@ describe('STYLEC-916 portion ruler', () => {
     expect(screen.getByLabelText('Portion unit serving').props.accessibilityState).toMatchObject({ selected: true });
     const perServing = calcMacros(chicken, 1, 'serving');
     expect(perServing).toEqual(calcMacros(chicken, 100, 'g'));
-    expect(screen.getByTestId('portion-summary').props.children).toBe('165 kcal, 31 g protein, 0 g carbs, 3.6 g fat.');
+    expect(screen.getByTestId('portion-summary')).toHaveTextContent('165 kcal, 31 g protein, 0 g carbs, 3.6 g fat.');
+    expect(String(screen.getByTestId('portion-summary').props.children)).toContain('\u00A0g fat.');
     await fireEvent.press(screen.getByLabelText('Portion unit oz'));
     expect(screen.getByLabelText('Portion unit oz').props.accessibilityState).toMatchObject({ selected: true });
   });
@@ -95,7 +96,8 @@ describe('STYLEC-916 portion ruler', () => {
     await render(<Harness onConfirm={jest.fn()} />);
     expect(screen.getByText('For Lunch')).toBeTruthy();
     expect(screen.getByRole('header').props.children).toBe('Chicken breast, grilled');
-    expect(screen.getByTestId('portion-summary').props.children).toBe('248 kcal, 46.5 g protein, 0 g carbs, 5.4 g fat.');
+    expect(screen.getByTestId('portion-summary')).toHaveTextContent('248 kcal, 46.5 g protein, 0 g carbs, 5.4 g fat.');
+    expect(String(screen.getByTestId('portion-summary').props.children)).toContain('\u00A0g fat.');
     const order = JSON.stringify(screen.toJSON());
     expect(order.indexOf('portion-ruler')).toBeLessThan(order.indexOf('portion-summary'));
     expect(order.indexOf('portion-summary')).toBeLessThan(order.indexOf('quantity-log-food'));

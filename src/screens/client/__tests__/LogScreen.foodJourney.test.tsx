@@ -271,14 +271,14 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     await fireEvent.press(screen.getAllByText('Add food')[0]);
     await fireEvent.changeText(screen.getByPlaceholderText('Search foods...'), 'foods');
     await fireEvent.press(await screen.findByText('Banana'));
-    await fireEvent.press(screen.getByRole('button', { name: 'Portion unit g' }));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Portion unit g' }));
     await fireEvent.changeText(screen.getByLabelText('Food quantity'), '100');
     await fireEvent.press(screen.getByRole('button', { name: 'Log food' }));
     expect(await screen.findByText('Added Banana.')).toBeTruthy();
     expect(screen.getByPlaceholderText('Search foods...').props.value).toBe('foods');
     expect(useClientStore.getState().dailyTotals.calories).toBe(89);
     await fireEvent.press(screen.getByText('Rolled oats'));
-    await fireEvent.press(screen.getByRole('button', { name: 'Portion unit g' }));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Portion unit g' }));
     await fireEvent.changeText(screen.getByLabelText('Food quantity'), '100');
     await fireEvent.press(screen.getByRole('button', { name: 'Log food' }));
     expect(await screen.findByText('Added Rolled oats.')).toBeTruthy();
@@ -297,9 +297,9 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     await render(<LogScreen onSaved={onSaved} />);
     await fireEvent.press(screen.getAllByText('Add food')[0]);
     await fireEvent.press(screen.getByText('Frequent'));
-    expect(screen.getByText('Most logged, last 7 days')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Frequent' }).props.accessibilityState.selected).toBe(true);
     await fireEvent.press(screen.getByText('Recent'));
-    expect(screen.getByText('Recent foods, last 7 days')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Recent' }).props.accessibilityState.selected).toBe(true);
     jest.mocked(foodApi.search).mockRejectedValueOnce(new Error('Network Error'));
     await fireEvent.changeText(screen.getByPlaceholderText('Search foods...'), 'fruit');
     await fireEvent.press(await screen.findByText(/^(Retry Search|Try again)$/));
