@@ -325,7 +325,7 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: layout.gutter,
-    marginTop: 16,
+    marginTop: 8,
     marginBottom: 8,
     gap: 10,
     minHeight: layout.buttonHeight,
@@ -364,7 +364,7 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   searchResultItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 7,
     minHeight: layout.rowMinHeight,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: sc.border,

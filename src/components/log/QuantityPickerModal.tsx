@@ -191,7 +191,7 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   },
   unitTabs: {
     flexGrow: 0,
-    marginTop: 16,
+    marginTop: 4,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: sc.border,
   },
