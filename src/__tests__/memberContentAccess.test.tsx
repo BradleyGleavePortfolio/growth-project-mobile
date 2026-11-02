@@ -1408,3 +1408,30 @@ describe('LO-911R3 B1: a via row does not hide what the file draws itself', () =
     expect(unnamedWith({ [f]: text })).toContain(`list ${f}`);
   });
 });
+
+// ─── LO-911R3 B2 (B-TEST, review only): member reads named only by a file's name, never by the read ──────────────
+// commandCenterApi.getInbox (services/commandCenterApi.ts:351, GET /coach/command-center/inbox) returns each client's
+// last_message_preview, the read behind the InboxScreen KNOWN GAP row. It is no LIST_CALLS sign, commandCenterApi does
+// not match MEMBER_API_NAME, and the path is not in MEMBER_PATH (:400), so InboxScreen is named only because its file
+// name holds "Inbox" (MEMBER_PLACE). The same holds for a raw read of /notifications, whose rows the REGISTRY says can
+// quote a message (NotificationCenterScreen row): fetchNotifications is a sign by name, its path is not. LO-911R2 B2 was
+// this class (a member read with no sign); the fix added the nudges sign only. Smallest fix: commandCenterApi.getInbox
+// as a LIST_CALLS sign, /coach/command-center/inbox and /notifications in MEMBER_PATH, and a check that the wire path of
+// every LIST_CALLS / COMPOSER_CALLS sign matches MEMBER_PATH (so a sign and its path cannot drift apart again).
+describe('LO-911R3 B2: a member read is named by what it reads, not by the file name', () => {
+  it('a coach Home card drawing commandCenterApi.getInbox previews is named a list', () => {
+    const text = "import React from 'react';\nimport { Text } from 'react-native';\nimport { useQuery } from '@tanstack/react-query';\n" +
+      "import { commandCenterApi } from '../../../services/commandCenterApi';\nexport default function LatestFromClients() {\n" +
+      "  const q = useQuery({ queryKey: ['cc', 'inbox'], queryFn: () => commandCenterApi.getInbox() });\n" +
+      '  return <>{q.data?.data.threads.map((t) => <Text key={t.client_id}>{t.last_message_preview}</Text>)}</>;\n}\n';
+    expect(classify('screens/coach/home-v11/LatestFromClients.tsx', text).list).toBe(true);
+  });
+  it('a raw read of the command center inbox is named a list', () => {
+    const text = "import api from '../../../services/api';\nexport const readLatest = () => api.get('/coach/command-center/inbox');\n";
+    expect(classify('screens/coach/home-v11/latestRead.ts', text).list).toBe(true);
+  });
+  it('a raw read of the notification rows is named a list', () => {
+    const text = "import api from '../../../services/api';\nexport const readBell = () => api.get('/notifications?limit=20');\n";
+    expect(classify('screens/coach/home-v11/bellRead.ts', text).list).toBe(true);
+  });
+});
