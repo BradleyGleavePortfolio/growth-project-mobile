@@ -95,7 +95,10 @@ async function withChatBox<T>(uid: string, body: (box: { current: ReturnType<typ
     jest.doMock('react', () => React);
     jest.doMock('react-native', () => ReactNative);
     jest.doMock('@react-native-async-storage/async-storage', () => asyncStorageModule);
+    // A plain require: the copy must load through the isolated registry (and see the test's mocks).
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     mod = require('../../src/lib/chatDrafts') as typeof ChatDrafts;
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     users = require('../../src/hooks/useCurrentUser') as typeof CurrentUser;
   });
   jest.dontMock('react');
