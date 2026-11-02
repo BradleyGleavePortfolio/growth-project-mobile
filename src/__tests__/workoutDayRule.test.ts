@@ -29,7 +29,9 @@ import {
   workoutStartDay,
 } from '../utils/workout/workoutDay';
 
-const ROOT = path.resolve(__dirname, '..', '..');
+// FR-917R3: a mutation test may point the guard at its own copy of src
+// (FR917_DAY_ROOT), so no other test's child run sees its edits.
+const ROOT = process.env.FR917_DAY_ROOT || path.resolve(__dirname, '..', '..');
 const read = (file: string) => fs.readFileSync(path.join(ROOT, file), 'utf8');
 
 describe('the day rule (Pacific time)', () => {

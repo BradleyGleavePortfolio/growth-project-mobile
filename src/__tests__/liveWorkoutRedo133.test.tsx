@@ -135,8 +135,9 @@ describe.each(DEVICES)('live workout at $name', (device) => {
 
   it('sets serif titles with a line height that never clips descenders', async () => {
     const view = await open();
-    // FR-917R3 (C1 v2 header, owner-picked): the header is "Block A of B" and the set count; no workout title.
-    for (const text of ['Bench Press', 'Seated Row']) {
+    // FR-917R3 (C1 v2, owner-picked): the header is "Block A of B" and the set count, no workout title; only the
+    // block in progress has a serif name (a block not started is a sans line, as in C2_logger).
+    for (const text of ['Bench Press']) {
       const style = flat(view.getByText(text));
       expect(style.fontFamily).toMatch(/^CormorantGaramond/);
       expect(style.lineHeight!).toBeGreaterThanOrEqual(1.2 * style.fontSize!);

@@ -85,7 +85,7 @@ export function ExerciseCard({
         <View style={[styles.exerciseHeader, local.foldedHeader]}>
           {letter}
           <View style={styles.exerciseHeaderText}>
-            <Headline level="h3">{exercise.exerciseName}</Headline>
+            <Text style={styles.exerciseName}>{exercise.exerciseName}</Text>
             {plan ? <Text style={styles.exerciseSummary}>{plan}</Text> : null}
           </View>
         </View>
@@ -102,7 +102,7 @@ export function ExerciseCard({
         <View style={[styles.exerciseHeader, local.foldedHeader]}>
           {letter}
           <View style={styles.exerciseHeaderText}>
-            <Headline level="h3">{`${blockLetter(exIdx)} · ${exercise.exerciseName}`}</Headline>
+            <Text style={styles.exerciseName}>{`${blockLetter(exIdx)} · ${exercise.exerciseName}`}</Text>
             {summary}
           </View>
           <Ionicons name="chevron-down" size={20} color={sc.textPrimary} />

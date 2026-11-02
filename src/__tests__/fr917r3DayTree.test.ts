@@ -1,18 +1,24 @@
 // FR-917R3 (LS-917R3 B1, LO-917R3 C5): more syntax the day guard must see in
-// the tree. Each child guard run sees one mutation; the product file is
-// restored after each case.
+// the tree. Each child guard run sees one mutation in a private copy of src;
+// the copy's file is restored after each case.
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
 
 const root = path.resolve(__dirname, '../..');
 const guard = path.join(root, 'src/__tests__/workoutDayRule.test.ts');
-const listed = path.join(root, 'src/utils/workout/workoutDoneToday.ts');
-const placedLine = path.join(root, 'src/screens/client/progress/progressV2.ts');
+// The guard reads a private copy of src (FR917_DAY_ROOT), so the product tree
+// is never edited and other tests' guard runs never see these mutations.
+const copy = fs.mkdtempSync(path.join(require('os').tmpdir(), 'fr917r3-day-'));
+fs.cpSync(path.join(root, 'src'), path.join(copy, 'src'), { recursive: true });
+afterAll(() => fs.rmSync(copy, { recursive: true, force: true }));
+const listed = path.join(copy, 'src/utils/workout/workoutDoneToday.ts');
+const placedLine = path.join(copy, 'src/screens/client/progress/progressV2.ts');
 
 function runGuard() {
   const result = spawnSync(process.execPath, [require.resolve('jest/bin/jest'), '--runInBand', '--forceExit', '--runTestsByPath', guard], {
     cwd: root, encoding: 'utf8', timeout: 40_000, maxBuffer: 8 * 1024 * 1024,
+    env: { ...process.env, FR917_DAY_ROOT: copy },
   });
   if (result.error) throw result.error;
   return result;
