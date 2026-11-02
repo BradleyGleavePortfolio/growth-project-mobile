@@ -982,3 +982,22 @@ describe('LO-911R2 B2: the client nudge list (my coach\'s words) is a registered
     expect(scan().list).toContain('screens/client/NotificationsScreen.tsx');
   });
 });
+
+// ─── LO-911R2 B3 (B-TEST, review only): a raw services/api read of a member path the scan cannot read passes ─────
+// nodeKinds names a raw wire read only when the first argument is a literal or a template that starts with the path,
+// the verb is get/post/put/patch/delete, and the object is services/api by name. A path held in a const, a path behind
+// a base constant, api.request and a local alias of api all go through unnamed, though the header says the scan fails
+// closed on a form it cannot read. Smallest fix: a services/api call (any verb, request included, or an alias of the
+// default export) whose path text the scan cannot read counts by its verb (fail closed), with resolving a local const
+// initializer for the path; the few files that build paths today take EXEMPT rows with a why.
+describe('LO-911R2 B3: every raw services/api read of a member path is named, whatever form the path or client takes', () => {
+  const RAW: { file: string; text: string }[] = [
+    { file: 'screens/client/ChatByVariable.tsx', text: "import api from '../../services/api';\nexport default function V({ id }: { id: string }) {\n  const url = `/community/cohorts/${id}/chat`;\n  const q = useQuery({ queryKey: ['chat', id], queryFn: () => api.get(url) });\n  return <Text>{q.data?.data?.[0]?.body}</Text>;\n}\n" },
+    { file: 'screens/client/ChatByBase.tsx', text: "import api from '../../services/api';\nconst BASE = '/community';\nexport default function V({ id }: { id: string }) {\n  const q = useQuery({ queryKey: ['chat', id], queryFn: () => api.get(`${BASE}/cohorts/${id}/chat`) });\n  return <Text>{q.data?.data?.[0]?.body}</Text>;\n}\n" },
+    { file: 'screens/client/ChatByRequest.tsx', text: "import api from '../../services/api';\nexport default function V() {\n  const q = useQuery({ queryKey: ['posts'], queryFn: () => api.request({ method: 'get', url: '/community/posts' }) });\n  return <Text>{q.data?.data?.[0]?.body}</Text>;\n}\n" },
+    { file: 'screens/client/ChatByAlias.tsx', text: "import api from '../../services/api';\nconst wire = api;\nexport default function V() {\n  const q = useQuery({ queryKey: ['posts'], queryFn: () => wire.get('/community/posts') });\n  return <Text>{q.data?.data?.[0]?.body}</Text>;\n}\n" },
+  ];
+  it('each raw read is named a list', () => {
+    expect(RAW.filter((f) => !classify(f.file, f.text).list).map((f) => f.file)).toEqual([]);
+  });
+});
