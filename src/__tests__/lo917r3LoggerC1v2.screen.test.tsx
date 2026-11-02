@@ -102,3 +102,27 @@ it('LO-917R3 B1: a block not started yet is one line with its plan (C1 v2 "C  Ro
   expect(view.queryByTestId('set-done-2-0')).toBeNull();
   expect(view.getByText(/3 × 8 · 135 lb/)).toBeTruthy();
 });
+
+it('LO-917R3 B2: the set row with the filled "As planned" fits the sage card on a 320 pt phone', async () => {
+  // Widths are the real styles on the rendered row. The label's width is a
+  // floor (half an em per letter); the real Inter SemiBold text is wider and
+  // 130% text wider again, so a row over the floor cannot fit.
+  mockParams = { ...mockParams, exercises: JSON.stringify(threeBlocks()) };
+  const view = await render(<ActiveWorkoutScreen />);
+  await waitFor(() => expect(view.getByTestId('exercise-active-0')).toBeTruthy());
+  const card = StyleSheet.flatten(view.getByTestId('exercise-active-0').props.style);
+  const pill = view.getByTestId('set-done-0-0');
+  const pillStyle = StyleSheet.flatten(pill.props.style);
+  const label = view.getAllByText('As planned')[0];
+  const labelStyle = StyleSheet.flatten(label.props.style);
+  const weight = StyleSheet.flatten(view.getByTestId('set-weight-0-0').props.style);
+  const reps = StyleSheet.flatten(view.getByTestId('set-reps-0-0').props.style);
+  // The row's gap (setRow, 4) between the four cells.
+  const gap = 4;
+  const labelFloor = 0.5 * Number(labelStyle.fontSize) * 'As planned'.length;
+  const pillWidth = 2 * Number(pillStyle.paddingHorizontal ?? 0) + Number(pillStyle.gap ?? 0) + 16 + labelFloor;
+  const rowFloor = 36 + Number(weight.minWidth) + Number(reps.minWidth) + 3 * gap + pillWidth;
+  const inside = 320 - 2 * Number(card.marginHorizontal) - 2 * Number(card.paddingHorizontal);
+  expect(Number.isFinite(rowFloor) && Number.isFinite(inside)).toBe(true);
+  expect(rowFloor).toBeLessThanOrEqual(inside);
+});
