@@ -1376,3 +1376,35 @@ describe('FR-911R2 F3: a new read of my coach\'s nudges is named a list', () => 
     expect(classify('screens/client/FR911R2Nudges.tsx', text).list).toBe(true);
   });
 });
+
+// ─── LO-911R3 B1 (B-TEST, review only): a via row must not register the file's own composer or list ─────────────
+// FR-911R2 gave the files that draw a gap part a via row (:277-293). `registered()` is per file and kind, so that row
+// registers the whole file: a composer or list the file draws itself (not through the part) passes the inventory
+// unnamed. At 06d2faeb these files had no row, so the same edit was named; this round made it silent. Smallest fix: a
+// via row registers only what the file holds through its parts (classify the file with its parts read as empty: any
+// kind still held is the file's own and needs its own row), and the via proof check asserts that on src as it is.
+describe('LO-911R3 B1: a via row does not hide what the file draws itself', () => {
+  const unnamedWith = (overlay: Record<string, string>) => {
+    const ctx = scanCtx(overlay);
+    const out: string[] = [];
+    for (const [file, text] of ctx.files) {
+      const k = classify(file, text, ctx);
+      (['composer', 'list'] as Kind[]).forEach((x) => { if (k[x] && !registered(file, x)) out.push(`${x} ${file}`); });
+    }
+    return out;
+  };
+  it('ProgressScreen with its own coach note box (a ComposerInput) is named a composer', () => {
+    const f = 'screens/client/ProgressScreen.tsx';
+    const text = `${read(f)}\nimport { ComposerInput as CoachNoteInput } from '../../components/community';\n` +
+      'export function CoachNoteBox() { return <CoachNoteInput placeholder="Note" maxLength={500} onSubmit={async () => undefined} />; }\n';
+    expect(classify(f, text).composer).toBe(true);
+    expect(unnamedWith({ [f]: text })).toContain(`composer ${f}`);
+  });
+  it('CommandCenterScreen with its own space feed (usePosts) is named a list', () => {
+    const f = 'screens/coach/command-center/CommandCenterScreen.tsx';
+    const text = `${read(f)}\nimport { usePosts as useSpacePosts } from '../../../hooks/useCommunity';\n` +
+      "export function SpacePeek() { const q = useSpacePosts('ws-1'); return null; }\n";
+    expect(classify(f, text).list).toBe(true);
+    expect(unnamedWith({ [f]: text })).toContain(`list ${f}`);
+  });
+});
