@@ -1230,6 +1230,9 @@ export default function ActiveWorkoutScreen() {
     </View>
   ) : null;
 
+  // C1 v2: the exercise in progress is the first one with a set still to do.
+  const activeExercise = sessionExercises.findIndex((exercise) => exercise.sets.some((set) => !set.completed));
+
   return (
     <>
     <Screen
@@ -1295,6 +1298,8 @@ export default function ActiveWorkoutScreen() {
         ) : null}
         {sessionExercises.map((exercise, exIdx) => (
           <ExerciseCard
+            active={exIdx === activeExercise}
+            foldable={activeExercise >= 0 && exercise.sets.length > 0 && exercise.sets.every((set) => set.completed)}
             key={`${exercise.exerciseId}-${exIdx}`}
             exercise={exercise}
             exIdx={exIdx}

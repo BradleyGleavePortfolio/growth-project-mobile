@@ -111,6 +111,7 @@ export function SetLogger({
   previous,
   editable = true,
   hideCompletion = false,
+  nextUp = false,
 }: {
   set: SessionSet;
   setIdx: number;
@@ -122,10 +123,16 @@ export function SetLogger({
   previous?: SessionSet;
   editable?: boolean;
   hideCompletion?: boolean;
+  /** C1 v2: the next set to do in the exercise in progress (filled "As planned"). */
+  nextUp?: boolean;
 }) {
   // An explicitly typed zero is an entry, not a blank ghost to replace.
   const [weightBlank, setWeightBlank] = useState(set.weight <= 0 && !set.prescribedZero);
   const [repsBlank, setRepsBlank] = useState(set.reps <= 0);
+  // C1 v2: a set with a plan (the coach's numbers, a typed value or the last
+  // workout's set) is done in one tap with "As planned"; the tap fills any
+  // blank from the previous set, as the check did.
+  const asPlanned = !set.completed && (!!set.prescribedZero || set.weight > 0 || set.reps > 0 || !!previous);
   return (
     <View style={[styles.setRow, set.completed && styles.setRowCompleted]} pointerEvents={editable ? 'auto' : 'none'}>
       <Text style={[styles.setText, { width: 36 }]}>{setIdx + 1}</Text>
@@ -158,7 +165,8 @@ export function SetLogger({
       />
       {!hideCompletion && <HapticPressable
         intent="medium"
-        style={[styles.checkBtn, set.completed && styles.checkBtnDone]}
+        style={[styles.checkBtn, set.completed && styles.checkBtnDone,
+          asPlanned && styles.asPlannedBtn, asPlanned && nextUp && styles.asPlannedBtnNext]}
         disabled={!editable}
         onPress={() => {
           if (!set.completed && previous) {
@@ -173,7 +181,10 @@ export function SetLogger({
         accessibilityLabel={`Mark set ${setIdx + 1} done`}
         testID={`set-done-${exIdx}-${setIdx}`}
       >
-        <Ionicons name="checkmark" size={16} color={set.completed ? colors.textOnPrimary : colors.textMuted} />
+        {asPlanned ? <>
+          {nextUp ? <Ionicons name="checkmark" size={16} color={sc.textOnAccent} /> : null}
+          <Text style={[styles.asPlannedText, { color: nextUp ? sc.textOnAccent : sc.textMuted }]}>As planned</Text>
+        </> : <Ionicons name="checkmark" size={16} color={set.completed ? colors.textOnPrimary : colors.textMuted} />}
       </HapticPressable>}
     {previous ? <HapticPressable
       intent="light"

@@ -108,6 +108,7 @@ export const makeStyles = (colors: ThemeColors) =>
   setHeaderText: { fontFamily: 'Inter_500Medium', fontSize: 13, fontWeight: '500', letterSpacing: 0.3, color: sc.textMuted, textAlign: 'center' },
   setRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: 4,
     marginBottom: 4,
@@ -149,6 +150,20 @@ export const makeStyles = (colors: ThemeColors) =>
     backgroundColor: colors.primary,
     borderColor: colors.primary,
   },
+  // C1 v2 "As planned": an outlined pill, filled forest on the next set to do.
+  asPlannedBtn: {
+    width: undefined,
+    minWidth: 44,
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: 14,
+    borderRadius: radius.button,
+    borderWidth: 1,
+    borderColor: sc.textMuted,
+    backgroundColor: 'transparent',
+  },
+  asPlannedBtnNext: { backgroundColor: sc.accent, borderColor: sc.accent },
+  asPlannedText: { fontFamily: 'Inter_600SemiBold', fontSize: 15, lineHeight: 20, fontWeight: '600' },
   addSetBtn: {
     flexDirection: 'row',
     alignItems: 'center',
