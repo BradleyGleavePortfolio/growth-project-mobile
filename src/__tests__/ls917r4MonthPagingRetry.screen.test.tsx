@@ -58,11 +58,20 @@ const session = (id: string, day: string): CoachingSession => ({
   ended_at: null, end_reason: null, created_at: `${day}T09:00:00.000Z`,
   updated_at: `${day}T09:00:00.000Z`,
 });
-const firstPage = Array.from({ length: 20 }, (_, i) => session(`recent-${i}`, addDays(today, -7 * i)));
-const older = session('older-session', addDays(today, -7 * 20));
+const uuid = (index: number) => `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`;
+const firstPage = Array.from({ length: 20 }, (_, i) => session(uuid(i), addDays(today, -7 * i)));
+const older = session(uuid(20), addDays(today, -7 * 20));
 const clients: QueryClient[] = [];
 let mockFail = false;
 let mockNextCalls = 0;
+
+function expectRealStableCursor() {
+  const requests = jest.mocked(schedulingApi.listMySessions).mock.calls
+    .filter(([, options]) => !!options?.before).map(([, options]) => options);
+  expect(requests).toEqual(Array.from({ length: mockNextCalls }, () => ({
+    scope: 'past', before: firstPage[19].start_at, beforeId: firstPage[19].id,
+  })));
+}
 
 beforeEach(() => {
   jest.clearAllMocks(); mockFail = false; mockNextCalls = 0;
@@ -99,6 +108,7 @@ it('control: a successful next page is consumed once and its real exhaustion sto
   await openEarlierMonth();
   await waitFor(() => expect(mockNextCalls).toBe(1));
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+  expectRealStableCursor();
   expect(mockNextCalls).toBe(1);
 });
 
@@ -108,5 +118,6 @@ it('LS-917R4 B4: a failed Month cursor stops automatic sends and waits for an ex
   await view.findByText('Calendar could not load. Check the connection, then try again.');
   // Allow notification/effect turns, not a query retry: retry is explicitly disabled above.
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+  expectRealStableCursor();
   expect(mockNextCalls).toBe(1);
 });

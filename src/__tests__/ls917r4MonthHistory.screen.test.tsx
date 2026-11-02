@@ -55,6 +55,9 @@ jest.mock('@react-navigation/native', () => ({
 const today = getTodayString();
 const oldMonth = monthStart(today, -6);
 const oldDay = addDays(oldMonth, 4);
+const uuid = (index: number) => `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`;
+const latestId = uuid(0);
+const olderId = uuid(100);
 const log = (id: string, day: string, name: string): ApiWorkoutSession => ({
   id, user_id: 'member-fixture', date: day, workout_name: name,
   exercises: [], created_at: `${day}T12:00:00.000Z`,
@@ -62,8 +65,8 @@ const log = (id: string, day: string, name: string): ApiWorkoutSession => ({
 // The server orders date/created_at descending and takes the requested limit.
 // All 100 recent rows really are newer than row 101, not a fake cursor.
 const history = [
-  ...Array.from({ length: 100 }, (_, i) => log(`recent-${i}`, addDays(today, -i), `Recent workout ${i}`)),
-  log('older-101', oldDay, 'Earlier saved workout'),
+  ...Array.from({ length: 100 }, (_, i) => log(uuid(i), addDays(today, -i), `Recent workout ${i}`)),
+  log(olderId, oldDay, 'Earlier saved workout'),
 ];
 const clients: QueryClient[] = [];
 const root = async () => {
@@ -73,7 +76,7 @@ const root = async () => {
   const view = await render(<QueryClientProvider client={qc}>
     <CalendarWeekRoot navigation={navigation} route={{ key: 'fixture', name: 'CalendarHome' }} />
   </QueryClientProvider>);
-  await waitFor(() => expect(view.getByTestId('week-log-recent-0')).toBeTruthy());
+  await waitFor(() => expect(view.getByTestId(`week-log-${latestId}`)).toBeTruthy());
   return view;
 };
 beforeEach(() => {
@@ -101,7 +104,7 @@ it('control: the real Month presenter can show row 101 when its read supplies it
   const view = await render(<CalendarWeekPage data={data} initialMonth={oldMonth}
     onRefresh={jest.fn()} onSession={jest.fn()} onBook={jest.fn()} />);
   await fireEvent.press(view.getByTestId(`month-day-${oldDay}`));
-  expect(view.getByTestId('week-log-older-101')).toBeTruthy();
+  expect(view.getByTestId(`week-log-${olderId}`)).toBeTruthy();
 });
 
 it('LS-917R4 B3: navigating to an earlier month keeps row 101 instead of calling its day a rest day', async () => {
@@ -110,7 +113,7 @@ it('LS-917R4 B3: navigating to an earlier month keeps row 101 instead of calling
   for (let i = 0; i < 6; i++) await fireEvent.press(view.getByTestId('month-previous'));
   await fireEvent.press(view.getByTestId(`month-day-${oldDay}`));
   expect({
-    savedWorkout: !!view.queryByTestId('week-log-older-101'),
+    savedWorkout: !!view.queryByTestId(`week-log-${olderId}`),
     restDay: !!view.queryByText('Rest day'),
   }).toEqual({ savedWorkout: true, restDay: false });
 });
