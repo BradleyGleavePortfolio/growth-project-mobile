@@ -176,7 +176,7 @@ export const makeStyles = (colors: ThemeColors) =>
   // The next set is lifted: a white row with a forest bar on the left.
   setLineNext: { backgroundColor: sc.bgSurface, borderLeftColor: colors.primary },
   setLineMain: { flexDirection: 'row', alignItems: 'center', flexShrink: 1, columnGap: 4 },
-  setLineLabel: { fontFamily: 'Inter_500Medium', fontSize: 14, lineHeight: 20, fontWeight: '500', color: sc.textMuted, minWidth: 36 },
+  setLineLabel: { fontFamily: 'Inter_500Medium', fontSize: 14, lineHeight: 20, fontWeight: '500', color: sc.textMuted, minWidth: 36, marginRight: 6 },
   setLineValue: { flexDirection: 'row', alignItems: 'center', flexShrink: 1 },
   setLineInput: {
     minHeight: 44,

@@ -148,10 +148,12 @@ it('a set row is never cut at 320 or 360 pt with 100% or 130% text: one line at 
   expect(reps.width).toBe(fitted(reps, '6', testScale));
   // Half an em per character is a floor for Inter; real text is wider.
   const em = (size: unknown, text: string, scale: number) => 0.5 * n(size) * scale * text.length;
+  // At 130% "Set 1" outgrows its minimum width: a fixed space keeps it from reading "Set 140 lb".
+  expect(n(label.marginRight)).toBeGreaterThanOrEqual(6);
   for (const [width, scale] of [[320, 1], [320, 1.3], [360, 1], [360, 1.3]] as const) {
     const inside = width - 2 * n(card.marginHorizontal) - 2 * n(card.paddingHorizontal)
       - 2 * n(row.marginHorizontal) - n(row.paddingLeft) - n(row.paddingRight) - n(row.borderLeftWidth);
-    const numbers = Math.max(n(label.minWidth), em(label.fontSize, 'Set 1', scale)) + 4
+    const numbers = Math.max(n(label.minWidth), em(label.fontSize, 'Set 1', scale)) + n(label.marginRight) + 4
       + fitted(weight, '155', scale)
       + em(unit.fontSize, 'lb ×', scale) + 2 * n(unit.marginHorizontal)
       + fitted(reps, '6', scale);
