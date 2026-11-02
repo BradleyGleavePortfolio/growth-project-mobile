@@ -1428,3 +1428,31 @@ describe('LS-911R3 B2: unread code modules fail closed in every binding form', (
     expect(classify(host, "export const image = require('../settings/missing.png');")).toEqual({ composer: false, list: false });
   });
 });
+
+describe('LS-911R3 B3: a via row cannot prove newly added independent content', () => {
+  it('an independent composer added beside the named gap part still names its new caller', () => {
+    const file = 'screens/client/ProgressScreen.tsx';
+    const host = 'screens/client/SolProgressHost.tsx';
+    const original = read(file).replace('export default function ProgressScreen(', 'function ExistingProgressScreen(');
+    const changed = `import api from '../../services/api';
+import { ComposerInput } from '../../components/community';
+${original}
+export default function ProgressScreen(props: ProgressProps) {
+  return <><ExistingProgressScreen {...props} /><ComposerInput
+    placeholder="Reply" maxLength={2000}
+    onSubmit={async (body) => { await api.post('/community/workspaces/ws/posts', { body }); }}
+  /></>;
+}`;
+    const caller = "import React from 'react'; import ProgressScreen from './ProgressScreen'; export default function SolProgressHost() { return <ProgressScreen />; }";
+    const ctx = scanCtx({ [file]: changed, [host]: caller });
+    const via = REGISTRY.find((s) => s.file === file && s.kind === 'composer');
+    expect(via?.proof.by).toBe('via');
+    if (!via || via.proof.by !== 'via') throw new Error('expected the reviewed via row');
+    for (const part of via.proof.parts) {
+      expect(REGISTRY.some((s) => s.file === part && s.kind === 'composer' && (s.proof.by === 'gap' || s.proof.by === 'via'))).toBe(true);
+      expect(importsOf(ctx, file).has(part)).toBe(true);
+    }
+    expect(classify(file, changed, ctx).composer).toBe(true);
+    expect(classify(host, caller, ctx).composer).toBe(true);
+  });
+});
