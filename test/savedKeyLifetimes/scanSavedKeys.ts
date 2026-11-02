@@ -426,22 +426,52 @@ function originOf(e: ts.Expression, p: Parsed, env: Env, depth = 0): Origin | nu
   return null;
 }
 
-/** The function a name or `ns.name` refers to, with its file. */
+/** The local module a value is (its namespace): `import * as w`, `require('./w')`, `await import('./w')`, an alias. */
+function nsOfExpr(e: ts.Expression, p: Parsed, depth = 0): Parsed | null {
+  e = unwrap(e);
+  if (depth > 8) return null;
+  if (ts.isIdentifier(e)) return nsOfTarget(resolveName(e.text, e, p), depth + 1);
+  if (!ts.isCallExpression(e)) return null;
+  const spec = moduleCall(e, p);
+  const rel = spec ? resolveModule(p.rel, spec) : null;
+  return rel && !LAYERS[rel] ? parse(rel) : null;
+}
+function nsOfTarget(t: Target | null, depth = 0): Parsed | null {
+  if (!t) return null;
+  if (t.k === 'ns') return t.p;
+  if (t.k !== 'decl' || t.path.length || !ts.isVariableDeclaration(t.node) || !t.node.initializer) return null;
+  return nsOfExpr(t.node.initializer, t.p, depth);
+}
+
+/** The function a name, `ns.name` or `ns['name']` refers to, with its file. */
 function fnOfTarget(t: Target | null): { fn: Fn; p: Parsed } | null {
-  if (!t || t.k !== 'decl' || t.path.length) return null;
+  if (!t || t.k !== 'decl') return null;
   const n = t.node;
+  if (t.path.length) {
+    // `const { save } = await import('./w')`, `const { save } = require('./w')`, `const { save } = w`
+    const ns = t.path.length === 1 ? nsOfTarget({ ...t, path: [] }) : null;
+    return ns ? fnOfTarget(resolveExport(ns, t.path[0])) : null;
+  }
   if (ts.isFunctionDeclaration(n)) return { fn: n, p: t.p };
   const init = ts.isVariableDeclaration(n) && n.initializer ? unwrap(n.initializer)
     : ts.isExportAssignment(n) ? unwrap(n.expression) : null;
   return init && (ts.isArrowFunction(init) || ts.isFunctionExpression(init)) ? { fn: init, p: t.p } : null;
 }
 
+/** `ns.name` or `ns['name']`: the member's name ('' when chosen at run time), or null for any other node. */
+function memberName(e: ts.Node): string | null {
+  if (ts.isPropertyAccessExpression(e)) return e.name.text;
+  if (ts.isElementAccessExpression(e)) return literalOf(e.argumentExpression) ?? '';
+  return null;
+}
+
 function calleeFn(callee: ts.Expression, p: Parsed): { fn: Fn; p: Parsed } | null {
   callee = unwrap(callee);
   if (ts.isIdentifier(callee)) return fnOfTarget(resolveName(callee.text, callee, p));
-  if (ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression)) {
-    const t = resolveName(callee.expression.text, callee.expression, p);
-    if (t?.k === 'ns') return fnOfTarget(resolveExport(t.p, callee.name.text));
+  const name = memberName(callee);
+  if (name && (ts.isPropertyAccessExpression(callee) || ts.isElementAccessExpression(callee))) {
+    const ns = nsOfExpr(callee.expression, p);
+    if (ns) return fnOfTarget(resolveExport(ns, name));
   }
   return null;
 }
@@ -491,18 +521,101 @@ function lookup(name: string, at: ts.Node, p: Parsed, env: Map<ts.Node, string[]
       if (ts.isFunctionDeclaration(st) && st.name?.text === name) return { node: st, p };
       if (!ts.isVariableStatement(st)) continue;
       for (const d of st.declarationList.declarations) {
-        if (ts.isIdentifier(d.name) && d.name.text === name) return d.initializer ? { node: d.initializer, p } : ['*'];
+        if (ts.isIdentifier(d.name) && d.name.text === name) return changedKeys(d, p, env) ?? (d.initializer ? { node: d.initializer, p } : ['*']);
       }
     }
   }
   const imp = p.imports.get(name);
   const t = imp ? resolveImport(p, imp) : null;
   if (t?.k !== 'decl' || t.path.length) return ['*'];
-  if (ts.isVariableDeclaration(t.node)) return t.node.initializer ? { node: t.node.initializer, p: t.p } : ['*'];
+  if (ts.isVariableDeclaration(t.node)) return changedKeys(t.node, t.p, new Map()) ?? (t.node.initializer ? { node: t.node.initializer, p: t.p } : ['*']);
   if (ts.isExportAssignment(t.node)) return { node: t.node.expression, p: t.p };
   return { node: t.node, p: t.p };
 }
 
+const isAssign = (k: ts.SyntaxKind) => k >= ts.SyntaxKind.FirstAssignment && k <= ts.SyntaxKind.LastAssignment;
+/** Methods that change the array, object, map or set they are called on. */
+const MUTATORS = new Set(['push', 'unshift', 'splice', 'fill', 'copyWithin', 'set', 'add', 'delete', 'clear']);
+const OBJECT_WRITERS = new Set(['assign', 'defineProperty', 'defineProperties']);
+
+/** A reference that changes its binding or what the binding holds: `k = `, `k += `, `k++`, `K.a = `, `K.push()`, ... */
+function writesTo(id: ts.Identifier): boolean {
+  const ref = climb(id);
+  let n: ts.Node = ref;
+  let last: string | null = null;
+  while (n.parent && (ts.isPropertyAccessExpression(n.parent) || ts.isElementAccessExpression(n.parent)) &&
+    n.parent.expression === n) {
+    last = memberName(n.parent);
+    n = climb(n.parent);
+  }
+  const par = n.parent;
+  if (!par) return false;
+  if (ts.isBinaryExpression(par) && isAssign(par.operatorToken.kind) && par.left === n) return true;
+  if ((ts.isPrefixUnaryExpression(par) || ts.isPostfixUnaryExpression(par)) &&
+    (par.operator === ts.SyntaxKind.PlusPlusToken || par.operator === ts.SyntaxKind.MinusMinusToken)) return true;
+  if ((ts.isForOfStatement(par) || ts.isForInStatement(par)) && par.initializer === n) return true;
+  if (n !== ref) {
+    if (ts.isDeleteExpression(par)) return true;
+    if (ts.isCallExpression(par) && par.expression === n && last !== null && MUTATORS.has(last)) return true;
+  }
+  if (n === ref && ts.isCallExpression(par) && par.arguments[0] === n) {
+    const callee = unwrap(par.expression);
+    if (ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression) &&
+      callee.expression.text === 'Object' && OBJECT_WRITERS.has(callee.name.text)) return true;
+  }
+  // A destructuring assignment target: `[k] = ...`, `({ k } = ...)`, `for ([k] of ...)`
+  let t: ts.Node = n;
+  while (t.parent && (ts.isArrayLiteralExpression(t.parent) || ts.isObjectLiteralExpression(t.parent) ||
+    ts.isShorthandPropertyAssignment(t.parent) || ts.isSpreadElement(t.parent) || ts.isSpreadAssignment(t.parent) ||
+    (ts.isPropertyAssignment(t.parent) && t.parent.initializer === t) || ts.isParenthesizedExpression(t.parent))) t = t.parent;
+  if (t === n || !t.parent) return false;
+  const top = t.parent;
+  return (ts.isBinaryExpression(top) && top.operatorToken.kind === ts.SyntaxKind.EqualsToken && top.left === t) ||
+    ((ts.isForOfStatement(top) || ts.isForInStatement(top)) && top.initializer === t);
+}
+
+/** How a key binding changes after its first value: not at all, only by `push`/`unshift` (their arguments), or any. */
+type Change = { k: 'none' } | { k: 'appends'; args: ts.Expression[] } | { k: 'any' };
+const changeCache = new Map<ts.Node, Change>();
+function changeOf(d: ts.VariableDeclaration, p: Parsed): Change {
+  if (!ts.isIdentifier(d.name)) return { k: 'none' };
+  const known = changeCache.get(d);
+  if (known) return known;
+  const name = d.name.text;
+  let scope: ts.Node = d;
+  while (scope.parent && !ts.isSourceFile(scope) && !ts.isFunctionLike(scope)) scope = scope.parent;
+  const args: ts.Expression[] = [];
+  let any = false;
+  eachRef(scope, (id) => {
+    if (any || id.text !== name || !writesTo(id) || resolveName(name, id, p)?.node !== d) return;
+    const at = climb(id).parent;
+    const call = at?.parent;
+    if (at && ts.isPropertyAccessExpression(at) && (at.name.text === 'push' || at.name.text === 'unshift') &&
+      call && ts.isCallExpression(call) && call.expression === at) args.push(...call.arguments);
+    else any = true;
+  });
+  const c: Change = any ? { k: 'any' } : args.length ? { k: 'appends', args } : { k: 'none' };
+  changeCache.set(d, c);
+  return c;
+}
+
+/**
+ * What a key binding can hold (null: its first value only). A binding that changes after its first value is read as
+ * any key ('*'), except a list built by `push`/`unshift`, read as its first elements and everything added.
+ */
+function changedKeys(d: ts.VariableDeclaration, p: Parsed, env: Map<ts.Node, string[]>): string[] | null {
+  const c = changeOf(d, p);
+  if (c.k === 'none') return null;
+  const init = d.initializer ? unwrap(d.initializer) : null;
+  if (c.k === 'any' || !init || !ts.isArrayLiteralExpression(init) || reading.has(d)) return ['*'];
+  reading.add(d); // a list that adds its own elements is read as any key
+  try {
+    return [...elements(init, p, env), ...c.args.flatMap((a) => (ts.isSpreadElement(a) ? elements(a.expression, p, env) : keys(a, p, env)))];
+  } finally {
+    reading.delete(d);
+  }
+}
+const reading = new Set<ts.Node>();
 /** Every key an array expression holds (array literals, spreads, consts). */
 function elements(e: ts.Expression, p: Parsed, env: Map<ts.Node, string[]>, depth = 0): string[] {
   e = unwrap(e);
@@ -637,6 +750,51 @@ function listFiles(dir: string, out: string[] = []): string[] {
       if (!SKIP_DIRS.has(entry.name)) listFiles(rel, out);
     } else if (/\.(ts|tsx|js|jsx)$/.test(entry.name) && !/\.d\.ts$|\.(test|spec)\.[jt]sx?$/.test(entry.name)) {
       out.push(rel);
+    }
+  }
+  return out;
+}
+
+/** Every module a file loads: its imports (side-effect ones too), re-exports, `require()` and `import()` calls. */
+function specsOf(p: Parsed): string[] {
+  const out: string[] = [];
+  const visit = (n: ts.Node): void => {
+    if ((ts.isImportDeclaration(n) || ts.isExportDeclaration(n)) && n.moduleSpecifier && ts.isStringLiteral(n.moduleSpecifier)) {
+      out.push(n.moduleSpecifier.text);
+    } else if (ts.isCallExpression(n)) {
+      const spec = moduleCall(n, p);
+      if (spec) out.push(spec);
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(p.sf);
+  return out;
+}
+
+/**
+ * The app's own files outside src/: the entry (package.json "main", index.ts) and every file it loads, step by step,
+ * that is not under src/ (App.tsx and whatever App.tsx loads from the root). src/ is listed in full.
+ */
+function entryFiles(): string[] {
+  let main = 'index.ts';
+  try {
+    const pkg = JSON.parse(String(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))) as { main?: string };
+    if (typeof pkg.main === 'string') main = pkg.main;
+  } catch {
+    // no package.json: the default entry
+  }
+  const start = fs.existsSync(path.join(ROOT, main)) ? main : resolveModule('package.json', `./${main.replace(/\.[jt]sx?$/, '')}`);
+  const out: string[] = [];
+  const queue = start ? [start] : [];
+  while (queue.length) {
+    const rel = queue.shift()!;
+    if (out.includes(rel) || rel.startsWith('src/') || rel.startsWith('node_modules/')) continue;
+    const p = parse(rel);
+    if (!p) continue;
+    out.push(rel);
+    for (const spec of specsOf(p)) {
+      const next = resolveModule(rel, spec);
+      if (next) queue.push(next);
     }
   }
   return out;
@@ -813,7 +971,7 @@ export function scanSavedKeys(): Scan {
     no('used in a way the scan cannot follow');
   };
 
-  const files = listFiles('src').map(parse).filter((p): p is Parsed => !!p);
+  const files = [...listFiles('src'), ...entryFiles()].map(parse).filter((p): p is Parsed => !!p);
   const storageImport = (p: Parsed) => [...p.imports.values()].some((imp) => !!originOfTarget(resolveImport(p, imp), EMPTY));
   for (const p of files) {
     if (LAYERS[p.rel]) continue;
@@ -824,6 +982,16 @@ export function scanSavedKeys(): Scan {
         const o = originOfTarget(resolveName(id.text, id, p), EMPTY);
         if (o) use(id, o, p, EMPTY);
       });
+      // A store loaded in place: `require('x').default.setItem(...)`, `(await import('x')).default.setItem(...)`
+      const inline = (n: ts.Node): void => {
+        if (ts.isCallExpression(n)) {
+          const spec = moduleCall(n, p);
+          const o = spec ? originOfModule(spec, p) : null;
+          if (o) use(n, o, p, EMPTY);
+        }
+        ts.forEachChild(n, inline);
+      };
+      inline(p.sf);
     }
     if (!p.text.includes(PERSISTER_MODULE)) continue;
     const visit = (n: ts.Node) => {
@@ -867,30 +1035,85 @@ export function scanSavedKeys(): Scan {
     if (ts.isExportSpecifier(par) || ts.isExportAssignment(par)) return; // its importers are read
     each((v) => unsupported(p, n, v.store, `${w.name} (it saves the key it is given) used as a value`));
   };
-  const importsCache = new Map<string, Array<{ fn: Fn | null; ns: Parsed | null }>>();
+  // Which files a round reads: a wrapper's home and every file that loads a module exposing one of the batch's
+  // wrappers (directly, through re-exports at any depth, by import, require() or import()).
+  const loadsCache = new Map<string, string[]>();
+  const loads = (p: Parsed) => {
+    if (!loadsCache.has(p.rel)) {
+      loadsCache.set(p.rel, [...new Set(specsOf(p).map((spec) => resolveModule(p.rel, spec)).filter((r): r is string => !!r))]);
+    }
+    return loadsCache.get(p.rel)!;
+  };
+  const exposesCache = new Map<string, Set<string>>();
+  /** The files whose exports a module hands on (itself, its re-exports and the imports it exports again). */
+  const exposes = (rel: string): Set<string> => {
+    const known = exposesCache.get(rel);
+    if (known) return known;
+    const out = new Set<string>([rel]);
+    exposesCache.set(rel, out);
+    const p = parse(rel);
+    if (!p || LAYERS[rel]) return out;
+    const exported = new Set<string>();
+    const hand = (from: string) => {
+      const next = resolveModule(rel, from);
+      if (next) for (const r of exposes(next)) out.add(r);
+    };
+    for (const st of p.sf.statements) {
+      if (ts.isExportDeclaration(st)) {
+        if (st.moduleSpecifier && ts.isStringLiteral(st.moduleSpecifier)) hand(st.moduleSpecifier.text);
+        else if (st.exportClause && ts.isNamedExports(st.exportClause)) {
+          for (const el of st.exportClause.elements) exported.add((el.propertyName ?? el.name).text);
+        }
+      } else if (ts.isExportAssignment(st) && ts.isIdentifier(st.expression)) exported.add(st.expression.text);
+      else if (hasModifier(st, ts.SyntaxKind.ExportKeyword) && ts.isVariableStatement(st)) {
+        for (const d of st.declarationList.declarations) {
+          const init = d.initializer ? unwrap(d.initializer) : null;
+          if (init && ts.isIdentifier(init)) exported.add(init.text);
+        }
+      }
+    }
+    for (const [local, imp] of p.imports) if (exported.has(local)) hand(imp.from);
+    return out;
+  };
+  /** A member of a module namespace that may be one of the batch's wrappers. */
+  const viaNs = (ref: ts.Node, ns: Parsed, p: Parsed, round: number, byFn: Map<ts.Node, Wrapper[]>, batch: Wrapper[]) => {
+    const n = climb(ref);
+    const par = n.parent;
+    if (!par || !(ts.isPropertyAccessExpression(par) || ts.isElementAccessExpression(par)) || par.expression !== n) return;
+    const name = memberName(par);
+    if (name === '') {
+      const fns = new Set(exportNames(ns).map((x) => fnOfTarget(resolveExport(ns, x))?.fn).filter((f) => !!f));
+      for (const w of batch.filter((b) => fns.has(b.fn))) {
+        w.vias.forEach((v) => unsupported(p, par, v.store, `${w.name} picked from its module at run time`));
+      }
+      return;
+    }
+    const hit = name ? fnOfTarget(resolveExport(ns, name)) : null;
+    for (const w of (hit && byFn.get(hit.fn)) || []) wrapperUse(par, w, p, round);
+  };
   for (let round = 1; round <= MAX_ROUNDS && pending.length; round++) {
     const batch = pending.splice(0);
     const byFn = new Map<ts.Node, Wrapper[]>();
     for (const w of batch) byFn.set(w.fn, [...(byFn.get(w.fn) ?? []), w]);
     const homes = new Set(batch.map((w) => w.p.rel));
     for (const p of files) {
-      if (!importsCache.has(p.rel)) {
-        importsCache.set(p.rel, [...p.imports.values()].map((imp) => {
-          const t = resolveImport(p, imp);
-          return { fn: fnOfTarget(t)?.fn ?? null, ns: t?.k === 'ns' ? t.p : null };
-        }));
-      }
-      const reach = importsCache.get(p.rel)!;
-      if (!homes.has(p.rel) && !reach.some((r) => (r.fn && byFn.has(r.fn)) || (r.ns && homes.has(r.ns.rel)))) continue;
+      if (!homes.has(p.rel) && !loads(p).some((rel) => [...exposes(rel)].some((r) => homes.has(r)))) continue;
       eachRef(p.sf, (id) => {
         const t = resolveName(id.text, id, p);
         const hit = fnOfTarget(t);
         for (const w of (hit && byFn.get(hit.fn)) || []) wrapperUse(id, w, p, round);
-        if (t?.k === 'ns' && ts.isPropertyAccessExpression(id.parent) && id.parent.expression === id) {
-          const viaNs = fnOfTarget(resolveExport(t.p, id.parent.name.text));
-          for (const w of (viaNs && byFn.get(viaNs.fn)) || []) wrapperUse(id.parent, w, p, round);
-        }
+        const ns = nsOfTarget(t);
+        if (ns) viaNs(id, ns, p, round, byFn, batch);
       });
+      // A module loaded in place: `require('./w').save(...)`, `(await import('./w')).save(...)`
+      const inline = (n: ts.Node): void => {
+        if (ts.isCallExpression(n)) {
+          const ns = nsOfExpr(n, p);
+          if (ns && moduleCall(n, p)) viaNs(n, ns, p, round, byFn, batch);
+        }
+        ts.forEachChild(n, inline);
+      };
+      inline(p.sf);
     }
   }
   for (const w of pending) {
