@@ -69,13 +69,20 @@ interface Parsed { rel: string; sf: ts.SourceFile; text: string; imports: Map<st
 
 const parsed = new Map<string, Parsed | null>();
 
+const resolved = new Map<string, string | null>();
 function resolveModule(fromRel: string, spec: string): string | null {
   if (!spec.startsWith('.')) return null;
   const base = path.join(path.dirname(fromRel), spec);
+  if (resolved.has(base)) return resolved.get(base)!;
+  let out: string | null = null;
   for (const ext of ['.ts', '.tsx', '.js', '/index.ts', '/index.tsx']) {
-    if (fs.existsSync(path.join(ROOT, base + ext))) return (base + ext).split(path.sep).join('/');
+    if (fs.existsSync(path.join(ROOT, base + ext))) {
+      out = (base + ext).split(path.sep).join('/');
+      break;
+    }
   }
-  return null;
+  resolved.set(base, out);
+  return out;
 }
 
 function parse(rel: string): Parsed | null {
@@ -292,7 +299,8 @@ function member(o: Origin, name: string): Origin | null | 'unsupported' {
     case 'module':
       if (name === 'default') return ASYNC_STORE;
       if (name === 'useAsyncStorage') return { k: 'hook' };
-      return knownMethod(name) ? { k: 'method', store: 'async', method: name } : null;
+      // Any other member of the module may be a store or a method the scan does not know: reported.
+      return knownMethod(name) ? { k: 'method', store: 'async', method: name } : 'unsupported';
     case 'holder': return o.props.get(name) ?? null;
     case 'ns': return originOfTarget(resolveExport(o.p, name), EMPTY);
     default: return 'unsupported';
@@ -335,7 +343,11 @@ function nsHasStorage(p: Parsed): boolean {
 const originCache = new Map<ts.Node, Origin | null>();
 function baseOrigin(t: Extract<Target, { k: 'decl' }>, env: Env, depth: number): Origin | null {
   const n = t.node;
-  if (ts.isParameter(n)) return env.get(n) ?? null;
+  if (ts.isParameter(n)) {
+    // A `.then` callback's first parameter is the value the promise gives: `import('x').then((m) => ...)` is x.
+    const from = env.get(n) ? null : thenSource(n);
+    return env.get(n) ?? (from ? originOf(from, t.p, EMPTY, depth + 1) : null);
+  }
   const cacheable = env.size === 0;
   if (cacheable && originCache.has(n)) return originCache.get(n)!;
   if (cacheable) originCache.set(n, null);
@@ -364,6 +376,19 @@ function unwrap(e: ts.Expression): ts.Expression {
   while (ts.isParenthesizedExpression(e) || ts.isAsExpression(e) || ts.isNonNullExpression(e) ||
     ts.isSatisfiesExpression(e) || ts.isTypeAssertionExpression(e) || ts.isAwaitExpression(e)) e = e.expression;
   return e;
+}
+
+/**
+ * The promise whose value a `.then` callback's first parameter receives (`X.then((m) => ...)` gives X), or null.
+ * A module loaded with `import('x').then(...)` is read through that parameter like `const m = await import('x')`.
+ */
+function thenSource(q: ts.ParameterDeclaration): ts.Expression | null {
+  const fn = q.parent;
+  if (!(ts.isArrowFunction(fn) || ts.isFunctionExpression(fn)) || fn.parameters[0] !== q) return null;
+  const call = climb(fn).parent;
+  if (!call || !ts.isCallExpression(call) || call.arguments[0] !== climb(fn)) return null;
+  const callee = unwrap(call.expression);
+  return ts.isPropertyAccessExpression(callee) && callee.name.text === 'then' ? callee.expression : null;
 }
 
 /** The module a `require('x')` or `import('x')` call loads. */
@@ -439,6 +464,10 @@ function nsOfExpr(e: ts.Expression, p: Parsed, depth = 0): Parsed | null {
 function nsOfTarget(t: Target | null, depth = 0): Parsed | null {
   if (!t) return null;
   if (t.k === 'ns') return t.p;
+  if (t.k === 'decl' && !t.path.length && ts.isParameter(t.node)) {
+    const from = thenSource(t.node); // `import('./w').then((w) => ...)`
+    return from ? nsOfExpr(from, t.p, depth + 1) : null;
+  }
   if (t.k !== 'decl' || t.path.length || !ts.isVariableDeclaration(t.node) || !t.node.initializer) return null;
   return nsOfExpr(t.node.initializer, t.p, depth);
 }
@@ -539,7 +568,7 @@ const MUTATORS = new Set(['push', 'unshift', 'splice', 'fill', 'copyWithin', 'se
 const OBJECT_WRITERS = new Set(['assign', 'defineProperty', 'defineProperties']);
 
 /** A reference that changes its binding or what the binding holds: `k = `, `k += `, `k++`, `K.a = `, `K.push()`, ... */
-function writesTo(id: ts.Identifier): boolean {
+function writesTo(id: ts.Node): boolean {
   const ref = climb(id);
   let n: ts.Node = ref;
   let last: string | null = null;
@@ -586,19 +615,109 @@ function changeOf(d: ts.VariableDeclaration, p: Parsed): Change {
   while (scope.parent && !ts.isSourceFile(scope) && !ts.isFunctionLike(scope)) scope = scope.parent;
   const args: ts.Expression[] = [];
   let any = false;
+  const init = d.initializer ? unwrap(d.initializer) : null;
+  const container = !!init && (ts.isArrayLiteralExpression(init) || ts.isObjectLiteralExpression(init));
   eachRef(scope, (id) => {
-    if (any || id.text !== name || !writesTo(id)) return;
+    if (any || id.text !== name) return;
     const t = resolveName(name, id, p);
     if (t?.k !== 'decl' || t.node !== d) return;
+    if (!writesTo(id)) {
+      // A list or object can also change through another name for it (LS-910R3 B3, LO-910R3 B4).
+      if (container && handedOn(id, p, 0)) any = true;
+      return;
+    }
     const at = climb(id).parent;
     const call = at?.parent;
     if (at && ts.isPropertyAccessExpression(at) && (at.name.text === 'push' || at.name.text === 'unshift') &&
       call && ts.isCallExpression(call) && call.expression === at) args.push(...call.arguments);
     else any = true;
   });
+  if (!any && container && ts.isSourceFile(scope)) any = changedByImporters(d, p);
   const c: Change = any ? { k: 'any' } : args.length ? { k: 'appends', args } : { k: 'none' };
   changeCache.set(d, c);
   return c;
+}
+
+const scopeOf = (n: ts.Node): ts.Node => {
+  let s: ts.Node = n;
+  while (s.parent && !ts.isSourceFile(s) && !ts.isFunctionLike(s)) s = s.parent;
+  return s;
+};
+/** Whether a reference to `decl` (a list or object binding) under `scope` changes what it holds, or hands it on so. */
+function refsChange(name: string, decl: ts.Node, scope: ts.Node, p: Parsed, depth: number): boolean {
+  let hit = false;
+  eachRef(scope, (id) => {
+    if (hit || id.text !== name) return;
+    const t = resolveName(name, id, p);
+    if (t?.k !== 'decl' || t.node !== decl || t.path.length) return;
+    if (writesTo(id) || handedOn(id, p, depth)) hit = true;
+  });
+  return hit;
+}
+/**
+ * Whether a whole list or object is handed to another name that may change it: an alias (`const alias = keys`, its
+ * own uses read), an assignment to another binding, or an app function's parameter (its uses read). A library call
+ * (a store's multiGet, JSON.stringify) only reads it.
+ */
+function handedOn(ref: ts.Node, p: Parsed, depth: number): boolean {
+  if (depth > 4) return true; // too far to follow: read as changed
+  const n = climb(ref);
+  const par = n.parent;
+  if (!par) return false;
+  if (ts.isVariableDeclaration(par) && par.initializer === n) {
+    return ts.isIdentifier(par.name) ? refsChange(par.name.text, par, scopeOf(par), p, depth + 1) : false;
+  }
+  if (ts.isBinaryExpression(par) && par.operatorToken.kind === ts.SyntaxKind.EqualsToken && par.right === n) return true;
+  if ((ts.isCallExpression(par) || ts.isNewExpression(par)) && par.arguments?.some((a) => a === n)) {
+    const target = ts.isCallExpression(par) ? calleeFn(par.expression, p) : null;
+    const q = target?.fn.parameters[par.arguments.indexOf(n as ts.Expression)];
+    if (!target || !q || !target.fn.body) return false;
+    if (q.dotDotDotToken || !ts.isIdentifier(q.name)) return !!q.dotDotDotToken;
+    return refsChange(q.name.text, q, target.fn, target.p, depth + 1);
+  }
+  return false;
+}
+
+/** Every app file's import of a declaration (by name) and of a module (as a namespace), built once. */
+let importIndex: { byDecl: Map<ts.Node, Array<{ f: Parsed; local: string }>>; byNs: Map<string, Array<{ f: Parsed; local: string }>> } | null = null;
+function importersOf(): NonNullable<typeof importIndex> {
+  if (importIndex) return importIndex;
+  const byDecl = new Map<ts.Node, Array<{ f: Parsed; local: string }>>();
+  const byNs = new Map<string, Array<{ f: Parsed; local: string }>>();
+  for (const f of appFiles()) {
+    for (const [local, imp] of f.imports) {
+      if (!imp.from.startsWith('.')) continue;
+      const t = resolveImport(f, imp);
+      if (t?.k === 'decl' && !t.path.length) byDecl.set(t.node, [...(byDecl.get(t.node) ?? []), { f, local }]);
+      if (t?.k === 'ns') byNs.set(t.p.rel, [...(byNs.get(t.p.rel) ?? []), { f, local }]);
+    }
+  }
+  importIndex = { byDecl, byNs };
+  return importIndex;
+}
+/** Whether a file that imports a top-level list or object changes it (`K.invite = ...`, `K.push(...)`, an alias). */
+function changedByImporters(d: ts.VariableDeclaration, p: Parsed): boolean {
+  const { byDecl, byNs } = importersOf();
+  for (const { f, local } of byDecl.get(d) ?? []) {
+    if (f !== p && refsChange(local, d, f.sf, f, 1)) return true;
+  }
+  for (const [rel, list] of byNs) {
+    const ns = parse(rel);
+    if (!ns || !exportNames(ns).some((x) => { const t = resolveExport(ns, x); return t?.k === 'decl' && t.node === d; })) continue;
+    for (const { f, local } of list) {
+      let hit = false;
+      eachRef(f.sf, (id) => {
+        if (hit || id.text !== local || resolveName(local, id, f)?.k !== 'ns') return;
+        const n = climb(id);
+        const m = n.parent && memberName(n.parent);
+        const t = m ? resolveExport(ns, m) : null;
+        if (t?.k !== 'decl' || t.node !== d) return;
+        if (writesTo(id) || handedOn(n.parent, f, 1)) hit = true;
+      });
+      if (hit) return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -774,8 +893,9 @@ function specsOf(p: Parsed): string[] {
 }
 
 /**
- * The app's own files outside src/: the entry (package.json "main", index.ts) and every file it loads, step by step,
- * that is not under src/ (App.tsx and whatever App.tsx loads from the root). src/ is listed in full.
+ * The app's own files the entry reaches: the entry (package.json "main", index.ts) and every app file it loads, step by
+ * step, by import, re-export, require() or import(), across the src/ boundary both ways (a root file loaded from src/
+ * is read too). Never node_modules. src/ is also listed in full.
  */
 function entryFiles(): string[] {
   let main = 'index.ts';
@@ -787,10 +907,12 @@ function entryFiles(): string[] {
   }
   const start = fs.existsSync(path.join(ROOT, main)) ? main : resolveModule('package.json', `./${main.replace(/\.[jt]sx?$/, '')}`);
   const out: string[] = [];
+  const seen = new Set<string>();
   const queue = start ? [start] : [];
   while (queue.length) {
     const rel = queue.shift()!;
-    if (out.includes(rel) || rel.startsWith('src/') || rel.startsWith('node_modules/')) continue;
+    if (seen.has(rel) || rel.startsWith('node_modules/') || rel.startsWith('../')) continue;
+    seen.add(rel);
     const p = parse(rel);
     if (!p) continue;
     out.push(rel);
@@ -800,6 +922,13 @@ function entryFiles(): string[] {
     }
   }
   return out;
+}
+
+let appCache: Parsed[] | null = null;
+/** Every app file the scan reads: src/ in full and every file the entry reaches, each once. */
+function appFiles(): Parsed[] {
+  appCache ??= [...new Set([...listFiles('src'), ...entryFiles()])].map(parse).filter((p): p is Parsed => !!p);
+  return appCache;
 }
 
 /** An identifier that refers to a binding (not a declaration's own name, a property name or a type). */
@@ -914,8 +1043,15 @@ export function scanSavedKeys(): Scan {
     if ((ts.isPropertyAccessExpression(par) || ts.isElementAccessExpression(par)) && par.expression === n) {
       const name = ts.isPropertyAccessExpression(par) ? par.name.text : literalOf(par.argumentExpression);
       if (name === null) return no('a member chosen at run time');
+      if (name === 'then' && o.k !== 'method') {
+        // A loaded module's promise: its callback's parameter is read where it is used (thenSource).
+        const call = par.parent;
+        const cb = ts.isCallExpression(call) && call.expression === par && call.arguments[0] ? unwrap(call.arguments[0]) : null;
+        if (cb && (ts.isArrowFunction(cb) || ts.isFunctionExpression(cb))) return;
+        return no('a loaded module handed to a callback the scan cannot follow');
+      }
       const m = member(o, name);
-      if (m === 'unsupported') return no(`${name} of a storage method`);
+      if (m === 'unsupported') return no(o.k === 'module' ? `${name} of the storage module` : `${name} of a storage method`);
       if (m) use(par, m, p, env, depth + 1);
       return;
     }
@@ -973,7 +1109,7 @@ export function scanSavedKeys(): Scan {
     no('used in a way the scan cannot follow');
   };
 
-  const files = [...listFiles('src'), ...entryFiles()].map(parse).filter((p): p is Parsed => !!p);
+  const files = appFiles();
   const storageImport = (p: Parsed) => [...p.imports.values()].some((imp) => !!originOfTarget(resolveImport(p, imp), EMPTY));
   for (const p of files) {
     if (LAYERS[p.rel]) continue;
@@ -1078,19 +1214,49 @@ export function scanSavedKeys(): Scan {
     return out;
   };
   /** A member of a module namespace that may be one of the batch's wrappers. */
-  const viaNs = (ref: ts.Node, ns: Parsed, p: Parsed, round: number, byFn: Map<ts.Node, Wrapper[]>, batch: Wrapper[]) => {
+  /** The batch's wrappers a module namespace holds: its own exports and its nested namespaces' (`export * as`). */
+  const nsWrappers = (ns: Parsed, batch: Wrapper[], seen = new Set<string>()): Wrapper[] => {
+    if (seen.has(ns.rel)) return [];
+    seen.add(ns.rel);
+    const out: Wrapper[] = [];
+    for (const x of exportNames(ns)) {
+      const t = resolveExport(ns, x);
+      const fn = fnOfTarget(t)?.fn;
+      out.push(...batch.filter((b) => b.fn === fn));
+      const inner = t?.k === 'ns' ? t.p : null;
+      if (inner) out.push(...nsWrappers(inner, batch, seen));
+    }
+    return [...new Set(out)];
+  };
+  const viaNs = (ref: ts.Node, ns: Parsed, p: Parsed, round: number, byFn: Map<ts.Node, Wrapper[]>, batch: Wrapper[],
+    depth = 0): void => {
     const n = climb(ref);
     const par = n.parent;
-    if (!par || !(ts.isPropertyAccessExpression(par) || ts.isElementAccessExpression(par)) || par.expression !== n) return;
-    const name = memberName(par);
-    if (name === '') {
-      const fns = new Set(exportNames(ns).map((x) => fnOfTarget(resolveExport(ns, x))?.fn).filter((f) => !!f));
-      for (const w of batch.filter((b) => fns.has(b.fn))) {
-        w.vias.forEach((v) => unsupported(p, par, v.store, `${w.name} picked from its module at run time`));
-      }
-      return;
+    if (!par || depth > 8) return;
+    const asValue = (why: string) => {
+      for (const w of nsWrappers(ns, batch)) w.vias.forEach((v) => unsupported(p, n, v.store, `${w.name}: ${why}`));
+    };
+    if (!((ts.isPropertyAccessExpression(par) || ts.isElementAccessExpression(par)) && par.expression === n)) {
+      // The module itself handed on (spread, an argument, kept, returned): its wrappers can no longer be followed.
+      if (ts.isExportSpecifier(par) || ts.isExportAssignment(par) || ts.isExpressionStatement(par) ||
+        ts.isVoidExpression(par) || ts.isTypeOfExpression(par)) return;
+      // An alias or a one-level destructure (`const { save } = w`): read where used. A deeper pattern is not followed.
+      if (ts.isVariableDeclaration(par) && par.initializer === n &&
+        (ts.isIdentifier(par.name) || par.name.elements.every((el) => ts.isOmittedExpression(el) || ts.isIdentifier(el.name)))) return;
+      return asValue('its module used as a value the scan cannot follow');
     }
-    const hit = name ? fnOfTarget(resolveExport(ns, name)) : null;
+    const name = memberName(par);
+    if (name === '') return asValue('picked from its module at run time');
+    if (name === 'then') {
+      // `import('./w').then((w) => ...)`: the callback's parameter is read as the module (thenSource).
+      const call = par.parent;
+      const cb = ts.isCallExpression(call) && call.expression === par && call.arguments[0] ? unwrap(call.arguments[0]) : null;
+      if (cb && (ts.isArrowFunction(cb) || ts.isFunctionExpression(cb))) return;
+      return asValue('its module handed to a callback the scan cannot follow');
+    }
+    const t = name ? resolveExport(ns, name) : null;
+    if (t?.k === 'ns') return viaNs(par, t.p, p, round, byFn, batch, depth + 1); // `api.writes.save(...)`
+    const hit = fnOfTarget(t);
     for (const w of (hit && byFn.get(hit.fn)) || []) wrapperUse(par, w, p, round);
   };
   for (let round = 1; round <= MAX_ROUNDS && pending.length; round++) {
