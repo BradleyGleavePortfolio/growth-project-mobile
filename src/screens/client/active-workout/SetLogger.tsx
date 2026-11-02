@@ -131,8 +131,9 @@ export function SetLogger({
   const [repsBlank, setRepsBlank] = useState(set.reps <= 0);
   // C1 v2: a set with a plan (the coach's numbers, a typed value or the last
   // workout's set) is done in one tap with "As planned"; the tap fills any
-  // blank from the previous set, as the check did.
-  const asPlanned = !set.completed && (!!set.prescribedZero || set.weight > 0 || set.reps > 0 || !!previous);
+  // blank from the previous set, as the check did. Not on screens without the
+  // done button (the history edit keeps main's row).
+  const asPlanned = !hideCompletion && !set.completed && (!!set.prescribedZero || set.weight > 0 || set.reps > 0 || !!previous);
   return (
     <View style={[styles.setRow, set.completed && styles.setRowCompleted]} pointerEvents={editable ? 'auto' : 'none'}>
       <Text style={[styles.setText, { width: 36 }]}>{setIdx + 1}</Text>
