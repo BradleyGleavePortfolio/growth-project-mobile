@@ -162,14 +162,14 @@ export default function FoodSearchView({
         {searching && <ActivityIndicator size="small" color={sc.accentText} />}
         {searchQuery.length > 0 && (
           <HapticPressable intent="light" disableAnimation onPress={onClearSearch} style={styles.clearButton} accessibilityRole="button" accessibilityLabel="Clear food search">
-            <Ionicons name="close-circle" size={18} color={sc.textMuted} />
+            <Ionicons name="close-circle" size={18} color={colors.graphite} />
           </HapticPressable>
         )}
       </View>
 
       {searchError && (
         <View style={styles.searchErrorBanner} accessibilityRole="alert" testID="food-search-error">
-          <Ionicons name="information-circle-outline" size={16} color={sc.textMuted} />
+          <Ionicons name="information-circle-outline" size={16} color={colors.graphite} />
           <Text style={styles.searchErrorText}>{searchError}</Text>
         </View>
       )}
@@ -291,7 +291,7 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   },
   repeatText: { flex: 1 },
   repeatTitle: { ...typography.h3, color: sc.textPrimary },
-  repeatSubtitle: { fontSize: 13, lineHeight: 19, color: sc.textMuted, marginTop: 2, fontVariant: ['tabular-nums'] },
+  repeatSubtitle: { fontSize: 13, lineHeight: 19, color: colors.graphite, marginTop: 2, fontVariant: ['tabular-nums'] },
   repeatButton: {
     minHeight: layout.touchMin,
     minWidth: 88,
@@ -400,7 +400,7 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   },
   searchErrorText: {
     fontSize: 13,
-    color: sc.textMuted,
+    color: colors.graphite,
     flex: 1,
   },
   slowSearchBanner: {
@@ -409,7 +409,7 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   },
   slowSearchText: {
     fontSize: 13,
-    color: sc.textMuted,
+    color: colors.graphite,
   },
   tabChip: {
     minHeight: layout.touchMin,
@@ -445,7 +445,7 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   },
   emptyStateSubtitle: {
     fontSize: 13,
-    color: sc.textMuted,
+    color: colors.graphite,
     textAlign: 'center',
     lineHeight: 19,
   },

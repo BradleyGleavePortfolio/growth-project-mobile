@@ -39,7 +39,7 @@ it('preserves search, clear, both tabs, food selection, repeat and manual entry'
     borderBottomColor: require('../../../theme/tokens').lightTokens.border,
   });
   expect(StyleSheet.flatten(screen.getByText('Food search could not load').props.style).color)
-    .toBe(require('../../../theme/tokens').lightTokens.textMuted);
+    .toBe(require('../../../theme/tokens').colors.graphite);
   expect(StyleSheet.flatten(screen.getByTestId('food-search-error').props.style).backgroundColor).toBeUndefined();
   await fireEvent.press(screen.getByLabelText('Clear food search')); expect(search.onClearSearch).toHaveBeenCalled(); await press('Try again', search.onRetrySearch);
   await rerender(<FoodSearchView {...search} searchQuery="oat" didYouMean={[food]} />);
