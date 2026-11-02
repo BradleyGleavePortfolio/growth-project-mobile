@@ -6,7 +6,7 @@ import { randomUUID } from 'expo-crypto';
  * server error) keeps its key here, so the same food or water tapped again sends the same key and the
  * server keeps one row. A save the server answered, or refused, lets its key go.
  */
-const unanswered = new Map<string, string>();
+const unanswered = new Map<string, string[]>();
 
 /** Sign-out (clientStore.reset): a key never passes from one account to the next on the same phone. */
 export const forgetSaveKeys = (): void => unanswered.clear();
@@ -22,25 +22,35 @@ const canonical = (v: unknown): unknown =>
       : v;
 
 /**
- * FR-916 F1: one food save, one intent, whichever path sends it (repeat, Recent, search, manual; online or
- * queued). The intent is what the save sends: the log fields (day, meal, portion, plan link) and the food
- * (its server id, or the food it creates). `nth` tells apart the same food twice in one repeated meal.
+ * FR-916 F1 / FR-916R2 F1: one food save, one intent, whichever path sends it (repeat, Recent, search, manual;
+ * online or queued). The intent is only what every path sends the same way: the day, the meal, the portion
+ * (the multiplier: for one food, the same grams), the plan link and the food (its server id, or the food it
+ * creates). The entered amount (original_quantity / original_unit) is left out: Recent can prefill the same
+ * portion with another amount, as "1 serving" for a hand-entered "2 servings".
  */
-export function foodSaveIntent(log: { quantity_multiplier?: number }, food: unknown, nth = 0): unknown {
-  const m = log.quantity_multiplier;
-  return ['food', canonical({ ...log, quantity_multiplier: typeof m === 'number' ? Math.round(m * 1e6) / 1e6 : m }), canonical(food), nth];
+export function foodSaveIntent(
+  log: { date: string; meal_type: string; quantity_multiplier: number; plan_slot_id?: string; fills_usual_meal?: boolean },
+  food: unknown,
+): unknown {
+  const { date, meal_type, quantity_multiplier: m, plan_slot_id, fills_usual_meal } = log;
+  return ['food', date, meal_type, Math.round(m * 1e6) / 1e6, plan_slot_id ?? null, fills_usual_meal === true, canonical(food)];
 }
 
-/** Runs one intended save with its key. `intent` is everything the save sends except the key. */
+/**
+ * Runs one intended save with its key. `intent` is everything the save sends except the key. Each lost
+ * answer keeps its own key, so the same food twice in one repeated meal, both lost, are two kept keys: each
+ * later save of that intent takes one (the occurrence), and a save after an answered one gets a new key.
+ */
 export async function withSaveKey<T>(intent: unknown, save: (key: string) => Promise<T>): Promise<T> {
   const id = JSON.stringify(intent);
-  const key = unanswered.get(id) ?? newSaveKey();
-  unanswered.delete(id);
+  const kept = unanswered.get(id) ?? [];
+  const key = kept.shift() ?? newSaveKey();
+  if (kept.length === 0) unanswered.delete(id);
   try {
     return await save(key);
   } catch (err) {
     const status = (err as { response?: { status?: number } } | null)?.response?.status;
-    if (!status || status >= 500) unanswered.set(id, key);
+    if (!status || status >= 500) unanswered.set(id, [...(unanswered.get(id) ?? []), key]);
     throw err;
   }
 }

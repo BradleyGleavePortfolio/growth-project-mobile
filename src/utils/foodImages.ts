@@ -105,11 +105,16 @@ const PLAIN_WORDS = new Set([
   'lowfat', 'skinless', 'boneless', 'unsweetened', 'unsalted', 'organic',
 ]);
 
+// FR-916R2 F3: a plain word is dropped only when the rest is still the same food. Each plain word was
+// read against every key above; these two words together are another food (a sandwich, not cheese).
+const DISHES = new Set(['grilled cheese', 'chopped cheese']);
+
+const singular = (w: string) => w.replace(/ies$/, 'y').replace(/(ch|sh|x|ss|o)es$/, '$1').replace(/([^s])s$/, '$1');
+
 function mapKey(words: string[]): string | null {
   if (words.length === 0) return null;
   const last = words[words.length - 1];
-  const singular = last.replace(/ies$/, 'y').replace(/(ch|sh|x|ss|o)es$/, '$1').replace(/([^s])s$/, '$1');
-  for (const w of [last, singular]) {
+  for (const w of [last, singular(last)]) {
     const key = [...words.slice(0, -1), w].join('_');
     if (Object.prototype.hasOwnProperty.call(FOOD_PHOTOS, key)) return key;
   }
@@ -129,6 +134,9 @@ export function getFoodImageUrl(foodName: string): string {
     .map((part) => part.split(/\s+/).filter(Boolean));
   const [head = [], ...rest] = parts;
   if (rest.some((part) => part.some((w) => !PLAIN_WORDS.has(w)))) return '';
+  // "Cheese, grilled" in the USDA order reads as grilled cheese too.
+  const words = [...rest.flat(), ...head];
+  if (words.some((w, i) => i > 0 && DISHES.has(`${words[i - 1]} ${singular(w)}`))) return '';
   const key = mapKey(head) ?? mapKey(head.filter((w) => !PLAIN_WORDS.has(w)));
   return key ? FOOD_PHOTOS[key] : '';
 }

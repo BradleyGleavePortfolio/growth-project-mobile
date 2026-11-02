@@ -61,7 +61,6 @@ export interface RepeatMealResult {
  */
 /** `link`: the plan meal or usual-day meal this repeat fills (FOODLINK), sent on every food. */
 export async function repeatPastMeal(meal: PastMeal, date: string, mealType: MealType, link?: PlanLink): Promise<RepeatMealResult> {
-  const seen = new Map<string, number>();
   const settled = await Promise.allSettled(
     meal.entries.map((e) => {
       const log = {
@@ -74,10 +73,8 @@ export async function repeatPastMeal(meal: PastMeal, date: string, mealType: Mea
       };
       // FR-916 F1: each food is its own save, keyed by what it sends (foodSaveIntent), so the same food
       // sent again after a lost answer, by Repeat or from Recent as the alert says, sends the same key.
-      const id = JSON.stringify([log, e.foodItemId]);
-      const nth = seen.get(id) ?? 0;
-      seen.set(id, nth + 1);
-      return withSaveKey(foodSaveIntent(log, e.foodItemId, nth), (key) =>
+      // The same food twice in this meal is two saves of one intent: each takes its own key (withSaveKey).
+      return withSaveKey(foodSaveIntent(log, e.foodItemId), (key) =>
         logApi.logFood({ ...log, food_item_id: e.foodItemId, client_uuid: key }));
     }),
   );
