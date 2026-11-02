@@ -203,7 +203,7 @@ const REGISTRY: Surface[] = [
     how: 'blockSync reads the badge again at once', proof: { by: 'cache', id: 'badge-messages' }, exports: ['useUnreadMessagesCount'] },
   // FR-911R2 (LO-911R2 B2): my coach's nudges (typed title and body), named once nudgesApi is a sign.
   { file: 'hooks/useApi.ts', kind: 'list', what: 'my coach\'s nudges and their unread count (useNudges, useUnreadNudgeCount, [\'nudges\'])',
-    how: 'the server leaves out a nudge across a block either way (backend nudges.service.ts listForClient); nothing on the phone drops the cached nudges',
+    how: 'server read only; nothing on the phone drops the cached nudges after a block',
     proof: cacheGap('[\'nudges\']', 'nudges', 'blockSync touches no [\'nudges\'] key, so a coach I just blocked keeps their nudges (title and body) on Notifications until the next read (G11, a runtime follow-up)'),
     exports: ['useNudges', 'useUnreadNudgeCount'] },
   { file: 'screens/client/NotificationsScreen.tsx', kind: 'list', what: 'my coach\'s nudges: title, body, unread (useNudges)',
