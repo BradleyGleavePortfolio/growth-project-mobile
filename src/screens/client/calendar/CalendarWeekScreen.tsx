@@ -83,6 +83,12 @@ function CalendarWeekScreen({ navigation, coachless = false }: Props & { coachle
     queryKey: ['check-ins', month ? 'month' : 'week', from, to],
     queryFn: async () => (await checkInsApi.list({ from, to, limit: month ? 31 : 7 })).data,
   });
+  // Month view: page past sessions back until the month's first day is covered.
+  const oldestPast = past.data?.pages.at(-1)?.at(-1)?.start_at;
+  useEffect(() => {
+    if (month && !coachless && past.hasNextPage && !past.isFetchingNextPage
+      && (!oldestPast || bucketDateLocal(new Date(oldestPast)) >= month)) void past.fetchNextPage();
+  }, [month, coachless, oldestPast, past.hasNextPage, past.isFetchingNextPage, past]);
   const network = useNetworkStatus();
   const own = [workouts, checkIns, logs];
   const queries = coachless ? own : [coaches, sessions, past, ...own];

@@ -160,3 +160,26 @@ it('a coachless client gets the month too, with no scheduling read', async () =>
   expect(r.getByTestId(`month-day-${today}`).props.accessibilityState).toEqual({ selected: true });
   [schedulingApi.listMyCoaches, schedulingApi.listMySessions, schedulingApi.listSessionTypes].forEach((read) => expect(read).not.toHaveBeenCalled());
 });
+
+it('an earlier month pages past sessions back to its first day (more than one page)', async () => {
+  jest.mocked(schedulingApi.listMyCoaches).mockResolvedValue(base.coaches);
+  jest.mocked(schedulingApi.listSessionTypes).mockResolvedValue([]);
+  jest.mocked(workoutBuilderApi.listMyAssignments).mockResolvedValue([]);
+  jest.mocked(checkInsApi.list).mockResolvedValue({ data: [] } as Awaited<ReturnType<typeof checkInsApi.list>>);
+  const first = monthStart(today);
+  // A full page of 20 past sessions, all after the 1st of this month at 09:00; then an older page.
+  const page1 = Array.from({ length: 20 }, (_, i) => ({ ...session, id: `p${i}`, status: 'completed',
+    start_at: `${addDays(today, -(i % 3))}T09:${String(59 - i).padStart(2, '0')}:00`, end_at: `${addDays(today, -(i % 3))}T10:00:00` }))
+    .sort((a, b) => Date.parse(b.start_at) - Date.parse(a.start_at)) as CoachingSession[];
+  const older = [{ ...session, id: 'older', status: 'completed', start_at: `${addDays(first, -40)}T09:00:00`, end_at: `${addDays(first, -40)}T10:00:00` }] as CoachingSession[];
+  jest.mocked(schedulingApi.listMySessions).mockImplementation(async (_n: number, opts?: { scope?: string; before?: string }) =>
+    (opts?.scope === 'past' ? (opts.before ? older : page1) : []));
+  const r = await screen();
+  await waitFor(() => expect(r.getByTestId('calendar-tab-month')).toBeTruthy());
+  const pastCalls = () => jest.mocked(schedulingApi.listMySessions).mock.calls.filter(([, o]) => o?.scope === 'past');
+  await waitFor(() => expect(pastCalls()).toHaveLength(1));
+  await fireEvent.press(r.getByTestId('calendar-tab-month'));
+  await fireEvent.press(r.getByLabelText('Previous month'));
+  await waitFor(() => expect(pastCalls().length).toBeGreaterThanOrEqual(2));
+  expect(pastCalls()[1][1]).toMatchObject({ scope: 'past', before: page1[19].start_at, beforeId: page1[19].id });
+});
