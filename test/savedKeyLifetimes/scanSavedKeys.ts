@@ -587,7 +587,9 @@ function changeOf(d: ts.VariableDeclaration, p: Parsed): Change {
   const args: ts.Expression[] = [];
   let any = false;
   eachRef(scope, (id) => {
-    if (any || id.text !== name || !writesTo(id) || resolveName(name, id, p)?.node !== d) return;
+    if (any || id.text !== name || !writesTo(id)) return;
+    const t = resolveName(name, id, p);
+    if (t?.k !== 'decl' || t.node !== d) return;
     const at = climb(id).parent;
     const call = at?.parent;
     if (at && ts.isPropertyAccessExpression(at) && (at.name.text === 'push' || at.name.text === 'unshift') &&
