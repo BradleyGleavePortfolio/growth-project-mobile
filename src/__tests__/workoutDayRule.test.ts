@@ -33,6 +33,11 @@ import {
 // (FR917_DAY_ROOT), so no other test's child run sees its edits.
 const ROOT = process.env.FR917_DAY_ROOT || path.resolve(__dirname, '..', '..');
 const read = (file: string) => fs.readFileSync(path.join(ROOT, file), 'utf8');
+// Other suites' mutation tests add and remove probe files in src while this
+// guard runs; a file gone between listing and reading is skipped, not a crash.
+const readIfThere = (file: string) => {
+  try { return read(file); } catch (e) { if ((e as NodeJS.ErrnoException).code === 'ENOENT') return ''; throw e; }
+};
 
 describe('the day rule (Pacific time)', () => {
   it.each([
@@ -376,7 +381,7 @@ it('every product file in the workout and assignment class that reads a day is l
   const listed = new Set(SAVES_AND_READS.map(([file]) => file));
   const unplaced = productFiles('src').flatMap((file) => {
     if (listed.has(file)) return [];
-    const source = read(file);
+    const source = readIfThere(file);
     if (!/\b(?:date|scheduled_for|created_at|completed_at|started_at|logged_at)\b/.test(source)) return [];
     if (!IN_CLASS.some((pattern) => pattern.test(source)) && !parsesAStoredDate(file, source)) return [];
     if (!allDayNodes(file, source).length) return [];
@@ -405,6 +410,6 @@ it.each([
 });
 
 it('the unplaced on-device volume reader still has no caller', () => {
-  const callers = productFiles('src').filter((file) => file !== 'src/db/workoutDb.ts' && /getDailyVolumeBreakdown/.test(read(file)));
+  const callers = productFiles('src').filter((file) => file !== 'src/db/workoutDb.ts' && /getDailyVolumeBreakdown/.test(readIfThere(file)));
   expect(callers).toEqual([]);
 });
