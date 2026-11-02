@@ -1376,3 +1376,27 @@ describe('FR-911R2 F3: a new read of my coach\'s nudges is named a list', () => 
     expect(classify('screens/client/FR911R2Nudges.tsx', text).list).toBe(true);
   });
 });
+
+describe('LS-911R3 B1: raw wire origins and member URLs cannot disappear', () => {
+  const host = 'screens/client/SolAccessProbe.tsx';
+  const head = "import api from '../../services/api';\n";
+  it.each([
+    ['extracted raw GET', `${head}const load = api.get; export const read = (url: string) => load(url);`, 'list'],
+    ['destructured raw GET', `${head}const { get: load } = api; export const read = (url: string) => load(url);`, 'list'],
+    ['extracted raw POST', `${head}const send = api.post; export const write = (url: string, body: unknown) => send(url, body);`, 'composer'],
+    ['literal coaching member URL', `${head}export const read = () => api.get('/coach/clients/client-1/messages');`, 'list'],
+    ['quoted request config', `${head}export const send = () => api.request({ 'method': 'post', 'url': '/community/posts', data: { body: 'hello' } });`, 'composer'],
+  ] as const)('%s cannot silently disappear', (_label, text, kind) => {
+    expect(classify(host, text)[kind]).toBe(true);
+  });
+  it.each([
+    ['literal wire read', `${head}export const read = () => api.get('/community/posts');`, 'list'],
+    ['HEAD with unread URL', `${head}export const read = (url: string) => api.head(url);`, 'list'],
+  ] as const)('positive control %s', (_label, text, kind) => {
+    expect(classify(host, text)[kind]).toBe(true);
+  });
+  it.each(['delete', 'options'])('%s with unread URL is not a content read', (verb) => {
+    const kinds = classify(host, `${head}export const call = (url: string) => api.${verb}(url);`);
+    expect(kinds).toEqual({ composer: false, list: false });
+  });
+});
