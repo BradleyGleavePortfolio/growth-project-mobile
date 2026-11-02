@@ -15,8 +15,11 @@
  *             or useInfiniteQuery in a MEMBER_PLACE file.
  *   The scan follows bindings, not spellings: an import under another name, a namespace import, a destructured or
  *   re-assigned method, import() / require() / React.lazy, re-exports and export *, and a local helper or hook that
- *   holds a kind all carry the kind to the file that uses them (a REGISTRY row that is not a host and an EXEMPT row
- *   without `passes` stop it). A relative import from a member place that the scan cannot read is named (fail closed).
+ *   holds a kind all carry the kind to the file that uses them. Only the exports a row proves stop it (its `exports`,
+ *   else the file's default export and the one named like the file) of a REGISTRY row that is neither a host nor a
+ *   KNOWN GAP, or of an EXEMPT row without `passes`; a KNOWN GAP row stops nothing, so whoever draws a gap part is
+ *   named and takes a `via` row. Fail closed: a relative import from a member place, or an import() / require() of a
+ *   code module, that the scan cannot read is named; a services/api call whose path it cannot read counts by its verb.
  * WHEN THIS GOES RED (say which one in your PR):
  *   - "not in the KT-2 registry": you added a composer or a content list. Make it apply the rules (a composer draws
  *     nothing typeable unless useConversationClosed says open, ConversationClosedLine in its place; a list drops a
@@ -89,15 +92,22 @@ type Proof =
   /** An existing test in the suite (file under src/, exact test titles). This test fails if one is gone. */
   | { by: 'suite'; file: string; titles: string[] }
   /** STATE_CASES below: lists kept in screen state, drawn, or (where a draw needs the whole navigator) read in the source. */
-  | { by: 'state'; id: string };
+  | { by: 'state'; id: string }
+  /** FR-911R2 (LO-911R2 B1): draws registered parts whose own row is a KNOWN GAP (or another `via` row), so it shows
+   * that gap and nothing of its own; the gap is fixed in the part. Checked: each part has such a row of this kind, and
+   * this file imports it. */
+  | { by: 'via'; parts: string[] };
 
 /** where = file:function that misses the rule; shows = a CACHE_CASES id (asserted still holding the rows) or a source check. */
 type KnownGap = { where: string; rule: string; why: string; shows: { cache: string } | { lacks: RegExp } };
 /** file under src/; what it shows or sends; how it applies a block (mine / theirs), a ban, a removal, a departure, a
  * closed conversation and the cache after a block; the proof. */
-type Surface = { file: string; kind: Kind; what: string; how: string; proof: Proof | { by: 'gap'; gap: KnownGap } };
+/** exports: the exports the row proves (default: the file's default export and the one named like the file); only
+ * those stop the scan, so any other export of the file carries its kinds on to its callers (a KNOWN GAP row stops none). */
+type Surface = { file: string; kind: Kind; what: string; how: string; proof: Proof | { by: 'gap'; gap: KnownGap }; exports?: string[] };
 
 const CLIENT_THREAD = 'screens/client/__tests__/MessagesScreenV2.test.tsx';
+const SHARE = ['components/share/ShareSheet.tsx'];
 const COACH_THREAD = 'screens/coach/__tests__/ClientMessagesScreenV2.test.tsx';
 const gap = (where: string, rule: string, why: string, shows: KnownGap['shows']): Surface['proof'] => ({ by: 'gap', gap: { where, rule, why, shows } });
 /** blockSync.blockPlaced filters only the DM list and the coach inbox: every other cached list keeps the rows. */
@@ -189,14 +199,23 @@ const REGISTRY: Surface[] = [
     proof: { by: 'suite', file: 'components/home/__tests__/HomeHeaderActions.test.tsx', titles: ['a block hides the coach entry at once and an unblock brings it back, the count read again'] } },
   { file: 'hooks/useClientUnreadCount.ts', kind: 'list', what: 'the client notice count', how: 're-reads on a block or unblock (subscribes to the block store)',
     proof: { by: 'suite', file: 'hooks/__tests__/useClientUnreadCount.test.tsx', titles: ['a block and an unblock read the count again at once'] } },
-  { file: 'hooks/useApi.ts', kind: 'list', what: 'the messages unread badge (useUnreadCount, [\'messages\', \'unread-count\'])',
-    how: 'blockSync reads the badge again at once', proof: { by: 'cache', id: 'badge-messages' } },
+  { file: 'hooks/useApi.ts', kind: 'list', what: 'the messages unread badge (useUnreadMessagesCount, [\'messages\', \'unread-count\'])',
+    how: 'blockSync reads the badge again at once', proof: { by: 'cache', id: 'badge-messages' }, exports: ['useUnreadMessagesCount'] },
+  // FR-911R2 (LO-911R2 B2): my coach's nudges (typed title and body), named once nudgesApi is a sign.
+  { file: 'hooks/useApi.ts', kind: 'list', what: 'my coach\'s nudges and their unread count (useNudges, useUnreadNudgeCount, [\'nudges\'])',
+    how: 'the server leaves out a nudge across a block either way (backend nudges.service.ts listForClient); nothing on the phone drops the cached nudges',
+    proof: cacheGap('[\'nudges\']', 'nudges', 'blockSync touches no [\'nudges\'] key, so a coach I just blocked keeps their nudges (title and body) on Notifications until the next read (G11, a runtime follow-up)'),
+    exports: ['useNudges', 'useUnreadNudgeCount'] },
+  { file: 'screens/client/NotificationsScreen.tsx', kind: 'list', what: 'my coach\'s nudges: title, body, unread (useNudges)',
+    how: 'server read only; no block-store filter over the rows',
+    proof: cacheGap('[\'nudges\']', 'nudges', 'a coach I just blocked keeps their cached nudges (title and body) on Notifications until the next read; blockSync has no [\'nudges\'] key (G11, a runtime follow-up)') },
   { file: 'navigation/ClientNavigator.tsx', kind: 'list', what: 'the Community tab badge (useCommunityBadge, communityKeys.me)',
     how: 'blockSync reads communityKeys.me again at once', proof: { by: 'cache', id: 'badge-community-me' } },
   { file: 'screens/community/CommunityTabScreen.tsx', kind: 'list', what: 'the Community tab badge (useCommunityBadge)',
     how: 'blockSync reads communityKeys.me again at once', proof: { by: 'cache', id: 'badge-community-me' } },
-  { file: 'components/community/SpaceTree.tsx', kind: 'list', what: 'the coach row unread in the space tree',
-    how: 'blockSync reads [\'community\', \'home\', \'coach-unread\'] again at once', proof: { by: 'cache', id: 'badge-coach-unread' } },
+  { file: 'components/community/SpaceTree.tsx', kind: 'list', what: 'the coach row unread in the space tree (useSpaceTree, drawn by SpaceTree)',
+    how: 'blockSync reads [\'community\', \'home\', \'coach-unread\'] again at once; useCoachChatClosed drops the coach row when the chat is closed', proof: { by: 'cache', id: 'badge-coach-unread' },
+    exports: ['useSpaceTree', 'SpaceTree'] },
   { file: 'navigation/CoachNavigator.tsx', kind: 'list', what: 'the coach bell count',
     how: 'useCoachNotificationUnreadCount re-reads on a block or unblock (its effect depends on the block store)', proof: { by: 'state', id: 'coach-bell-source' } },
   { file: 'screens/community/CommunityDmThreadScreen.tsx', kind: 'list', what: 'the DM messages',
@@ -253,15 +272,34 @@ const REGISTRY: Surface[] = [
     how: 're-read on focus (a block is made on another screen, so coming back reads again); the server count leaves a closed chat out', proof: { by: 'state', id: 'focus-reread-coach-home' } },
   { file: 'screens/coach/lookup/ClientLookupScreen.tsx', kind: 'list', what: 'unread per client in the coach lookup',
     how: 're-read on focus; the server count leaves a closed chat out', proof: { by: 'state', id: 'focus-reread-lookup' } },
+  // FR-911R2 (LO-911R2 B1): a KNOWN GAP row no longer stops the scan, so the files that draw a gap part are named; each
+  // shows the part's gap (fixed in the part), and its row stops here so the navigators above it are not named for it.
+  ...([
+    ['screens/client/ProgressScreen.tsx', 'Share a progress card: ShareSheet ("Send to {coach}")', SHARE],
+    ['screens/client/active-workout/WorkoutFinishSummary.tsx', 'Share a finished workout: ShareSheet ("Send to {coach}")', SHARE],
+    ['screens/client/wearables/MetricDetailV2.tsx', 'Share a metric card: ShareSheet ("Send to {coach}")', SHARE],
+    ['screens/coach/lookup/ClientLookupScreen.tsx', 'a typed nudge from the lookup (useLookupNudge)', ['screens/coach/lookup/useLookupNudge.tsx']],
+    ['navigation/CommunityNavigator.tsx', 'the voice note composer route', ['screens/community/CommunityVoiceComposerScreen.tsx']],
+    ['navigation/ClientNavigator.tsx', 'the wins route (CommunityScreen)', ['screens/client/CommunityScreen.tsx']],
+    ['navigation/CoachNavigator.tsx', 'the client detail and risk detail routes (a nudge)', ['screens/coach/ClientDetailScreen.tsx', 'screens/coach/ClientRiskDetailScreen.tsx']],
+  ] as const).map(([file, what, parts]): Surface => ({ file, kind: 'composer', what, how: 'the part\'s own (its KNOWN GAP row)', proof: { by: 'via', parts: [...parts] } })),
+  ...([
+    ['navigation/CommunityNavigator.tsx', 'the community routes (today, a space, a post, a challenge, search, a voice note)', [
+      'screens/community/CommunityTodayScreen.tsx', 'screens/community/CommunitySpaceScreen.tsx', 'screens/community/CommunityThreadScreen.tsx',
+      'screens/community/CommunityChallengeDetailScreen.tsx', 'screens/community/CommunityFindScreen.tsx', 'screens/community/CommunityVoiceNoteDetail.tsx']],
+    ['navigation/CoachCommunityNavigator.tsx', 'the coach community routes (a post, a voice note)', ['screens/community/CoachCommunityPostDetailScreen.tsx', 'screens/community/CommunityVoiceNoteDetail.tsx']],
+    ['screens/coach/command-center/CommandCenterScreen.tsx', 'the command center inbox tab (InboxScreen)', ['screens/coach/command-center/InboxScreen.tsx']],
+    ['screens/coach/cross-pillar/CrossPillarNavigator.tsx', 'the cross-pillar messages route', ['screens/coach/cross-pillar/CrossPillarMessagesScreen.tsx']],
+  ] as const).map(([file, what, parts]): Surface => ({ file, kind: 'list', what, how: 'the parts\' own (their KNOWN GAP rows)', proof: { by: 'via', parts: [...parts] } })),
 ];
 
 /** Files that match a sign but are not a surface: plumbing the registered surfaces call, or no member words. */
 /** passes: plumbing whose exports carry member content on to their callers, so the files that use them are named. A
  * row without it (and any REGISTRY row but a `host` part) stops that: its users are not named for it. */
-const EXEMPT: { file: string; kinds: Kind[]; why: string; passes?: true }[] = [
+const EXEMPT: { file: string; kinds: Kind[]; why: string; passes?: true; exports?: string[] }[] = [
   { file: 'services/api.ts', kinds: ['composer', 'list'], why: 'wire wrappers; the registered screens call them', passes: true },
   { file: 'api/messagesApi.ts', kinds: ['composer'], why: 'wire wrapper (sendReply); block / unblock report to blockSync', passes: true },
-  { file: 'api/messagingV2Api.ts', kinds: ['list'], why: 'wire wrapper and schema', passes: true },
+  { file: 'api/messagingV2Api.ts', kinds: ['composer', 'list'], why: 'wire wrapper and schema (FR-911R2: the scan now reads its threadBase / msgUrl paths, so sendMessage is a send)', passes: true },
   { file: 'api/coachCommunityApi.ts', kinds: ['list'], why: 'wire wrapper', passes: true },
   { file: 'services/messageOutbox.ts', kinds: ['composer'], why: 'sends what a registered chat queued; it draws nothing', passes: true },
   { file: 'hooks/useCommunity.ts', kinds: ['composer', 'list'], why: 'query and send hooks the registered community screens call', passes: true },
@@ -274,7 +312,7 @@ const EXEMPT: { file: string; kinds: Kind[]; why: string; passes?: true }[] = [
   { file: 'hooks/useCoachCommunity.ts', kinds: ['list'], why: 'coach community read hooks of the registered coach screens', passes: true },
   { file: 'hooks/useInboxTriage.ts', kinds: ['list'], why: 'triage hook of the registered coach community inbox', passes: true },
   { file: 'hooks/useCoachChatClosed.ts', kinds: ['list'], why: 'the closed gate itself (reads only the closed header)' },
-  { file: 'hooks/useNotifications.ts', kinds: ['list'], why: 'first payment notice only (money, no member words)' },
+  { file: 'hooks/useNotifications.ts', kinds: ['list'], why: 'first payment notice only (money, no member words)', exports: ['useFirstPaymentNotification'] },
   { file: 'components/messaging/ConversationClosed.tsx', kinds: ['list'], why: 'the closed gate itself (reads the coaching row)' },
   { file: 'components/messaging/ReportMessageSheet.tsx', kinds: ['composer'], why: 'a report to the safety team, never to the person' },
   { file: 'components/community/SearchBar.tsx', kinds: ['composer'], why: 'a search field; sends nothing to anyone' },
@@ -301,6 +339,9 @@ const EXEMPT: { file: string; kinds: Kind[]; why: string; passes?: true }[] = [
   { file: 'screens/community/CommunityClassroomScreen.tsx', kinds: ['list'], why: 'coach-made lessons' },
   { file: 'screens/community/CommunityWearablePromptsScreen.tsx', kinds: ['list'], why: 'coach-only prompts the server drafts from a client\'s own opted-in wearable insights' },
   { file: 'screens/roman/RomanChatScreen.tsx', kinds: ['list'], why: 'Roman (the assistant), not a member' },
+  // FR-911R2 (F1): a services/api call whose path the scan cannot read fails closed; the ones in src/ today, each with why.
+  { file: 'services/health/ingestBatching.ts', kinds: ['composer'], exports: ['postIngestBatches'],
+    why: 'my own health samples to WEARABLES_INGEST_PATH (/v1/wearables/samples/ingest), through a post seam whose path is a parameter; no member words' },
 ];
 
 // ─── The inventory scan ──────────────────────────────────────────────────────────────────────────────────────────
@@ -310,16 +351,20 @@ const EXEMPT: { file: string; kinds: Kind[]; why: string; passes?: true }[] = [
 // `export *`, barrels), namespace imports, destructuring (`const { sendDm } = communityApi`), import(), require() and
 // lazy(). A file is named by what it uses there:
 //   - a sign below, by its declared name (so `usePosts as useFeed` and `usePosts\n(` are usePosts);
-//   - a raw call on services/api to a member path (/community, /messages, /coach/messages, a client's messages): a GET
-//     is a list, any other verb a composer;
+//   - a raw call on services/api to a member path (/community, /messages, /nudges, /coach/messages, a client's
+//     messages): a GET is a list, a POST / PUT / PATCH into SEND_PATH a composer. FR-911R2: any form (api['get'],
+//     api.request({ method, url }), api(config), an alias of api) and any path text it can read (a const here or
+//     imported, an object of paths, a path function's return, a condition); a path whose start it cannot read counts
+//     by its verb (fail closed);
 //   - any method of an API object whose own body makes such a call (spaceChatApi.list), unless NOT_CONTENT below says
 //     why that one method carries no member words;
 //   - any function, hook or component exported from another file whose own body (followed the same way) holds one of
-//     these: a shared wrapper, a new hook in hooks/useCommunity.ts, useSpaceChat. A file with its own REGISTRY row
-//     (proof other than `host`) stops this: its row proves it, so the screens that draw it need none;
+//     these: a shared wrapper, a new hook in hooks/useCommunity.ts, useSpaceChat. The exports a row proves stop this
+//     (FR-911R2: per export, not per file; a KNOWN GAP row stops nothing), so the screens that draw them need none;
 //   - inside MEMBER_PLACE: a <TextInput (composer), a <FlatList, <SectionList, <FlashList or useInfiniteQuery( (list);
-//   - fail closed: a name imported from a member place the scan cannot read, an import() or require() it cannot follow,
-//     or an API object it cannot find but named for member content, counts as both (or by its verb).
+//   - fail closed: a name imported from a member place the scan cannot read, an import() or require() it cannot follow
+//     (or of a relative code module it cannot read), a whole namespace passed on, a method picked by a key it cannot
+//     read, or an API object it cannot find but named for member content, counts as both (or by its verb).
 
 const COMPOSER_PARTS = new Set(['ComposerInput', 'ReplyComposer', 'ReactionBar', 'VoiceNotesSection', 'VoiceRecordSheet', 'VoiceNoteComposer']);
 const COMPOSER_CALLS = new Set([
@@ -342,6 +387,7 @@ const LIST_CALLS = new Set([
   'communityChallengesApi.getLeaderboard', 'communitySearchApi.search', 'communityWinsApi.getFeed',
   'coachCommunityApi.getInbox', 'coachCommunityApi.getCoachPostDetail', 'coachCommunityApi.getFlagged',
   'messagesApi.list', 'messagesApi.unreadCount', 'coachApi.getClientMessages', 'coachApi.getUnreadCounts',
+  'nudgesApi.list', 'nudgesApi.unreadCount', 'useNudges', 'useUnreadNudgeCount',
   'fetchNotifications', 'fetchUnreadCount',
 ]);
 /** The API objects of the signs above: any method of these counts (by its verb) unless NOT_CONTENT names it. */
@@ -351,7 +397,7 @@ const MEMBER_API_NAME = /^\w*(community|space|chat|dm|message|voice|post|comment
 /** A read by its verb; anything else on a member API is a send. */
 const READ_VERB = /^(get|list|fetch|search|load|read|peek|find|count|unread|poll)/i;
 /** A raw member-content path on services/api: the first argument's text. */
-const MEMBER_PATH = /^\/(community|messages|coach\/messages|coach\/clients\/\$\{[^}]+\}\/messages)(\/|\?|$|\$\{)/;
+const MEMBER_PATH = /^\/(community|messages|nudges|coach\/messages|coach\/clients\/\$\{[^}]+\}\/messages)(\/|\?|$|\$\{)/;
 const WIRE_VERBS = new Set(['get', 'post', 'put', 'patch', 'delete']);
 /** A send of member words: a POST, PUT or PATCH into a collection of them (not a mark, a block, a report or a delete). */
 const SEND_PATH = /\/(posts|comments|messages|dms?|threads|voice-notes|voice|reactions|chat|wins|replies|notes)\/?(\?.*)?$/;
@@ -385,7 +431,8 @@ const NONE = (): Kinds => ({ composer: false, list: false });
 const add = (a: Kinds, b: Kinds) => { a.composer ||= b.composer; a.list ||= b.list; return a; };
 /** mod: the src file that declares it (null: not read; `pkg:` a package); name: its declared name (dotted for a method). */
 type Origin = { mod: string | null; name: string; spec?: string };
-type Binding = { from: string; name: string } | { ns: string } | { obj: string; prop: string } | { lazy: string };
+/** alias: `const wire = api`, `const Draft = Parts['IndependentDraft']` (a name bound to an imported thing, followed). */
+type Binding = { from: string; name: string } | { ns: string } | { obj: string; prop: string } | { lazy: string } | { alias: ts.Expression };
 type ModInfo = {
   sf: ts.SourceFile;
   bindings: Map<string, Binding>;
@@ -396,6 +443,8 @@ type ModInfo = {
   decls: Map<string, ts.Node>;
   /** every name declared anywhere in the file (parameters, locals): such a name is never an unread member API */
   declared: Set<string>;
+  /** every `const` name in the file -> its initializers (a path held in a const is read through it) */
+  consts: Map<string, ts.Expression[]>;
 };
 
 const parsed = new Map<string, { text: string; info: ModInfo }>();
@@ -403,7 +452,7 @@ function modInfo(file: string, text: string): ModInfo {
   const hit = parsed.get(file);
   if (hit && hit.text === text) return hit.info;
   const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, file.endsWith('.ts') ? ts.ScriptKind.TS : ts.ScriptKind.TSX);
-  const info: ModInfo = { sf, bindings: new Map(), exports: new Map(), stars: [], decls: new Map(), declared: new Set() };
+  const info: ModInfo = { sf, bindings: new Map(), exports: new Map(), stars: [], decls: new Map(), declared: new Set(), consts: new Map() };
   const specOf = (n: ts.Node | undefined): string | null => {
     let e = n;
     while (e && (ts.isAwaitExpression(e) || ts.isParenthesizedExpression(e))) e = e.expression;
@@ -421,6 +470,14 @@ function modInfo(file: string, text: string): ModInfo {
         if (prop && ts.isIdentifier(el.name)) info.bindings.set(el.name.text, target(prop));
       }
     }
+  };
+  /** `api`, `Parts.X`, `Parts['X']` where the first name is already bound to an import: an alias the scan follows */
+  const aliasOfBound = (e: ts.Expression): boolean => {
+    while (ts.isParenthesizedExpression(e) || ts.isAsExpression(e) || ts.isNonNullExpression(e)) e = e.expression;
+    if (ts.isIdentifier(e)) return info.bindings.has(e.text);
+    if (ts.isPropertyAccessExpression(e)) return aliasOfBound(e.expression);
+    if (ts.isElementAccessExpression(e) && ts.isStringLiteralLike(e.argumentExpression)) return aliasOfBound(e.expression);
+    return false;
   };
   const visit = (n: ts.Node) => {
     if ((ts.isParameter(n) || ts.isVariableDeclaration(n) || ts.isBindingElement(n)) && ts.isIdentifier(n.name)) info.declared.add(n.name.text);
@@ -459,8 +516,14 @@ function modInfo(file: string, text: string): ModInfo {
       const top = n.parent?.parent?.parent === sf;
       const spec = specOf(n.initializer);
       const init = n.initializer;
-      const propSpec = init && ts.isPropertyAccessExpression(init) ? specOf(init.expression) : null;
-      if (propSpec && init && ts.isPropertyAccessExpression(init) && ts.isIdentifier(n.name)) info.bindings.set(n.name.text, { from: propSpec, name: init.name.text });
+      // require('m').Feed and require('m')['Feed']
+      const propName = init && ts.isPropertyAccessExpression(init) ? init.name.text
+        : init && ts.isElementAccessExpression(init) && ts.isStringLiteralLike(init.argumentExpression) ? init.argumentExpression.text : null;
+      const propSpec = propName !== null && init && (ts.isPropertyAccessExpression(init) || ts.isElementAccessExpression(init)) ? specOf(init.expression) : null;
+      if (ts.isIdentifier(n.name) && init && ts.getCombinedNodeFlags(n) & ts.NodeFlags.Const) {
+        info.consts.set(n.name.text, [...(info.consts.get(n.name.text) ?? []), init]);
+      }
+      if (propSpec && propName !== null && ts.isIdentifier(n.name)) info.bindings.set(n.name.text, { from: propSpec, name: propName });
       else if (spec && ts.isIdentifier(n.name)) info.bindings.set(n.name.text, { ns: spec });
       else if (spec) bindPattern(n.name, (prop) => ({ from: spec, name: prop }));
       else if (n.initializer && ts.isIdentifier(n.initializer) && !ts.isIdentifier(n.name)) {
@@ -471,6 +534,8 @@ function modInfo(file: string, text: string): ModInfo {
         const body = f && (ts.isArrowFunction(f) || ts.isFunctionExpression(f)) ? (ts.isBlock(f.body) ? undefined : f.body) : undefined;
         const lazySpec = specOf(body);
         if (lazySpec) info.bindings.set(n.name.text, { lazy: lazySpec });
+      } else if (ts.isIdentifier(n.name) && init && !info.bindings.has(n.name.text) && aliasOfBound(init)) {
+        info.bindings.set(n.name.text, { alias: init });
       }
       if (top && ts.isIdentifier(n.name)) {
         const local = n.name.text;
@@ -538,8 +603,53 @@ function resolveLocal(ctx: ScanCtx, mod: string, local: string, depth = 0): Orig
     return { ...o, name: `${o.name}.${b.prop}` };
   }
   if (b && 'ns' in b) return { mod, name: local, spec: b.ns };
+  if (b && 'alias' in b) return (depth < 12 && originOf(ctx, mod, b.alias, depth + 1)) || { mod: null, name: local };
   if (info.decls.has(local)) return { mod, name: local };
   return { mod: null, name: local };
+}
+
+/** a namespace (import * as, await import(), require(), .then((m) => ...)) or import()/require() call: its spec */
+function nsSpecOf(info: ModInfo, e: ts.Expression): string | null {
+  while (ts.isAwaitExpression(e) || ts.isParenthesizedExpression(e) || ts.isNonNullExpression(e)) e = e.expression;
+  if (ts.isIdentifier(e)) { const b = info.bindings.get(e.text); return b && 'ns' in b ? b.ns : null; }
+  if (ts.isCallExpression(e) && e.arguments.length && ts.isStringLiteralLike(e.arguments[0]) &&
+    (e.expression.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(e.expression) && e.expression.text === 'require'))) return e.arguments[0].text;
+  return null;
+}
+/** Where the thing an expression names was declared: a name, X.m, X['m'] (a literal key), followed through bindings. */
+function originOf(ctx: ScanCtx, mod: string, e: ts.Expression, depth = 0): Origin | null {
+  while (ts.isParenthesizedExpression(e) || ts.isNonNullExpression(e) || ts.isAsExpression(e)) e = e.expression;
+  if (depth > 12) return null;
+  if (ts.isIdentifier(e)) return resolveLocal(ctx, mod, e.text, depth + 1);
+  const prop = ts.isPropertyAccessExpression(e) ? e.name.text
+    : ts.isElementAccessExpression(e) && ts.isStringLiteralLike(e.argumentExpression) ? e.argumentExpression.text : null;
+  if (prop !== null && (ts.isPropertyAccessExpression(e) || ts.isElementAccessExpression(e))) {
+    const spec = nsSpecOf(infoOf(ctx, mod), e.expression);
+    if (spec) return resolveExport(ctx, resolveSpec(ctx, mod, spec), prop, spec, depth + 1);
+    const o = originOf(ctx, mod, e.expression, depth + 1);
+    return o ? { ...o, name: `${o.name}.${prop}` } : null;
+  }
+  return null;
+}
+/** A relative module of code (not an image, a font, a sound or JSON): one the scan cannot read is a member place unread. */
+const isCodeSpec = (spec: string) => spec.startsWith('.') && !/\.(png|jpe?g|gif|webp|svg|json|ttf|otf|mp3|mp4|wav|m4a|aac|caf|lottie|html|css|txt|md)$/i.test(spec);
+/** Everything a whole module holds (a namespace used as a value, an import() or require() whose use is not followed):
+ * the kinds of all its exports; a relative module of code the scan cannot read counts as both (fail closed). */
+function moduleKinds(ctx: ScanCtx, mod: string, spec: string): Kinds {
+  const k = NONE();
+  const m = resolveSpec(ctx, mod, spec);
+  if (m && !m.startsWith('pkg:')) for (const name of exportNames(ctx, m)) add(k, declKinds(ctx, resolveExport(ctx, m, name, spec)));
+  if (!m && isCodeSpec(spec)) add(k, { composer: true, list: true });
+  return k;
+}
+/** Exported names of a module, with `export *` followed. */
+function exportNames(ctx: ScanCtx, mod: string, seen = new Set<string>()): string[] {
+  if (seen.has(mod)) return [];
+  seen.add(mod);
+  const info = infoOf(ctx, mod);
+  const out = [...info.exports.keys()];
+  for (const s of info.stars) { const m = resolveSpec(ctx, mod, s); if (m && !m.startsWith('pkg:')) out.push(...exportNames(ctx, m, seen).filter((n) => n !== 'default')); }
+  return out;
 }
 
 /** The kinds a declaration's own body holds (followed into what it calls), less the kinds its file's own row proves. */
@@ -555,23 +665,51 @@ function declKinds(ctx: ScanCtx, o: Origin): Kinds {
   ctx.busy.add(key);
   const k = nodeKinds(ctx, o.mod, node);
   ctx.busy.delete(key);
+  // FR-911R2 (LO-911R2 B1): a row stops only the exports it proves, never a whole file; a KNOWN GAP row stops nothing
+  const stops = (exports?: string[]) => stoppedLocals(ctx, o.mod as string, exports).has(o.name.split('.')[0]);
   for (const kind of ['composer', 'list'] as Kind[]) {
-    if (REGISTRY.some((s) => s.file === o.mod && s.kind === kind && s.proof.by !== 'host')) k[kind] = false;
-    if (EXEMPT.some((e) => e.file === o.mod && e.kinds.includes(kind) && !e.passes)) k[kind] = false;
+    if (REGISTRY.some((s) => s.file === o.mod && s.kind === kind && s.proof.by !== 'host' && s.proof.by !== 'gap' && stops(s.exports))) k[kind] = false;
+    if (EXEMPT.some((e) => e.file === o.mod && e.kinds.includes(kind) && !e.passes && stops(e.exports))) k[kind] = false;
   }
   ctx.memo.set(key, k);
   return k;
 }
 
+/** The declarations a row stops: the exports it names (`exports`), else the file's default export and the export named
+ * like the file (CoachInboxV2.tsx: CoachInboxV2). Any other export of the file carries its kinds on to its callers. */
+function stoppedLocals(ctx: ScanCtx, file: string, exports?: string[]): Set<string> {
+  const out = new Set<string>();
+  if (!ctx.files.has(file)) return out;
+  const info = infoOf(ctx, file);
+  for (const n of exports ?? ['default', path.posix.basename(file).replace(/\.tsx?$/, '')]) {
+    const e = info.exports.get(n);
+    if (e && 'local' in e) out.add(e.local);
+  }
+  return out;
+}
+
+/** The src files a file imports (import, export from, import(), require(), lazy()). */
+function importsOf(ctx: ScanCtx, file: string): Set<string> {
+  const out = new Set<string>();
+  for (const b of infoOf(ctx, file).bindings.values()) {
+    const spec = 'from' in b ? b.from : 'ns' in b ? b.ns : 'lazy' in b ? b.lazy : null;
+    const m = spec ? resolveSpec(ctx, file, spec) : null;
+    if (m) out.add(m);
+  }
+  return out;
+}
+
 /** What a use of `o` (called, drawn, or a method taken) names. */
-function kindsOfUse(ctx: ScanCtx, mod: string, o: Origin, how: 'call' | 'jsx' | 'method', followLocal: boolean): Kinds {
+/** how: 'value' is a name passed on (a component to createElement, a function to queryFn): it counts as drawn and called. */
+function kindsOfUse(ctx: ScanCtx, mod: string, o: Origin, how: 'call' | 'jsx' | 'value', followLocal: boolean): Kinds {
   const k = NONE();
   const [obj, method] = o.name.includes('.') ? [o.name.slice(0, o.name.lastIndexOf('.')), o.name.slice(o.name.lastIndexOf('.') + 1)] : [null, null];
   if (notContent(o)) return k;
-  if (how === 'jsx' && COMPOSER_PARTS.has(o.name)) k.composer = true;
+  const drawn = how !== 'call';
+  if (drawn && COMPOSER_PARTS.has(o.name)) k.composer = true;
   if (how !== 'jsx' && COMPOSER_CALLS.has(o.name)) k.composer = true;
   if (how !== 'jsx' && LIST_CALLS.has(o.name)) k.list = true;
-  if (how === 'jsx' && LIST_PARTS.has(o.name) && MEMBER_PLACE.test(mod)) k.list = true;
+  if (drawn && LIST_PARTS.has(o.name) && MEMBER_PLACE.test(mod)) k.list = true;
   if (how === 'call' && o.name === 'useInfiniteQuery' && MEMBER_PLACE.test(mod)) k.list = true;
   // a method of a member API the scan cannot read (no file, or not a method it can find): by its verb (fail closed)
   const unread = (!o.mod && !infoOf(ctx, mod).declared.has(obj ?? '')) || (!!o.mod && !o.mod.startsWith('pkg:') && !infoOf(ctx, o.mod).decls.has(o.name));
@@ -590,64 +728,58 @@ function kindsOfUse(ctx: ScanCtx, mod: string, o: Origin, how: 'call' | 'jsx' | 
 /** The kinds a node holds: everything in it that is called, drawn, sent on the wire, or a member API method taken. */
 function nodeKinds(ctx: ScanCtx, mod: string, root: ts.Node): Kinds {
   const info = infoOf(ctx, mod);
-  const sf = info.sf;
   const k = NONE();
-  const followLocal = root !== sf;
-  /** a namespace (import * as, await import(), require(), .then((m) => ...)) or import()/require() call: its spec */
-  const nsSpec = (e: ts.Expression): string | null => {
-    while (ts.isAwaitExpression(e) || ts.isParenthesizedExpression(e) || ts.isNonNullExpression(e)) e = e.expression;
-    if (ts.isIdentifier(e)) { const b = info.bindings.get(e.text); return b && 'ns' in b ? b.ns : null; }
-    if (ts.isCallExpression(e) && e.arguments.length && ts.isStringLiteralLike(e.arguments[0]) &&
-      (e.expression.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(e.expression) && e.expression.text === 'require'))) return e.arguments[0].text;
-    return null;
-  };
-  const origin = (e: ts.Expression): Origin | null => {
-    while (ts.isParenthesizedExpression(e) || ts.isNonNullExpression(e) || ts.isAsExpression(e)) e = e.expression;
-    if (ts.isIdentifier(e)) return resolveLocal(ctx, mod, e.text);
-    if (ts.isPropertyAccessExpression(e)) {
-      const spec = nsSpec(e.expression);
-      if (spec) return resolveExport(ctx, resolveSpec(ctx, mod, spec), e.name.text, spec);
-      const o = origin(e.expression);
-      return o ? { ...o, name: `${o.name}.${e.name.text}` } : null;
-    }
-    return null;
-  };
+  const followLocal = root !== info.sf;
+  const origin = (e: ts.Expression) => originOf(ctx, mod, e);
   const tagName = (t: ts.JsxTagNameExpression): Origin | null => (ts.isIdentifier(t) || ts.isPropertyAccessExpression(t) ? origin(t as ts.Expression) : null);
+  /** an API object (or namespace) whose method is picked by a key the scan cannot read: every method it has, or by name */
+  const anyMethod = (base: ts.Expression): Kinds => {
+    const spec = nsSpecOf(info, base);
+    if (spec) return moduleKinds(ctx, mod, spec);
+    const o = origin(base);
+    const out = NONE();
+    if (!o) return out;
+    const last = o.name.split('.').pop() as string;
+    if (MEMBER_APIS.has(last) || MEMBER_API_NAME.test(last)) add(out, { composer: true, list: true });
+    if (o.mod && !o.mod.startsWith('pkg:')) {
+      for (const d of infoOf(ctx, o.mod).decls.keys()) if (d.startsWith(`${o.name}.`)) add(out, declKinds(ctx, { mod: o.mod, name: d }));
+    }
+    return out;
+  };
   const visit = (n: ts.Node) => {
     if (ts.isCallExpression(n)) {
       if (n.expression.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(n.expression) && n.expression.text === 'require')) {
         const a = n.arguments[0];
         if (!a || !ts.isStringLiteralLike(a)) add(k, { composer: true, list: true }); // fail closed: cannot follow
-        else if (!usedAsBinding(n)) {
-          // fail closed: an import() or require() whose use the scan does not follow counts as all its module holds
-          const m = resolveSpec(ctx, mod, a.text);
-          if (m && !m.startsWith('pkg:')) for (const name of infoOf(ctx, m).exports.keys()) add(k, declKinds(ctx, resolveExport(ctx, m, name, a.text)));
-        }
+        // fail closed: an import() or require() whose use the scan does not follow counts as all its module holds, and
+        // one of a relative code module the scan cannot read counts as both (FR-911R2, LS-911R2)
+        else if (!usedAsBinding(n)) add(k, moduleKinds(ctx, mod, a.text));
       } else {
         const o = origin(n.expression);
         if (o) add(k, kindsOfUse(ctx, mod, o, 'call', followLocal));
-        // a raw call on services/api to a member path
-        if (ts.isPropertyAccessExpression(n.expression) && WIRE_VERBS.has(n.expression.name.text) && n.arguments[0]) {
-          const api = origin(n.expression.expression);
-          const isApi = api && ((api.mod === 'services/api.ts' && /^(default|api)$/.test(api.name)) || (!api.mod && /^(api|apiClient|http|client)$/.test(api.name)));
-          const a0 = n.arguments[0];
-          const text = ts.isStringLiteralLike(a0) ? a0.text : ts.isTemplateExpression(a0) ? a0.getText(sf).slice(1, -1) : null;
-          if (isApi && text !== null && MEMBER_PATH.test(text)) {
-            const verb = n.expression.name.text;
-            if (verb === 'get') k.list = true;
-            else if (verb !== 'delete' && SEND_PATH.test(text)) k.composer = true;
-          }
-        }
+        add(k, wireKinds(ctx, mod, n));
       }
-    } else if (ts.isPropertyAccessExpression(n) && !(ts.isCallExpression(n.parent) && n.parent.expression === n)) {
-      // a member API method taken without a call (queryFn: communityApi.listPosts)
+    }
+    if ((ts.isPropertyAccessExpression(n) || ts.isElementAccessExpression(n)) && !(ts.isCallExpression(n.parent) && n.parent.expression === n)) {
+      // a member API method taken without a call (queryFn: communityApi.listPosts), or a part of a namespace passed on
+      // (React.createElement(Parts.Draft), Parts['Draft'])
       const o = origin(n);
-      if (o && o.name.includes('.')) add(k, kindsOfUse(ctx, mod, o, 'method', followLocal));
+      if (o && (o.name.includes('.') || nsSpecOf(info, n.expression))) add(k, kindsOfUse(ctx, mod, o, 'value', followLocal));
+    }
+    if (ts.isElementAccessExpression(n) && !ts.isStringLiteralLike(n.argumentExpression)) {
+      // fail closed: a method picked by a key the scan cannot read (communityApi[name], Parts[name])
+      add(k, anyMethod(n.expression));
     }
     if (ts.isIdentifier(n) && isReference(n) && info.bindings.has(n.text)) {
-      // an imported function passed on, not called here (queryFn: fetchInboxTriage): it runs, so it counts
-      const o = resolveLocal(ctx, mod, n.text);
-      if (o.mod !== mod) add(k, kindsOfUse(ctx, mod, o, 'call', followLocal));
+      const b = info.bindings.get(n.text) as Binding;
+      if ('ns' in b) {
+        // a whole namespace passed on (return parts; register(Parts)): it holds all its module holds
+        add(k, moduleKinds(ctx, mod, b.ns));
+      } else {
+        // an imported function or component passed on, not called or drawn here (queryFn: fetchInboxTriage): it counts
+        const o = resolveLocal(ctx, mod, n.text);
+        if (o.mod !== mod) add(k, kindsOfUse(ctx, mod, o, 'value', followLocal));
+      }
     }
     if (ts.isJsxOpeningElement(n) || ts.isJsxSelfClosingElement(n)) {
       const o = tagName(n.tagName);
@@ -657,6 +789,113 @@ function nodeKinds(ctx: ScanCtx, mod: string, root: ts.Node): Kinds {
     ts.forEachChild(n, visit);
   };
   visit(root);
+  return k;
+}
+
+const AXIOS_VERBS = new Set(['get', 'head', 'options', 'delete', 'post', 'put', 'patch']);
+/** What a name or X.m stands for: its const initializer, object property or function (here, a local const, or imported). */
+function defsOf(ctx: ScanCtx, mod: string, e: ts.Expression): { mod: string; node: ts.Node }[] {
+  while (ts.isParenthesizedExpression(e) || ts.isAsExpression(e) || ts.isNonNullExpression(e)) e = e.expression;
+  const info = infoOf(ctx, mod);
+  if (ts.isIdentifier(e) && !info.bindings.has(e.text) && !info.decls.has(e.text)) return (info.consts.get(e.text) ?? []).map((node) => ({ mod, node }));
+  const o = originOf(ctx, mod, e);
+  if (!o || !o.mod || o.mod.startsWith('pkg:')) return [];
+  const d = infoOf(ctx, o.mod).decls.get(o.name);
+  if (!d) return [];
+  if (ts.isVariableDeclaration(d)) return d.initializer && ts.getCombinedNodeFlags(d) & ts.NodeFlags.Const ? [{ mod: o.mod, node: d.initializer }] : [];
+  if (ts.isPropertyAssignment(d)) return [{ mod: o.mod, node: d.initializer }];
+  return [{ mod: o.mod, node: d }];
+}
+/** The expressions a function returns (an arrow's body, or each `return` not inside a nested function). */
+function returnsOf(f: ts.Node): ts.Expression[] {
+  if (ts.isArrowFunction(f) && !ts.isBlock(f.body)) return [f.body];
+  if (!(ts.isArrowFunction(f) || ts.isFunctionExpression(f) || ts.isFunctionDeclaration(f) || ts.isMethodDeclaration(f)) || !f.body) return [];
+  const out: ts.Expression[] = [];
+  const walk = (n: ts.Node) => {
+    if (ts.isReturnStatement(n) && n.expression) out.push(n.expression);
+    if (!ts.isFunctionLike(n)) ts.forEachChild(n, walk);
+  };
+  ts.forEachChild(f.body, walk);
+  return out;
+}
+const UNREAD = '${?}';
+/**
+ * Every text a path can have, as far as the scan can read it: literals, templates, `+` joins, `a ? b : c` and `a ?? b`,
+ * a const (here or imported), an object's property (COPILOT_PATHS.recent) and what a path function returns
+ * (threadBase(scope), draftUrl(id)); a part it cannot read is `${?}`.
+ */
+function pathAlts(ctx: ScanCtx, mod: string, e: ts.Expression, depth = 0): string[] {
+  while (ts.isParenthesizedExpression(e) || ts.isAsExpression(e) || ts.isNonNullExpression(e) || ts.isSatisfiesExpression(e)) e = e.expression;
+  if (depth > 10) return [UNREAD];
+  const cross = (parts: string[][]) => {
+    const out = parts.reduce((acc, ps) => acc.flatMap((x) => ps.map((y) => x + y)), ['']);
+    return out.length > 32 ? [UNREAD] : [...new Set(out)];
+  };
+  if (ts.isStringLiteralLike(e) || ts.isNumericLiteral(e)) return [e.text];
+  if (ts.isTemplateExpression(e)) return cross([[e.head.text], ...e.templateSpans.flatMap((sp) => [pathAlts(ctx, mod, sp.expression, depth + 1), [sp.literal.text]])]);
+  if (ts.isBinaryExpression(e) && e.operatorToken.kind === ts.SyntaxKind.PlusToken) return cross([pathAlts(ctx, mod, e.left, depth + 1), pathAlts(ctx, mod, e.right, depth + 1)]);
+  if (ts.isBinaryExpression(e) && [ts.SyntaxKind.QuestionQuestionToken, ts.SyntaxKind.BarBarToken].includes(e.operatorToken.kind)) {
+    return [...new Set([...pathAlts(ctx, mod, e.left, depth + 1), ...pathAlts(ctx, mod, e.right, depth + 1)])];
+  }
+  if (ts.isConditionalExpression(e)) return [...new Set([...pathAlts(ctx, mod, e.whenTrue, depth + 1), ...pathAlts(ctx, mod, e.whenFalse, depth + 1)])];
+  if (ts.isIdentifier(e) || ts.isPropertyAccessExpression(e) || ts.isElementAccessExpression(e)) {
+    const defs = defsOf(ctx, mod, e);
+    return defs.length ? [...new Set(defs.flatMap((d) => (ts.isExpression(d.node) && !ts.isFunctionLike(d.node) ? pathAlts(ctx, d.mod, d.node, depth + 1) : [UNREAD])))] : [UNREAD];
+  }
+  if (ts.isCallExpression(e)) {
+    const fns = defsOf(ctx, mod, e.expression).map((d) => ({ mod: d.mod, rets: returnsOf(d.node) })).filter((f) => f.rets.length);
+    return fns.length ? [...new Set(fns.flatMap((f) => f.rets.flatMap((r) => pathAlts(ctx, f.mod, r, depth + 1))))] : [UNREAD];
+  }
+  return [UNREAD];
+}
+/** services/api, its default export, or (a file not read, a snippet) a free name like one. */
+function isWireClient(ctx: ScanCtx, mod: string, o: Origin | null): boolean {
+  if (!o) return false;
+  if (o.mod === 'services/api.ts') return /^(default|api)$/.test(o.name);
+  return !o.mod && /^(api|apiClient|http|client)$/.test(o.name) && !infoOf(ctx, mod).declared.has(o.name);
+}
+/**
+ * A raw call on services/api: api.get(path), api['get'](path), api[verb](path), api.request({ method, url }), api(config),
+ * through any alias. A readable member path counts by its verb (a GET is a list; a POST / PUT / PATCH into SEND_PATH a
+ * composer). FR-911R2 (LO-911R2 B3, LS-911R2): a path the scan cannot read fails closed, by its verb: GET / HEAD a list,
+ * POST / PUT / PATCH a composer, an unread verb both; DELETE and OPTIONS carry no words either way.
+ */
+function wireKinds(ctx: ScanCtx, mod: string, n: ts.CallExpression): Kinds {
+  const k = NONE();
+  let c: ts.Expression = n.expression;
+  while (ts.isParenthesizedExpression(c) || ts.isNonNullExpression(c)) c = c.expression;
+  let client: ts.Expression = c;
+  let verb: string | null = 'request';
+  if (ts.isPropertyAccessExpression(c)) { client = c.expression; verb = c.name.text; }
+  else if (ts.isElementAccessExpression(c)) { client = c.expression; verb = ts.isStringLiteralLike(c.argumentExpression) ? c.argumentExpression.text : null; }
+  if (!isWireClient(ctx, mod, originOf(ctx, mod, client))) return k;
+  let url: ts.Expression | undefined = n.arguments[0];
+  if (verb === 'request') {
+    const cfg = n.arguments[0];
+    url = undefined;
+    verb = null;
+    if (cfg && ts.isObjectLiteralExpression(cfg)) {
+      const prop = (name: string) => cfg.properties.find((p): p is ts.PropertyAssignment => ts.isPropertyAssignment(p) && !!p.name && ts.isIdentifier(p.name) && p.name.text === name)?.initializer;
+      const m = prop('method');
+      const spread = cfg.properties.some((p) => !ts.isPropertyAssignment(p));
+      verb = m ? (ts.isStringLiteralLike(m) ? m.text.toLowerCase() : null) : spread ? null : 'get';
+      url = prop('url');
+    }
+  } else if (verb !== null && !AXIOS_VERBS.has(verb)) return k;
+  for (const text of url ? pathAlts(ctx, mod, url) : [UNREAD]) {
+    if (!text.startsWith(UNREAD)) {
+      // a path the scan can read
+      if (!MEMBER_PATH.test(text)) continue;
+      if (verb === 'get' || verb === 'head') k.list = true;
+      else if (verb === null) { k.list = true; if (SEND_PATH.test(text)) k.composer = true; }
+      else if (verb !== 'delete' && verb !== 'options' && SEND_PATH.test(text)) k.composer = true;
+      continue;
+    }
+    // fail closed: its start cannot be read
+    if (verb === 'get' || verb === 'head') k.list = true;
+    else if (verb === null) add(k, { composer: true, list: true });
+    else if (verb !== 'delete' && verb !== 'options') k.composer = true;
+  }
   return k;
 }
 /** An identifier read as a value, not called or drawn here (those count on their own), not a name being declared. */
@@ -678,6 +917,7 @@ function usedAsBinding(call: ts.CallExpression): boolean {
   let p: ts.Node = call.parent;
   while (ts.isAwaitExpression(p) || ts.isParenthesizedExpression(p)) p = p.parent;
   if (ts.isVariableDeclaration(p) || ts.isPropertyAccessExpression(p)) return true;
+  if (ts.isElementAccessExpression(p) && ts.isStringLiteralLike(p.argumentExpression)) return true; // require(m)['Feed']
   if (ts.isArrowFunction(p) && ts.isCallExpression(p.parent) && /^(React\.)?lazy$/.test(p.parent.expression.getText())) return true;
   return false;
 }
@@ -780,6 +1020,7 @@ describe('KT-2 registry: every content list and composer on the phone is registe
   });
 
   it('every row has a proof that is still in the suite', () => {
+    const ctx = scanCtx();
     const composers = fs.readFileSync(COMPOSERS_TEST, 'utf8');
     const problems: string[] = [];
     for (const s of REGISTRY) {
@@ -798,7 +1039,15 @@ describe('KT-2 registry: every content list and composer on the phone is registe
         for (const t of p.titles) if (!text.includes(t)) problems.push(`${s.file}: proof "${t}" is gone from src/${p.file}`);
       }
       if (p.by === 'gap' && 'cache' in p.gap.shows && !CACHE_CASES[p.gap.shows.cache]) problems.push(`${s.file}: no cache case ${p.gap.shows.cache}`);
+      if (p.by === 'via') {
+        for (const part of p.parts) {
+          if (!REGISTRY.some((h) => h.file === part && h.kind === s.kind && (h.proof.by === 'gap' || h.proof.by === 'via'))) problems.push(`${s.file}: part ${part} has no KNOWN GAP or via row (${s.kind})`);
+          if (!importsOf(ctx, s.file).has(part)) problems.push(`${s.file}: does not import its part ${part}`);
+        }
+      }
     }
+    // FR-911R2: a row stops only the exports it names, so each must be an export of its file
+    for (const r of [...REGISTRY, ...EXEMPT]) for (const e of r.exports ?? []) if (!infoOf(ctx, r.file).exports.has(e)) problems.push(`${r.file}: no export ${e}`);
     expect(problems).toEqual([]);
   });
 });
@@ -828,6 +1077,8 @@ const CACHE_CASES: Record<string, CacheCase> = {
   'voice-note': { key: voiceKeys.note('vn-1'), seed: row(BLOCKED), check: 'dropped' },
   'challenge-notes': { key: ['community', 'challenge', 'ch-1', 'comments'], seed: pages([row(BLOCKED), row(OTHER)]), check: 'dropped' },
   'coach-post-detail': { key: coachCommunityKeys.post('post-1'), seed: { post: row(BLOCKED), comments: [row(BLOCKED)] }, check: 'dropped' },
+  // FR-911R2 (LO-911R2 B2): useNudges(100) on Notifications; a nudge is my coach's typed title and body
+  nudges: { key: ['nudges', 'list', 100], seed: [{ id: 'n-1', coach_id: BLOCKED, client_id: 'client-1', title: WORDS, body: WORDS, created_at: '2026-11-01T10:00:00.000Z', read_at: null }], check: 'dropped' },
 };
 
 const holdsBlocked = (data: unknown) => [BLOCKED, WORDS].some((w) => JSON.stringify(data ?? null).includes(w));
