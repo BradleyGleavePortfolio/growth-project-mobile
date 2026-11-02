@@ -37,7 +37,8 @@ const forms: Form[] = [
 ];
 
 describe('B-TEST LS-910R3 B1 module provenance stays fail closed', () => {
-  it.each(forms)('%s', (_name, source, extra) => {
+  // Object cases avoid Jest interpreting an omitted optional tuple field as a done callback.
+  it.each(forms.map(([name, source, extra]) => ({ name, source, extra })))('$name', ({ source, extra }) => {
     const scan = fixtureScan({ 'src/probe.ts': source, ...extra });
     expect({
       reported: foundOrRejected(scan, 'src/probe.ts', KEY),
