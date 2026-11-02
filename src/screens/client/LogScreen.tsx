@@ -790,6 +790,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
         saving={foodSaving}
         portionPicker={quantityModalVisible ? (
           <QuantityPickerContent
+            mealLabel={MEAL_SECTIONS.find((s) => s.type === activeMealType)?.label}
             selectedFood={selectedFood}
             quantityInput={quantityInput}
             selectedUnit={selectedUnit}

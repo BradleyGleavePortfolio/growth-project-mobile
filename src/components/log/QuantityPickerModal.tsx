@@ -6,18 +6,18 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
-  Image,
   ScrollView,
 } from 'react-native';
-import { layout, radius, typography } from '../../theme/tokens';
+import { colors, gold, layout, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/useTheme';
 import { QuietText as Text } from '../../ui/progress/QuietBar';
-import FoodImage from '../FoodImage';
 import HapticPressable from '../HapticPressable';
 import { QuietOverline } from '../../ui/sections/QuietSection';
 import { PrimaryButton, TextLink } from '../../ui';
 import { SearchResult, unitOptionsFor } from '../../utils/log/types';
 import { calcMacros, parseQuantityInput } from '../../utils/log/macros';
+import PortionRuler from './PortionRuler';
+import SheetGrip from './SheetGrip';
 
 interface Props {
   visible: boolean;
@@ -35,6 +35,8 @@ interface Props {
   /** A message under the portion (screen readers hear it); `blocked` keeps the confirm off. */
   notice?: string | null;
   blocked?: boolean;
+  /** The meal this food goes to ("For Lunch"); the coach's portion has none. */
+  mealLabel?: string;
 }
 
 export default function QuantityPickerModal({ visible, ...props }: Props) {
@@ -52,6 +54,10 @@ export default function QuantityPickerModal({ visible, ...props }: Props) {
 
 // Search and portion selection can share one native sheet without asking
 // UIKit to present a sibling modal while Add Food is already presented.
+// STYLEC-916 (C2 C_portion): grip, meal overline, serif name, unit tabs, the
+// amount over a 10 g ruler, one summary line, then one filled action.
+const UNIT_ORDER = ['g', 'oz', 'serving', 'cup', 'tbsp', 'tsp'];
+
 export function QuantityPickerContent({
   selectedFood,
   quantityInput,
@@ -65,6 +71,7 @@ export function QuantityPickerContent({
   emptyHint = 'Enter a quantity greater than zero to log this food.',
   notice,
   blocked = false,
+  mealLabel,
 }: Omit<Props, 'visible'>) {
   const quantity = parseQuantityInput(quantityInput);
   const { semanticColors: sc } = useTheme();
@@ -72,14 +79,10 @@ export function QuantityPickerContent({
   const previewMacros = selectedFood
     ? calcMacros(selectedFood, quantity ?? 0, selectedUnit)
     : { calories: 0, protein: 0, carbs: 0, fat: 0 };
-  const displayMacro = (value: number) => Number.isFinite(value) ? String(value) : '—';
-
-  const macros = [
-    { key: 'calories', label: 'Calories', value: displayMacro(previewMacros.calories) },
-    { key: 'protein', label: 'Protein', value: `${displayMacro(previewMacros.protein)}g` },
-    { key: 'carbs', label: 'Carbs', value: `${displayMacro(previewMacros.carbs)}g` },
-    { key: 'fat', label: 'Fat', value: `${displayMacro(previewMacros.fat)}g` },
-  ];
+  const shown = (value: number) => Number.isFinite(value) ? String(value) : '—';
+  const units = [...unitOptionsFor(selectedFood)].sort((a, b) => UNIT_ORDER.indexOf(a) - UNIT_ORDER.indexOf(b));
+  const summary = `${shown(previewMacros.calories)} kcal, ${shown(previewMacros.protein)} g protein, `
+    + `${shown(previewMacros.carbs)} g carbs, ${shown(previewMacros.fat)} g fat.`;
 
   return (
     <KeyboardAvoidingView
@@ -90,61 +93,48 @@ export function QuantityPickerContent({
         contentContainerStyle={styles.quantityModalContent}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.hero}>
-          {selectedFood?.image_url ? (
-            <Image
-              source={{ uri: selectedFood.image_url }}
-              style={styles.quantityFoodImage}
-              resizeMode="cover"
-            />
-          ) : (
-            <FoodImage name={selectedFood?.name || '?'} size={96} />
-          )}
-        </View>
-
+        <SheetGrip />
+        {mealLabel ? <QuietOverline style={styles.mealLine}>For {mealLabel}</QuietOverline> : null}
         <Text style={styles.quantityFoodName} accessibilityRole="header">{selectedFood?.name}</Text>
         {selectedFood?.brand ? (
           <Text style={styles.quantityFoodBrand}>{selectedFood.brand}</Text>
         ) : null}
 
-        <View style={styles.macroPreviewCard}>
-          {macros.map((macro) => (
-            <View key={macro.key} style={styles.macroPreviewItem}>
-              <QuietOverline style={styles.macroPreviewLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>{macro.label}</QuietOverline>
-              <Text style={styles.macroPreviewValue}>{macro.value}</Text>
-            </View>
-          ))}
-        </View>
-
-        <QuietOverline style={styles.quantitySectionLabel}>Quantity</QuietOverline>
-        <TextInput
-          accessibilityLabel="Food quantity"
-          style={styles.quantityInput}
-          value={quantityInput}
-          onChangeText={onQuantityChange}
-          keyboardType="decimal-pad"
-          placeholder="1"
-          placeholderTextColor={sc.textMuted}
-        />
-
-        <QuietOverline style={styles.quantitySectionLabel}>Unit</QuietOverline>
-        <View style={styles.unitChipRow}>
-          {unitOptionsFor(selectedFood).map((u) => (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.unitTabs}
+          contentContainerStyle={styles.unitTabRow} keyboardShouldPersistTaps="handled">
+          {units.map((u) => (
             <HapticPressable
               key={u}
               intent="light"
               disableAnimation
-              accessibilityRole="button"
+              accessibilityRole="tab"
               accessibilityLabel={`Portion unit ${u}`}
               accessibilityState={{ selected: selectedUnit === u }}
-              style={[styles.unitChip, selectedUnit === u && styles.unitChipActive]}
+              style={[styles.unitTab, selectedUnit === u && styles.unitTabActive]}
               onPress={() => onUnitChange(u)}
             >
-              <Text style={[styles.unitChipText, selectedUnit === u && styles.unitChipTextActive]}>{u}</Text>
+              <Text style={[styles.unitTabText, selectedUnit === u && styles.unitTabTextActive]}>{u}</Text>
             </HapticPressable>
           ))}
-        </View>
+        </ScrollView>
 
+        <View style={styles.amountRow}>
+          <TextInput
+            accessibilityLabel="Food quantity"
+            style={styles.quantityInput}
+            value={quantityInput}
+            onChangeText={onQuantityChange}
+            keyboardType="decimal-pad"
+            placeholder="1"
+            placeholderTextColor={sc.textMuted}
+            maxFontSizeMultiplier={1.3}
+          />
+          <Text style={styles.amountUnit} importantForAccessibility="no" accessibilityElementsHidden>{selectedUnit}</Text>
+        </View>
+        <PortionRuler value={quantity} unit={selectedUnit} label="Quantity" disabled={saving}
+          onChange={(next) => onQuantityChange(String(next))} />
+
+        {quantity != null ? <Text style={styles.summary} testID="portion-summary">{summary}</Text> : null}
         {selectedFood?.serving_size ? (
           <Text style={styles.servingSizeInfo}>1 serving = {selectedFood.serving_size}</Text>
         ) : null}
@@ -164,7 +154,7 @@ export function QuantityPickerContent({
           testID="quantity-log-food"
           style={styles.quantityLogButton}
         />
-        <TextLink label="Cancel" underline={false} disabled={saving} onPress={onCancel} />
+        <TextLink label="Cancel" tone="accent" disabled={saving} onPress={onCancel} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -177,103 +167,91 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   },
   quantityModalContent: {
     paddingHorizontal: layout.gutter,
-    paddingTop: 32,
     paddingBottom: 40,
   },
-  hero: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  quantityFoodImage: {
-    width: 96,
-    height: 96,
-    borderRadius: radius.card,
+  mealLine: {
+    color: colors.graphite,
+    marginTop: 8,
+    marginBottom: 2,
   },
   quantityFoodName: {
     ...typography.h1,
+    fontSize: 30,
+    lineHeight: 38,
     color: sc.textPrimary,
-    textAlign: 'center',
   },
   quantityFoodBrand: {
     fontSize: 14,
-    color: sc.textMuted,
-    textAlign: 'center',
-    marginTop: 4,
+    color: colors.graphite,
+    marginTop: 2,
   },
-  macroPreviewCard: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingVertical: layout.sectionPadY,
-    marginTop: layout.sectionGap,
-    marginBottom: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
+  unitTabs: {
+    flexGrow: 0,
+    marginTop: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: sc.border,
+    borderBottomColor: sc.border,
   },
-  macroPreviewItem: {
-    flex: 1,
-    alignItems: 'flex-start',
+  unitTabRow: {
+    gap: 8,
   },
-  macroPreviewLabel: {
-    marginBottom: 4,
+  unitTab: {
+    minHeight: layout.touchMin,
+    minWidth: 64,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
   },
-  macroPreviewValue: {
-    ...typography.h2,
+  unitTabActive: {
+    borderBottomColor: gold[300],
+  },
+  unitTabText: {
+    fontSize: 16,
+    color: colors.graphite,
+  },
+  unitTabTextActive: {
+    fontFamily: typography.bodyMd.fontFamily,
     color: sc.textPrimary,
-    fontVariant: ['lining-nums', 'tabular-nums'],
   },
-  quantitySectionLabel: {
+  amountRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'center',
     marginTop: 20,
-    marginBottom: 8,
   },
   quantityInput: {
+    minWidth: 72,
     minHeight: layout.buttonHeight,
-    backgroundColor: sc.bgSurface,
-    borderRadius: radius.input,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: sc.border,
-    paddingHorizontal: 16,
-    fontFamily: typography.bodyMd.fontFamily,
-    fontSize: 20,
+    paddingVertical: 0,
+    paddingHorizontal: 4,
+    fontFamily: typography.display.fontFamily,
+    fontSize: 56,
+    lineHeight: 70,
     color: sc.textPrimary,
     textAlign: 'center',
-    fontVariant: ['tabular-nums'],
+    fontVariant: ['lining-nums', 'tabular-nums'],
   },
-  unitChipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 12,
+  amountUnit: {
+    fontSize: 18,
+    color: colors.graphite,
+    marginLeft: 6,
   },
-  unitChip: {
-    minHeight: layout.touchMin,
-    minWidth: layout.touchMin,
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-    borderRadius: radius.chip,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: sc.border,
-  },
-  unitChipActive: {
-    borderWidth: 1,
-    borderColor: sc.accent,
-  },
-  unitChipText: {
-    fontSize: 14,
-    color: sc.textMuted,
-  },
-  unitChipTextActive: {
-    fontFamily: typography.bodyMd.fontFamily,
-    color: sc.accentText,
+  summary: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: colors.graphite,
+    marginTop: 12,
+    fontVariant: ['lining-nums', 'tabular-nums'],
   },
   servingSizeInfo: {
     fontSize: 13,
     lineHeight: 19,
-    color: sc.textMuted,
+    color: colors.graphite,
     marginTop: 4,
   },
   quantityLogButton: {
-    marginTop: 32,
+    marginTop: 24,
     marginBottom: 8,
   },
 });

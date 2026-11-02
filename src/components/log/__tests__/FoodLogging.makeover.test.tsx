@@ -49,7 +49,7 @@ it('preserves portion input, unit, log and cancel with the same macro values', a
   const props = { visible: true, selectedFood: { ...food, nutrient_basis: 'PER_100G' as const, serving_size_grams: 100, supports_volume_units: true, cup_grams: 100, tbsp_grams: 10, tsp_grams: 5 }, quantityInput: '1', selectedUnit: 'serving', onQuantityChange: action, onUnitChange: unit, onConfirm: confirm, onCancel: cancel }; await render(<QuantityPickerModal {...props} />);
   await fireEvent.changeText(screen.getByLabelText('Food quantity'), '2'); expect(action).toHaveBeenLastCalledWith('2');
   for (const label of ['serving', 'g', 'oz', 'cup', 'tbsp', 'tsp']) await press(label, unit, label); await press('Log food', confirm); await press('Cancel', cancel); cancel.mockClear(); QuantityPickerModal(props).props.onRequestClose(); expect(cancel).toHaveBeenCalled(); fonts();
-  for (const value of ['300', '12g', '54g', '6g']) expect(screen.getByText(value)).toBeTruthy(); });
+  expect(screen.getByTestId('portion-summary')).toHaveTextContent('300 kcal, 12 g protein, 54 g carbs, 6 g fat.'); });
 it('preserves all water quick-add amounts and displayed quantities', async () => {
   await render(<WaterTracker currentOz={8} onAdd={action} />);
   for (const oz of [8, 12, 16]) { await fireEvent.press(screen.getByLabelText(`Add ${oz} ounces of water`)); expect(action).toHaveBeenLastCalledWith(oz); } fonts();

@@ -19,8 +19,7 @@ beforeEach(() => jest.clearAllMocks());
 describe('portion preview matches the saved quantity parser', () => {
   it('previews a comma-decimal half serving as 81 kcal rather than zero', async () => {
     await render(<QuantityPickerModal {...props} quantityInput="0,5" />);
-    expect(screen.getByText('81')).toBeTruthy();
-    expect(screen.getByText('2.9g')).toBeTruthy();
+    expect(screen.getByTestId('portion-summary')).toHaveTextContent(/^81 kcal, 2\.9 g protein, /);
   });
 
   it('cannot log an empty quantity as an unseen one-serving default', async () => {
@@ -32,7 +31,7 @@ describe('portion preview matches the saved quantity parser', () => {
 
   it('shows an unknown nutrient as a dash instead of NaN', async () => {
     await render(<QuantityPickerModal {...props} selectedFood={{ ...food, protein: NaN }} />);
-    expect(screen.getByText('—g')).toBeTruthy();
+    expect(screen.getByTestId('portion-summary')).toHaveTextContent(/— g protein/);
     expect(screen.queryByText(/NaN/)).toBeNull();
   });
 
