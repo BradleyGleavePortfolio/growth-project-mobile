@@ -31,7 +31,7 @@ import { releaseOutbox } from '../services/messageOutbox';
 import { cacheStorage, prefsStorage, secureStorage } from '../storage/mmkv';
 import { authEvents } from '../utils/authEvents';
 import { scanSavedKeys, type KeySite, type Store } from '../../test/savedKeyLifetimes/scanSavedKeys';
-import { KNOWN_GAPS, REGISTRY, RULES, type Row, type Rule } from '../../test/savedKeyLifetimes/savedKeyRegistry';
+import { KNOWN_GAPS, REGISTRY, RULES, SIGNED_IN_IDS, type Row, type Rule } from '../../test/savedKeyLifetimes/savedKeyRegistry';
 import { READERS, type Probe } from '../../test/savedKeyLifetimes/savedKeyReaders';
 // Loaded as the app loads them at start: their sign-out listeners are part of the real sign out.
 import '../hooks/useVoiceOutbox';
@@ -70,8 +70,12 @@ const B = 'acct-b-2222';
 const ASYNC_READS = new Set(['getItem', 'getItemAsync', 'getStringAsync', 'multiGet', 'getMany']);
 const secure = (SecureStore as unknown as { __store: Map<string, string> }).__store;
 
+/**
+ * A row's pattern as a test of a scanned key. The scan writes every part it cannot read (the account id among them)
+ * as a literal '*', so `{uid}` matches only that '*'; a row's own `*` matches any part (LO-910R3 B2).
+ */
 const glob = (pattern: string) =>
-  new RegExp(`^${pattern.replace(/[.+?^$()|[\]\\]/g, '\\$&').replace(/\{uid\}|\*/g, '.*')}$`);
+  new RegExp(`^${pattern.replace(/[.+?^$()|[\]\\]/g, '\\$&').replace(/\{uid\}|\*/g, (m) => (m === '*' ? '.*' : '\\*'))}$`);
 const exact = (key: string) => key.replace(/\{uid\}/g, '*');
 const globRows = (site: KeySite) => REGISTRY.filter(([store, key]) => store === site.store && glob(key).test(site.key));
 /** The row for a site: its exact pattern first, else the one wider pattern that matches it. */
@@ -125,7 +129,13 @@ async function logIn(uid: string): Promise<void> {
   await settle();
 }
 
-const scan = scanSavedKeys();
+const raw = scanSavedKeys();
+/** A site saved with a fixed id its file signs in as (SIGNED_IN_IDS) is read with that id as the account id. */
+const asAccount = (s: KeySite): KeySite => {
+  const ids = SIGNED_IN_IDS.filter(([file]) => s.file === `src/${file}`).map(([, id]) => id);
+  return { ...s, key: ids.reduce((k, id) => k.split(id).join('*'), s.key) };
+};
+const scan = { ...raw, sites: raw.sites.map(asAccount) };
 type Found = Map<string, string>; // `${store} ${key}|${rule}` -> message
 
 function fail(found: Found, row: Row, rule: Rule, detail: string): void {
@@ -166,6 +176,23 @@ async function saveAll(uid: string): Promise<void> {
   for (const row of REGISTRY) await probeOf(row)?.write(uid).catch(() => undefined);
 }
 const unkeyedQueue = (row: Row) => row[2] === 'QUEUE' && !row[1].includes('{uid}');
+/** A restart: in-memory state goes (the outbox drops its memory); what stays is what is on the phone. */
+async function restart(): Promise<void> {
+  releaseOutbox();
+  await settle();
+}
+/**
+ * Every ACCOUNT key stays gone (LO-910R3 B3): a keyed row has no key for A, an unkeyed row does not hold the value
+ * A saved (`before`, read when A was signed in). B may save its own value under an unkeyed key.
+ */
+async function accountStaysGone(found: Found, before: Map<Row, string | null>, when: string): Promise<void> {
+  for (const row of REGISTRY.filter((r) => r[2] === 'ACCOUNT')) {
+    const now = await onDisk(row, A);
+    if (row[1].includes('{uid}') ? now !== null : now !== null && now === before.get(row)) {
+      fail(found, row, 'signout', `A's ${row[1].includes('{uid}') ? 'key' : 'value'} is on the phone again ${when}.`);
+    }
+  }
+}
 
 /**
  * The lifetime half of KT-13: every finding not in KNOWN_GAPS, and every KNOWN GAP that no longer holds.
@@ -228,9 +255,12 @@ export async function lifetimeFindings(): Promise<string[]> {
     if (probe && !(await readsBack(probe, A))) fail(found, row, 'signout', 'After A signs back in it reads as not set: it shows again.');
   }
 
-  // A signs out again and B signs in on the same phone: B's readers get none of A's marks or work.
+  // A signs out again, the phone restarts, and B signs in on the same phone: no ACCOUNT key of A's comes back (a
+  // store that kept A's value in memory and saved it again), and B's readers get none of A's marks or work.
   await signOut();
   await settle();
+  await restart();
+  await accountStaysGone(found, before, 'after a restart that follows sign out');
   await logIn(B);
   for (const row of REGISTRY.filter((r) => r[2] === 'MARK' || r[2] === 'QUEUE')) {
     const probe = probeOf(row);
@@ -238,6 +268,7 @@ export async function lifetimeFindings(): Promise<string[]> {
       fail(found, row, 'keyed', `B's ${probe.via === 'reader' ? 'reader' : 'store read'} gets A's ${row[2] === 'MARK' ? 'mark' : 'unsent work'}.`);
     }
   }
+  await accountStaysGone(found, before, 'when B signs in');
 
   // A fresh phone: account A finishes the real deletion path (the deletion screen sees "deleted").
   await freshPhone();
@@ -286,6 +317,8 @@ describe('KT-13 saved key lifetimes', () => {
   it('every registry row still matches a saved key, and each key has one row', () => {
     const stale = REGISTRY.filter((row) => !scan.sites.some((s) => rowOf(s) === row))
       .map(([store, key]) => `${where(store, key)} matches no saved key in src/: delete the row`);
+    stale.push(...SIGNED_IN_IDS.filter(([file, id]) => !raw.sites.some((s) => s.file === `src/${file}` && s.key.includes(id)))
+      .map(([file, id]) => `SIGNED_IN_IDS src/${file} '${id}' is in no saved key there: delete the note`));
     const twice = scan.sites.filter((s) => !REGISTRY.some(([st, k]) => st === s.store && exact(k) === s.key) &&
       globRows(s).length > 1).map((s) => `${s.file}:${s.line} ${where(s.store, s.key)} matches two rows: make one narrower`);
     expect([...stale, ...new Set(twice)]).toEqual([]);

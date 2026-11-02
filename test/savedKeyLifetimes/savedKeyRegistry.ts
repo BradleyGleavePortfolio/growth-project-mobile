@@ -16,6 +16,18 @@ export type Lifetime = 'DEVICE' | 'ACCOUNT' | 'MARK' | 'QUEUE';
 /** store, key pattern, lifetime, owning file (under src/), what it holds, sample for `*` when seeded. */
 export type Row = [Store, string, Lifetime, string, string, string?];
 
+/**
+ * A fixed account id a file signs in as, so a key it saves with that id is the signed-in account's key (`{uid}`).
+ * The scan reads a literal id as itself, and `{uid}` matches only the '*' the scan writes for an account id (FR-910R3
+ * F4), so the contract reads these sites with the id as '*'. file (under src/), the id, why it is the account's id.
+ */
+export const SIGNED_IN_IDS: Array<[string, string, string]> = [
+  ['screenshots/seed.ts', 'demo-user-screenshot',
+    'screenshot mode only (EXPO_PUBLIC_SCREENSHOT_MODE): seedDemoUser signs the client demo account in with ' +
+    'setUserCache and saves its macro_targets:{uid} under its id (DEMO_USER_ID, src/screenshots/fixtures.ts); the coach ' +
+    "demo signs in as coach_id, and the key is then the client demo's demo data"],
+];
+
 export const REGISTRY: Row[] = [
   ['async', '@activeWorkoutSession/v1', 'QUEUE', 'storage/activeWorkoutSession.ts', 'old one-slot workout in progress'],
   ['async', 'TGP_RQ_CACHE_V1:{uid}', 'ACCOUNT', 'services/queryClient.ts', "sealed copy of the account's server data"],
