@@ -152,7 +152,8 @@ export function firstPendingAssignment(
 ): ClientWorkoutAssignmentWithPlan | undefined {
   return (Array.isArray(rows) ? rows : [])
     .filter((a) => !a.completed_at)
-    .sort((a, b) => String(a.scheduled_for ?? '').localeCompare(String(b.scheduled_for ?? '')))[0];
+    // Ordered by the assigned day (assignmentDay), the same order TrainToday opens.
+    .sort((a, b) => assignmentDay(a).localeCompare(assignmentDay(b)))[0];
 }
 
 /** Store-connected, flag-gated card for Train. */

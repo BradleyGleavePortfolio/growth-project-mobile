@@ -100,6 +100,8 @@ const OLD_PATTERNS: Array<[what: string, pattern: RegExp]> = [
   // LO-917 B1: scheduled_for is a moment; only assignmentDay reads it.
   ['an assigned moment read as a calendar date', /calendarDay\([^)]*scheduled_for/],
   ['an assigned day cut from its text', /scheduled_for\??\.(?:slice|substring|split)\(/],
+  // LO-917R2 C9: a stored calendar date moved into local time.
+  ['a stored calendar date read as an instant', /instantDay\(\s*[\w?.]+\.date\b/],
 ];
 
 // Lines in listed files that match an old pattern but are not a workout or
@@ -110,6 +112,51 @@ const NOT_A_WORKOUT_DAY: Record<string, Array<[line: string, why: string]>> = {
     ['events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());', 'timeline order of event instants'],
   ],
 };
+
+const DAY_FIELD = /\.(?:date|scheduled_for|created_at|completed_at|started_at|logged_at)\b|\b(?:date|scheduled_for|created_at|completed_at|started_at|logged_at)\??:/;
+// A type or schema field declaration (`created_at: string;`), not a read.
+const TYPE_FIELD = /^\s*(?:readonly\s+)?(?:date|scheduled_for|created_at|completed_at|started_at|logged_at)\??:\s*[\w\s|'"<>[\].]+[;,]?\s*(?:\/\/.*|\/\*.*)?$/;
+const dayLines = (source: string) => source.split('\n').filter((line) => DAY_FIELD.test(line) && !TYPE_FIELD.test(line));
+
+// LS-917R2 B1: the rule applied correctly. A workout row or its calendar
+// date goes through workoutDay or calendarDay, an assigned day through
+// assignmentDay, an instant (created_at, completed_at, started_at,
+// logged_at) through instantDay or workoutDay. A line that also parses a day
+// field itself is not a rule read.
+const RULE_READ = /\b(?:workoutDay|assignmentDay|workoutStartDay|calendarDay|dayStart)\(|\binstantDay\((?!\s*[\w?.]+\.(?:date|scheduled_for)\b)/;
+const RAW_DAY_PARSE = /(?:new Date|Date\.parse|bucketDateLocal|localCalendarDate)\(\s*[\w?.[\]]+\.(?:date|scheduled_for|created_at|completed_at|started_at|logged_at)\b|\.(?:date|scheduled_for|created_at|completed_at|started_at|logged_at)\??\.(?:slice|substring|split)\(/;
+// Done or not done: the field is only tested for being set, or copied as is.
+const PRESENCE = /!{1,2}\s*[\w?.]+\.(?:completed_at|skipped_at|started_at)\b|[\w?.]+\.(?:completed_at|skipped_at)\s*(?:[!=]==?\s*null|\?(?!\.)|&&)|\b(?:completed_at|skipped_at):\s*[\w?.]+\.(?:completed_at|skipped_at)\b(?!\s*\?\?)/g;
+
+// Day-field lines in listed files that are not a workout or assignment day
+// read through the rule: other kinds of rows, style names and request shapes.
+const LISTED_LINES: Record<string, Array<[snippet: string, why: string]>> = {
+  'src/screens/client/ActiveWorkoutScreen.tsx': [['started_at: sessionStartTimeRef.current.toISOString()', 'the start instant sent to the server, not a day read']],
+  'src/offline/models/WorkoutLog.ts': [['loggedAt: new Date(row.logged_at)', 'the queued row keeps its logged instant'], ['// The server keeps a calendar date', 'a comment']],
+  'src/components/coach/ai-entry/ClientCopyBar.tsx': [['scheduled_for: getTodayString()', "the save of the coach's local today (listed above)"]],
+  'src/components/home/rings/homeRings.ts': [['assignments: ReadonlyArray<{ scheduled_for?: string | null; completed_at?: string | null }>', 'an input type']],
+  'src/screens/client/train/TrainToday.tsx': [['completed_at: a.completed_at, skipped_at: a.skipped_at', 'done and skipped copied as is; the day is dayOf (assignmentDay)'], ['dayOf(a).localeCompare(dayOf(b))', 'open rows ordered by assignmentDay']],
+  'src/screens/client/calendar/CalendarWeekScreen.tsx': [['type CheckIn = { id: string; date: string }', 'a check-in type, not a workout'], ["row.date.slice(0, 10) === day", 'a check-in day, not a workout'], ['styles.date', 'a style name'], ['date: { ...typography.h3', 'a style name']],
+  'src/screens/client/progress/progressV2.ts': [['dayX(l.date)', 'weigh-in days'], ['log.date === today', 'a weigh-in day'], ['dayX(log.date)', 'a weigh-in day'], ['export interface BestSet', 'a type'], ['export function trainingWeek(rows: Array<{ scheduled_for: string; completed_at: string | null }>', 'an input type']],
+  'src/screens/client/progress/weekReview.ts': [['export interface FoodDay', 'a type'], ['export interface ReviewCheckIn', 'a type'], ['const inWeek = (date: string, week: ReviewWeek)', 'food, check-in and weigh-in days (calendar dates)'], ['inWeek(d.date, week)', 'a food day'], ['inWeek(c.date, week)', 'a check-in day'], ['r.date <= week.end', 'a weigh-in day'], ['c.date.slice(0, 10) === day', 'a check-in day'], ['foodDays.map((d) => d.date.slice(0, 10))', 'food days'], ['inWeek(w.date, week)', 'a weigh-in day']],
+  'src/screens/client/ClientWorkoutViewerScreen.tsx': [['formatScheduled(a.scheduled_for)', 'formatScheduled reads assignmentDay (checked below)']],
+  'src/components/tutorial/PlanExplanationCard.tsx': [['weekdayOf(first.scheduled_for)', 'weekdayOf reads assignmentDay (checked below)']],
+  'src/hooks/useApi.ts': [['useHabitLogs(date: string', 'a habit day argument'], ['args: { id: string; date: string; completed: boolean', 'a habit request shape'], ['breakdown: Array<{ date: string; volume: number }>', 'a type'], ['type Session = { date?: string; created_at?: string;', 'a type'], ['useTodayLog(date: string)', 'a food day argument'], ['useTodayCheckIn(date: string', 'a check-in day argument'], ["['check-ins', 'day', vars.date]", 'a cache key']],
+  'src/utils/workout/workoutLogging.ts': [['const finishedAt = s.completed_at || s.created_at || s.date', "the session's sort instant; its day is workoutDay(s)"]],
+  'src/screens/coach/client-detail/WorkoutsTab.tsx': [['{ date: string; weight: number }[]', 'a type'], ['{ date: dayOfSession(s), weight }', 'dayOfSession reads s.day or instantDay (listed above)'], ['a.date.localeCompare(b.date)', 'points dated by dayOfSession'], ['dayText(p.date)', 'points dated by dayOfSession'], ['dayText(points[0].date)', 'points dated by dayOfSession'], ['dayText(points[points.length - 1].date)', 'points dated by dayOfSession']],
+  'src/screens/coach/client-detail/useClientDetailData.ts': [['function recordedAt(s: { date?: string; created_at?: string })', 'a type; recordedAt returns workoutDay'], ['type WeightRow =', 'a type'], ["typeof w.date === 'string' ? w.date.slice(0, 10)", 'a weight log day'], ['(meal.date || meal.logged_at', 'a meal day'], ["date: dateStr + 'T", 'a timeline event instant'], ["(w.date || '').slice(0, 10)", 'a weight log day'], ['date: recordedAt(s)', 'recordedAt returns workoutDay'], ["String(c.date || '').slice(0, 10)", 'a check-in day'], ['new Date(b.date).getTime() - new Date(a.date).getTime()', 'timeline order of event instants']],
+  'src/utils/coach/clientPeek.ts': [['localDay(latest.date, false)', 'a check-in day'], ['localDay(weight.date, false)', 'a weight log day']],
+};
+
+const presenceOnly = (line: string) => !DAY_FIELD.test(line.replace(PRESENCE, ''));
+const ruleRead = (line: string) => RULE_READ.test(line) && !RAW_DAY_PARSE.test(line.replace(/\b(?:workoutDay|assignmentDay|workoutStartDay|calendarDay|instantDay|dayStart)\([^()]*\)/g, ''));
+
+function unplacedListedReads(file: string, source: string): string[] {
+  const placed = (LISTED_LINES[file] ?? []).map(([snippet]) => snippet);
+  return dayLines(source)
+    .filter((line) => !ruleRead(line) && !presenceOnly(line) && !placed.some((snippet) => line.includes(snippet)))
+    .map((line) => `${file}: ${line.trim()}`);
+}
 
 describe.each(SAVES_AND_READS)('%s', (file, what, uses) => {
   const source = read(file);
@@ -126,6 +173,13 @@ describe.each(SAVES_AND_READS)('%s', (file, what, uses) => {
   it('every exempt line still exists (the list cannot go stale)', () => {
     exempt.forEach((line) => expect(source).toContain(line));
   });
+  // LS-917R2 B1 (LO-917R2 C9): a listed file is checked line by line too. Each
+  // line that reads a day field goes through the rule, only tests whether the
+  // field is set, or is placed in LISTED_LINES with its reason.
+  it('every day read in the file goes through the rule or is placed', () => {
+    expect(unplacedListedReads(file, source)).toEqual([]);
+    (LISTED_LINES[file] ?? []).forEach(([snippet]) => expect(source).toContain(snippet));
+  });
 });
 
 // Part 3 (LS-917 B3, LO-917 C1): the list is found, not trusted. A product
@@ -141,10 +195,9 @@ const IN_CLASS = [
   /scheduled_for/,
   RULE_IMPORT,
   /isWorkoutDoneToday\(/,
+  // LO-917R2 C9: a file with its own row type that parses a stored date.
+  /(?:new Date|Date\.parse|instantDay|bucketDateLocal)\(\s*(?:new Date\(\s*)?[\w?.[\]]+\.date\b/,
 ];
-const DAY_FIELD = /\.(?:date|scheduled_for|created_at|completed_at|started_at|logged_at)\b|\b(?:date|scheduled_for|created_at|completed_at|started_at|logged_at)\??:/;
-// A type or schema field declaration (`created_at: string;`), not a read.
-const TYPE_FIELD = /^\s*(?:readonly\s+)?(?:date|scheduled_for|created_at|completed_at|started_at|logged_at)\??:\s*[\w\s|'"<>[\].]+[;,]?\s*(?:\/\/.*|\/\*.*)?$/;
 
 // In-class files that are not day readers: every day-field line that is not a
 // type field must contain one of its listed snippets.
@@ -175,7 +228,6 @@ function productFiles(dir: string): string[] {
   });
 }
 
-const dayLines = (source: string) => source.split('\n').filter((line) => DAY_FIELD.test(line) && !TYPE_FIELD.test(line));
 
 it('every product file in the workout and assignment class that reads a day is listed or placed', () => {
   const listed = new Set(SAVES_AND_READS.map(([file]) => file));
@@ -194,6 +246,16 @@ it('every product file in the workout and assignment class that reads a day is l
 it.each(Object.entries(PLACED))('%s stays placed', (file, { lines }) => {
   const source = read(file);
   lines.forEach((snippet) => expect(source).toContain(snippet));
+});
+
+// Helpers a placed line hands the day to: each reads the rule itself.
+it.each([
+  ['src/screens/client/ClientWorkoutViewerScreen.tsx', /function formatScheduled\(iso: string\): string \{[^}]*dayStart\(assignmentDay\(iso\)\)/],
+  ['src/components/tutorial/PlanExplanationCard.tsx', /function weekdayOf\([^)]*\)[^{]*\{[^}]*dayStart\(assignmentDay\(day\)\)/],
+  ['src/screens/coach/client-detail/WorkoutsTab.tsx', /const dayOfSession = \(s: WorkoutSession\) => s\.day \|\| instantDay\(s\.startTime\)/],
+  ['src/screens/client/train/TrainToday.tsx', /const dayOf = \(a: Row\) => assignmentDay\(a\)/],
+])('%s hands days to a helper that reads the rule', (file, helper) => {
+  expect(read(file)).toMatch(helper);
 });
 
 it('the unplaced on-device volume reader still has no caller', () => {
