@@ -4,7 +4,8 @@ import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { cleanup, fireEvent, render } from '@testing-library/react-native';
 import type { CoachingSession } from '../api/schedulingApi';
 import { colors } from '../theme/tokens';
-import { CalendarWeekPage, type CalendarWeekData } from '../screens/client/calendar/CalendarWeekScreen';
+import { CalendarWeekPage, monthStart, type CalendarWeekData } from '../screens/client/calendar/CalendarWeekScreen';
+import { getTodayString } from '../utils/date';
 
 jest.mock('../hooks/useApi', () => ({}));
 jest.mock('../hooks/useCalendar', () => ({}));
@@ -59,6 +60,18 @@ it('control: the existing no_show payload already renders Missed in its selected
   await fireEvent.press(view.getByTestId('month-day-2026-10-08'));
   expect(view.getByTestId('week-session-missed-fixture')).toBeTruthy();
   expect(view.getAllByText('Missed').length).toBeGreaterThan(0);
+});
+
+it('control: an empty visited month does not falsely call this week empty when today has a session', async () => {
+  const today = getTodayString();
+  const view = await render(<CalendarWeekPage
+    data={{ ...data, sessions: [session('current-fixture', today, 'scheduled')] }}
+    initialMonth={monthStart(today, -2)}
+    onRefresh={jest.fn()} onSession={jest.fn()} onBook={jest.fn()} />);
+  expect(view.getByTestId('month-grid')).toBeTruthy();
+  expect(view.queryByTestId('week-empty')).toBeNull();
+  await fireEvent.press(view.getByTestId('calendar-tab-week'));
+  expect(view.getByTestId('week-session-current-fixture')).toBeTruthy();
 });
 
 it('LS-917R4 B2: the month retains the picked C4 Missed legend even before selecting the missed day', async () => {
