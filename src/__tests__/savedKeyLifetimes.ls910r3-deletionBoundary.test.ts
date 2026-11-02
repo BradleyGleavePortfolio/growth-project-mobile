@@ -8,7 +8,7 @@ import { READERS } from '../../test/savedKeyLifetimes/savedKeyReaders';
 import { lifetimeFindings } from './savedKeyLifetimes.test';
 
 const A = 'acct-a-1111';
-const remaining = [
+const checked = [
   'async coach_consult_v1:{uid}',
   'async mwb_autosave_mirror:*',
   'async tgp.voiceOutbox.v1',
@@ -16,17 +16,22 @@ const remaining = [
 ];
 
 describe('LS-910R3 C1 existing deletion boundary is not called a cleanup fix', () => {
-  it('the current contract is green while four existing QUEUE payloads remain readable after deletion', async () => {
+  it('coach answers remain readable after deletion while autosave, voice and encrypted draft controls are removed', async () => {
     // The last phase of lifetimeFindings seeds A, renders the real deletion screen, waits for logout,
     // then checks all MARK rows. No extra seed after that deletion is permitted in this observation.
     expect(await lifetimeFindings()).toEqual([]);
     const restored: Record<string, boolean> = {};
     try {
-      for (const name of remaining) {
+      for (const name of checked) {
         await setUserCache({ id: A, role: 'coach', name: 'A' } as Parameters<typeof setUserCache>[0]);
         restored[name] = await READERS[name].read(A);
       }
-      expect(restored).toEqual(Object.fromEntries(remaining.map((name) => [name, true])));
+      expect(restored).toEqual({
+        'async coach_consult_v1:{uid}': true,
+        'async mwb_autosave_mirror:*': false,
+        'async tgp.voiceOutbox.v1': false,
+        'secure-store consult_draft.{uid}.*': false,
+      });
     } finally {
       await clearUserCache();
     }
