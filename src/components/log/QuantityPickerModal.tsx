@@ -36,7 +36,7 @@ interface Props {
   /** A message under the portion (screen readers hear it); `blocked` keeps the confirm off. */
   notice?: string | null;
   blocked?: boolean;
-  /** The meal this food goes to ("For Lunch"); the coach's portion has none. */
+  /** The meal this food goes to ("For Lunch"); the coach picker passes its slot name ("For Pre-workout"). */
   mealLabel?: string;
 }
 
