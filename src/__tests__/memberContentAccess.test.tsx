@@ -1400,3 +1400,31 @@ describe('LS-911R3 B1: raw wire origins and member URLs cannot disappear', () =>
     expect(kinds).toEqual({ composer: false, list: false });
   });
 });
+
+describe('LS-911R3 B2: unread code modules fail closed in every binding form', () => {
+  const host = 'screens/client/SolModuleProbe.tsx';
+  it.each([
+    ['require destructuring', "const { Feed } = require('../settings/SolUnreadModule'); export const draw = () => Feed();"],
+    ['import then destructuring', "export const load = () => import('../settings/SolUnreadModule').then(({ Feed }) => Feed());"],
+    ['lazy default', "import React from 'react'; const Feed = React.lazy(() => import('../settings/SolUnreadModule')); export const Host = () => <Feed />;"],
+    ['require property', "const Feed = require('../settings/SolUnreadModule').Feed; export const draw = () => Feed();"],
+    ['require literal element', "const Feed = require('../settings/SolUnreadModule')['Feed']; export const draw = () => Feed();"],
+    ['await import named property', "export const load = async () => { const { Feed } = await import('../settings/SolUnreadModule'); return Feed(); };"],
+    ['computed template control', "export const load = (name: string) => import(`../settings/${name}`);"],
+    ['namespace returned control', "export const load = () => { const mod = require('../settings/SolUnreadModule'); return mod; };"],
+    ['plain import control', "export const load = () => import('../settings/SolUnreadModule');"],
+  ])('%s cannot silently disappear', (_label, text) => {
+    expect(classify(host, text)).toEqual({ composer: true, list: true });
+  });
+  it.each([
+    ['star', "export * from '../SolUnreadModule';"],
+    ['named', "export { Feed } from '../SolUnreadModule';"],
+  ])('unread %s re-export through a readable index cannot disappear', (_label, barrel) => {
+    const text = "import * as Parts from '../settings/SolProbeBarrel'; export const load = () => Parts;";
+    const ctx = scanCtx({ [host]: text, 'screens/settings/SolProbeBarrel/index.ts': barrel });
+    expect(classify(host, text, ctx)).toEqual({ composer: true, list: true });
+  });
+  it('non-code asset control is still skipped', () => {
+    expect(classify(host, "export const image = require('../settings/missing.png');")).toEqual({ composer: false, list: false });
+  });
+});
