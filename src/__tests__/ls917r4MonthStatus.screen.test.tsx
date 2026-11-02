@@ -1,6 +1,6 @@
 /** LS-917R4 B2: C4's month must distinguish an existing missed session. */
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { cleanup, fireEvent, render } from '@testing-library/react-native';
 import type { CoachingSession } from '../api/schedulingApi';
 import { colors } from '../theme/tokens';
@@ -63,18 +63,26 @@ it('control: the existing no_show payload already renders Missed in its selected
 
 it('LS-917R4 B2: the month retains the picked C4 Missed legend even before selecting the missed day', async () => {
   const view = await start();
-  expect(view.getByText('Session', { includeHiddenElements: true })).toBeTruthy();
-  expect(view.getByText('Workout', { includeHiddenElements: true })).toBeTruthy();
-  expect(view.getByText('Check-in', { includeHiddenElements: true })).toBeTruthy();
-  expect(view.getByText('Missed', { includeHiddenElements: true })).toBeTruthy();
+  expect(view.getByText(/\bSession\b/, { includeHiddenElements: true })).toBeTruthy();
+  expect(view.getByText(/\bWorkout\b/, { includeHiddenElements: true })).toBeTruthy();
+  expect(view.getByText(/\bCheck-in\b/, { includeHiddenElements: true })).toBeTruthy();
+  expect(view.getByText(/\bMissed\b/, { includeHiddenElements: true })).toBeTruthy();
 });
 
 it('LS-917R4 B2: a missed session is not painted as the same ordinary session ring', async () => {
   const view = await start();
-  const rings = (day: string) => view.getByTestId(`month-day-${day}`)
-    .findAllByType(View)
-    .map((node) => StyleSheet.flatten(node.props.style))
-    .filter((style) => Number(style?.borderWidth) > 0);
+  const rings = (day: string) => {
+    const result: ViewStyle[] = [];
+    // RNTL 14's public TestInstance tree, not react-test-renderer methods.
+    const collect = (node: ReturnType<typeof view.getByTestId> | string) => {
+      if (typeof node === 'string') return;
+      const style = StyleSheet.flatten(node.props.style as StyleProp<ViewStyle>);
+      if (style && Number(style.borderWidth) > 0) result.push(style);
+      node.children.forEach(collect);
+    };
+    collect(view.getByTestId(`month-day-${day}`));
+    return result;
+  };
   expect(rings('2026-10-05')).toEqual(expect.arrayContaining([
     expect.objectContaining({ borderColor: colors.camel }),
   ]));
