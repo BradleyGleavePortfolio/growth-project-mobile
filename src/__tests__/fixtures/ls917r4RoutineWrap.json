@@ -1,0 +1,262 @@
+{
+  "renders": [
+    {
+      "device": "android320",
+      "font": "1.3",
+      "file": "train-week__android320__130.png",
+      "errors": [],
+      "ownRoutineWords": [
+        {
+          "word": "Routines",
+          "lines": [
+            277.91,
+            294.81
+          ],
+          "chars": [
+            {
+              "char": "R",
+              "left": 117.328125,
+              "top": 277.90625,
+              "width": 11.25
+            },
+            {
+              "char": "o",
+              "left": 128.5625,
+              "top": 277.90625,
+              "width": 12.953125
+            },
+            {
+              "char": "u",
+              "left": 141.5,
+              "top": 277.90625,
+              "width": 12.578125
+            },
+            {
+              "char": "t",
+              "left": 154.0625,
+              "top": 277.90625,
+              "width": 11.328125
+            },
+            {
+              "char": "i",
+              "left": 165.375,
+              "top": 277.90625,
+              "width": 5.890625
+            },
+            {
+              "char": "n",
+              "left": 171.25,
+              "top": 277.90625,
+              "width": 12.8125
+            },
+            {
+              "char": "e",
+              "left": 184.046875,
+              "top": 277.90625,
+              "width": 10.625
+            },
+            {
+              "char": "s",
+              "left": 117.328125,
+              "top": 294.8125,
+              "width": 11.21875
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "device": "android390",
+      "font": "1.3",
+      "file": "train-week__android390__130.png",
+      "errors": [],
+      "ownRoutineWords": [
+        {
+          "word": "Routines",
+          "lines": [
+            396.13
+          ],
+          "chars": [
+            {
+              "char": "R",
+              "left": 140.65625,
+              "top": 396.125,
+              "width": 11.25
+            },
+            {
+              "char": "o",
+              "left": 151.890625,
+              "top": 396.125,
+              "width": 12.953125
+            },
+            {
+              "char": "u",
+              "left": 164.828125,
+              "top": 396.125,
+              "width": 12.578125
+            },
+            {
+              "char": "t",
+              "left": 177.390625,
+              "top": 396.125,
+              "width": 11.328125
+            },
+            {
+              "char": "i",
+              "left": 188.703125,
+              "top": 396.125,
+              "width": 5.890625
+            },
+            {
+              "char": "n",
+              "left": 194.578125,
+              "top": 396.125,
+              "width": 12.8125
+            },
+            {
+              "char": "e",
+              "left": 207.375,
+              "top": 396.125,
+              "width": 10.625
+            },
+            {
+              "char": "s",
+              "left": 217.984375,
+              "top": 396.125,
+              "width": 11.21875
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "device": "ios320",
+      "font": "1.3",
+      "file": "train-week__ios320__130.png",
+      "errors": [],
+      "ownRoutineWords": [
+        {
+          "word": "Routines",
+          "lines": [
+            239.91,
+            256.81
+          ],
+          "chars": [
+            {
+              "char": "R",
+              "left": 117.328125,
+              "top": 239.90625,
+              "width": 11.25
+            },
+            {
+              "char": "o",
+              "left": 128.5625,
+              "top": 239.90625,
+              "width": 12.953125
+            },
+            {
+              "char": "u",
+              "left": 141.5,
+              "top": 239.90625,
+              "width": 12.578125
+            },
+            {
+              "char": "t",
+              "left": 154.0625,
+              "top": 239.90625,
+              "width": 11.328125
+            },
+            {
+              "char": "i",
+              "left": 165.375,
+              "top": 239.90625,
+              "width": 5.890625
+            },
+            {
+              "char": "n",
+              "left": 171.25,
+              "top": 239.90625,
+              "width": 12.8125
+            },
+            {
+              "char": "e",
+              "left": 184.046875,
+              "top": 239.90625,
+              "width": 10.625
+            },
+            {
+              "char": "s",
+              "left": 117.328125,
+              "top": 256.8125,
+              "width": 11.21875
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "device": "ios390",
+      "font": "1.3",
+      "file": "train-week__ios390__130.png",
+      "errors": [],
+      "ownRoutineWords": [
+        {
+          "word": "Routines",
+          "lines": [
+            408.13
+          ],
+          "chars": [
+            {
+              "char": "R",
+              "left": 140.65625,
+              "top": 408.125,
+              "width": 11.25
+            },
+            {
+              "char": "o",
+              "left": 151.890625,
+              "top": 408.125,
+              "width": 12.953125
+            },
+            {
+              "char": "u",
+              "left": 164.828125,
+              "top": 408.125,
+              "width": 12.578125
+            },
+            {
+              "char": "t",
+              "left": 177.390625,
+              "top": 408.125,
+              "width": 11.328125
+            },
+            {
+              "char": "i",
+              "left": 188.703125,
+              "top": 408.125,
+              "width": 5.890625
+            },
+            {
+              "char": "n",
+              "left": 194.578125,
+              "top": 408.125,
+              "width": 12.8125
+            },
+            {
+              "char": "e",
+              "left": 207.375,
+              "top": 408.125,
+              "width": 10.625
+            },
+            {
+              "char": "s",
+              "left": 217.984375,
+              "top": 408.125,
+              "width": 11.21875
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
