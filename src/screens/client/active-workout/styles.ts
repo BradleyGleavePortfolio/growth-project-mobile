@@ -176,7 +176,7 @@ export const makeStyles = (colors: ThemeColors) =>
   // The next set is lifted: a white row with a forest bar on the left.
   setLineNext: { backgroundColor: sc.bgSurface, borderLeftColor: colors.primary },
   setLineMain: { flexDirection: 'row', alignItems: 'center', flexShrink: 1, columnGap: 4 },
-  setLineLabel: { fontFamily: 'Inter_500Medium', fontSize: 14, lineHeight: 20, fontWeight: '500', color: sc.textMuted, minWidth: 40 },
+  setLineLabel: { fontFamily: 'Inter_500Medium', fontSize: 14, lineHeight: 20, fontWeight: '500', color: sc.textMuted, minWidth: 36 },
   setLineValue: { flexDirection: 'row', alignItems: 'center', flexShrink: 1 },
   setLineInput: {
     minHeight: 44,
@@ -193,11 +193,11 @@ export const makeStyles = (colors: ThemeColors) =>
   setLineReps: { minWidth: 32, textAlign: 'left' },
   // The next set's numbers carry a dashed line: "tap the numbers".
   setLineInputNext: { borderBottomWidth: 1, borderStyle: 'dashed', borderBottomColor: sc.textMuted },
-  setLineUnit: { fontFamily: 'Inter_600SemiBold', fontSize: 18, lineHeight: 24, fontWeight: '600', color: colors.textPrimary, marginHorizontal: 3 },
+  setLineUnit: { fontFamily: 'Inter_600SemiBold', fontSize: 18, lineHeight: 24, fontWeight: '600', color: colors.textPrimary, marginHorizontal: 2, flexShrink: 0 },
   setLineText: { fontFamily: 'Inter_600SemiBold', fontVariant: ['tabular-nums'], fontSize: 18, lineHeight: 24, fontWeight: '600', color: colors.textPrimary, paddingVertical: 10 },
   // A set still to do (not next) reads quieter than a done one.
   setLineTextQuiet: { color: sc.textMuted },
-  previousLine: { flexBasis: '100%', flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, paddingLeft: 44 },
+  previousLine: { flexBasis: '100%', flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, paddingLeft: 40 },
   // C1 v2 "As planned": an outlined pill, filled forest on the next set to do.
   asPlannedBtn: {
     minWidth: 44,
@@ -206,7 +206,7 @@ export const makeStyles = (colors: ThemeColors) =>
     alignItems: 'center',
     flexDirection: 'row',
     gap: 4,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     marginLeft: 'auto',
     borderRadius: radius.button,
     borderWidth: 1,

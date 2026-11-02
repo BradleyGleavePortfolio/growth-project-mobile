@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../../../components/HapticPressable';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
@@ -60,6 +60,7 @@ function NumericCell({
   accessibilityLabel,
   testID,
   autoFocus = false,
+  fit,
 }: {
   value: number;
   sanitize: (raw: string) => string;
@@ -74,7 +75,10 @@ function NumericCell({
   accessibilityLabel: string;
   testID?: string;
   autoFocus?: boolean;
+  /** C1 v2 inline numbers: as wide as their digits at the user's text size, never less than `min`. */
+  fit?: { min: number; size: number };
 }) {
+  const { fontScale } = useWindowDimensions();
   const [text, setText] = useState(value > 0 || showZero ? String(value) : '');
   useEffect(() => {
     setText((cur) => {
@@ -85,7 +89,7 @@ function NumericCell({
   useEffect(() => { onBlankChange(text === ''); }, [text, onBlankChange]);
   return (
     <TextInput
-      style={style}
+      style={fit ? [style, { width: Math.max(fit.min, Math.ceil((text || placeholder).length * fit.size * 0.62 * (fontScale || 1)) + 4) }] : style}
       value={text}
       onChangeText={(raw) => {
         const next = sanitize(raw);
@@ -139,8 +143,9 @@ export function SetLogger({
   // blank from the previous set, as the check did. Not on screens without the
   // done button (the history edit keeps main's row).
   const asPlanned = !hideCompletion && !set.completed && (!!set.prescribedZero || set.weight > 0 || set.reps > 0 || !!previous);
-  const weightCell = (style: React.ComponentProps<typeof TextInput>['style'], autoFocus = false) => (
+  const weightCell = (style: React.ComponentProps<typeof TextInput>['style'], autoFocus = false, fit?: { min: number; size: number }) => (
     <NumericCell
+      fit={fit}
       autoFocus={autoFocus}
       style={style}
       value={set.weight}
@@ -156,8 +161,9 @@ export function SetLogger({
       testID={`set-weight-${exIdx}-${setIdx}`}
     />
   );
-  const repsCell = (style: React.ComponentProps<typeof TextInput>['style']) => (
+  const repsCell = (style: React.ComponentProps<typeof TextInput>['style'], fit?: { min: number; size: number }) => (
     <NumericCell
+      fit={fit}
       style={style}
       value={set.reps}
       sanitize={sanitizeRepsText}
@@ -217,9 +223,9 @@ export function SetLogger({
         <Text style={styles.setLineLabel}>Set {setIdx + 1}</Text>
         {fields ? (
           <View style={styles.setLineValue}>
-            {weightCell([styles.setLineInput, styles.setLineWeight, nextUp && styles.setLineInputNext], editing && !nextUp)}
+            {weightCell([styles.setLineInput, styles.setLineWeight, nextUp && styles.setLineInputNext], editing && !nextUp, { min: 44, size: 18 })}
             <Text style={styles.setLineUnit} accessible={false}>lb ×</Text>
-            {repsCell([styles.setLineInput, styles.setLineReps, nextUp && styles.setLineInputNext])}
+            {repsCell([styles.setLineInput, styles.setLineReps, nextUp && styles.setLineInputNext], { min: 32, size: 18 })}
           </View>
         ) : (
           <HapticPressable intent="light" style={styles.setLineValue} onPress={() => setEditing(true)}

@@ -3,7 +3,7 @@
  * fit at 320 and 360 pt with 100% and 130% text. Harness copied from
  * fr917r2LiveBlocks.screen.test.tsx. */
 import React from 'react';
-import { Alert, StyleSheet } from 'react-native';
+import { Alert, Dimensions, StyleSheet } from 'react-native';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { buildActiveWorkoutExercises } from '../utils/workout/buildActiveWorkout';
 
@@ -135,19 +135,26 @@ it('a set row is never cut at 320 or 360 pt with 100% or 130% text: one line at 
   const label = StyleSheet.flatten(view.getAllByText('Set 1')[0].props.style);
   const unit = StyleSheet.flatten(view.getAllByText('lb ×')[0].props.style);
   const pillText = StyleSheet.flatten(view.getAllByText('As planned')[0].props.style);
+  const n = (v: unknown) => Number(v ?? 0);
   // Nothing has a fixed width that text at 130% could overflow; the row wraps.
   expect(row.flexWrap).toBe('wrap');
-  for (const s of [label, weight, reps, pill]) expect(s.width).toBeUndefined();
-  const n = (v: unknown) => Number(v ?? 0);
+  for (const s of [label, pill]) expect(s.width).toBeUndefined();
+  // The numbers are as wide as their digits (0.62 em each for Inter's tabular figures), never less than the minimum.
+  const fitted = (style: { minWidth?: unknown; fontSize?: unknown }, text: string, scale: number) =>
+    Math.max(n(style.minWidth), Math.ceil(text.length * n(style.fontSize) * 0.62 * scale) + 4);
+  // (The test renderer's window reports its own text scale.)
+  const testScale = Dimensions.get('window').fontScale || 1;
+  expect(weight.width).toBe(fitted(weight, '155', testScale));
+  expect(reps.width).toBe(fitted(reps, '6', testScale));
   // Half an em per character is a floor for Inter; real text is wider.
   const em = (size: unknown, text: string, scale: number) => 0.5 * n(size) * scale * text.length;
   for (const [width, scale] of [[320, 1], [320, 1.3], [360, 1], [360, 1.3]] as const) {
     const inside = width - 2 * n(card.marginHorizontal) - 2 * n(card.paddingHorizontal)
       - 2 * n(row.marginHorizontal) - n(row.paddingLeft) - n(row.paddingRight) - n(row.borderLeftWidth);
     const numbers = Math.max(n(label.minWidth), em(label.fontSize, 'Set 1', scale)) + 4
-      + Math.max(n(weight.minWidth), em(weight.fontSize, '155', scale))
+      + fitted(weight, '155', scale)
       + em(unit.fontSize, 'lb ×', scale) + 2 * n(unit.marginHorizontal)
-      + Math.max(n(reps.minWidth), em(reps.fontSize, '6', scale));
+      + fitted(reps, '6', scale);
     const pillWidth = 2 * n(pill.paddingHorizontal) + n(pill.gap) + 16 + em(pillText.fontSize, 'As planned', scale);
     // Each line fits on its own.
     expect(numbers).toBeLessThanOrEqual(inside);
