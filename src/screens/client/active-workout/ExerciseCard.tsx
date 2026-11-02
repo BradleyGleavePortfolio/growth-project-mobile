@@ -8,6 +8,7 @@ import { Headline } from '../../../ui';
 import type { SessionExercise, SessionSet } from './types';
 import type { ActiveWorkoutStyles } from './styles';
 import { SetLogger } from './SetLogger';
+import { blockLetter } from './blockLetter';
 
 export function ExerciseCard({
   exercise,
@@ -28,6 +29,7 @@ export function ExerciseCard({
   disabled = false,
   active = false,
   foldable = false,
+  notStarted = false,
 }: {
   exercise: SessionExercise;
   exIdx: number;
@@ -49,9 +51,12 @@ export function ExerciseCard({
   active?: boolean;
   /** C1 v2: every set is done and the client has moved on, so the block folds. */
   foldable?: boolean;
+  /** C1 v2: a later block with no set done yet is one line with its plan until tapped. */
+  notStarted?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const folded = foldable && !open;
+  const waiting = notStarted && !open && !active;
   const done = exercise.sets.length > 0 && exercise.sets.every((set) => set.completed);
   // The first set still to do gets the filled "As planned" in the active block.
   const nextSet = active ? exercise.sets.findIndex((set) => !set.completed) : -1;
@@ -69,15 +74,35 @@ export function ExerciseCard({
         : <Text style={[local.letterText, { color: active ? sc.textOnAccent : sc.accentText }]}>{blockLetter(exIdx)}</Text>}
     </View>
   );
-  if (folded) {
+  // C1 v2: "C  Romanian deadlift  3 × 8 · 135 lb", one tap opens the block.
+  if (waiting) {
+    const plan = planLine(exercise.sets);
     return (
       <HapticPressable intent="light" style={styles.exerciseCard} onPress={() => setOpen(true)}
         accessibilityRole="button" accessibilityState={{ expanded: false }}
-        accessibilityLabel={exercise.exerciseName} testID={`exercise-folded-${exIdx}`}>
+        accessibilityLabel={`Show sets for ${exercise.exerciseName}${plan ? `, ${plan}` : ''}`}
+        testID={`exercise-waiting-${exIdx}`}>
         <View style={[styles.exerciseHeader, local.foldedHeader]}>
           {letter}
           <View style={styles.exerciseHeaderText}>
-            <Text style={styles.exerciseName}>{blockLetter(exIdx)} · {exercise.exerciseName}</Text>
+            <Headline level="h3">{exercise.exerciseName}</Headline>
+            {plan ? <Text style={styles.exerciseSummary}>{plan}</Text> : null}
+          </View>
+        </View>
+      </HapticPressable>
+    );
+  }
+  if (folded) {
+    const sets = exercise.sets.length;
+    return (
+      <HapticPressable intent="light" style={styles.exerciseCard} onPress={() => setOpen(true)}
+        accessibilityRole="button" accessibilityState={{ expanded: false }}
+        accessibilityLabel={`Show sets for ${exercise.exerciseName}, ${sets} of ${sets} ${sets === 1 ? 'set' : 'sets'} complete`}
+        testID={`exercise-folded-${exIdx}`}>
+        <View style={[styles.exerciseHeader, local.foldedHeader]}>
+          {letter}
+          <View style={styles.exerciseHeaderText}>
+            <Headline level="h3">{`${blockLetter(exIdx)} · ${exercise.exerciseName}`}</Headline>
             {summary}
           </View>
           <Ionicons name="chevron-down" size={20} color={sc.textPrimary} />
@@ -97,7 +122,7 @@ export function ExerciseCard({
         </View>
         {foldable ? (
           <HapticPressable intent="light" style={styles.toolButton} onPress={() => setOpen(false)}
-            accessibilityRole="button" accessibilityState={{ expanded: true }} accessibilityLabel={exercise.exerciseName}>
+            accessibilityRole="button" accessibilityState={{ expanded: true }} accessibilityLabel={`Hide sets for ${exercise.exerciseName}`}>
             <Ionicons name="chevron-up" size={20} color={sc.textPrimary} />
           </HapticPressable>
         ) : null}
@@ -154,13 +179,7 @@ export function ExerciseCard({
       </View>}
       {onChangeRest && ![60, 90, 120].includes(exercise.restSec ?? 0) && <Text style={styles.previousSetText}>Rest: {exercise.restSec ?? 0}s · From the plan</Text>}
 
-      {/* Set Headers */}
-      <View style={styles.setHeaderRow}>
-        <Text style={[styles.setHeaderText, { width: 36 }]}>Set</Text>
-        <Text style={[styles.setHeaderText, { flex: 1 }]}>Weight (lbs)</Text>
-        <Text style={[styles.setHeaderText, { flex: 1 }]}>Reps</Text>
-        <View style={{ width: 44 }} />
-      </View>
+      {/* C1 v2: each set is its own text row ("Set 2  155 lb × 6"), so no column headers. */}
 
       {exercise.sets.map((set, setIdx) => (
         <SetLogger
@@ -198,10 +217,15 @@ export function ExerciseCard({
   );
 }
 
-/** A, B, C... as in C1 v2; past Z the block keeps its number. */
-export function blockLetter(index: number): string {
-  return index < 26 ? String.fromCharCode(65 + index) : String(index + 1);
+/** C1 v2 plan line from the block's first set: "3 × 8 · 135 lb"; a coach's zero stays "0 lb". */
+export function planLine(sets: SessionSet[]): string {
+  const first = sets[0];
+  if (!first) return '';
+  const weight = first.weight > 0 || first.prescribedZero ? ` · ${first.weight} lb` : '';
+  return first.reps > 0 ? `${sets.length} × ${first.reps}${weight}` : `${sets.length} ${sets.length === 1 ? 'set' : 'sets'}${weight}`;
 }
+
+export { blockLetter };
 
 const local = StyleSheet.create({
   // The block letter beside the exercise name; decorative, so screen readers skip it.

@@ -59,6 +59,7 @@ function NumericCell({
   keyboardType,
   accessibilityLabel,
   testID,
+  autoFocus = false,
 }: {
   value: number;
   sanitize: (raw: string) => string;
@@ -72,6 +73,7 @@ function NumericCell({
   keyboardType: 'decimal-pad' | 'number-pad';
   accessibilityLabel: string;
   testID?: string;
+  autoFocus?: boolean;
 }) {
   const [text, setText] = useState(value > 0 || showZero ? String(value) : '');
   useEffect(() => {
@@ -94,6 +96,7 @@ function NumericCell({
       placeholder={placeholder}
       placeholderTextColor={placeholderTextColor}
       selectTextOnFocus
+      autoFocus={autoFocus}
       accessibilityLabel={accessibilityLabel}
       testID={testID}
     />
@@ -129,68 +132,50 @@ export function SetLogger({
   // An explicitly typed zero is an entry, not a blank ghost to replace.
   const [weightBlank, setWeightBlank] = useState(set.weight <= 0 && !set.prescribedZero);
   const [repsBlank, setRepsBlank] = useState(set.reps <= 0);
+  // C1 v2: a set that is not next is a text row until the client taps its numbers.
+  const [editing, setEditing] = useState(false);
   // C1 v2: a set with a plan (the coach's numbers, a typed value or the last
   // workout's set) is done in one tap with "As planned"; the tap fills any
   // blank from the previous set, as the check did. Not on screens without the
   // done button (the history edit keeps main's row).
   const asPlanned = !hideCompletion && !set.completed && (!!set.prescribedZero || set.weight > 0 || set.reps > 0 || !!previous);
-  return (
-    <View style={[styles.setRow, set.completed && styles.setRowCompleted]} pointerEvents={editable ? 'auto' : 'none'}>
-      <Text style={[styles.setText, { width: 36 }]}>{setIdx + 1}</Text>
-      <NumericCell
-        style={[styles.setInput, { flex: 1 }]}
-        value={set.weight}
-        sanitize={sanitizeWeightText}
-        parse={parseWeightText}
-        onChangeValue={(v) => onUpdate(exIdx, setIdx, 'weight', v)}
-        onBlankChange={setWeightBlank}
-        placeholder={String(previous?.weight ?? 0)}
-        showZero={!!set.prescribedZero || (set.completed && previous?.weight === 0)}
-        keyboardType="decimal-pad"
-        placeholderTextColor={sc.textMuted}
-        accessibilityLabel={`Set ${setIdx + 1} weight in pounds`}
-        testID={`set-weight-${exIdx}-${setIdx}`}
-      />
-      <NumericCell
-        style={[styles.setInput, { flex: 1 }]}
-        value={set.reps}
-        sanitize={sanitizeRepsText}
-        parse={parseRepsText}
-        onChangeValue={(v) => onUpdate(exIdx, setIdx, 'reps', v)}
-        onBlankChange={setRepsBlank}
-        placeholder={String(previous?.reps ?? 0)}
-        keyboardType="number-pad"
-        placeholderTextColor={sc.textMuted}
-        accessibilityLabel={`Set ${setIdx + 1} reps`}
-        testID={`set-reps-${exIdx}-${setIdx}`}
-      />
-      {!hideCompletion && <HapticPressable
-        intent="medium"
-        style={asPlanned ? [styles.asPlannedBtn, nextUp && styles.asPlannedBtnNext]
-          : [styles.checkBtn, set.completed && styles.checkBtnDone]}
-        disabled={!editable}
-        onPress={() => {
-          if (!set.completed && previous) {
-            if (weightBlank) onUpdate(exIdx, setIdx, 'weight', previous.weight);
-            if (repsBlank) onUpdate(exIdx, setIdx, 'reps', previous.reps);
-          }
-          onToggleComplete(exIdx, setIdx);
-        }}
-        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked: set.completed }}
-        accessibilityLabel={`Mark set ${setIdx + 1} done`}
-        testID={`set-done-${exIdx}-${setIdx}`}
-      >
-        {asPlanned ? <>
-          {nextUp ? <Ionicons name="checkmark" size={16} color={sc.textOnAccent} /> : null}
-          <Text style={[styles.asPlannedText, { color: nextUp ? sc.textOnAccent : sc.textMuted }]}>As planned</Text>
-        </> : <Ionicons name="checkmark" size={16} color={set.completed ? colors.textOnPrimary : colors.textMuted} />}
-      </HapticPressable>}
-    {previous ? <HapticPressable
+  const weightCell = (style: React.ComponentProps<typeof TextInput>['style'], autoFocus = false) => (
+    <NumericCell
+      autoFocus={autoFocus}
+      style={style}
+      value={set.weight}
+      sanitize={sanitizeWeightText}
+      parse={parseWeightText}
+      onChangeValue={(v) => onUpdate(exIdx, setIdx, 'weight', v)}
+      onBlankChange={setWeightBlank}
+      placeholder={String(previous?.weight ?? 0)}
+      showZero={!!set.prescribedZero || (set.completed && previous?.weight === 0)}
+      keyboardType="decimal-pad"
+      placeholderTextColor={sc.textMuted}
+      accessibilityLabel={`Set ${setIdx + 1} weight in pounds`}
+      testID={`set-weight-${exIdx}-${setIdx}`}
+    />
+  );
+  const repsCell = (style: React.ComponentProps<typeof TextInput>['style']) => (
+    <NumericCell
+      style={style}
+      value={set.reps}
+      sanitize={sanitizeRepsText}
+      parse={parseRepsText}
+      onChangeValue={(v) => onUpdate(exIdx, setIdx, 'reps', v)}
+      onBlankChange={setRepsBlank}
+      placeholder={String(previous?.reps ?? 0)}
+      keyboardType="number-pad"
+      placeholderTextColor={sc.textMuted}
+      accessibilityLabel={`Set ${setIdx + 1} reps`}
+      testID={`set-reps-${exIdx}-${setIdx}`}
+    />
+  );
+  const usePrevious = previous ? (
+    <HapticPressable
       intent="light"
       disabled={set.completed || !editable}
-      style={styles.previousSet}
+      style={hideCompletion ? styles.previousSet : styles.previousLine}
       accessibilityRole="button"
       accessibilityLabel={`Use previous set ${setIdx + 1}: ${previous.weight} pounds, ${previous.reps} reps`}
       onPress={() => {
@@ -200,7 +185,79 @@ export function SetLogger({
     >
       <Text style={styles.previousSetLabel}>Previous</Text>
       <Text style={styles.previousSetValue}>{previous.weight} × {previous.reps}</Text>
-    </HapticPressable> : asPlanned ? null : <View style={styles.previousSet} />}
+    </HapticPressable>
+  ) : null;
+  // The history edit (no done button) keeps main's grid row.
+  if (hideCompletion) {
+    return (
+      <View style={[styles.setRow, set.completed && styles.setRowCompleted]} pointerEvents={editable ? 'auto' : 'none'}>
+        <Text style={[styles.setText, { width: 36 }]}>{setIdx + 1}</Text>
+        {weightCell([styles.setInput, { flex: 1 }])}
+        {repsCell([styles.setInput, { flex: 1 }])}
+        {usePrevious ?? <View style={styles.previousSet} />}
+      </View>
+    );
+  }
+  // C1 v2 (MOCKUP3/C1/style-c-v2 C2_logger): a text row "Set 2  155 lb × 6";
+  // the numbers are the fields (tap to type). The next set to do is lifted
+  // (white row, forest bar) with the filled "As planned". Last time's numbers
+  // stay one tap away on the next set and on a set typed away from them.
+  const differs = !!previous && (previous.weight !== set.weight || previous.reps !== set.reps);
+  const showPrevious = !!usePrevious && !set.completed && (nextUp || differs);
+  // Only the next set (or one the client tapped) shows its fields; another
+  // set is text, done in one tap or changed by tapping its numbers.
+  const fields = nextUp || editing;
+  const zero = !!set.prescribedZero || (set.completed && previous?.weight === 0);
+  const shownWeight = set.weight > 0 || zero ? set.weight : previous?.weight ?? 0;
+  const shownReps = set.reps > 0 ? set.reps : previous?.reps ?? 0;
+  const ghost = !(set.weight > 0 || zero) || !(set.reps > 0);
+  return (
+    <View style={[styles.setLine, nextUp && styles.setLineNext]} pointerEvents={editable ? 'auto' : 'none'} testID={`set-row-${exIdx}-${setIdx}`}>
+      <View style={styles.setLineMain}>
+        <Text style={styles.setLineLabel}>Set {setIdx + 1}</Text>
+        {fields ? (
+          <View style={styles.setLineValue}>
+            {weightCell([styles.setLineInput, styles.setLineWeight, nextUp && styles.setLineInputNext], editing && !nextUp)}
+            <Text style={styles.setLineUnit} accessible={false}>lb ×</Text>
+            {repsCell([styles.setLineInput, styles.setLineReps, nextUp && styles.setLineInputNext])}
+          </View>
+        ) : (
+          <HapticPressable intent="light" style={styles.setLineValue} onPress={() => setEditing(true)}
+            accessibilityRole="button" accessibilityLabel={`Set ${setIdx + 1}, ${shownWeight} pounds, ${shownReps} reps. Change the numbers`}
+            testID={`set-value-${exIdx}-${setIdx}`}>
+            <Text style={[styles.setLineText, (ghost || !set.completed) && styles.setLineTextQuiet]}>{`${shownWeight} lb × ${shownReps}`}</Text>
+          </HapticPressable>
+        )}
+      </View>
+      <HapticPressable
+        intent="medium"
+        style={asPlanned ? [styles.asPlannedBtn, nextUp && styles.asPlannedBtnNext]
+          : [styles.checkBtn, set.completed && styles.checkBtnDone]}
+        disabled={!editable}
+        onPress={() => {
+          // Without its fields on screen, a blank is read from the set itself.
+          const blankWeight = fields ? weightBlank : set.weight <= 0 && !set.prescribedZero;
+          const blankReps = fields ? repsBlank : set.reps <= 0;
+          if (!set.completed && previous) {
+            if (blankWeight) onUpdate(exIdx, setIdx, 'weight', previous.weight);
+            if (blankReps) onUpdate(exIdx, setIdx, 'reps', previous.reps);
+          }
+          setEditing(false);
+          onToggleComplete(exIdx, setIdx);
+        }}
+        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: set.completed }}
+        // LO-917R3 C3: the pill's words are in its name.
+        accessibilityLabel={asPlanned ? `As planned, mark set ${setIdx + 1} done` : `Mark set ${setIdx + 1} done`}
+        testID={`set-done-${exIdx}-${setIdx}`}
+      >
+        {asPlanned ? <>
+          {nextUp ? <Ionicons name="checkmark" size={16} color={sc.textOnAccent} /> : null}
+          <Text style={[styles.asPlannedText, { color: nextUp ? sc.textOnAccent : sc.textMuted }]}>As planned</Text>
+        </> : <Ionicons name="checkmark" size={16} color={set.completed ? colors.textOnPrimary : colors.textMuted} />}
+      </HapticPressable>
+      {showPrevious ? usePrevious : null}
     </View>
   );
 }

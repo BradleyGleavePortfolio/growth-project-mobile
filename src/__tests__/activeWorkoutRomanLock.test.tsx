@@ -67,7 +67,7 @@ describe('live workout: Roman\'s set readback (139-15)', () => {
   it('a client with no coach logs the set with no Roman readback', async () => {
     mockUser = STUDENT;
     const view = await open();
-    expect(view.getByText('1 of 1 sets completed')).toBeTruthy();
+    expect(view.getByText('1 / 1 sets')).toBeTruthy();
     expect(view.queryByTestId('roman-voicelog-card')).toBeNull();
   });
 

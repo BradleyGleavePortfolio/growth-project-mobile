@@ -120,22 +120,22 @@ it('the exercise in progress is the open sage block; a done block folds and open
   await fireEvent.press(view.getByTestId('set-done-0-0'));
   // A is done; it stays open (its numbers and Add set at hand) while its set is the last one ticked.
   expect(view.queryByTestId('exercise-folded-0')).toBeNull();
-  expect(view.getByTestId('set-weight-0-0')).toBeTruthy();
+  expect(view.getByTestId('set-row-0-0')).toBeTruthy();
   expect(view.getByTestId('exercise-active-1')).toBeTruthy();
   await fireEvent.press(view.getByTestId('set-done-1-0'));
   // A set in B is ticked: A folds (its sets are hidden), B is still in progress.
   expect(view.getByTestId('exercise-folded-0')).toBeTruthy();
   expect(view.getByText('A · Pull Up')).toBeTruthy();
-  expect(view.queryByTestId('set-weight-0-0')).toBeNull();
+  expect(view.queryByTestId('set-row-0-0')).toBeNull();
   expect(view.getByTestId('exercise-active-1')).toBeTruthy();
   await fireEvent.press(view.getByTestId('exercise-folded-0'));
-  expect(view.getByTestId('set-weight-0-0')).toBeTruthy();
+  expect(view.getByTestId('set-row-0-0')).toBeTruthy();
 });
 
 it('control: when every block is done nothing folds, so the last sets stay on screen', async () => {
   const view = await start([['Pull Up', 1, 15]]);
   await fireEvent.press(view.getByTestId('set-done-0-0'));
   expect(view.queryByTestId('exercise-folded-0')).toBeNull();
-  expect(view.getByTestId('set-weight-0-0')).toBeTruthy();
+  expect(view.getByTestId('set-row-0-0')).toBeTruthy();
   expect(view.queryAllByText('As planned')).toHaveLength(0);
 });
