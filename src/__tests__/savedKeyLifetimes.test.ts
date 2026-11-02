@@ -213,8 +213,9 @@ export async function lifetimeFindings(): Promise<string[]> {
     else if (life === 'MARK' && now !== before.get(row)) fail(found, row, 'signout', 'Sign out changed its value.');
     if (life === 'DEVICE' && now === null) fail(found, row, 'signout', 'Sign out removed it.');
     if (unkeyedQueue(row)) {
+      // Gone, or the app's own empty queue: any other value may hold A's work, whatever the reader filters.
       const probe = probeOf(row);
-      if ((now !== null && now === before.get(row)) || (probe && (await readsBack(probe, A)))) {
+      if ((now !== null && !(probe?.empty ?? []).includes(now)) || (probe && (await readsBack(probe, A)))) {
         fail(found, row, 'keyed', "A's unsent work is still there for the next account.");
       }
     }
