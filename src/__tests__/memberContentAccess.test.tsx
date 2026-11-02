@@ -968,3 +968,17 @@ describe('LO-911R2 B1: the stop rule must not hide a new caller of a registered 
     expect(classify('screens/client/CoachThreadPeek.tsx', screen, ctx).list).toBe(true);
   });
 });
+
+// ─── LO-911R2 B2 (B-TEST, review only): my coach's nudges are a list of another person's words, never named ──────
+// screens/client/NotificationsScreen.tsx draws my coach's typed nudges (title and body, useNudges in hooks/useApi.ts,
+// nudgesApi.list). The REGISTRY counts the same nudge as a composer on the coach side ("a typed nudge (title and body)"),
+// and the server leaves out a nudge across a block either way (backend nudges.service.ts listForClient, FX-1141), but
+// nudgesApi is no sign of the scan, blockSync touches no ['nudges'] key, and even with the sign the hooks/useApi.ts
+// badge row stops useNudges (B1). So a client who blocks their coach keeps the coach's nudges on Notifications, and
+// nothing here says so. Smallest fix: nudgesApi.list and nudgesApi.unreadCount as LIST_CALLS signs (with B1's per-export
+// stop), and a NotificationsScreen row with its proof (a cache case for ['nudges'], or an operator-approved gap row).
+describe('LO-911R2 B2: the client nudge list (my coach\'s words) is a registered list', () => {
+  it('the scan names screens/client/NotificationsScreen.tsx a list', () => {
+    expect(scan().list).toContain('screens/client/NotificationsScreen.tsx');
+  });
+});
