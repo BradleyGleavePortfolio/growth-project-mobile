@@ -106,7 +106,7 @@ export function PlanExplanationCardView({
           testID="plan-next-day"
           style={[styles.disclosure, { borderTopColor: sc.border }]}
         >
-          <Text style={[styles.disclosureText, styles.grow, { color: sc.textPrimary }]} numberOfLines={1}>
+          <Text style={[styles.disclosureText, styles.grow, { color: sc.textPrimary }]} numberOfLines={2}>
             {next.title ? `Next: ${next.title}` : 'Your workouts'}
           </Text>
           {next.when ? <Text style={[styles.meta, { color: sc.textMuted }]}>{next.when}</Text> : null}
