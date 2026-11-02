@@ -138,6 +138,10 @@ export function SetLogger({
   const [repsBlank, setRepsBlank] = useState(set.reps <= 0);
   // C1 v2: a set that is not next is a text row until the client taps its numbers.
   const [editing, setEditing] = useState(false);
+  // A 320 pt phone cannot fit the next set's fields beside its filled pill
+  // (FR-917R3B renders): there the next set is its text row too (dashed, tap
+  // to type) and the pill drops its tick, so the row stays on one line.
+  const narrow = useWindowDimensions().width < 360;
   // C1 v2: a set with a plan (the coach's numbers, a typed value or the last
   // workout's set) is done in one tap with "As planned"; the tap fills any
   // blank from the previous set, as the check did. Not on screens without the
@@ -212,7 +216,7 @@ export function SetLogger({
   const showPrevious = !!usePrevious && !set.completed && (nextUp || differs);
   // Only the next set (or one the client tapped) shows its fields; another
   // set is text, done in one tap or changed by tapping its numbers.
-  const fields = nextUp || editing;
+  const fields = (nextUp && !narrow) || editing;
   const zero = !!set.prescribedZero || (set.completed && previous?.weight === 0);
   const shownWeight = set.weight > 0 || zero ? set.weight : previous?.weight ?? 0;
   const shownReps = set.reps > 0 ? set.reps : previous?.reps ?? 0;
@@ -223,15 +227,15 @@ export function SetLogger({
         <Text style={styles.setLineLabel}>Set {setIdx + 1}</Text>
         {fields ? (
           <View style={styles.setLineValue}>
-            {weightCell([styles.setLineInput, styles.setLineWeight, nextUp && styles.setLineInputNext], editing && !nextUp, { min: 44, size: 18 })}
+            {weightCell([styles.setLineInput, styles.setLineWeight, nextUp && styles.setLineInputNext], editing, { min: 40, size: 18 })}
             <Text style={styles.setLineUnit} accessible={false}>lb ×</Text>
-            {repsCell([styles.setLineInput, styles.setLineReps, nextUp && styles.setLineInputNext], { min: 32, size: 18 })}
+            {repsCell([styles.setLineInput, styles.setLineReps, nextUp && styles.setLineInputNext], { min: 28, size: 18 })}
           </View>
         ) : (
-          <HapticPressable intent="light" style={styles.setLineValue} onPress={() => setEditing(true)}
+          <HapticPressable intent="light" style={[styles.setLineValue, nextUp && styles.setLineInputNext]} onPress={() => setEditing(true)}
             accessibilityRole="button" accessibilityLabel={`Set ${setIdx + 1}, ${shownWeight} pounds, ${shownReps} reps. Change the numbers`}
             testID={`set-value-${exIdx}-${setIdx}`}>
-            <Text style={[styles.setLineText, (ghost || !set.completed) && styles.setLineTextQuiet]}>{`${shownWeight} lb × ${shownReps}`}</Text>
+            <Text style={[styles.setLineText, (ghost || (!set.completed && !nextUp)) && styles.setLineTextQuiet]}>{`${shownWeight} lb × ${shownReps}`}</Text>
           </HapticPressable>
         )}
       </View>
@@ -259,7 +263,7 @@ export function SetLogger({
         testID={`set-done-${exIdx}-${setIdx}`}
       >
         {asPlanned ? <>
-          {nextUp ? <Ionicons name="checkmark" size={16} color={sc.textOnAccent} /> : null}
+          {nextUp && !narrow ? <Ionicons name="checkmark" size={16} color={sc.textOnAccent} /> : null}
           <Text style={[styles.asPlannedText, { color: nextUp ? sc.textOnAccent : sc.textMuted }]}>As planned</Text>
         </> : <Ionicons name="checkmark" size={16} color={set.completed ? colors.textOnPrimary : colors.textMuted} />}
       </HapticPressable>

@@ -189,8 +189,10 @@ export const makeStyles = (colors: ThemeColors) =>
     color: colors.textPrimary,
     backgroundColor: 'transparent',
   },
-  setLineWeight: { minWidth: 44, textAlign: 'right' },
-  setLineReps: { minWidth: 32, textAlign: 'left' },
+  // 40 and 28 wide (44 tall): with 44 and 32 the next set's row was 1 pt too
+  // wide for the card on a 360 pt phone at 100% text (FR-917R3B renders).
+  setLineWeight: { minWidth: 40, textAlign: 'right' },
+  setLineReps: { minWidth: 28, textAlign: 'left' },
   // The next set's numbers carry a dashed line: "tap the numbers".
   setLineInputNext: { borderBottomWidth: 1, borderStyle: 'dashed', borderBottomColor: sc.textMuted },
   setLineUnit: { fontFamily: 'Inter_600SemiBold', fontSize: 18, lineHeight: 24, fontWeight: '600', color: colors.textPrimary, marginHorizontal: 2, flexShrink: 0 },
