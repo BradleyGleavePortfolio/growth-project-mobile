@@ -1,16 +1,20 @@
 // FR-917R2 (LS-917R2 B1, LO-917R2 C9): the real guard is run once with three
 // added day readers. Each must be named in the guard's failure output, so a
-// failure for any other reason does not count. Product files change only
-// during this test and are put back in `finally`.
+// failure for any other reason does not count. FR-917R3B: the readers are
+// written into a private copy of src (FR917_DAY_ROOT), so this suite never
+// edits the product tree that other guard runs read at the same time.
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
 
 const root = path.resolve(__dirname, '../..');
 const guard = path.join(root, 'src/__tests__/workoutDayRule.test.ts');
-const listed = path.join(root, 'src/utils/workout/workoutDoneToday.ts');
+const copy = fs.mkdtempSync(path.join(require('os').tmpdir(), 'fr917r2-day-'));
+fs.cpSync(path.join(root, 'src'), path.join(copy, 'src'), { recursive: true });
+afterAll(() => fs.rmSync(copy, { recursive: true, force: true }));
+const listed = path.join(copy, 'src/utils/workout/workoutDoneToday.ts');
 // Not in the workout class by import or field name: its own row type only.
-const fresh = path.join(root, 'src/screens/client/fr917DayProbeOwnRow.ts');
+const fresh = path.join(copy, 'src/screens/client/fr917DayProbeOwnRow.ts');
 
 const listedReaders = `
 export const fr917r2InstantProbe = (w: { date: string }) => instantDay(w.date);
@@ -30,7 +34,7 @@ it('a reader added to a listed file, of either kind, and a new file with its own
       require.resolve('jest/bin/jest'), '--runInBand', '--forceExit', '--runTestsByPath', guard,
     ], {
       cwd: root, encoding: 'utf8', timeout: 40_000, maxBuffer: 8 * 1024 * 1024,
-      env: { ...process.env, FR917_DAY_PROBE: '1' },
+      env: { ...process.env, FR917_DAY_PROBE: '1', FR917_DAY_ROOT: copy },
     });
     if (result.error) throw result.error;
     expect(result.status).toBe(1);
