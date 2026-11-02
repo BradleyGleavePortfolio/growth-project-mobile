@@ -952,3 +952,19 @@ describe('LO-911 B2: the inventory scan names every form a member list or compos
     expect(FORMS.filter((f) => !named(f)).map((f) => `${f.kind} ${f.file}`)).toEqual([]);
   });
 });
+
+// ─── LO-911R2 B1 (B-TEST, review only): the stop rule is keyed by file, not by what the row proves ───────────────
+// hooks/useApi.ts is a REGISTRY list row for one badge (useUnreadMessagesCount, cache case badge-messages). declKinds
+// stops a kind for every export of a file with such a row, so a new member read added to that file (here a coaching
+// thread hook on messagesApi.list, a LIST_CALLS sign) passes the file's old row, and the new screen that draws it is
+// never named. Smallest fix: a non-host row stops only the exports it proves (an `exports` list on the row, or the
+// stop keyed by `${file}:${export}`), so any other export carries its kinds on to its callers.
+describe('LO-911R2 B1: the stop rule must not hide a new caller of a registered shared file', () => {
+  it('a new screen calling a new member read added to registered hooks/useApi.ts is named', () => {
+    const useApi = `${read('hooks/useApi.ts')}\nexport function useCoachThread() {\n  return useQuery({ queryKey: ['messages', 'thread'], queryFn: async () => (await messagesApi.list()).data });\n}\n`;
+    const screen = "import React from 'react';\nimport { Text } from 'react-native';\nimport { useCoachThread } from '../../hooks/useApi';\n" +
+      'export default function CoachThreadPeek() {\n  const q = useCoachThread();\n  return <Text>{q.data?.[0]?.body}</Text>;\n}\n';
+    const ctx = scanCtx({ 'hooks/useApi.ts': useApi, 'screens/client/CoachThreadPeek.tsx': screen });
+    expect(classify('screens/client/CoachThreadPeek.tsx', screen, ctx).list).toBe(true);
+  });
+});
