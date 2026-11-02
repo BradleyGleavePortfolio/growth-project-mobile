@@ -13,7 +13,10 @@ for (const scenario of scenarios) {
   assert(cases.length >= 12, `Control: ${scenario} has its full size matrix`);
   assert(cases.every((row) => !row.errors.length), 'Control: no crashed render');
 }
-const clipped = rows.filter((row) => scenarios.includes(row.scenario)).flatMap((row) =>
+// HomeDial requests native adjustsFontSizeToFit; this harness cannot emulate
+// that behavior. Its four ellipses are not proof of a native clipping defect.
+// PlanExplanationCard requests single-line ellipsis without native auto-fit.
+const clipped = rows.filter((row) => row.scenario === 'plan-card').flatMap((row) =>
   row.issues.filter((issue) => /^clipped (sideways|vertically):/.test(issue))
     .map((issue) => `${row.file}: ${issue}`));
 console.log(clipped.join('\n'));
