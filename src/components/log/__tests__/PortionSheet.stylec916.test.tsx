@@ -86,7 +86,7 @@ describe('STYLEC-916 portion ruler', () => {
     expect(screen.getByLabelText('Portion unit serving').props.accessibilityState).toMatchObject({ selected: true });
     const perServing = calcMacros(chicken, 1, 'serving');
     expect(perServing).toEqual(calcMacros(chicken, 100, 'g'));
-    expect(screen.getByTestId('portion-summary')).toHaveTextContent('165 kcal, 31 g protein, 0 g carbs, 3.6 g fat.');
+    expect(screen.getByTestId('portion-summary')).toHaveTextContent('165 kcal, 31 g protein, 0 g carbs, 4 g fat.');
     expect(String(screen.getByTestId('portion-summary').props.children)).toContain('\u00A0g fat.');
     await fireEvent.press(screen.getByLabelText('Portion unit oz'));
     expect(screen.getByLabelText('Portion unit oz').props.accessibilityState).toMatchObject({ selected: true });
@@ -96,7 +96,7 @@ describe('STYLEC-916 portion ruler', () => {
     await render(<Harness onConfirm={jest.fn()} />);
     expect(screen.getByText('For Lunch')).toBeTruthy();
     expect(screen.getByRole('header').props.children).toBe('Chicken breast, grilled');
-    expect(screen.getByTestId('portion-summary')).toHaveTextContent('248 kcal, 46.5 g protein, 0 g carbs, 5.4 g fat.');
+    expect(screen.getByTestId('portion-summary')).toHaveTextContent('248 kcal, 47 g protein, 0 g carbs, 5 g fat.');
     expect(String(screen.getByTestId('portion-summary').props.children)).toContain('\u00A0g fat.');
     const order = JSON.stringify(screen.toJSON());
     expect(order.indexOf('portion-ruler')).toBeLessThan(order.indexOf('portion-summary'));
@@ -112,6 +112,15 @@ describe('STYLEC-916 add sheet rows', () => {
     recentTab: 'recent' as const, onRecentTabChange: jest.fn(), frequentFoods: [],
     onSelectFood: jest.fn(), onEnterManualMode: jest.fn(),
   };
+
+  // STYLEC-916B (C2 C_add, C_portion): whole grams, as the mock's "1 cup, 240 ml, 6 g protein" and
+  // "248 kcal, 47 g protein, 0 g carbs, 5 g fat."; the saved entry keeps calcMacros' own numbers.
+  it('rounds the row protein to whole grams', async () => {
+    const grilled: SearchResult = { ...chicken, name: 'Chicken breast, grilled', last_quantity: 150, last_unit: 'g', from_log: true };
+    await render(<FoodSearchView {...base} recentFoods={[grilled]} />);
+    expect(screen.getByLabelText('Chicken breast, grilled, 150 g, 47 g protein, 248 kcal')).toBeTruthy();
+    expect(screen.getByText('150 g, 47 g protein')).toBeTruthy();
+  });
 
   it('shows a serif name, one portion and protein line, and that portion\'s calories at the right', async () => {
     const yoghurt: SearchResult = { name: 'Greek yoghurt, plain', calories: 59, protein: 10, carbs: 3.6, fat: 0.4,

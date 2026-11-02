@@ -82,7 +82,7 @@ export function QuantityPickerContent({
   const previewMacros = selectedFood
     ? calcMacros(selectedFood, quantity ?? 0, selectedUnit)
     : { calories: 0, protein: 0, carbs: 0, fat: 0 };
-  const shown = (value: number) => Number.isFinite(value) ? String(value) : '—';
+  const shown = (value: number) => Number.isFinite(value) ? String(Math.round(value)) : '—';
   const units = [...unitOptionsFor(selectedFood)].sort((a, b) => UNIT_ORDER.indexOf(a) - UNIT_ORDER.indexOf(b));
   // No-break spaces keep each number with its unit when the line wraps (320 pt, 130% text).
   const summary = `${shown(previewMacros.calories)}\u00A0kcal, ${shown(previewMacros.protein)}\u00A0g protein, `

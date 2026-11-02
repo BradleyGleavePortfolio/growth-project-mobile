@@ -48,7 +48,7 @@ interface Props {
   saving?: boolean;
 }
 
-const shownNumber = (value: number) => Number.isFinite(value) ? String(Math.round(value * 10) / 10) : '—';
+const shownNumber = (value: number) => Number.isFinite(value) ? String(Math.round(value)) : '—';
 
 // STYLEC-916 (C2 C_add): one portion and protein line, and the calories of that same portion.
 // A food from the log shows the portion logged last time; any other food shows its nutrition basis.
