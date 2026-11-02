@@ -172,7 +172,7 @@ it('an earlier month pages past sessions back to its first day (more than one pa
     start_at: `${addDays(today, -(i % 3))}T09:${String(59 - i).padStart(2, '0')}:00`, end_at: `${addDays(today, -(i % 3))}T10:00:00` }))
     .sort((a, b) => Date.parse(b.start_at) - Date.parse(a.start_at)) as CoachingSession[];
   const older = [{ ...session, id: 'older', status: 'completed', start_at: `${addDays(first, -40)}T09:00:00`, end_at: `${addDays(first, -40)}T10:00:00` }] as CoachingSession[];
-  jest.mocked(schedulingApi.listMySessions).mockImplementation(async (_n: number, opts?: { scope?: string; before?: string }) =>
+  jest.mocked(schedulingApi.listMySessions).mockImplementation(async (_n?: number, opts?: { scope?: string; before?: string }) =>
     (opts?.scope === 'past' ? (opts.before ? older : page1) : []));
   const r = await screen();
   await waitFor(() => expect(r.getByTestId('calendar-tab-month')).toBeTruthy());
