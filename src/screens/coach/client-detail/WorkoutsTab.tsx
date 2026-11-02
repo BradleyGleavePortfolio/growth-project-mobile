@@ -1,6 +1,5 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import Svg, { Polyline } from 'react-native-svg';
 import { useTheme, type ThemeColors } from '../../../theme/ThemeProvider';
 import type { ClientDetailStyles } from './styles';
@@ -101,7 +100,11 @@ export function WorkoutsTab({
           return (
             <View key={session.id} testID={`coach-session-${session.id}`} style={[rule, { backgroundColor: sc.bgPrimary, paddingVertical: spacing.xl }]}>
               <View style={styles.sessionTop}>
-                <Ionicons name={session.completed ? 'checkmark-circle-outline' : 'ellipse-outline'} size={24} color={session.completed ? sc.accentText : sc.textMuted} style={{ marginRight: spacing.md }} />
+                {/* K1 Style C: a day tile, filled when done, dashed while in progress. */}
+                <View testID={`coach-session-${session.id}-day`} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden
+                  style={[tile.box, session.completed ? { backgroundColor: sc.accent, borderColor: sc.accent } : { borderColor: sc.textMuted, borderStyle: 'dashed' }]}>
+                  <Text style={[tile.text, { color: session.completed ? sc.textOnAccent : sc.textMuted }]}>{dayStart(dayOfSession(session))?.getDate() ?? ''}</Text>
+                </View>
                 <View style={{ flex: 1 }}>
                   <Text style={heading}>{session.routineName}</Text>
                   <Text style={meta}>
@@ -171,3 +174,10 @@ export function WorkoutsTab({
     </>
   );
 }
+
+// K1 Style C (MOCKUP3/K1/style-c/C_workouts): the this-week rows lead with a day tile.
+const tile = StyleSheet.create({
+  box: { minWidth: 36, minHeight: 36, borderRadius: 6, borderWidth: 1, alignItems: 'center', justifyContent: 'center',
+    marginRight: spacing.md, paddingHorizontal: 4 },
+  text: { ...typography.bodyMd, fontVariant: ['tabular-nums'] },
+});
