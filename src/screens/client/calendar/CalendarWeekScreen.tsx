@@ -1,6 +1,7 @@
 /**
  * C4 slice 1: looked after, with one clear next action (training 5.1, 6.2).
- * Current week only. Month, booking restyle and weekly forms are later slices.
+ * Current week, and the C4 Style C month (LS-917R3 B3). Booking restyle and
+ * weekly forms are later slices.
  * No new reader or write: the same signed-in-client APIs supply every item.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -52,6 +53,18 @@ export type CalendarWeekData = {
 
 const active = (s: CoachingSession) => ['requested', 'scheduled', 'pending_provider'].includes(s.status);
 const dayDate = (day: string) => new Date(`${day}T12:00:00`);
+/** First day of the month `delta` months from the month of `day` (YYYY-MM-01). */
+export function monthStart(day: string, delta = 0): string {
+  const d = dayDate(day);
+  return bucketDateLocal(new Date(d.getFullYear(), d.getMonth() + delta, 1, 12));
+}
+export const monthEnd = (first: string) => addDays(monthStart(first, 1), -1);
+/** The month grid: whole Monday-first weeks covering the month. */
+export function monthGrid(first: string): string[] {
+  const start = addDays(first, -((dayDate(first).getDay() + 6) % 7));
+  const count = Math.ceil(((dayDate(first).getDay() + 6) % 7 + Number(monthEnd(first).slice(8))) / 7) * 7;
+  return Array.from({ length: count }, (_, i) => addDays(start, i));
+}
 
 function CalendarWeekScreen({ navigation, coachless = false }: Props & { coachless?: boolean }) {
   // Scheduling routes need a coach (402 otherwise): a coachless client never calls them.
@@ -62,11 +75,13 @@ function CalendarWeekScreen({ navigation, coachless = false }: Props & { coachle
   const logs = useWorkouts(50); // GET /workouts, newest first: covers any week of training.
   const coachList = coachless ? [] : coaches.data ?? [];
   const types = useBookableTypes(coachList[0]?.coach_id);
-  const from = getLocalWeekStart();
-  const to = addDays(from, 6);
+  // Month view asks for that month's check-ins only (one a day at most).
+  const [month, setMonth] = useState<string | null>(null);
+  const from = month ?? getLocalWeekStart();
+  const to = month ? monthEnd(month) : addDays(from, 6);
   const checkIns = useQuery<CheckIn[]>({
-    queryKey: ['check-ins', 'week', from, to],
-    queryFn: async () => (await checkInsApi.list({ from, to, limit: 7 })).data,
+    queryKey: ['check-ins', month ? 'month' : 'week', from, to],
+    queryFn: async () => (await checkInsApi.list({ from, to, limit: month ? 31 : 7 })).data,
   });
   const network = useNetworkStatus();
   const own = [workouts, checkIns, logs];
@@ -89,7 +104,7 @@ function CalendarWeekScreen({ navigation, coachless = false }: Props & { coachle
     hasData: (coachless ? own : [sessions, ...own]).some((q) => q.data !== undefined),
     coachless,
   };
-  return <CalendarWeekPage data={data} onRefresh={() => refreshRef.current()}
+  return <CalendarWeekPage data={data} onRefresh={() => refreshRef.current()} onMonthChange={setMonth}
     onSession={(id) => navigation.navigate('CalendarSession', { sessionId: id })}
     onBook={(coachId) => navigation.navigate('CalendarBook', coachId ? { coachId } : {})} />;
 }
@@ -133,17 +148,30 @@ function pairDoneAssignments(
 }
 
 /** Shared real view for fixture-backed web previews; no fixtures in the app. */
-export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
+export function CalendarWeekPage({ data, onRefresh, onSession, onBook, onMonthChange, initialMonth }: {
   data: CalendarWeekData;
   onRefresh: () => void;
   onSession: (id: string) => void;
   onBook: (coachId?: string) => void;
+  /** The month shown (YYYY-MM-01), or null for the week; the screen loads its check-ins. */
+  onMonthChange?: (month: string | null) => void;
+  /** Previews and tests: open on this month. */
+  initialMonth?: string;
 }) {
   const { semanticColors: sc } = useTheme();
   const nav = useNavigation<NavigationProp<ParamListBase>>();
   const today = getTodayString();
   const days = Array.from({ length: 7 }, (_, i) => addDays(getLocalWeekStart(), i));
-  const [selected, setSelected] = useState(today);
+  const [selected, setSelected] = useState(initialMonth ?? today);
+  const [month, setMonthState] = useState<string | null>(initialMonth ?? null);
+  const showMonth = (next: string | null) => {
+    void HapticService.selection();
+    setMonthState(next);
+    onMonthChange?.(next);
+    // The chosen day stays when it is in view; else the month's first day (or today).
+    const inView = next ? selected.startsWith(next.slice(0, 7)) : days.includes(selected);
+    if (!inView) setSelected(next ? (today.startsWith(next.slice(0, 7)) ? today : next) : today);
+  };
   const reduced = useReducedMotion();
   const fade = useRef(new Animated.Value(1)).current;
   const { fontScale } = useWindowDimensions();
@@ -155,7 +183,7 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
     const animation = Animated.timing(fade, { toValue: 1, duration: reduced ? 150 : 200, useNativeDriver: true });
     animation.start();
     return () => animation.stop();
-  }, [selected, fade, reduced]);
+  }, [selected, month, fade, reduced]);
   const sessions = [...new Map(data.sessions.map((s) => [s.id, s])).values()]
     .sort((a, b) => Date.parse(a.start_at) - Date.parse(b.start_at));
   const next = sessions.find((s) => active(s) && Date.parse(s.end_at) > Date.now());
@@ -213,6 +241,87 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
       </Pressable>
     );
   };
+  const daySection = (day: string) => (
+        <View key={day} style={styles.daySection} testID={`week-agenda-${day}`}>
+          <View style={styles.dateRow}>
+            <Text style={[styles.date, ink]} accessibilityRole="header">{dayLabel(day)}{day === today ? ` · ${c['C4-S-82']}` : ''}</Text>
+            <View style={[styles.dateRule, { backgroundColor: sc.border }]} />
+          </View>
+          {sessions.filter((s) => sessionDay(s) === day).map((s) => sessionCard(s))}
+          {workoutsOn(day).map((w) => (
+            <Pressable key={w.id} accessibilityRole="button" testID={w.testID}
+              accessibilityLabel={`${w.name}, ${w.done ? c['C4-S-138'] : c['C4-S-137']}`}
+              style={[styles.row, { borderColor: sc.border }]}
+              onPress={() => { void HapticService.softImpact(); w.open(); }}>
+              {rowIcon(w.done ? 'checkmark' : 'barbell-outline')}
+              <View style={styles.rowText}>
+                <Text style={[styles.small, ink]}>{c['C4-S-84']}</Text>
+                <Text style={[styles.bodyStrong, ink]}>{w.name}</Text>
+              </View>
+              <Text style={[styles.small, ink]}>{w.done ? c['C4-S-138'] : c['C4-S-137']}</Text>
+            </Pressable>
+          ))}
+          {checkOn(day) ? <View style={[styles.row, { borderColor: sc.border }]} testID={`week-checkin-${day}`}>
+            {rowIcon('checkmark')}<Text style={[body, styles.rowText]}>{c['C4-S-88']}</Text><Text style={[styles.small, ink]}>{c['C4-S-138']}</Text>
+          </View> : null}
+          {day === today ? <TextLink label={c['C4S1-S-02']} tone="ink" align="start" testID="week-checkin-open"
+            onPress={() => nav.navigate('Home', { screen: 'Habits', params: { initialTab: 'checkin' }, initial: false })} /> : null}
+          {!data.loading && !data.failed && !data.offline && data.hasData && !workoutsOn(day).length &&
+            !sessions.some((s) => sessionDay(s) === day) && !checkOn(day) && day !== today ?
+            <View style={styles.restRow}>{rowIcon('moon-outline')}<Text style={[body, styles.rowText, { color: sc.textMuted }]}>{c['C4-S-89']}</Text></View> : null}
+        </View>
+  );
+  const tab = (label: string, on: boolean, next: string | null) => (
+    <Pressable key={label} accessibilityRole="tab" accessibilityState={{ selected: on }} testID={`calendar-tab-${label.toLowerCase()}`}
+      onPress={() => { if (!on) showMonth(next); }}
+      style={[styles.tab, { borderBottomColor: on ? colors.camel : 'transparent' }]}>
+      <Text style={[styles.tabText, { color: on ? sc.textOnAccent : sc.textOnMastheadMuted }]}>{label}</Text>
+    </Pressable>
+  );
+  const chevron = (label: string, icon: 'chevron-back' | 'chevron-forward', delta: number) => (
+    <Pressable accessibilityRole="button" accessibilityLabel={label} style={styles.bell} testID={`month-${delta < 0 ? 'previous' : 'next'}`}
+      onPress={() => showMonth(monthStart(month ?? today, delta))}>
+      <Ionicons name={icon} size={24} color={sc.textOnAccent} />
+    </Pressable>
+  );
+  // C4 Style C month: ring = session, dot = workout, square = check-in; the chosen day is filled forest.
+  const monthView = month ? (
+    <View testID="calendar-month">
+      <View style={styles.weekRow} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+        {monthGrid(month).slice(0, 7).map((day) => (
+          <Text key={day} style={[styles.cellHead, { color: sc.textMuted }]}>{dayDate(day).toLocaleDateString('en-US', { weekday: 'narrow' })}</Text>
+        ))}
+      </View>
+      <View style={styles.weekRow}>
+        {monthGrid(month).map((day) => {
+          const inMonth = day.startsWith(month.slice(0, 7));
+          const on = day === selected;
+          const session = sessions.some((s) => sessionDay(s) === day);
+          return (
+            <Pressable key={day} accessibilityRole="button" accessibilityState={{ selected: on }}
+              accessibilityLabel={[dayLabel(day), day === today && c['C4-S-82'], session && c['C4-S-83'],
+                workoutsOn(day).length > 0 && c['C4-S-84'], checkOn(day) && c['C4-S-85']].filter(Boolean).join(', ')} testID={`month-day-${day}`}
+              onPress={() => { void HapticService.selection(); setSelected(day); }} style={styles.cell}>
+              <View style={[styles.cellCircle, { minWidth: 40 * fontScale, minHeight: 40 * fontScale, borderRadius: 20 * fontScale,
+                borderColor: session ? colors.camel : 'transparent', backgroundColor: on ? sc.accent : 'transparent' }]}>
+                <Text style={[styles.cellNumber, { color: on ? sc.textOnAccent : inMonth ? sc.textPrimary : sc.textMuted },
+                  day === today && !on ? { textDecorationLine: 'underline', textDecorationColor: colors.camel } : null]}>{dayDate(day).getDate()}</Text>
+              </View>
+              <View style={styles.marks} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+                {workoutsOn(day).length ? <View testID={`month-workout-${day}`} style={[styles.markDot, { backgroundColor: sc.accent }]} /> : null}
+                {checkOn(day) ? <View testID={`month-checkin-${day}`} style={[styles.markSquare, { backgroundColor: colors.camel }]} /> : null}
+              </View>
+            </Pressable>
+          );
+        })}
+      </View>
+      <View style={styles.legend} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+        <View style={[styles.markRing, styles.legendMark, { borderColor: colors.camel }]} /><Text style={body}>{c['C4-S-83']}</Text>
+        <View style={[styles.markDot, styles.legendMark, { backgroundColor: sc.accent }]} /><Text style={body}>{c['C4-S-84']}</Text>
+        <View style={[styles.markSquare, styles.legendMark, { backgroundColor: colors.camel }]} /><Text style={body}>{c['C4-S-85']}</Text>
+      </View>
+    </View>
+  ) : null;
   return (
     <Screen edges={['top']} style={{ backgroundColor: sc.surface.masthead }} contentStyle={styles.content}
       testID="calendar-week"
@@ -229,11 +338,15 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
             <Ionicons name="notifications-outline" size={24} color={sc.textOnAccent} />
           </Pressable>
         </View>
-        <View style={styles.header}>
-          <Text style={[styles.bodyStrong, { color: sc.textOnAccent }]}>{c['C4-S-80']}</Text>
-          <Text style={[styles.small, { color: sc.textOnMastheadMuted }]}>{dayDate(days[0]).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</Text>
+        <View style={styles.header} accessibilityRole="tablist">
+          <View style={styles.tabs}>{tab(c['C4-S-80'], !month, null)}{tab(c['C4-S-81'], !!month, monthStart(selected))}</View>
+          {month ? null : <Text style={[styles.small, { color: sc.textOnMastheadMuted }]}>{dayDate(days[0]).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</Text>}
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.strip}>
+        {month ? <View style={[styles.header, styles.monthHead]}>
+          <Text accessibilityRole="header" style={[styles.sessionTitle, styles.grow, { color: sc.textOnAccent }]}>
+            {dayDate(month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</Text>
+          {chevron(c['917-W4'], 'chevron-back', -1)}{chevron(c['917-W5'], 'chevron-forward', 1)}
+        </View> : <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.strip}>
           {days.map((day) => (
             <Pressable key={day} accessibilityRole="button" accessibilityState={{ selected: day === selected }}
               accessibilityLabel={`${dayLabel(day)}${day === today ? `, ${c['C4-S-82']}` : ''}`}
@@ -255,7 +368,7 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
               </View>
             </Pressable>
           ))}
-        </ScrollView>
+        </ScrollView>}
       </View>
       {/* Solid tan page to the footer; only its content inks in (LO-769R B1). */}
       <View style={[styles.page, { backgroundColor: sc.bgPrimary }]} testID="week-page">
@@ -266,41 +379,13 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
             <Text style={body}>{c['C4-S-130']}</Text>
             <TextLink label={c['C1-S-47']} tone="ink" onPress={onRefresh} testID="week-retry" />
           </View> : null}
-          {next ? <View>
+          {monthView}
+          {next && !month ? <View>
             <Text style={[styles.overline, ink]}>{c['C4-S-03']}</Text>
             {sessionCard(next, true)}
           </View> : null}
           {!data.loading && !data.failed && !data.offline && data.hasData && noItems ? <Text style={body} testID="week-empty">{c['C4-S-131']}</Text> : null}
-          {days.filter((day) => day >= selected).map((day) => (
-            <View key={day} style={styles.daySection} testID={`week-agenda-${day}`}>
-              <View style={styles.dateRow}>
-                <Text style={[styles.date, ink]} accessibilityRole="header">{dayLabel(day)}{day === today ? ` · ${c['C4-S-82']}` : ''}</Text>
-                <View style={[styles.dateRule, { backgroundColor: sc.border }]} />
-              </View>
-              {sessions.filter((s) => sessionDay(s) === day).map((s) => sessionCard(s))}
-              {workoutsOn(day).map((w) => (
-                <Pressable key={w.id} accessibilityRole="button" testID={w.testID}
-                  accessibilityLabel={`${w.name}, ${w.done ? c['C4-S-138'] : c['C4-S-137']}`}
-                  style={[styles.row, { borderColor: sc.border }]}
-                  onPress={() => { void HapticService.softImpact(); w.open(); }}>
-                  {rowIcon(w.done ? 'checkmark' : 'barbell-outline')}
-                  <View style={styles.rowText}>
-                    <Text style={[styles.small, ink]}>{c['C4-S-84']}</Text>
-                    <Text style={[styles.bodyStrong, ink]}>{w.name}</Text>
-                  </View>
-                  <Text style={[styles.small, ink]}>{w.done ? c['C4-S-138'] : c['C4-S-137']}</Text>
-                </Pressable>
-              ))}
-              {checkOn(day) ? <View style={[styles.row, { borderColor: sc.border }]} testID={`week-checkin-${day}`}>
-                {rowIcon('checkmark')}<Text style={[body, styles.rowText]}>{c['C4-S-88']}</Text><Text style={[styles.small, ink]}>{c['C4-S-138']}</Text>
-              </View> : null}
-              {day === today ? <TextLink label={c['C4S1-S-02']} tone="ink" align="start" testID="week-checkin-open"
-                onPress={() => nav.navigate('Home', { screen: 'Habits', params: { initialTab: 'checkin' }, initial: false })} /> : null}
-              {!data.loading && !data.failed && !data.offline && data.hasData && !workoutsOn(day).length &&
-                !sessions.some((s) => sessionDay(s) === day) && !checkOn(day) && day !== today ?
-                <View style={styles.restRow}>{rowIcon('moon-outline')}<Text style={[body, styles.rowText, { color: sc.textMuted }]}>{c['C4-S-89']}</Text></View> : null}
-            </View>
-          ))}
+          {month ? daySection(selected) : days.filter((day) => day >= selected).map(daySection)}
         </Animated.View>
       </View>
     </Screen>
@@ -337,5 +422,17 @@ const styles = StyleSheet.create({
   restRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 56 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: spacing.md, minHeight: 56 },
   rowText: { flex: 1, minWidth: 0 },
+  tabs: { flexDirection: 'row', gap: spacing.xl },
+  grow: { flex: 1 },
+  tab: { minHeight: 44, justifyContent: 'center', borderBottomWidth: 2 },
+  tabText: { ...typography.body, fontFamily: 'Inter_600SemiBold', fontSize: 17 },
+  monthHead: { borderBottomWidth: 1, borderColor: colors.camel, paddingBottom: spacing.sm },
+  weekRow: { flexDirection: 'row', flexWrap: 'wrap' },
+  cellHead: { ...typography.caption, width: `${100 / 7}%`, textAlign: 'center', marginBottom: spacing.sm },
+  cell: { width: `${100 / 7}%`, minHeight: 56, alignItems: 'center', paddingVertical: 2 },
+  cellCircle: { alignItems: 'center', justifyContent: 'center', borderWidth: 1.5 },
+  cellNumber: { ...typography.h3 },
+  legend: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 6, rowGap: 4, marginTop: spacing.sm },
+  legendMark: { marginLeft: spacing.sm },
   footer: { marginHorizontal: -spacing.xl, marginBottom: -spacing.xl, marginTop: -layout.footerTopGap, padding: spacing.xl },
 });
