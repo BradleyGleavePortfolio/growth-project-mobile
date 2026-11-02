@@ -1,10 +1,13 @@
 /** LS-917R4 B4: adjacent Month session rings must fit their seven columns. */
 import React from 'react';
-import * as RN from 'react-native';
 import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { cleanup, render } from '@testing-library/react-native';
 import type { CoachingSession } from '../api/schedulingApi';
 import { CalendarWeekPage, type CalendarWeekData } from '../screens/client/calendar/CalendarWeekScreen';
+
+// Spy on the module object the screen reads, not a namespace-import copy.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const RN = require('react-native') as typeof import('react-native');
 
 jest.mock('../hooks/useApi', () => ({}));
 jest.mock('../hooks/useCalendar', () => ({}));
