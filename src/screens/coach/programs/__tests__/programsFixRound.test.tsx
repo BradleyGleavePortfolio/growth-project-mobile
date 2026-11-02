@@ -100,6 +100,11 @@ function assignScreen() {
 
 const keyOf = (call: number) => mockAssign.mock.calls[call][2];
 
+// FR-917R2: the screen's first start date is the next Monday after today. On Monday 2 Nov 2026 (UTC)
+// that is 2026-11-09, so a fixed 2026-11-09 was no new intent on that day. Use a date that is never
+// the first one.
+const NEW_START = "2031-01-06";
+
 describe("ProgramAssignScreen request keys (B-328-1)", () => {
   it("a new start date is a new intent: fresh key and the old results are cleared", async () => {
     const screen = await assignScreen();
@@ -108,13 +113,13 @@ describe("ProgramAssignScreen request keys (B-328-1)", () => {
     expect(await screen.findByText(/1 assigned/)).toBeTruthy();
     await fireEvent.changeText(
       screen.getByLabelText("Start date, year month day"),
-      "2026-11-09",
+      NEW_START,
     );
     expect(screen.queryByText(/1 assigned/)).toBeNull();
     await fireEvent.press(screen.getByLabelText("Assign to 1 client"));
     expect(mockAssign).toHaveBeenCalledTimes(2);
     expect(mockAssign.mock.calls[1][1]).toMatchObject({
-      start_date: "2026-11-09",
+      start_date: NEW_START,
     });
     expect(keyOf(1)).not.toBe(keyOf(0));
   });

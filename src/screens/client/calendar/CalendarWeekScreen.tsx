@@ -184,6 +184,12 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
   const ink = { color: sc.textPrimary };
   // Use primary ink for small supporting text: never low-contrast stone on tan.
   const body = [styles.body, ink];
+  // C4 Style C agenda rows lead with a round icon (barbell = workout, check = done, moon = rest day).
+  const rowIcon = (name: React.ComponentProps<typeof Ionicons>['name']) => (
+    <View style={[styles.icon, { borderColor: sc.border }]} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+      <Ionicons name={name} size={18} color={sc.textPrimary} />
+    </View>
+  );
   const noItems = !sessions.some((s) => days.includes(sessionDay(s))) &&
     !days.some((day) => workoutsOn(day).length) && !data.checkIns.length;
   const sessionCard = (s: CoachingSession, hero = false) => {
@@ -232,15 +238,20 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
             <Pressable key={day} accessibilityRole="button" accessibilityState={{ selected: day === selected }}
               accessibilityLabel={`${dayLabel(day)}${day === today ? `, ${c['C4-S-82']}` : ''}`}
               testID={`week-day-${day}`} onPress={() => { void HapticService.selection(); setSelected(day); }}
-              style={[styles.day, { minWidth: 44 * fontScale, backgroundColor: day === selected ? sc.bgPrimary : 'transparent' }]}>
-              <Text style={[styles.small, { color: day === selected ? sc.textPrimary : sc.textOnAccent }]}>
+              style={[styles.day, { minWidth: 44 * fontScale }]}>
+              <Text style={[styles.small, { color: sc.textOnAccent }]}>
                 {dayDate(day).toLocaleDateString('en-US', { weekday: 'short' })}
               </Text>
-              <Text style={[styles.dayNumber, { color: day === selected ? sc.textPrimary : sc.textOnAccent }]}>{dayDate(day).getDate()}</Text>
+              {/* C4 Style C: the chosen day's number sits in a light circle. */}
+              <View testID={`week-day-circle-${day}`} style={[styles.dayCircle, { minWidth: 40 * fontScale, minHeight: 40 * fontScale,
+                borderRadius: 20 * fontScale, backgroundColor: day === selected ? sc.bgPrimary : 'transparent' }]}>
+                <Text style={[styles.dayNumber, { color: day === selected ? sc.textPrimary : sc.textOnAccent }]}>{dayDate(day).getDate()}</Text>
+              </View>
+              {/* C4 Style C marks: ring = session, dot = workout, square = check-in. */}
               <View style={styles.marks} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-                {sessions.some((s) => sessionDay(s) === day) ? <View style={[styles.mark, { backgroundColor: colors.camel }]} /> : null}
-                {workoutsOn(day).length ? <View style={[styles.mark, { backgroundColor: day === selected ? sc.textPrimary : sc.textOnAccent }]} /> : null}
-                {checkOn(day) ? <View style={[styles.mark, { backgroundColor: day === selected ? sc.textPrimary : sc.textOnAccent }]} /> : null}
+                {sessions.some((s) => sessionDay(s) === day) ? <View style={[styles.markRing, { borderColor: colors.camel }]} /> : null}
+                {workoutsOn(day).length ? <View style={[styles.markDot, { backgroundColor: sc.textOnAccent }]} /> : null}
+                {checkOn(day) ? <View style={[styles.markSquare, { backgroundColor: colors.camel }]} /> : null}
               </View>
             </Pressable>
           ))}
@@ -262,13 +273,17 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
           {!data.loading && !data.failed && !data.offline && data.hasData && noItems ? <Text style={body} testID="week-empty">{c['C4-S-131']}</Text> : null}
           {days.filter((day) => day >= selected).map((day) => (
             <View key={day} style={styles.daySection} testID={`week-agenda-${day}`}>
-              <Text style={[styles.date, ink]} accessibilityRole="header">{dayLabel(day)}{day === today ? ` · ${c['C4-S-82']}` : ''}</Text>
+              <View style={styles.dateRow}>
+                <Text style={[styles.date, ink]} accessibilityRole="header">{dayLabel(day)}{day === today ? ` · ${c['C4-S-82']}` : ''}</Text>
+                <View style={[styles.dateRule, { backgroundColor: sc.border }]} />
+              </View>
               {sessions.filter((s) => sessionDay(s) === day).map((s) => sessionCard(s))}
               {workoutsOn(day).map((w) => (
                 <Pressable key={w.id} accessibilityRole="button" testID={w.testID}
                   accessibilityLabel={`${w.name}, ${w.done ? c['C4-S-138'] : c['C4-S-137']}`}
                   style={[styles.row, { borderColor: sc.border }]}
                   onPress={() => { void HapticService.softImpact(); w.open(); }}>
+                  {rowIcon(w.done ? 'checkmark' : 'barbell-outline')}
                   <View style={styles.rowText}>
                     <Text style={[styles.small, ink]}>{c['C4-S-84']}</Text>
                     <Text style={[styles.bodyStrong, ink]}>{w.name}</Text>
@@ -277,13 +292,13 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook }: {
                 </Pressable>
               ))}
               {checkOn(day) ? <View style={[styles.row, { borderColor: sc.border }]} testID={`week-checkin-${day}`}>
-                <Text style={body}>{c['C4-S-88']}</Text><Text style={[styles.small, ink]}>{c['C4-S-138']}</Text>
+                {rowIcon('checkmark')}<Text style={[body, styles.rowText]}>{c['C4-S-88']}</Text><Text style={[styles.small, ink]}>{c['C4-S-138']}</Text>
               </View> : null}
               {day === today ? <TextLink label={c['C4S1-S-02']} tone="ink" align="start" testID="week-checkin-open"
                 onPress={() => nav.navigate('Home', { screen: 'Habits', params: { initialTab: 'checkin' }, initial: false })} /> : null}
               {!data.loading && !data.failed && !data.offline && data.hasData && !workoutsOn(day).length &&
                 !sessions.some((s) => sessionDay(s) === day) && !checkOn(day) && day !== today ?
-                <Text style={body}>{c['C4-S-89']}</Text> : null}
+                <View style={styles.restRow}>{rowIcon('moon-outline')}<Text style={[body, styles.rowText, { color: sc.textMuted }]}>{c['C4-S-89']}</Text></View> : null}
             </View>
           ))}
         </Animated.View>
@@ -299,10 +314,13 @@ const styles = StyleSheet.create({
   title: { ...typography.h1, flex: 1 },
   bell: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   strip: { flexGrow: 1, justifyContent: 'space-between', paddingVertical: spacing.sm, borderBottomWidth: 1, borderColor: colors.camel },
-  day: { minHeight: 88, borderRadius: radius.button, alignItems: 'center', paddingVertical: spacing.sm },
+  day: { minHeight: 88, alignItems: 'center', paddingVertical: spacing.sm },
   dayNumber: { ...typography.h2 },
-  marks: { flexDirection: 'row', gap: 2, height: 8, marginTop: 4 },
-  mark: { width: 7, height: 3 },
+  dayCircle: { alignItems: 'center', justifyContent: 'center', marginTop: 4 },
+  marks: { flexDirection: 'row', alignItems: 'center', gap: 3, height: 8, marginTop: 4 },
+  markRing: { width: 6, height: 6, borderRadius: 3, borderWidth: 1 },
+  markDot: { width: 5, height: 5, borderRadius: 2.5 },
+  markSquare: { width: 5, height: 5 },
   page: { borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, padding: spacing.xl, flexGrow: 1 },
   body: { ...typography.body, fontSize: 14, lineHeight: 22 },
   bodyStrong: { ...typography.body, fontFamily: 'Inter_500Medium', fontSize: 15, lineHeight: 23 },
@@ -312,7 +330,11 @@ const styles = StyleSheet.create({
   sessionTitle: { ...typography.h2 },
   coachWords: { ...typography.h3, fontStyle: 'italic', marginTop: spacing.md },
   daySection: { marginTop: spacing.lg },
-  date: { ...typography.h3, marginBottom: spacing.md },
+  dateRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm },
+  date: { ...typography.h3, fontStyle: 'italic', flexShrink: 1 },
+  dateRule: { flex: 1, height: StyleSheet.hairlineWidth, minWidth: spacing.lg },
+  icon: { width: 40, height: 40, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
+  restRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 56 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: spacing.md, minHeight: 56 },
   rowText: { flex: 1, minWidth: 0 },
   footer: { marginHorizontal: -spacing.xl, marginBottom: -spacing.xl, marginTop: -layout.footerTopGap, padding: spacing.xl },
