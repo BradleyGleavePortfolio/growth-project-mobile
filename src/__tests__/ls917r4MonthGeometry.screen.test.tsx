@@ -1,4 +1,4 @@
-/** LS-917R4 B4: adjacent Month session rings must fit their seven columns. */
+/** LS-917R4 look-only C2: adjacent Month session rings should fit their seven columns. */
 import React from 'react';
 import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { cleanup, render } from '@testing-library/react-native';
@@ -85,6 +85,6 @@ it('control: the actual Month rings fit adjacent columns on a 430 pt phone at 13
   for (const cell of await geometry(430)) expect(cell.ringWidth).toBeLessThanOrEqual(cell.columnWidth);
 });
 
-it.each([320, 360])('LS-917R4 B4: adjacent Month session rings fit a %i pt phone at 130% text', async (width) => {
+it.each([320, 360])('LS-917R4 C2: adjacent Month session rings fit a %i pt phone at 130% text', async (width) => {
   for (const cell of await geometry(width)) expect(cell.ringWidth).toBeLessThanOrEqual(cell.columnWidth);
 });

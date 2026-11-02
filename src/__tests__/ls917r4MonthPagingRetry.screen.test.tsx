@@ -1,4 +1,4 @@
-/** LS-917R4 B5: a failed Month cursor waits for Retry, rather than re-entering the fetch effect. */
+/** LS-917R4 B4: a failed Month cursor waits for Retry, rather than re-entering the fetch effect. */
 import React from 'react';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -8,6 +8,7 @@ import { addDays, getTodayString } from '../utils/date';
 import CalendarWeekRoot from '../screens/client/calendar/CalendarWeekScreen';
 
 jest.mock('../api/schedulingApi', () => ({
+  ...jest.requireActual('../api/schedulingApi'),
   schedulingApi: {
     listMySessions: jest.fn(), listMyCoaches: jest.fn(async () => []),
     listSessionTypes: jest.fn(async () => []),
@@ -89,7 +90,7 @@ async function openEarlierMonth() {
   await waitFor(() => expect(jest.mocked(schedulingApi.listMySessions).mock.calls
     .some(([, options]) => options?.scope === 'past')).toBe(true));
   await fireEvent.press(view.getByTestId('calendar-tab-month'));
-  // Twenty weekly calls cover about five months; June's first day needs the next page.
+  // Twenty weekly calls cover about five months; the earlier month's first day needs another page.
   for (let i = 0; i < 5; i++) await fireEvent.press(view.getByTestId('month-previous'));
   return view;
 }
@@ -101,7 +102,7 @@ it('control: a successful next page is consumed once and its real exhaustion sto
   expect(mockNextCalls).toBe(1);
 });
 
-it('LS-917R4 B5: a failed Month cursor stops automatic sends and waits for an explicit retry', async () => {
+it('LS-917R4 B4: a failed Month cursor stops automatic sends and waits for an explicit retry', async () => {
   mockFail = true;
   const view = await openEarlierMonth();
   await view.findByText('Calendar could not load. Check the connection, then try again.');
