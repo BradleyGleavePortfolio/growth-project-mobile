@@ -68,7 +68,7 @@ it('control: an empty visited month does not falsely call this week empty when t
     data={{ ...data, sessions: [session('current-fixture', today, 'scheduled')] }}
     initialMonth={monthStart(today, -2)}
     onRefresh={jest.fn()} onSession={jest.fn()} onBook={jest.fn()} />);
-  expect(view.getByTestId('month-grid')).toBeTruthy();
+  expect(view.getByTestId('calendar-month')).toBeTruthy();
   expect(view.queryByTestId('week-empty')).toBeNull();
   await fireEvent.press(view.getByTestId('calendar-tab-week'));
   expect(view.getByTestId('week-session-current-fixture')).toBeTruthy();
