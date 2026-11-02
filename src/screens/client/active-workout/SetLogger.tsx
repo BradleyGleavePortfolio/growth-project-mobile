@@ -165,8 +165,8 @@ export function SetLogger({
       />
       {!hideCompletion && <HapticPressable
         intent="medium"
-        style={[styles.checkBtn, set.completed && styles.checkBtnDone,
-          asPlanned && styles.asPlannedBtn, asPlanned && nextUp && styles.asPlannedBtnNext]}
+        style={asPlanned ? [styles.asPlannedBtn, nextUp && styles.asPlannedBtnNext]
+          : [styles.checkBtn, set.completed && styles.checkBtnDone]}
         disabled={!editable}
         onPress={() => {
           if (!set.completed && previous) {
@@ -199,7 +199,7 @@ export function SetLogger({
     >
       <Text style={styles.previousSetLabel}>Previous</Text>
       <Text style={styles.previousSetValue}>{previous.weight} × {previous.reps}</Text>
-    </HapticPressable> : <View style={styles.previousSet} />}
+    </HapticPressable> : asPlanned ? null : <View style={styles.previousSet} />}
     </View>
   );
 }

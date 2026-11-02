@@ -118,7 +118,12 @@ it('the exercise in progress is the open sage block; a done block folds and open
   expect(view.getByTestId('exercise-active-0')).toBeTruthy();
   expect(view.queryByTestId('exercise-folded-0')).toBeNull();
   await fireEvent.press(view.getByTestId('set-done-0-0'));
-  // A is done and folded (its sets are hidden), B is now in progress.
+  // A is done; it stays open (its numbers and Add set at hand) while its set is the last one ticked.
+  expect(view.queryByTestId('exercise-folded-0')).toBeNull();
+  expect(view.getByTestId('set-weight-0-0')).toBeTruthy();
+  expect(view.getByTestId('exercise-active-1')).toBeTruthy();
+  await fireEvent.press(view.getByTestId('set-done-1-0'));
+  // A set in B is ticked: A folds (its sets are hidden), B is still in progress.
   expect(view.getByTestId('exercise-folded-0')).toBeTruthy();
   expect(view.getByText('A · Pull Up')).toBeTruthy();
   expect(view.queryByTestId('set-weight-0-0')).toBeNull();

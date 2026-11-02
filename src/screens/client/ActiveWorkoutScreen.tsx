@@ -1232,6 +1232,12 @@ export default function ActiveWorkoutScreen() {
 
   // C1 v2: the exercise in progress is the first one with a set still to do.
   const activeExercise = sessionExercises.findIndex((exercise) => exercise.sets.some((set) => !set.completed));
+  // The exercise holding the set ticked last stays open (its numbers and Add set stay at hand) until a set
+  // in another exercise is ticked; then a done exercise folds to its header.
+  const lastTicked = sessionExercises.reduce<{ at: number; order: number }>((best, exercise, at) => {
+    const order = Math.max(0, ...exercise.sets.map((set) => (set.completed ? set.doneOrder ?? 0 : 0)));
+    return order > best.order ? { at, order } : best;
+  }, { at: -1, order: 0 }).at;
 
   return (
     <>
@@ -1299,7 +1305,7 @@ export default function ActiveWorkoutScreen() {
         {sessionExercises.map((exercise, exIdx) => (
           <ExerciseCard
             active={exIdx === activeExercise}
-            foldable={activeExercise >= 0 && exercise.sets.length > 0 && exercise.sets.every((set) => set.completed)}
+            foldable={activeExercise >= 0 && exIdx !== lastTicked && exercise.sets.length > 0 && exercise.sets.every((set) => set.completed)}
             key={`${exercise.exerciseId}-${exIdx}`}
             exercise={exercise}
             exIdx={exIdx}

@@ -127,9 +127,10 @@ describe.each(DEVICES)('live workout at $name', (device) => {
     expect(footer.getByText('Finish workout')).toBeTruthy();
     expect(flat(finish).borderRadius).toBe(radius.button);
     expect(flat(finish).minHeight).toBe(layout.buttonHeight);
-    // One filled forest element on the page (nothing logged yet, so no ticked set marks).
+    // Nothing logged yet, so no ticked set marks. FR-917R2 (C1 v2 logger, owner B4): besides Finish, the
+    // only forest fills are the active block's letter and the next set's "As planned".
     const fills = forestFills(view.container as unknown as Node).filter((n) => n.props.testID !== 'live-progress-fill');
-    expect(fills.map((n) => n.props.testID)).toEqual(['finish-workout']);
+    expect(fills.map((n) => n.props.testID)).toEqual(['exercise-letter-0', 'set-done-0-0', 'finish-workout']);
   });
 
   it('sets serif titles with a line height that never clips descenders', async () => {
@@ -156,7 +157,9 @@ describe.each(DEVICES)('live workout at $name', (device) => {
     const input = flat(view.getByTestId('set-weight-0-0'));
     expect(input.borderRadius).toBe(radius.input);
     expect(input.fontVariant).toEqual(['tabular-nums']);
-    expect(flat(view.getByTestId('set-done-0-0')).borderRadius).toBe(radius.chip);
+    // FR-917R2 (C1 v2): a set still to do is the rounded "As planned" pill.
+    expect(flat(view.getByTestId('set-done-0-0')).borderRadius).toBe(radius.button);
+    expect(within(view.getByTestId('set-done-0-0')).getByText('As planned')).toBeTruthy();
   });
 
   it('a ticked set starts the rest row inside the footer, above Finish, with +30s and Skip', async () => {

@@ -63,7 +63,7 @@ export function ExerciseCard({
   // C1 v2 (MOCKUP3/C1/style-c-v2/C2_logger): lettered blocks A, B, C...
   const letter = (
     <View style={[local.letter, done ? local.letterDone : active ? local.letterActive : local.letterOpen]}
-      accessible={false} importantForAccessibility="no-hide-descendants">
+      testID={`exercise-letter-${exIdx}`} accessible={false} importantForAccessibility="no-hide-descendants">
       {done
         ? <Ionicons name="checkmark" size={16} color={sc.textOnAccent} />
         : <Text style={[local.letterText, { color: active ? sc.textOnAccent : sc.accentText }]}>{blockLetter(exIdx)}</Text>}

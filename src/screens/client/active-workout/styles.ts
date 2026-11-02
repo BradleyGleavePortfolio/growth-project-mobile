@@ -152,8 +152,10 @@ export const makeStyles = (colors: ThemeColors) =>
   },
   // C1 v2 "As planned": an outlined pill, filled forest on the next set to do.
   asPlannedBtn: {
-    width: undefined,
     minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
     flexDirection: 'row',
     gap: 6,
     paddingHorizontal: 14,
