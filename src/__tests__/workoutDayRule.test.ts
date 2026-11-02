@@ -80,6 +80,7 @@ const SAVES_AND_READS: Array<[file: string, what: string, uses: RegExp]> = [
   ['src/screens/client/YouScreen.tsx', 'You: next coach workout day', /assignmentDay\(/],
   ['src/screens/client/ClientWorkoutViewerScreen.tsx', 'assigned plans: order and day label', /assignmentDay\(/],
   ['src/components/tutorial/PlanExplanationCard.tsx', 'plan card: weekday of the assigned day', /assignmentDay\(/],
+  ['src/utils/workout/nextAssignment.ts', "Train's Today and the plan card's Next: the open workout by its assigned day", /assignmentDay\(a\)/],
   ['src/hooks/useApi.ts', 'weekly volume: workouts this week', /workoutDay\(/],
   // Coach reads
   ['src/utils/workout/workoutLogging.ts', "coach view: each session's recorded day", /day: workoutDay\(s\)/],
