@@ -100,19 +100,35 @@ export default function CalendarWeekRoot(props: Props) {
   return useClientNeedsCoach() ? <CalendarWeekScreen {...props} coachless /> : <ProtectedWeek {...props} />;
 }
 
-/** The saved workouts left to show once each done assignment is paired with its own. */
+/**
+ * The saved workouts left to show once each done assignment is paired with its
+ * own. Pairs are made across the whole week by match strength (LS-917R2 B3):
+ * first every start-day match (started_at), then every assigned-day match,
+ * then the completed day for rows still unpaired. So an older row done a day
+ * late cannot take the next day's workout before that day's own row pairs.
+ */
 function pairDoneAssignments(
   workouts: ClientWorkoutAssignmentWithPlan[],
   logs: ApiWorkoutSession[],
   planName: (w: ClientWorkoutAssignmentWithPlan) => string,
 ): ApiWorkoutSession[] {
   const left = [...logs];
-  for (const w of workouts) {
-    if (!w.completed_at) continue;
-    const days = w.started_at ? [instantDay(w.started_at)] : [assignmentDay(w), instantDay(w.completed_at)];
-    const at = left.findIndex((l) => l.workout_name === planName(w) && days.includes(workoutDay(l)));
-    if (at >= 0) left.splice(at, 1);
-  }
+  let open = workouts.filter((w) => !!w.completed_at);
+  const pass = (dayOf: (w: ClientWorkoutAssignmentWithPlan) => string | null) => {
+    open = open.filter((w) => {
+      const day = dayOf(w);
+      if (!day) return true;
+      const at = left.findIndex((l) => l.workout_name === planName(w) && workoutDay(l) === day);
+      if (at < 0) return true;
+      left.splice(at, 1);
+      return false;
+    });
+  };
+  pass((w) => (w.started_at ? instantDay(w.started_at) : null));
+  // A row with started_at pairs on its start day only.
+  open = open.filter((w) => !w.started_at);
+  pass((w) => assignmentDay(w));
+  pass((w) => instantDay(w.completed_at));
   return left;
 }
 
