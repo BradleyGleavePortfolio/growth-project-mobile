@@ -21,7 +21,7 @@ export const WEEK_COPY = {
   // C4 Style C month chevrons (spoken only; PR words table 917-W4, 917-W5).
   '917-W4': 'Previous month',
   '917-W5': 'Next month',
-  // C4 Style C Month legend and a missed day's spoken mark (PR words table 917-W11, 917-W12).
+  // C4 Style C Month legend and a missed day's spoken mark (PR words table 917-W11).
   '917-W11': 'Missed',
   'C4S1-S-01': 'You are offline. Only previously loaded calendar items are shown.',
   'C4S1-S-02': 'Open today’s check-in',

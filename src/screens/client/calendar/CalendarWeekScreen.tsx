@@ -357,11 +357,12 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook, onMonthCh
           );
         })}
       </View>
+      {/* Each mark wraps with its word (at 130% text the legend takes two lines). */}
       <View style={styles.legend} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-        <View style={[styles.markRing, styles.legendMark, { borderColor: colors.camel }]} /><Text style={body}>{c['C4-S-83']}</Text>
-        <View style={[styles.markDot, styles.legendMark, { backgroundColor: sc.accent }]} /><Text style={body}>{c['C4-S-84']}</Text>
-        <View style={[styles.markSquare, styles.legendMark, { backgroundColor: colors.camel }]} /><Text style={body}>{c['C4-S-85']}</Text>
-        <View style={[styles.markRing, styles.legendMark, { borderColor: sc.data.missed }]} /><Text style={body}>{c['917-W11']}</Text>
+        <View style={styles.legendItem}><View style={[styles.markRing, { borderColor: colors.camel }]} /><Text style={body}>{c['C4-S-83']}</Text></View>
+        <View style={styles.legendItem}><View style={[styles.markDot, { backgroundColor: sc.accent }]} /><Text style={body}>{c['C4-S-84']}</Text></View>
+        <View style={styles.legendItem}><View style={[styles.markSquare, { backgroundColor: colors.camel }]} /><Text style={body}>{c['C4-S-85']}</Text></View>
+        <View style={styles.legendItem}><View style={[styles.markRing, { borderColor: sc.data.missed }]} /><Text style={body}>{c['917-W11']}</Text></View>
       </View>
     </View>
   ) : null;
@@ -476,7 +477,7 @@ const styles = StyleSheet.create({
   cellCircle: { alignItems: 'center', justifyContent: 'center', borderWidth: 1.5 },
   // h3 with a tighter line (25 -> 22) so the date stays inside a column-fit ring at 130% text.
   cellNumber: { ...typography.h3, lineHeight: 22 },
-  legend: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 6, rowGap: 4, marginTop: spacing.sm },
-  legendMark: { marginLeft: spacing.sm },
+  legend: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: spacing.sm + 6, rowGap: 4, marginTop: spacing.sm },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   footer: { marginHorizontal: -spacing.xl, marginBottom: -spacing.xl, marginTop: -layout.footerTopGap, padding: spacing.xl },
 });
