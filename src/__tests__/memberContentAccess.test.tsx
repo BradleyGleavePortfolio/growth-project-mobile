@@ -342,6 +342,9 @@ const EXEMPT: { file: string; kinds: Kind[]; why: string; passes?: true; exports
   // FR-911R2 (F1): a services/api call whose path the scan cannot read fails closed; the ones in src/ today, each with why.
   { file: 'services/health/ingestBatching.ts', kinds: ['composer'], exports: ['postIngestBatches'],
     why: 'my own health samples to WEARABLES_INGEST_PATH (/v1/wearables/samples/ingest), through a post seam whose path is a parameter; no member words' },
+  // FR-911R3 (LO-911R3 B2): the wire modules of the routes MEMBER_PATH now names by what they reach; their callers are named.
+  { file: 'services/commandCenterApi.ts', kinds: ['list'], why: 'wire wrapper (getInbox: GET /coach/command-center/inbox, each client\'s last_message_preview); InboxScreen calls it', passes: true },
+  { file: 'services/notificationsApi.ts', kinds: ['list'], why: 'wire wrapper (GET /notifications, a row can quote a message); the registered notification screens call it', passes: true },
 ];
 
 // ─── The inventory scan ──────────────────────────────────────────────────────────────────────────────────────────
@@ -365,6 +368,18 @@ const EXEMPT: { file: string; kinds: Kind[]; why: string; passes?: true; exports
 //   - fail closed: a name imported from a member place the scan cannot read, an import() or require() it cannot follow
 //     (or of a relative code module it cannot read), a whole namespace passed on, a method picked by a key it cannot
 //     read, or an API object it cannot find but named for member content, counts as both (or by its verb).
+// FR-911R3 (round 3):
+//   - F1 (LS-911R3 B3, LO-911R3 B1): a via row proves only the parts it names. In its file a use of a part is read as
+//     empty for the row's kind (muted()); whatever else the file holds is its own, so the file (registered() never
+//     counts a via row) and its callers (declKinds never stops for a via row) are named for it.
+//   - F2 (LS-911R3 B1, LO-911R3 B2): a services/api method under any name (const load = api.get, const { get: load } =
+//     api, a held api.request, a method passed on as a value) is that method (wireVerb()); a quoted config key is a
+//     key; a route parameter is any one segment; the command center inbox and the notification rows are member routes;
+//     a nudge and an edit of one row are sends; a service object's method kept as a function of its file is followed.
+//     Each sign's body and each registered place must be named by what it reaches alone (SIGN_BY_NAME says why not).
+//   - F3 (LS-911R3 B2): anything bound from relative code the scan cannot read (a static import, require() destructured
+//     or picked, import().then, await import(), lazy(), an `export *` or `export { X } from` through any number of
+//     barrels) counts as both, in any folder; .js / .jsx and platform files are read, so that is left to what is not there.
 
 const COMPOSER_PARTS = new Set(['ComposerInput', 'ReplyComposer', 'ReactionBar', 'VoiceNotesSection', 'VoiceRecordSheet', 'VoiceNoteComposer']);
 const COMPOSER_CALLS = new Set([
@@ -389,6 +404,8 @@ const LIST_CALLS = new Set([
   'messagesApi.list', 'messagesApi.unreadCount', 'coachApi.getClientMessages', 'coachApi.getUnreadCounts',
   'nudgesApi.list', 'nudgesApi.unreadCount', 'useNudges', 'useUnreadNudgeCount',
   'fetchNotifications', 'fetchUnreadCount',
+  // FR-911R3 (LO-911R3 B2): the read behind the InboxScreen KNOWN GAP row (each client's last_message_preview)
+  'commandCenterApi.getInbox',
 ]);
 /** The API objects of the signs above: any method of these counts (by its verb) unless NOT_CONTENT names it. */
 const MEMBER_APIS = new Set([...COMPOSER_CALLS, ...LIST_CALLS].filter((s) => s.includes('.')).map((s) => s.split('.')[0]));
@@ -396,11 +413,33 @@ const MEMBER_APIS = new Set([...COMPOSER_CALLS, ...LIST_CALLS].filter((s) => s.i
 const MEMBER_API_NAME = /^\w*(community|space|chat|dm|message|voice|post|comment|inbox|thread|reply|removedRows|wins|broadcast)\w*Api$/i;
 /** A read by its verb; anything else on a member API is a send. */
 const READ_VERB = /^(get|list|fetch|search|load|read|peek|find|count|unread|poll)/i;
-/** A raw member-content path on services/api: the first argument's text. */
-const MEMBER_PATH = /^\/(community|messages|nudges|coach\/messages|coach\/clients\/\$\{[^}]+\}\/messages)(\/|\?|$|\$\{)/;
+/**
+ * A raw member-content route on services/api: the first argument's text. FR-911R3 (LS-911R3 B1, LO-911R3 B2): a route
+ * is named by what it reaches, so a parameter is any one segment (`/coach/clients/client-1/messages` and
+ * `/coach/clients/${id}/messages` are one route), and the reads behind the KNOWN GAP and registered rows that have no
+ * community or messages path are routes here too: the command center inbox (each client's last_message_preview) and the
+ * notification rows (a row can quote a message). My own notification settings carry no member words.
+ */
+/** one path segment: literal text or a part the scan cannot read (`${?}`) */
+const SEG = '(\\$\\{\\?\\}|[^/?$])+';
+const MEMBER_ROUTES = [
+  'community', 'messages', 'nudges', 'coach/messages', `coach/clients/${SEG}/(messages|nudges)`, 'coach/command-center/inbox',
+  'notifications(?!/(preferences|timezone)(/|\\?|$))',
+];
+const MEMBER_PATH = new RegExp(`^/(${MEMBER_ROUTES.join('|')})(/|\\?|$|\\$\\{)`);
 const WIRE_VERBS = new Set(['get', 'post', 'put', 'patch', 'delete']);
-/** A send of member words: a POST, PUT or PATCH into a collection of them (not a mark, a block, a report or a delete). */
-const SEND_PATH = /\/(posts|comments|messages|dms?|threads|voice-notes|voice|reactions|chat|wins|replies|notes)\/?(\?.*)?$/;
+/** A send of member words: a POST, PUT or PATCH into a collection of them (not a mark, a block, a report or a delete).
+ * FR-911R3 (LS-911R3 B1): a coach's nudge to a client (/coach/clients/:id/nudges) is a send, and a PATCH or PUT of one
+ * row (/messages/:id, /community/posts/:id: an edit of member words) is a send unless its last segment is an action
+ * that carries no words (SEND_ACTIONS). */
+const SEND_PATH = /\/(posts|comments|messages|dms?|threads|voice-notes|voice|reactions|chat|wins|replies|notes|nudges)\/?(\?.*)?$/;
+const EDIT_PATH = /\/(posts|comments|messages|dms?|threads|voice-notes|voice|chat|wins|replies|notes|nudges)\/([^/?]+)\/?(\?.*)?$/;
+const SEND_ACTIONS = /^(read|mark-all-read|mark-read|seen|report|mute|unmute|pin|unpin|inbox-pin|block|unblock|archive|unarchive|hide|unhide|dismiss)$/;
+const isSend = (verb: string | null, text: string) => {
+  if (SEND_PATH.test(text)) return true;
+  const m = EDIT_PATH.exec(text);
+  return !!m && (verb === 'patch' || verb === 'put' || verb === null) && !SEND_ACTIONS.test(m[2]);
+};
 /** A plain text box counts as a composer, and a list part as a list, where member words live. */
 const MEMBER_PLACE = /(^|\/)(community|messaging)\/|\/[^/]*(Messag|Inbox|Chat|Thread|Dm|Comment|Voice|Post|Reply|Broadcast)[^/]*$/;
 const LIST_PARTS = new Set(['FlatList', 'SectionList', 'FlashList']);
@@ -566,11 +605,20 @@ function modInfo(file: string, text: string): ModInfo {
   return info;
 }
 
-type ScanCtx = { files: Map<string, string>; memo: Map<string, Kinds>; busy: Set<string> };
+/** mute: false reads a via row's parts as they are (the stale check: does the via file still draw them?). */
+/** byName: false drops the signs (COMPOSER_CALLS, LIST_CALLS, an API object's name) and byPlace: false the file-name
+ * rule (MEMBER_PLACE), so a check can ask what the scan finds by the reads and sends alone (FR-911R3, LO-911R3 B2). */
+type ScanCtx = { files: Map<string, string>; memo: Map<string, Kinds>; busy: Set<string>; mute?: boolean; byName?: boolean; byPlace?: boolean };
+const inPlace = (ctx: ScanCtx, mod: string) => ctx.byPlace !== false && MEMBER_PLACE.test(mod);
+/** FR-911R3 (LS-911R3 B2): code the bundler resolves is read here too (a .js / .jsx module, a platform file), so the
+ * fail-closed rule for a module the scan cannot read is left to what is really not there. */
+const CODE_EXTS = ['.ts', '.tsx', '.js', '.jsx'];
+const PLATFORMS = ['', '.native', '.ios', '.android'];
 function resolveSpec(ctx: ScanCtx, from: string, spec: string): string | null {
   if (!spec.startsWith('.')) return `pkg:${spec}`;
   const base = path.posix.normalize(path.posix.join(path.posix.dirname(from), spec));
-  for (const c of [base, `${base}.ts`, `${base}.tsx`, `${base}/index.ts`, `${base}/index.tsx`]) if (ctx.files.has(c)) return c;
+  const tries = [base, ...[base, `${base}/index`].flatMap((b) => PLATFORMS.flatMap((p) => CODE_EXTS.map((x) => `${b}${p}${x}`)))];
+  for (const c of tries) if (ctx.files.has(c)) return c;
   return null;
 }
 const infoOf = (ctx: ScanCtx, mod: string) => modInfo(mod, ctx.files.get(mod) as string);
@@ -590,6 +638,9 @@ function resolveExport(ctx: ScanCtx, mod: string | null, name: string, spec: str
       if (o.mod !== m || infoOf(ctx, m).decls.has(o.name)) return o;
     }
   }
+  // FR-911R3 (LS-911R3 B2): a name no read export holds may come from an `export *` of code the scan cannot read
+  const unread = info.stars.find((s) => !resolveSpec(ctx, mod, s) && isCodeSpec(s));
+  if (unread && !info.decls.has(name)) return { mod: null, name, spec: unread };
   return { mod, name };
 }
 /** Where a name used in `mod` was declared (an import followed to its declaration, or this file, or not found). */
@@ -639,8 +690,10 @@ function moduleKinds(ctx: ScanCtx, mod: string, spec: string): Kinds {
   const k = NONE();
   const m = resolveSpec(ctx, mod, spec);
   if (m && !m.startsWith('pkg:')) for (const name of exportNames(ctx, m)) add(k, declKinds(ctx, resolveExport(ctx, m, name, spec)));
+  // FR-911R3 (LS-911R3 B2): a barrel the scan reads that passes on (export *) code it cannot read holds anything
+  if (m && !m.startsWith('pkg:') && unreadStar(ctx, m)) add(k, { composer: true, list: true });
   if (!m && isCodeSpec(spec)) add(k, { composer: true, list: true });
-  return k;
+  return muted(ctx, mod, m, k);
 }
 /** Exported names of a module, with `export *` followed. */
 function exportNames(ctx: ScanCtx, mod: string, seen = new Set<string>()): string[] {
@@ -651,9 +704,20 @@ function exportNames(ctx: ScanCtx, mod: string, seen = new Set<string>()): strin
   for (const s of info.stars) { const m = resolveSpec(ctx, mod, s); if (m && !m.startsWith('pkg:')) out.push(...exportNames(ctx, m, seen).filter((n) => n !== 'default')); }
   return out;
 }
+/** An `export *` of code the scan cannot read, here or in a barrel this one passes on (any depth). */
+function unreadStar(ctx: ScanCtx, mod: string, seen = new Set<string>()): boolean {
+  if (seen.has(mod)) return false;
+  seen.add(mod);
+  return infoOf(ctx, mod).stars.some((s) => {
+    const m = resolveSpec(ctx, mod, s);
+    return m ? !m.startsWith('pkg:') && unreadStar(ctx, m, seen) : isCodeSpec(s);
+  });
+}
 
 /** The kinds a declaration's own body holds (followed into what it calls), less the kinds its file's own row proves. */
 function declKinds(ctx: ScanCtx, o: Origin): Kinds {
+  // FR-911R3 (LS-911R3 B2): a name re-exported from code the scan cannot read (export { Feed } from './Unread') holds anything
+  if (unreadCode(o)) return { composer: true, list: true };
   if (!o.mod || o.mod.startsWith('pkg:')) return NONE();
   const key = `${o.mod}:${o.name}`;
   if (notContent(o)) return NONE();
@@ -668,7 +732,8 @@ function declKinds(ctx: ScanCtx, o: Origin): Kinds {
   // FR-911R2 (LO-911R2 B1): a row stops only the exports it proves, never a whole file; a KNOWN GAP row stops nothing
   const stops = (exports?: string[]) => stoppedLocals(ctx, o.mod as string, exports).has(o.name.split('.')[0]);
   for (const kind of ['composer', 'list'] as Kind[]) {
-    if (REGISTRY.some((s) => s.file === o.mod && s.kind === kind && s.proof.by !== 'host' && s.proof.by !== 'gap' && stops(s.exports))) k[kind] = false;
+    // FR-911R3: nor does a via row: what its file holds through its parts is read as empty there (muted), the rest goes on
+    if (REGISTRY.some((s) => s.file === o.mod && s.kind === kind && !['host', 'gap', 'via'].includes(s.proof.by) && stops(s.exports))) k[kind] = false;
     if (EXEMPT.some((e) => e.file === o.mod && e.kinds.includes(kind) && !e.passes && stops(e.exports))) k[kind] = false;
   }
   ctx.memo.set(key, k);
@@ -707,23 +772,48 @@ function kindsOfUse(ctx: ScanCtx, mod: string, o: Origin, how: 'call' | 'jsx' | 
   if (notContent(o)) return k;
   const drawn = how !== 'call';
   if (drawn && COMPOSER_PARTS.has(o.name)) k.composer = true;
-  if (how !== 'jsx' && COMPOSER_CALLS.has(o.name)) k.composer = true;
-  if (how !== 'jsx' && LIST_CALLS.has(o.name)) k.list = true;
-  if (drawn && LIST_PARTS.has(o.name) && MEMBER_PLACE.test(mod)) k.list = true;
-  if (how === 'call' && o.name === 'useInfiniteQuery' && MEMBER_PLACE.test(mod)) k.list = true;
+  const byName = ctx.byName !== false;
+  if (byName && how !== 'jsx' && COMPOSER_CALLS.has(o.name)) k.composer = true;
+  if (byName && how !== 'jsx' && LIST_CALLS.has(o.name)) k.list = true;
+  if (drawn && LIST_PARTS.has(o.name) && inPlace(ctx, mod)) k.list = true;
+  if (how === 'call' && o.name === 'useInfiniteQuery' && inPlace(ctx, mod)) k.list = true;
   // a method of a member API the scan cannot read (no file, or not a method it can find): by its verb (fail closed)
   const unread = (!o.mod && !infoOf(ctx, mod).declared.has(obj ?? '')) || (!!o.mod && !o.mod.startsWith('pkg:') && !infoOf(ctx, o.mod).decls.has(o.name));
-  if (obj && method && unread && (MEMBER_APIS.has(obj) || MEMBER_API_NAME.test(obj))) {
+  if (byName && obj && method && unread && (MEMBER_APIS.has(obj) || MEMBER_API_NAME.test(obj))) {
     if (READ_VERB.test(method)) k.list = true; else k.composer = true;
   }
   if (o.mod && (o.mod !== mod || followLocal)) add(k, declKinds(ctx, o));
-  if (!o.mod && o.spec && o.spec.startsWith('.') && MEMBER_PLACE.test(path.posix.join(path.posix.dirname(mod), o.spec))) {
-    // fail closed: imported from a member place the scan cannot read
-    if (how === 'call' && /^use[A-Z]/.test(o.name)) k.list = true;
-    else add(k, { composer: true, list: true });
-  }
+  // FR-911R3 (LS-911R3 B2): fail closed: anything bound from a relative code module the scan cannot read (an import,
+  // require() destructured or picked, import().then(({ X }) => ...), await import(), lazy()), in any folder
+  if (unreadCode(o)) add(k, { composer: true, list: true });
+  // FR-911R3 (LS-911R3 B1): a method of services/api passed on as a value (queryFn: load, fetcher(api.get)): by its verb
+  if (how === 'value') add(k, byVerb(wireVerb(ctx, mod, o), false));
+  return muted(ctx, mod, o.mod, k);
+}
+/** A use of a module that the scan cannot read, and that is code (not an image, a font, JSON): it may hold anything. */
+const unreadCode = (o: Origin) => !o.mod && !!o.spec && isCodeSpec(o.spec);
+/** What a wire verb sends or reads when its path is not read: GET / HEAD a list, POST / PUT / PATCH a composer, a verb
+ * not read (request(config), api[verb]) both; DELETE and OPTIONS carry no words. `none`: not a wire method at all. */
+function byVerb(verb: string | null, unreadVerb: boolean): Kinds {
+  if (verb === null) return unreadVerb ? { composer: true, list: true } : NONE();
+  if (verb === 'get' || verb === 'head') return { composer: false, list: true };
+  if (verb === 'request') return { composer: true, list: true };
+  if (verb === 'delete' || verb === 'options') return NONE();
+  return { composer: true, list: false };
+}
+/**
+ * FR-911R3 (LS-911R3 B3, LO-911R3 B1): a via row proves only the parts it names. In the via row's own file, what a use
+ * of one of its parts holds (for the row's kind) is the part's, shown by the part's KNOWN GAP row, so it is read as
+ * empty; everything else the file holds (a composer or list it draws, reads or sends itself) stays, so the file is named
+ * for it (registered() never counts a via row) and the callers of the file are named for it too.
+ */
+function muted(ctx: ScanCtx, mod: string, target: string | null, k: Kinds): Kinds {
+  if (ctx.mute === false || !target) return k;
+  for (const kind of ['composer', 'list'] as Kind[]) if (k[kind] && viaParts(mod, kind).includes(target)) k[kind] = false;
   return k;
 }
+const viaParts = (file: string, kind: Kind): string[] =>
+  REGISTRY.flatMap((s) => (s.file === file && s.kind === kind && s.proof.by === 'via' ? s.proof.parts : []));
 
 /** The kinds a node holds: everything in it that is called, drawn, sent on the wire, or a member API method taken. */
 function nodeKinds(ctx: ScanCtx, mod: string, root: ts.Node): Kinds {
@@ -780,11 +870,15 @@ function nodeKinds(ctx: ScanCtx, mod: string, root: ts.Node): Kinds {
         const o = resolveLocal(ctx, mod, n.text);
         if (o.mod !== mod) add(k, kindsOfUse(ctx, mod, o, 'value', followLocal));
       }
+    } else if (ts.isIdentifier(n) && isReference(n) && followLocal && info.decls.has(n.text)) {
+      // FR-911R3 (F2): a function of this file passed on from inside a declaration ({ latest }, { list: listImpl },
+      // queryFn: load): a service object's method is what its function's body reaches
+      add(k, kindsOfUse(ctx, mod, { mod, name: n.text }, 'value', true));
     }
     if (ts.isJsxOpeningElement(n) || ts.isJsxSelfClosingElement(n)) {
       const o = tagName(n.tagName);
       if (o) add(k, kindsOfUse(ctx, mod, o, 'jsx', followLocal));
-      if (o?.name === 'TextInput' && MEMBER_PLACE.test(mod)) k.composer = true;
+      if (o?.name === 'TextInput' && inPlace(ctx, mod)) k.composer = true;
     }
     ts.forEachChild(n, visit);
   };
@@ -854,6 +948,16 @@ function isWireClient(ctx: ScanCtx, mod: string, o: Origin | null): boolean {
   if (o.mod === 'services/api.ts') return /^(default|api)$/.test(o.name);
   return !o.mod && /^(api|apiClient|http|client)$/.test(o.name) && !infoOf(ctx, mod).declared.has(o.name);
 }
+/** FR-911R3 (LS-911R3 B1): the verb of a services/api method kept under another name (`const load = api.get`,
+ * `const { get: load } = api`, `api.request` held) or passed on as a value (`queryFn: load`): its origin is the
+ * client's method (`default.get`), not a name of its own. null: not a method of the client. */
+function wireVerb(ctx: ScanCtx, mod: string, o: Origin | null): string | null {
+  if (!o || !o.name.includes('.')) return null;
+  const i = o.name.lastIndexOf('.');
+  const verb = o.name.slice(i + 1);
+  if (!AXIOS_VERBS.has(verb) && verb !== 'request') return null;
+  return isWireClient(ctx, mod, { ...o, name: o.name.slice(0, i) }) ? verb : null;
+}
 /**
  * A raw call on services/api: api.get(path), api['get'](path), api[verb](path), api.request({ method, url }), api(config),
  * through any alias. A readable member path counts by its verb (a GET is a list; a POST / PUT / PATCH into SEND_PATH a
@@ -866,18 +970,26 @@ function wireKinds(ctx: ScanCtx, mod: string, n: ts.CallExpression): Kinds {
   while (ts.isParenthesizedExpression(c) || ts.isNonNullExpression(c)) c = c.expression;
   let client: ts.Expression = c;
   let verb: string | null = 'request';
-  if (ts.isPropertyAccessExpression(c)) { client = c.expression; verb = c.name.text; }
-  else if (ts.isElementAccessExpression(c)) { client = c.expression; verb = ts.isStringLiteralLike(c.argumentExpression) ? c.argumentExpression.text : null; }
-  if (!isWireClient(ctx, mod, originOf(ctx, mod, client))) return k;
+  // FR-911R3: the callee's own origin first, so a method of the client under any name (load(url)) is that method
+  const held = wireVerb(ctx, mod, originOf(ctx, mod, c));
+  if (held) verb = held;
+  else {
+    if (ts.isPropertyAccessExpression(c)) { client = c.expression; verb = c.name.text; }
+    else if (ts.isElementAccessExpression(c)) { client = c.expression; verb = ts.isStringLiteralLike(c.argumentExpression) ? c.argumentExpression.text : null; }
+    if (!isWireClient(ctx, mod, originOf(ctx, mod, client))) return k;
+  }
   let url: ts.Expression | undefined = n.arguments[0];
   if (verb === 'request') {
     const cfg = n.arguments[0];
     url = undefined;
     verb = null;
     if (cfg && ts.isObjectLiteralExpression(cfg)) {
-      const prop = (name: string) => cfg.properties.find((p): p is ts.PropertyAssignment => ts.isPropertyAssignment(p) && !!p.name && ts.isIdentifier(p.name) && p.name.text === name)?.initializer;
+      // FR-911R3 (LS-911R3 B1): a quoted key ({ 'method': 'post', 'url': ... }) is the same key
+      const prop = (name: string) => cfg.properties.find((p): p is ts.PropertyAssignment => ts.isPropertyAssignment(p) && !!p.name &&
+        (ts.isIdentifier(p.name) || ts.isStringLiteralLike(p.name)) && p.name.text === name)?.initializer;
       const m = prop('method');
-      const spread = cfg.properties.some((p) => !ts.isPropertyAssignment(p));
+      // a key the scan cannot read ([key]: value) may be the method or the url: as a spread, unread
+      const spread = cfg.properties.some((p) => !ts.isPropertyAssignment(p) || ts.isComputedPropertyName(p.name));
       verb = m ? (ts.isStringLiteralLike(m) ? m.text.toLowerCase() : null) : spread ? null : 'get';
       url = prop('url');
     }
@@ -887,8 +999,8 @@ function wireKinds(ctx: ScanCtx, mod: string, n: ts.CallExpression): Kinds {
       // a path the scan can read
       if (!MEMBER_PATH.test(text)) continue;
       if (verb === 'get' || verb === 'head') k.list = true;
-      else if (verb === null) { k.list = true; if (SEND_PATH.test(text)) k.composer = true; }
-      else if (verb !== 'delete' && verb !== 'options' && SEND_PATH.test(text)) k.composer = true;
+      else if (verb === null) { k.list = true; if (isSend(verb, text)) k.composer = true; }
+      else if (verb !== 'delete' && verb !== 'options' && isSend(verb, text)) k.composer = true;
       continue;
     }
     // fail closed: its start cannot be read
@@ -927,24 +1039,23 @@ function sourceFiles(dir: string): string[] {
     const full = path.join(dir, e.name);
     if (e.name === '__tests__' || e.name === '__mocks__' || e.name === 'node_modules' || /\.(test|spec)\./.test(e.name)) return [];
     if (e.isDirectory()) return sourceFiles(full);
-    return /\.tsx?$/.test(e.name) && !e.name.endsWith('.d.ts') ? [full] : [];
+    return /\.[jt]sx?$/.test(e.name) && !e.name.endsWith('.d.ts') ? [full] : [];
   });
 }
 const rel = (f: string) => path.relative(SRC, f).split(path.sep).join('/');
 const read = (file: string) => fs.readFileSync(path.join(SRC, file), 'utf8');
 
-function scanCtx(extra: Record<string, string> = {}): ScanCtx {
+function scanCtx(extra: Record<string, string> = {}, opts: { mute?: boolean; byName?: boolean; byPlace?: boolean } = {}): ScanCtx {
   const files = new Map(sourceFiles(SRC).map((f) => [rel(f), fs.readFileSync(f, 'utf8')] as const));
   for (const [f, t] of Object.entries(extra)) files.set(f, t);
-  return { files, memo: new Map(), busy: new Set() };
+  return { files, memo: new Map(), busy: new Set(), ...opts };
 }
 /** What one file holds, read against src/ as it is (`text` stands in for the file, which need not exist). */
 function classify(file: string, text: string, ctx: ScanCtx = scanCtx({ [file]: text })): Kinds {
   if (ctx.files.get(file) !== text) ctx.files.set(file, text);
   return nodeKinds(ctx, file, infoOf(ctx, file).sf);
 }
-function scan(): { composer: string[]; list: string[] } {
-  const ctx = scanCtx();
+function scan(ctx: ScanCtx = scanCtx()): { composer: string[]; list: string[] } {
   const out = { composer: [] as string[], list: [] as string[] };
   for (const [file, text] of ctx.files) {
     const k = classify(file, text, ctx);
@@ -954,8 +1065,10 @@ function scan(): { composer: string[]; list: string[] } {
   return out;
 }
 
+/** FR-911R3 (LO-911R3 B1): a via row registers nothing of its file's own (the scan reads its parts as empty there), so a
+ * via file that holds a composer or list of its own beside its parts is named until that has its own row. */
 const registered = (file: string, kind: Kind) =>
-  REGISTRY.some((s) => s.file === file && s.kind === kind) || EXEMPT.some((e) => e.file === file && e.kinds.includes(kind));
+  REGISTRY.some((s) => s.file === file && s.kind === kind && s.proof.by !== 'via') || EXEMPT.some((e) => e.file === file && e.kinds.includes(kind));
 
 it('LS-911 B2: NotificationCenter must use live proof, not the obsolete pre-898 gap', () => {
   const row = REGISTRY.find((s) => s.file === 'screens/notifications/NotificationCenterScreen.tsx' && s.kind === 'list');
@@ -1012,8 +1125,11 @@ describe('KT-2 registry: every content list and composer on the phone is registe
   });
 
   it('no stale row: every registered file exists and still holds what it is registered for', () => {
+    // FR-911R3: a via file holds its kind through its parts, which the inventory reads as empty there: read them as they are
+    const whole = scan(scanCtx({}, { mute: false }));
+    const holds = (s: Surface) => (s.proof.by === 'via' ? whole : found)[s.kind].includes(s.file);
     const stale = [
-      ...REGISTRY.filter((s) => !fs.existsSync(path.join(SRC, s.file)) || !found[s.kind].includes(s.file)).map((s) => `${s.kind} ${s.file}`),
+      ...REGISTRY.filter((s) => !fs.existsSync(path.join(SRC, s.file)) || !holds(s)).map((s) => `${s.kind} ${s.file}`),
       ...EXEMPT.flatMap((e) => e.kinds.filter((k) => !found[k].includes(e.file)).map((k) => `exempt ${k} ${e.file}`)),
     ];
     expect(stale).toEqual([]);
@@ -1044,6 +1160,9 @@ describe('KT-2 registry: every content list and composer on the phone is registe
           if (!REGISTRY.some((h) => h.file === part && h.kind === s.kind && (h.proof.by === 'gap' || h.proof.by === 'via'))) problems.push(`${s.file}: part ${part} has no KNOWN GAP or via row (${s.kind})`);
           if (!importsOf(ctx, s.file).has(part)) problems.push(`${s.file}: does not import its part ${part}`);
         }
+        // FR-911R3 (LO-911R3 B1): with its parts read as empty, a via file holds nothing of this kind of its own (or has
+        // its own row for it)
+        if (classify(s.file, read(s.file), ctx)[s.kind] && !registered(s.file, s.kind)) problems.push(`${s.file}: holds a ${s.kind} of its own beside its parts (give it its own row)`);
       }
     }
     // FR-911R2: a row stops only the exports it names, so each must be an export of its file
@@ -1513,5 +1632,149 @@ describe('LO-911R3 B2: a member read is named by what it reads, not by the file 
   it('a raw read of the notification rows is named a list', () => {
     const text = "import api from '../../../services/api';\nexport const readBell = () => api.get('/notifications?limit=20');\n";
     expect(classify('screens/coach/home-v11/bellRead.ts', text).list).toBe(true);
+  });
+});
+
+
+// ─── FR-911R3: the other forms of each round-3 class (red at 5006d41e, green at the fix) ─────────────────────────
+// F1 (LS-911R3 B3, LO-911R3 B1): a via row proves only the parts it names; anything else its file holds is named.
+describe('FR-911R3 F1: a via row proves only its parts', () => {
+  const unnamed = (overlay: Record<string, string>) => {
+    const ctx = scanCtx(overlay);
+    return [...ctx.files].flatMap(([file, text]) => {
+      const k = classify(file, text, ctx);
+      return (['composer', 'list'] as Kind[]).filter((x) => k[x] && !registered(file, x)).map((x) => `${x} ${file}`);
+    });
+  };
+  it('a via row beside a second composer in the same file (WorkoutFinishSummary: ShareSheet and a note box) is named', () => {
+    const f = 'screens/client/active-workout/WorkoutFinishSummary.tsx';
+    const text = `${read(f)}\nimport { ReplyComposer as FinishNote } from '../../../components/community';\n` +
+      'export function FinishNoteBox() { return <FinishNote onSend={async () => undefined} />; }\n';
+    expect(unnamed({ [f]: text })).toContain(`composer ${f}`);
+  });
+  it('a via list file (CrossPillarNavigator) that reads member messages itself is named a list', () => {
+    const f = 'screens/coach/cross-pillar/CrossPillarNavigator.tsx';
+    const text = `${read(f)}\nimport fr911r3Api from '../../../services/api';\nexport const peekMessages = () => fr911r3Api.get('/messages?limit=1');\n`;
+    expect(unnamed({ [f]: text })).toContain(`list ${f}`);
+  });
+  it('a via file as it is holds nothing of its own, and still holds its kind through its parts', () => {
+    const f = 'screens/client/ProgressScreen.tsx';
+    expect(classify(f, read(f)).composer).toBe(false);
+    expect(classify(f, read(f), scanCtx({}, { mute: false })).composer).toBe(true);
+  });
+  it('control: a new caller of a via file as it is is not named for its parts', () => {
+    const host = "import React from 'react'; import ProgressScreen from './ProgressScreen'; export default function FR911R3Host() { return <ProgressScreen />; }";
+    expect(classify('screens/client/FR911R3Host.tsx', host).composer).toBe(false);
+  });
+});
+
+// F2 (LS-911R3 B1, LO-911R3 B2): a member read or send is named by what it reaches, under any name.
+describe('FR-911R3 F2: member reads and sends with no sign are named by what they reach', () => {
+  const head = "import api from '../../services/api';\nimport { useQuery } from '@tanstack/react-query';\n";
+  const host = 'screens/client/FR911R3Reads.tsx';
+  it.each([
+    ['a function of the service object, shorthand', "import api from './api';\nasync function latest() { return api.get('/coach/command-center/inbox'); }\nexport const fr911r3PeekApi = { latest };\n"],
+    ['a function of the service object, renamed', "import api from './api';\nconst latestImpl = (id: string) => api.get(`/coach/clients/${encodeURIComponent(id)}/messages?limit=1`);\nexport const fr911r3PeekApi = { latest: latestImpl };\n"],
+    ['a method that reads a client\'s thread by a literal id', "import api from './api';\nexport const fr911r3PeekApi = { latest: () => api.get('/coach/clients/c-9/messages') };\n"],
+  ])('a list read through a service object the scan has not met (%s) is named', (_label, svc) => {
+    const text = "import { useQuery } from '@tanstack/react-query';\nimport { fr911r3PeekApi } from '../../services/fr911r3PeekApi';\n" +
+      "export const useLatest = () => useQuery({ queryKey: ['fr911r3'], queryFn: () => fr911r3PeekApi.latest('c-9') });\n";
+    const ctx = scanCtx({ 'services/fr911r3PeekApi.ts': svc, [host]: text });
+    expect(classify(host, text, ctx).list).toBe(true);
+  });
+  it.each([
+    ['a held GET passed as the queryFn', `${head}const load = api.get;\nexport const useRows = () => useQuery({ queryKey: ['r'], queryFn: () => load('/community/posts') });`, 'list'],
+    ['a destructured GET passed on bare', `${head}const { get } = api;\nexport const useRows = (key: string) => useQuery({ queryKey: [key], queryFn: get as never });`, 'list'],
+    ['the client\'s GET passed on bare', `${head}export const useRows = (url: string) => useQuery({ queryKey: [url], queryFn: () => run(url, api.get) });\ndeclare function run(u: string, f: unknown): Promise<unknown>;`, 'list'],
+    ['a held POST passed to a sender', `${head}const send = api.post;\nexport const sendWith = (go: (f: typeof send) => void) => go(send);`, 'composer'],
+  ] as const)('a bound method passed as a callback (%s) is named', (_label, text, kind) => {
+    expect(classify(host, text)[kind]).toBe(true);
+  });
+  it.each([
+    ['an edit of my message', "export const edit = (id: string, body: string) => api.patch(`/messages/${id}`, { body });"],
+    ['an edit of a post', "export const edit = (id: string, body: string) => api.patch(`/community/posts/${id}`, { body });"],
+    ['a coach\'s nudge to a client', "export const nudge = (id: string, body: string) => api.post(`/coach/clients/${id}/nudges`, { title: 'Hi', body });"],
+  ])('%s is a send', (_label, text) => {
+    expect(classify(host, `${head}${text}`).composer).toBe(true);
+  });
+  it.each([
+    ['a mark as read', "export const mark = () => api.post('/messages/read');"],
+    ['a mute', "export const mute = (on: boolean) => api.put('/messages/mute', { on });"],
+    ['a pin of a coach thread', "export const pin = (id: string) => api.put(`/coach/clients/${id}/messages/inbox-pin`);"],
+    ['my notification settings', "export const prefs = () => api.get('/notifications/preferences');"],
+    ['a held client setting that is no request', "const base = api.defaults;\nexport const where = () => base.baseURL;"],
+  ])('control, not named: %s', (_label, text) => {
+    const k = classify(host, `${head}${text}`);
+    expect(k.composer || k.list).toBe(false);
+  });
+});
+
+// F3 (LS-911R3 B2): code the scan cannot read counts as both, whatever its folder and however it is bound or passed on.
+describe('FR-911R3 F3: unread code fails closed through any barrel and any binding', () => {
+  const host = 'screens/client/FR911R3Mods.tsx';
+  it.each([
+    ['star', "export * from '../FR911R3Inner';", "export * from '../FR911R3Unread';"],
+    ['named', "export { Feed } from '../FR911R3Inner';", "export { Feed } from '../FR911R3Unread';"],
+  ])('a re-export two barrels deep (%s) is named', (_label, outer, inner) => {
+    const text = "import React from 'react'; import { Feed } from '../settings/FR911R3Outer'; export const Host = () => <Feed />;";
+    const ctx = scanCtx({ [host]: text, 'screens/settings/FR911R3Outer/index.ts': outer, 'screens/settings/FR911R3Inner/index.ts': inner });
+    expect(classify(host, text, ctx)).toEqual({ composer: true, list: true });
+    const ns = "import * as P from '../settings/FR911R3Outer'; export const all = () => P;";
+    expect(classify(host, ns, scanCtx({ [host]: ns, 'screens/settings/FR911R3Outer/index.ts': outer, 'screens/settings/FR911R3Inner/index.ts': inner }))).toEqual({ composer: true, list: true });
+  });
+  it.each([
+    ['a static named import', "import { Feed } from '../settings/FR911R3Unread'; export const draw = () => Feed();"],
+    ['a service object from code not read', "import { fr911r3Api } from '../../services/fr911r3Missing'; export const read = () => fr911r3Api.latest();"],
+  ])('%s of code the scan cannot read is named', (_label, text) => {
+    expect(classify(host, text)).toEqual({ composer: true, list: true });
+  });
+  it.each([
+    ['a readable two-deep barrel of nothing', { 'screens/settings/FR911R3Outer/index.ts': "export * from '../FR911R3Inner';", 'screens/settings/FR911R3Inner/index.ts': 'export const Feed = () => null;' }],
+    ['a .js module the bundler reads', { 'screens/settings/FR911R3Outer/index.ts': "export * from '../FR911R3Inner';", 'screens/settings/FR911R3Inner/index.js': 'export function Feed() { return null; }' }],
+  ])('control, not named: %s', (_label, files) => {
+    const text = "import { Feed } from '../settings/FR911R3Outer'; export const draw = () => Feed();";
+    expect(classify(host, text, scanCtx({ [host]: text, ...files }))).toEqual({ composer: false, list: false });
+  });
+});
+
+/**
+ * FR-911R3 (LO-911R3 B2, the class): a sign and the route it reads cannot drift apart. Each COMPOSER_CALLS / LIST_CALLS
+ * sign whose declaration is in src/ must be named by its own body alone (signs and file names off), and each
+ * registered place (not a host part or a via file) by its own reads and sends alone; a sign that is a sign by its name
+ * only says why here.
+ */
+const SIGN_BY_NAME: Record<string, string> = {
+  useMessageOutbox: 'the queue a registered coaching chat sends through; the send is services/messageOutbox (its path is the queued thread\'s)',
+  'messagesApi.sendReply': 'no such method today (services/api messagesApi has send); kept so a new one of that name is named',
+  'messagesModerationApi.send': 'no such method today (api/messagesApi has sendReply); kept so a new one of that name is named',
+  'communityVoiceApi.issueUploadUrl': 'the first hop of a voice note send (a signed upload target); the note itself is communityVoiceApi.create',
+  'communityVoiceApi.uploadBytes': 'the bytes go to signed storage by a bare axios PUT, no route; the note itself is communityVoiceApi.create',
+  'broadcastsApi.create': 'one to many (/coach/broadcasts is no member route; the server picks who gets it); a sign so a broadcast composer is named and reviewed',
+  useCommunityBadge: 'my own unread totals (communityApi.getMe, NOT_CONTENT); a count sign so a new badge reader is named',
+  useVoiceCatchUp: 'refetches the voice feed query it is handed; the read is useVoiceFeed',
+};
+describe('FR-911R3 F2: every sign and every registered place is named by what it reaches', () => {
+  it('each sign\'s own body reaches a member route (or SIGN_BY_NAME says why it is a sign by name)', () => {
+    const ctx = scanCtx({}, { byName: false });
+    const problems: string[] = [];
+    for (const sign of [...COMPOSER_CALLS, ...LIST_CALLS]) {
+      const kind: Kind = COMPOSER_CALLS.has(sign) ? 'composer' : 'list';
+      const decls = [...ctx.files.keys()].filter((f) => infoOf(ctx, f).decls.has(sign));
+      const reached = decls.some((f) => nodeKinds(ctx, f, infoOf(ctx, f).decls.get(sign) as ts.Node)[kind]);
+      if (!reached && !SIGN_BY_NAME[sign]) problems.push(`${kind} ${sign}: ${decls.length ? `its body (${decls.join(', ')}) reaches no member route` : 'no declaration in src/'}`);
+      if (reached && SIGN_BY_NAME[sign]) problems.push(`${sign}: reaches a member route, so its SIGN_BY_NAME row is stale`);
+    }
+    for (const sign of Object.keys(SIGN_BY_NAME)) if (!COMPOSER_CALLS.has(sign) && !LIST_CALLS.has(sign)) problems.push(`${sign}: SIGN_BY_NAME row of no sign`);
+    expect(problems).toEqual([]);
+  });
+  it('each registered place is named by its own reads and sends, not by a sign or its file name', () => {
+    const ctx = scanCtx({}, { byName: false, byPlace: false });
+    const missed = REGISTRY.filter((s) => s.proof.by !== 'host' && s.proof.by !== 'via' && !classify(s.file, read(s.file), ctx)[s.kind]);
+    expect(missed.map((s) => `${s.kind} ${s.file}`)).toEqual([]);
+  });
+  it('control: with signs and file names off, a plain screen and a settings read are not named', () => {
+    const ctx = scanCtx({}, { byName: false, byPlace: false });
+    const text = "import api from '../../services/api';\nexport const read = () => api.get('/notifications/preferences');\n";
+    expect(classify('screens/client/FR911R3Plain.tsx', text, ctx)).toEqual({ composer: false, list: false });
   });
 });
