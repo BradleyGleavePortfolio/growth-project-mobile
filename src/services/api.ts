@@ -1093,21 +1093,31 @@ export interface WaterEntry {
 
 export const waterApi = {
   log: (data: { amount_ml: number; date?: string }) =>
-    waterKeys.send(`${data.date ?? ''}|${data.amount_ml}`, (client_uuid) =>
-      api.post<WaterEntry>('/nutrition/water', { ...data, client_uuid }),
-    ),
-  // Once a day's water is read again the screen shows what the server holds,
-  // so the next glass that day is a new save with a new key.
+    api.post<WaterEntry>('/nutrition/water', data),
   getDaily: (date: string) =>
-    api.get<{ total_ml: number; logs?: WaterEntry[] }>(`/nutrition/water?date=${date}`).then((res) => {
-      waterKeys.forget((save) => save.startsWith(`${date}|`));
-      return res;
-    }),
+    api.get<{ total_ml: number; logs?: WaterEntry[] }>(`/nutrition/water?date=${date}`),
   getWeekly: (startDate: string) =>
     api.get(`/nutrition/water/weekly?start_date=${startDate}`),
   deleteEntry: (id: string) =>
     api.delete(`/nutrition/water/${encodeURIComponent(id)}`),
 };
+
+// WATER-WEIGHT-KEYS-M: each glass sends its key in the body as client_uuid, the same key on every resend of that
+// glass (./saveKeys.ts). Added beside waterApi, not inside it, so the food lane's change to log above merges as is.
+const sendWater = waterApi.log;
+const readWaterDay = waterApi.getDaily;
+waterApi.log = (data, ...rest) =>
+  waterKeys.send(`${data.date ?? ''}|${data.amount_ml}`, (client_uuid) => {
+    const body = { ...data, client_uuid };
+    return sendWater(body, ...rest);
+  });
+// Once a day's water is read again the screen shows what the server holds, so the next glass that day is a new
+// save with a new key.
+waterApi.getDaily = (date) =>
+  readWaterDay(date).then((res) => {
+    waterKeys.forget((save) => save.startsWith(`${date}|`));
+    return res;
+  });
 
 export const lessonsApi = {
   getAll: () => api.get('/lessons'),
