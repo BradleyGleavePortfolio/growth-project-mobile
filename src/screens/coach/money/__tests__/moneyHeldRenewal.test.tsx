@@ -13,7 +13,7 @@
  * A real failed payment still reads failed everywhere.
  */
 import React from "react";
-import { StyleSheet } from "react-native";
+import { StyleSheet, type TextStyle } from "react-native";
 import { fireEvent, render, within } from "@testing-library/react-native";
 
 const mockGet = jest.fn();
@@ -282,8 +282,9 @@ describe("the charge screen", () => {
   });
 });
 
-function labelColor(node: { props: { style: unknown } }) {
-  return StyleSheet.flatten(node.props.style as never)?.color;
+function labelColor(node: { props: Record<string, unknown> }): unknown {
+  const flat = StyleSheet.flatten(node.props.style as TextStyle | TextStyle[]);
+  return flat?.color;
 }
 
 describe("the Money page's recent charges", () => {

@@ -113,6 +113,12 @@ export interface MoneyCharge {
   createdAt: string;
   /** SWITCH-TELL (b#1132): when this client moved to another coach after this charge; null when they did not. */
   movedAwayAt: string | null;
+  /**
+   * HELD-RENEWAL-M (b#1202): "coach_account" when TGP holds this renewal
+   * because the coach's Stripe account cannot take payments; null otherwise,
+   * and for a missing or unknown value (never guessed from anything else).
+   */
+  waitingOn: "coach_account" | null;
 }
 
 export interface MoneyChargeBreakdown {
@@ -473,7 +479,20 @@ function readCharge(r: Reader, raw: unknown, at: string): MoneyCharge {
         : r.cents(c.charged_back_cents, `${at}.charged_back_cents`),
     createdAt: r.date(c.created_at, `${at}.created_at`),
     movedAwayAt: r.dateOrNull(c.moved_away_at, `${at}.moved_away_at`),
+    waitingOn: c.waiting_on === "coach_account" ? "coach_account" : null,
   };
+}
+
+/**
+ * HELD-RENEWAL-M: TGP is holding this renewal until the coach's Stripe
+ * account can take payments again. Only the server's waiting_on says so, and
+ * only for a charge not paid yet or not taken (pending or failed).
+ */
+export function chargeHeld(c: MoneyCharge): boolean {
+  return (
+    c.waitingOn === "coach_account" &&
+    (c.state === "pending" || c.state === "failed")
+  );
 }
 
 /** Exported for tests. */
@@ -751,8 +770,12 @@ export const coachMoneyApi = {
     const nc = d.next_cursor;
     if (!(nc === null || nc === undefined || typeof nc === "string"))
       r.fail("next_cursor");
+    const charges = d.charges.map((c, i) => readCharge(r, c, `charges[${i}]`));
     return {
-      charges: d.charges.map((c, i) => readCharge(r, c, `charges[${i}]`)),
+      // HELD-RENEWAL-M: a renewal TGP holds is not a failed payment, so the
+      // Failed filter never lists one, whatever state the server sends.
+      charges:
+        filter === "failed" ? charges.filter((c) => !chargeHeld(c)) : charges,
       nextCursor: strOrNull(nc),
     };
   },
