@@ -106,6 +106,21 @@ it('says when a featured coach is paused (the refusal the Settings path used to 
   ));
 });
 
+// 1TO1-FU-M (#185-S1 op 1, LS-1TO1R3 C1): Settings reads the same refused join the same way: today's 404
+// PACKAGE_NOT_FOUND and the not-accepting codes say the coach is not taking new clients, never paused.
+it.each<[string, number, Record<string, unknown>]>([
+  ['today: 404 PACKAGE_NOT_FOUND', 404, { error: 'PACKAGE_NOT_FOUND', message: 'Package not available' }],
+  ['coach_not_accepting_clients', 409, { code: 'coach_not_accepting_clients' }],
+])('a refused join (%s) says the coach is not taking new clients', async (_name, status, data) => {
+  mockRedeem.mockRejectedValue({ response: { status, data } });
+  const ui = await renderAt(24);
+  await fireEvent.changeText(ui.getByLabelText('Coach code'), 'GP-BRADLEY');
+  await join(ui);
+  await waitFor(() => expect(ui.getByTestId('add-coach-code-error')).toHaveTextContent(
+    'This coach is not taking new clients right now. Enter another coach code, or check back in a few days.',
+  ));
+});
+
 describe('a pasted invite link', () => {
   it.each([
     ['https://app.trygrowthproject.com/join/GP-LEE', 'GP-LEE'],

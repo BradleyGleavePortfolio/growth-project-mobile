@@ -1,7 +1,9 @@
 /**
  * FR-1TO1R2 (agent 185) class-first test. Class: every buyer surface that can start a purchase
- * names the coach's 1:1 coaching first and does not sell while that coach is unnamed
- * (ClientPackagesScreen's rule, LS-1TO1 B1). The plan sheet is one component mounted by five
+ * names the coach's 1:1 coaching first. 1TO1-FU-M (#186-P4 op 1): on the plan sheet, when only the
+ * coach's name fails to load there is no error; the line reads "1:1 coaching with your coach" and the
+ * plan can still be chosen. ClientPackagesScreen (the Style C rows, out of this job) keeps its own rule
+ * (LS-1TO1 B1: no sale until the coach is named). The plan sheet is one component mounted by five
  * surfaces; each mount's props x both platforms x every coach-name read outcome is a row.
  * The other purchase starters (usePackagePurchase callers) are listed with the rule they meet.
  */
@@ -68,16 +70,17 @@ it.each(ROWS)('%s on %s, coach name %s', async (_s, os, _r, props, coach, name) 
   const shown = props.house?.name ?? name;
   expect(r.getByTestId('package-sheet-one-to-one').props.children).toBe(`1:1 coaching with ${shown ?? 'your coach'}`);
   await fireEvent.press(r.getByTestId('package-card-p-1'));
-  expect(r.getByTestId('select-plan-btn').props.accessibilityState.disabled).toBe(!shown);
-  expect(!!r.queryByTestId('package-sheet-coach-retry')).toBe(!shown);
+  expect(r.getByTestId('select-plan-btn').props.accessibilityState.disabled).toBe(false);
+  expect(r.queryByTestId('package-sheet-coach-retry')).toBeNull();
+  expect(r.queryByText(/could not load/)).toBeNull();
   await fireEvent.press(r.getByTestId('select-plan-btn'));
-  expect(mockStart).toHaveBeenCalledTimes(shown ? 1 : 0);
+  expect(mockStart).toHaveBeenCalledTimes(1);
 });
 
 // Every other purchase starter, and how it meets the rule (the server names the coach or refuses).
 const SRC = join(__dirname, '..', '..');
 const STARTERS: Array<[string, RegExp, string]> = [
-  ['components/PackageSelectionSheet.tsx', /const ctaDisabled = [^;]*!coachName;/, 'rows above'],
+  ['components/PackageSelectionSheet.tsx', /const ctaDisabled = !selected \|\| busy;/, 'rows above: the coach, or your coach when only the name fails (#186-P4 op 1)'],
   ['screens/client/ClientPackagesScreen.tsx', /const blocked = [^;]*!coachName;/, 'Buy not enabled until the coach is named'],
   ['screens/client/PackageCheckoutScreen.tsx', /oneToOneCoachingLabel\(pkg\?\.coach\?\.displayName\)/, 'the storefront read names the coach or refuses (b#1183)'],
   ['screens/join/JoinPackageScreen.tsx', /oneToOneCoachingLabel\(join\.coach\.first_name\)/, 'the join names the coach or refuses (b#1183 planJoin)'],

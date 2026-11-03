@@ -64,3 +64,22 @@ describe('pairWithCoach refusal kinds', () => {
     expect(await kindFor(503, { code: 'code_revoked' })).toBe('server');
   });
 });
+
+// 1TO1-FU-M (#185-S1 op 1, LS-1TO1R3 C1): every answer the server gives for a coach who cannot take a new
+// client (backend main today: 404 PACKAGE_NOT_FOUND; after 1TO1-FU-BE: the not-accepting code) reads as
+// coach_unavailable, never "code not recognized". A 404 with no such answer stays invite_invalid.
+describe('a refused join to a coach who cannot take new clients', () => {
+  it.each<[string, number, Record<string, unknown>]>([
+    ['today: 404 PACKAGE_NOT_FOUND in error', 404, { error: 'PACKAGE_NOT_FOUND', message: 'Package not available' }],
+    ['today: 404 PACKAGE_NOT_FOUND in code', 404, { code: 'PACKAGE_NOT_FOUND' }],
+    ['coach_not_accepting_clients (409)', 409, { code: 'coach_not_accepting_clients' }],
+    ['coach_not_accepting_clients (404)', 404, { code: 'coach_not_accepting_clients' }],
+    ['coach_not_accepting (409)', 409, { code: 'coach_not_accepting' }],
+  ])('%s -> coach_unavailable', async (_name, status, data) => {
+    expect(await kindFor(status, data)).toBe('coach_unavailable');
+  });
+
+  it('a 404 with no such answer stays invite_invalid', async () => {
+    expect(await kindFor(404, { error: 'Not Found' })).toBe('invite_invalid');
+  });
+});
