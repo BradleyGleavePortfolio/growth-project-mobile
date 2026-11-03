@@ -26,6 +26,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authApi } from '../services/api';
 import { patchUserCache } from './userCache';
 import { presentJoinFrom } from './joinPackage';
+import { isCoachNotAcceptingRefusal } from './coachNotAccepting';
+import { inviteAttachErrorMessage } from './inviteAttachOutcome';
 import { logger } from '../utils/logger';
 
 const KEY = 'pending_invite_code';
@@ -152,6 +154,10 @@ export async function claimPendingInviteCode(
     // 4xx → the code is permanently bad; clear so the banner stops nagging.
     if (status >= 400 && status < 500) {
       await clearPendingInviteCode();
+    }
+    // 1TO1-FU-M: a coach who cannot take you says so with the invite-code words, never the server text.
+    if (isCoachNotAcceptingRefusal(err)) {
+      return { ok: false, reason: 'coach_not_accepting_clients', message: inviteAttachErrorMessage('coach_not_accepting_clients') };
     }
     return {
       ok: false,
