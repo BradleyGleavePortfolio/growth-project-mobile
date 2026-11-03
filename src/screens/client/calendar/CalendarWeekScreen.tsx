@@ -84,11 +84,13 @@ function CalendarWeekScreen({ navigation, coachless = false }: Props & { coachle
     queryFn: async () => (await checkInsApi.list({ from, to, limit: month ? 31 : 7 })).data,
   });
   // Month view: page past sessions back until the month's first day is covered.
+  // A failed page waits for Try again or pull to refresh (LS-917R4 B4): their
+  // refetch clears the error, then paging resumes.
   const oldestPast = past.data?.pages.at(-1)?.at(-1)?.start_at;
   useEffect(() => {
-    if (month && !coachless && past.hasNextPage && !past.isFetchingNextPage
+    if (month && !coachless && past.hasNextPage && !past.isFetchingNextPage && !past.isFetchNextPageError
       && (!oldestPast || bucketDateLocal(new Date(oldestPast)) >= month)) void past.fetchNextPage();
-  }, [month, coachless, oldestPast, past.hasNextPage, past.isFetchingNextPage, past]);
+  }, [month, coachless, oldestPast, past.hasNextPage, past.isFetchingNextPage, past.isFetchNextPageError, past]);
   const network = useNetworkStatus();
   const own = [workouts, checkIns, logs];
   const queries = coachless ? own : [coaches, sessions, past, ...own];
