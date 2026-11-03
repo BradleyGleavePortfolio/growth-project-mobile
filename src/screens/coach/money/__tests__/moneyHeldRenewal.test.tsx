@@ -332,13 +332,14 @@ describe("the Charges list and its Failed filter", () => {
         },
       }),
     );
-    const nav = { navigate: jest.fn() } as never;
-    return render(
+    const nav = { navigate: jest.fn() };
+    const r = await render(
       <MoneyChargesScreen
-        navigation={nav}
+        navigation={nav as never}
         route={{ key: "k", name: "CoachMoneyCharges", params: {} } as never}
       />,
     );
+    return Object.assign(r, { nav });
   }
 
   it("All shows a held row as held, a real failed row as failed", async () => {
@@ -353,6 +354,11 @@ describe("the Charges list and its Failed filter", () => {
     expect(within(held).queryByText(/failed/i)).toBeNull();
     const failed = r.getByTestId("money-charges-row-ch_fail");
     expect(within(failed).getByText("Payment failed")).toBeTruthy();
+    // A held row still opens its charge (no dead end).
+    await fireEvent.press(held);
+    expect(r.nav.navigate).toHaveBeenCalledWith("CoachMoneyCharge", {
+      chargeId: "ch_held",
+    });
   });
 
   it("Failed leaves out a row the server marks held and keeps every real failed payment", async () => {
