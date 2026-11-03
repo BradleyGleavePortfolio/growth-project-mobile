@@ -242,6 +242,8 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook, onMonthCh
   const checkOn = (day: string) => data.checkIns.some((row) => row.date.slice(0, 10) === day);
   // Saved workouts read for this day (LS-917R4 B3): else it is still loading, never a rest day.
   const logsKnown = (day: string) => !data.logsAfter || day > data.logsAfter;
+  // C4 Month: a missed session (no_show) is a grey ring, any other a camel ring.
+  const sessionsOn = (day: string) => sessions.filter((s) => sessionDay(s) === day);
   const dayLabel = (day: string) => formatDayLabel(dayDate(day));
   const ink = { color: sc.textPrimary };
   // Use primary ink for small supporting text: never low-contrast stone on tan.
@@ -318,7 +320,7 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook, onMonthCh
       <Ionicons name={icon} size={24} color={sc.textOnAccent} />
     </Pressable>
   );
-  // C4 Style C month: ring = session, dot = workout, square = check-in; the chosen day is filled forest.
+  // C4 Style C month: ring = session (grey when missed), dot = workout, square = check-in; the chosen day is filled forest.
   const monthView = month ? (
     <View testID="calendar-month">
       <View style={styles.weekRow} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
@@ -330,14 +332,16 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook, onMonthCh
         {monthGrid(month).map((day) => {
           const inMonth = day.startsWith(month.slice(0, 7));
           const on = day === selected;
-          const session = sessions.some((s) => sessionDay(s) === day);
+          const session = sessionsOn(day).some((s) => s.status !== 'no_show');
+          const missed = sessionsOn(day).some((s) => s.status === 'no_show');
           return (
             <Pressable key={day} accessibilityRole="button" accessibilityState={{ selected: on }}
-              accessibilityLabel={[dayLabel(day), day === today && c['C4-S-82'], session && c['C4-S-83'],
+              accessibilityLabel={[dayLabel(day), day === today && c['C4-S-82'], session && c['C4-S-83'], missed && c['917-W11'],
                 workoutsOn(day).length > 0 && c['C4-S-84'], checkOn(day) && c['C4-S-85']].filter(Boolean).join(', ')} testID={`month-day-${day}`}
               onPress={() => { void HapticService.selection(); setSelected(day); }} style={styles.cell}>
+              {/* A day with both keeps the camel ring (the session still to come or held); its label says both. */}
               <View style={[styles.cellCircle, { minWidth: 40 * fontScale, minHeight: 40 * fontScale, borderRadius: 20 * fontScale,
-                borderColor: session ? colors.camel : 'transparent', backgroundColor: on ? sc.accent : 'transparent' }]}>
+                borderColor: session ? colors.camel : missed ? sc.data.missed : 'transparent', backgroundColor: on ? sc.accent : 'transparent' }]}>
                 <Text style={[styles.cellNumber, { color: on ? sc.textOnAccent : inMonth ? sc.textPrimary : sc.textMuted },
                   day === today && !on ? { textDecorationLine: 'underline', textDecorationColor: colors.camel } : null]}>{dayDate(day).getDate()}</Text>
               </View>
@@ -353,6 +357,7 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook, onMonthCh
         <View style={[styles.markRing, styles.legendMark, { borderColor: colors.camel }]} /><Text style={body}>{c['C4-S-83']}</Text>
         <View style={[styles.markDot, styles.legendMark, { backgroundColor: sc.accent }]} /><Text style={body}>{c['C4-S-84']}</Text>
         <View style={[styles.markSquare, styles.legendMark, { backgroundColor: colors.camel }]} /><Text style={body}>{c['C4-S-85']}</Text>
+        <View style={[styles.markRing, styles.legendMark, { borderColor: sc.data.missed }]} /><Text style={body}>{c['917-W11']}</Text>
       </View>
     </View>
   ) : null;
