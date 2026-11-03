@@ -156,6 +156,13 @@ function isWritten(d: Decl): boolean {
   return written;
 }
 
+/** The takeLogDay helpers being followed now (a helper that calls itself fails, never loops). */
+const resolving = new Set<ts.Node>();
+function insideNestedFunction(n: ts.Node, outer: ts.Node): boolean {
+  for (let p = n.parent; p && p !== outer; p = p.parent) if (ts.isFunctionLike(p)) return true;
+  return false;
+}
+
 /** FR-916R2 F2: a call of the day rule itself, not a stand-in of the same name. */
 function isDayRule(c: ts.CallExpression): boolean {
   if (!ts.isIdentifier(c.expression) || !DAY_RULE.includes(c.expression.text)) return false;
@@ -167,9 +174,25 @@ function isDayRule(c: ts.CallExpression): boolean {
   }
   // takeLogDay: LogScreen's own, a const arrow that returns what dayForNewLog gave it.
   if (!d || !ts.isVariableDeclaration(d) || isWritten(d) || !d.initializer || !ts.isArrowFunction(d.initializer)) return false;
-  let rule = false;
-  eachCall(d.initializer, (inner) => { if (isDayRule(inner)) rule = true; });
-  return rule;
+  // FR-916R3 F1: every day the helper can return is the rule's result, not merely a rule call somewhere in
+  // its body. Each return (nested functions aside) must resolve to the rule; a bare `return;`, falling off
+  // the end, or a return the guard cannot follow (a ref, another helper, the helper calling itself) fails.
+  const fn = d.initializer;
+  if (resolving.has(fn)) return false;
+  resolving.add(fn);
+  try {
+    if (!ts.isBlock(fn.body)) return dayFrom(fn.body, [], false) === null;
+    const last = fn.body.statements[fn.body.statements.length - 1];
+    if (!last || !ts.isReturnStatement(last) || !last.expression) return false;
+    let bare = false;
+    eachNode(fn.body, (n) => { if (ts.isReturnStatement(n) && !n.expression && !insideNestedFunction(n, fn)) bare = true; });
+    if (bare) return false;
+    const found: Array<string | null | 'absent'> = [];
+    eachReturn(fn.body, (r) => found.push(dayFrom(r, [], false)));
+    return found.length > 0 && found.every((f) => f === null);
+  } finally {
+    resolving.delete(fn);
+  }
 }
 
 /**
