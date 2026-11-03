@@ -53,7 +53,7 @@ async function joinAndReadLine(): Promise<string> {
       debounceMs={0}
     />,
   );
-  await waitFor(() => expect(screen.getByText('Alex Rivera')).toBeTruthy());
+  await waitFor(() => expect(screen.getByTestId('coach-code-valid')).toBeTruthy());
   await fireEvent.press(screen.getByTestId('coach-code-join'));
   await waitFor(() => expect(screen.getByTestId('coach-code-refusal')).toBeTruthy());
   return String(screen.getByTestId('coach-code-refusal').props.children);
