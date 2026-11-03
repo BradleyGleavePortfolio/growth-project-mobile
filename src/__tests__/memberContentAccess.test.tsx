@@ -1376,3 +1376,142 @@ describe('FR-911R2 F3: a new read of my coach\'s nudges is named a list', () => 
     expect(classify('screens/client/FR911R2Nudges.tsx', text).list).toBe(true);
   });
 });
+
+describe('LS-911R3 B1: raw wire origins and member URLs cannot disappear', () => {
+  const host = 'screens/client/SolAccessProbe.tsx';
+  const head = "import api from '../../services/api';\n";
+  it.each([
+    ['extracted raw GET', `${head}const load = api.get; export const read = (url: string) => load(url);`, 'list'],
+    ['destructured raw GET', `${head}const { get: load } = api; export const read = (url: string) => load(url);`, 'list'],
+    ['extracted raw POST', `${head}const send = api.post; export const write = (url: string, body: unknown) => send(url, body);`, 'composer'],
+    ['literal coaching member URL', `${head}export const read = () => api.get('/coach/clients/client-1/messages');`, 'list'],
+    ['quoted request config', `${head}export const send = () => api.request({ 'method': 'post', 'url': '/community/posts', data: { body: 'hello' } });`, 'composer'],
+  ] as const)('%s cannot silently disappear', (_label, text, kind) => {
+    expect(classify(host, text)[kind]).toBe(true);
+  });
+  it.each([
+    ['literal wire read', `${head}export const read = () => api.get('/community/posts');`, 'list'],
+    ['HEAD with unread URL', `${head}export const read = (url: string) => api.head(url);`, 'list'],
+  ] as const)('positive control %s', (_label, text, kind) => {
+    expect(classify(host, text)[kind]).toBe(true);
+  });
+  it.each(['delete', 'options'])('%s with unread URL is not a content read', (verb) => {
+    const kinds = classify(host, `${head}export const call = (url: string) => api.${verb}(url);`);
+    expect(kinds).toEqual({ composer: false, list: false });
+  });
+});
+
+describe('LS-911R3 B2: unread code modules fail closed in every binding form', () => {
+  const host = 'screens/client/SolModuleProbe.tsx';
+  it.each([
+    ['require destructuring', "const { Feed } = require('../settings/SolUnreadModule'); export const draw = () => Feed();"],
+    ['import then destructuring', "export const load = () => import('../settings/SolUnreadModule').then(({ Feed }) => Feed());"],
+    ['lazy default', "import React from 'react'; const Feed = React.lazy(() => import('../settings/SolUnreadModule')); export const Host = () => <Feed />;"],
+    ['require property', "const Feed = require('../settings/SolUnreadModule').Feed; export const draw = () => Feed();"],
+    ['require literal element', "const Feed = require('../settings/SolUnreadModule')['Feed']; export const draw = () => Feed();"],
+    ['await import named property', "export const load = async () => { const { Feed } = await import('../settings/SolUnreadModule'); return Feed(); };"],
+    ['computed template control', "export const load = (name: string) => import(`../settings/${name}`);"],
+    ['namespace returned control', "export const load = () => { const mod = require('../settings/SolUnreadModule'); return mod; };"],
+    ['plain import control', "export const load = () => import('../settings/SolUnreadModule');"],
+  ])('%s cannot silently disappear', (_label, text) => {
+    expect(classify(host, text)).toEqual({ composer: true, list: true });
+  });
+  it.each([
+    ['star', "export * from '../SolUnreadModule';"],
+    ['named', "export { Feed } from '../SolUnreadModule';"],
+  ])('unread %s re-export through a readable index cannot disappear', (_label, barrel) => {
+    const text = "import * as Parts from '../settings/SolProbeBarrel'; export const load = () => Parts;";
+    const ctx = scanCtx({ [host]: text, 'screens/settings/SolProbeBarrel/index.ts': barrel });
+    expect(classify(host, text, ctx)).toEqual({ composer: true, list: true });
+  });
+  it('non-code asset control is still skipped', () => {
+    expect(classify(host, "export const image = require('../settings/missing.png');")).toEqual({ composer: false, list: false });
+  });
+});
+
+describe('LS-911R3 B3: a via row cannot prove newly added independent content', () => {
+  it('an independent composer added beside the named gap part still names its new caller', () => {
+    const file = 'screens/client/ProgressScreen.tsx';
+    const host = 'screens/client/SolProgressHost.tsx';
+    const original = read(file).replace('export default function ProgressScreen(', 'function ExistingProgressScreen(');
+    const changed = `import api from '../../services/api';
+import { ComposerInput } from '../../components/community';
+${original}
+export default function ProgressScreen(props: ProgressProps) {
+  return <><ExistingProgressScreen {...props} /><ComposerInput
+    placeholder="Reply" maxLength={2000}
+    onSubmit={async (body) => { await api.post('/community/workspaces/ws/posts', { body }); }}
+  /></>;
+}`;
+    const caller = "import React from 'react'; import ProgressScreen from './ProgressScreen'; export default function SolProgressHost() { return <ProgressScreen />; }";
+    const ctx = scanCtx({ [file]: changed, [host]: caller });
+    const via = REGISTRY.find((s) => s.file === file && s.kind === 'composer');
+    expect(via?.proof.by).toBe('via');
+    if (!via || via.proof.by !== 'via') throw new Error('expected the reviewed via row');
+    for (const part of via.proof.parts) {
+      expect(REGISTRY.some((s) => s.file === part && s.kind === 'composer' && (s.proof.by === 'gap' || s.proof.by === 'via'))).toBe(true);
+      expect(importsOf(ctx, file).has(part)).toBe(true);
+    }
+    expect(classify(file, changed, ctx).composer).toBe(true);
+    expect(classify(host, caller, ctx).composer).toBe(true);
+  });
+});
+
+// ─── LO-911R3 B1 (B-TEST, review only): a via row must not register the file's own composer or list ─────────────
+// FR-911R2 gave the files that draw a gap part a via row (:277-293). `registered()` is per file and kind, so that row
+// registers the whole file: a composer or list the file draws itself (not through the part) passes the inventory
+// unnamed. At 06d2faeb these files had no row, so the same edit was named; this round made it silent. Smallest fix: a
+// via row registers only what the file holds through its parts (classify the file with its parts read as empty: any
+// kind still held is the file's own and needs its own row), and the via proof check asserts that on src as it is.
+describe('LO-911R3 B1: a via row does not hide what the file draws itself', () => {
+  const unnamedWith = (overlay: Record<string, string>) => {
+    const ctx = scanCtx(overlay);
+    const out: string[] = [];
+    for (const [file, text] of ctx.files) {
+      const k = classify(file, text, ctx);
+      (['composer', 'list'] as Kind[]).forEach((x) => { if (k[x] && !registered(file, x)) out.push(`${x} ${file}`); });
+    }
+    return out;
+  };
+  it('ProgressScreen with its own coach note box (a ComposerInput) is named a composer', () => {
+    const f = 'screens/client/ProgressScreen.tsx';
+    const text = `${read(f)}\nimport { ComposerInput as CoachNoteInput } from '../../components/community';\n` +
+      'export function CoachNoteBox() { return <CoachNoteInput placeholder="Note" maxLength={500} onSubmit={async () => undefined} />; }\n';
+    expect(classify(f, text).composer).toBe(true);
+    expect(unnamedWith({ [f]: text })).toContain(`composer ${f}`);
+  });
+  it('CommandCenterScreen with its own space feed (usePosts) is named a list', () => {
+    const f = 'screens/coach/command-center/CommandCenterScreen.tsx';
+    const text = `${read(f)}\nimport { usePosts as useSpacePosts } from '../../../hooks/useCommunity';\n` +
+      "export function SpacePeek() { const q = useSpacePosts('ws-1'); return null; }\n";
+    expect(classify(f, text).list).toBe(true);
+    expect(unnamedWith({ [f]: text })).toContain(`list ${f}`);
+  });
+});
+
+// ─── LO-911R3 B2 (B-TEST, review only): member reads named only by a file's name, never by the read ──────────────
+// commandCenterApi.getInbox (services/commandCenterApi.ts:351, GET /coach/command-center/inbox) returns each client's
+// last_message_preview, the read behind the InboxScreen KNOWN GAP row. It is no LIST_CALLS sign, commandCenterApi does
+// not match MEMBER_API_NAME, and the path is not in MEMBER_PATH (:400), so InboxScreen is named only because its file
+// name holds "Inbox" (MEMBER_PLACE). The same holds for a raw read of /notifications, whose rows the REGISTRY says can
+// quote a message (NotificationCenterScreen row): fetchNotifications is a sign by name, its path is not. LO-911R2 B2 was
+// this class (a member read with no sign); the fix added the nudges sign only. Smallest fix: commandCenterApi.getInbox
+// as a LIST_CALLS sign, /coach/command-center/inbox and /notifications in MEMBER_PATH, and a check that the wire path of
+// every LIST_CALLS / COMPOSER_CALLS sign matches MEMBER_PATH (so a sign and its path cannot drift apart again).
+describe('LO-911R3 B2: a member read is named by what it reads, not by the file name', () => {
+  it('a coach Home card drawing commandCenterApi.getInbox previews is named a list', () => {
+    const text = "import React from 'react';\nimport { Text } from 'react-native';\nimport { useQuery } from '@tanstack/react-query';\n" +
+      "import { commandCenterApi } from '../../../services/commandCenterApi';\nexport default function LatestFromClients() {\n" +
+      "  const q = useQuery({ queryKey: ['cc', 'inbox'], queryFn: () => commandCenterApi.getInbox() });\n" +
+      '  return <>{q.data?.data.threads.map((t) => <Text key={t.client_id}>{t.last_message_preview}</Text>)}</>;\n}\n';
+    expect(classify('screens/coach/home-v11/LatestFromClients.tsx', text).list).toBe(true);
+  });
+  it('a raw read of the command center inbox is named a list', () => {
+    const text = "import api from '../../../services/api';\nexport const readLatest = () => api.get('/coach/command-center/inbox');\n";
+    expect(classify('screens/coach/home-v11/latestRead.ts', text).list).toBe(true);
+  });
+  it('a raw read of the notification rows is named a list', () => {
+    const text = "import api from '../../../services/api';\nexport const readBell = () => api.get('/notifications?limit=20');\n";
+    expect(classify('screens/coach/home-v11/bellRead.ts', text).list).toBe(true);
+  });
+});
