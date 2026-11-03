@@ -41,6 +41,12 @@ export type CalendarWeekData = {
   checkIns: CheckIn[];
   /** Workouts the client logged (Quick Workout, own routines, coach plans). */
   logs?: ApiWorkoutSession[];
+  /**
+   * Saved workouts are complete only for days after this one (the oldest row
+   * read may have more on its day); absent means every saved workout is read.
+   * A day on or before it is never called a rest day (LS-917R4 B3).
+   */
+  logsAfter?: string;
   descriptions?: Record<string, string>;
   loading: boolean;
   failed: boolean;
@@ -72,7 +78,10 @@ function CalendarWeekScreen({ navigation, coachless = false }: Props & { coachle
   const sessions = useMySessions(50, !coachless);
   const past = usePastSessions(!coachless);
   const workouts = useMyWorkoutAssignments();
-  const logs = useWorkouts(50); // GET /workouts, newest first: covers any week of training.
+  // GET /workouts, newest first. 50 covers a week of training; an earlier
+  // month grows the same read's limit until it covers the month (LS-917R4 B3).
+  const [logLimit, setLogLimit] = useState(50);
+  const logs = useWorkouts(logLimit);
   const coachList = coachless ? [] : coaches.data ?? [];
   const types = useBookableTypes(coachList[0]?.coach_id);
   // Month view asks for that month's check-ins only (one a day at most).
@@ -91,6 +100,19 @@ function CalendarWeekScreen({ navigation, coachless = false }: Props & { coachle
     if (month && !coachless && past.hasNextPage && !past.isFetchingNextPage && !past.isFetchNextPageError
       && (!oldestPast || bucketDateLocal(new Date(oldestPast)) >= month)) void past.fetchNextPage();
   }, [month, coachless, oldestPast, past.hasNextPage, past.isFetchingNextPage, past.isFetchNextPageError, past]);
+  // Saved workouts: the rows read are complete after their oldest day, or for
+  // every day when the server sent fewer than asked. Until the first day shown
+  // (the grid's first Monday, or this week's) is covered, ask again with a
+  // doubled limit; a failed read stops here and shows Try again.
+  const logRows = logs.data;
+  const logsReal = !!logRows && !logs.isPlaceholderData;
+  const logsAll = logsReal && logRows.length < logLimit;
+  const oldestLog = logRows?.reduce<string | undefined>((min, l) => (!min || workoutDay(l) < min ? workoutDay(l) : min), undefined);
+  const firstShown = month ? monthGrid(month)[0] : getLocalWeekStart();
+  const logsCover = logsAll || (!!oldestLog && oldestLog < firstShown);
+  useEffect(() => {
+    if (!logsCover && logsReal && !logs.isFetching && !logs.isError) setLogLimit((n) => n * 2);
+  }, [logsCover, logsReal, logs.isFetching, logs.isError]);
   const network = useNetworkStatus();
   const own = [workouts, checkIns, logs];
   const queries = coachless ? own : [coaches, sessions, past, ...own];
@@ -103,9 +125,11 @@ function CalendarWeekScreen({ navigation, coachless = false }: Props & { coachle
     sessions: coachless ? [] : [...(sessions.data ?? []), ...(past.data?.pages.flat() ?? [])],
     workouts: workouts.data ?? [],
     checkIns: checkIns.data ?? [],
-    logs: logs.data ?? [],
+    logs: logRows ?? [],
+    logsAfter: logsAll ? undefined : oldestLog ?? '9999-12-31',
     descriptions: Object.fromEntries((types.data ?? []).filter((t) => t.description).map((t) => [t.id, t.description!])),
-    loading: queries.some((q) => q.isPending && q.fetchStatus === 'fetching'),
+    loading: queries.some((q) => q.isPending && q.fetchStatus === 'fetching')
+      || (!logsCover && !logs.isError && logs.fetchStatus !== 'paused'),
     failed: queries.some((q) => q.isError),
     refreshing: queries.some((q) => q.isRefetching),
     offline: !network.isOnline || network.isInternetReachable === false,
@@ -216,6 +240,8 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook, onMonthCh
     })),
   ];
   const checkOn = (day: string) => data.checkIns.some((row) => row.date.slice(0, 10) === day);
+  // Saved workouts read for this day (LS-917R4 B3): else it is still loading, never a rest day.
+  const logsKnown = (day: string) => !data.logsAfter || day > data.logsAfter;
   const dayLabel = (day: string) => formatDayLabel(dayDate(day));
   const ink = { color: sc.textPrimary };
   // Use primary ink for small supporting text: never low-contrast stone on tan.
@@ -227,7 +253,7 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook, onMonthCh
     </View>
   );
   const noItems = !sessions.some((s) => days.includes(sessionDay(s))) &&
-    !days.some((day) => workoutsOn(day).length) && !data.checkIns.length;
+    !days.some((day) => workoutsOn(day).length) && !data.checkIns.length && logsKnown(days[0]);
   const sessionCard = (s: CoachingSession, hero = false) => {
     const owner = data.coaches.find((item) => item.coach_id === s.coach_id);
     const name = owner?.name ?? s.coach_name;
@@ -274,7 +300,7 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook, onMonthCh
           </View> : null}
           {day === today ? <TextLink label={c['C4S1-S-02']} tone="ink" align="start" testID="week-checkin-open"
             onPress={() => nav.navigate('Home', { screen: 'Habits', params: { initialTab: 'checkin' }, initial: false })} /> : null}
-          {!data.loading && !data.failed && !data.offline && data.hasData && !workoutsOn(day).length &&
+          {!data.loading && !data.failed && !data.offline && data.hasData && logsKnown(day) && !workoutsOn(day).length &&
             !sessions.some((s) => sessionDay(s) === day) && !checkOn(day) && day !== today ?
             <View style={styles.restRow}>{rowIcon('moon-outline')}<Text style={[body, styles.rowText, { color: sc.textMuted }]}>{c['C4-S-89']}</Text></View> : null}
         </View>

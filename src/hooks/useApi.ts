@@ -21,6 +21,7 @@
 // habit invalidates ['habits'] so both the list and the streak refetch.
 
 import {
+  keepPreviousData,
   useQuery,
   useMutation,
   useQueryClient,
@@ -244,6 +245,9 @@ export function useWorkouts(limit = 10) {
   return useQuery<ApiWorkoutSession[]>({
     queryKey: ['workouts', 'list', limit],
     queryFn: async () => (await workoutApi.getAll(limit)).data,
+    // A larger limit keeps the rows already shown until it lands (Calendar
+    // grows its limit to cover an earlier month: isPlaceholderData meanwhile).
+    placeholderData: keepPreviousData,
   });
 }
 
