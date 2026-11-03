@@ -80,6 +80,7 @@ import { entitlementEvents } from '../entitlements/entitlementEvents';
 import { withTutorialSignal } from '../tutorial/tutorialEvents';
 import { logger } from '../utils/logger';
 import { generateIdempotencyKey } from '../utils/idempotency';
+import { saveKeys } from './saveKeys';
 import { getTodayString } from '../utils/date';
 import { REQUEST_ID_HEADER, extractRequestId, newRequestId } from '../utils/correlation';
 import {
@@ -854,9 +855,16 @@ export const fastingApi = {
     api.delete(`/fasting/${encodeURIComponent(id)}`),
 };
 
+// WATER-WEIGHT-KEYS-M: a water or weight save sends its one-time key, and a
+// resend of the same save sends the same key (./saveKeys.ts; backend #1206).
+const weightKeys = saveKeys();
+const waterKeys = saveKeys();
+
 export const weightApi = {
   log: (data: { weight_lbs: number; date?: string; notes?: string }) =>
-    api.post('/weight', data),
+    weightKeys.send(JSON.stringify([data.weight_lbs, data.date ?? null, data.notes ?? null]), (client_uuid) =>
+      api.post('/weight', { ...data, client_uuid }),
+    ),
   getHistory: (days = 30) =>
     api.get(`/weight/history?days=${days}`),
 };
@@ -1085,9 +1093,16 @@ export interface WaterEntry {
 
 export const waterApi = {
   log: (data: { amount_ml: number; date?: string }) =>
-    api.post<WaterEntry>('/nutrition/water', data),
+    waterKeys.send(`${data.date ?? ''}|${data.amount_ml}`, (client_uuid) =>
+      api.post<WaterEntry>('/nutrition/water', { ...data, client_uuid }),
+    ),
+  // Once a day's water is read again the screen shows what the server holds,
+  // so the next glass that day is a new save with a new key.
   getDaily: (date: string) =>
-    api.get<{ total_ml: number; logs?: WaterEntry[] }>(`/nutrition/water?date=${date}`),
+    api.get<{ total_ml: number; logs?: WaterEntry[] }>(`/nutrition/water?date=${date}`).then((res) => {
+      waterKeys.forget((save) => save.startsWith(`${date}|`));
+      return res;
+    }),
   getWeekly: (startDate: string) =>
     api.get(`/nutrition/water/weekly?start_date=${startDate}`),
   deleteEntry: (id: string) =>
