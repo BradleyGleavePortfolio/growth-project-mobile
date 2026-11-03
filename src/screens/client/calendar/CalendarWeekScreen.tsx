@@ -206,7 +206,11 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook, onMonthCh
   };
   const reduced = useReducedMotion();
   const fade = useRef(new Animated.Value(1)).current;
-  const { fontScale } = useWindowDimensions();
+  const { fontScale, width } = useWindowDimensions();
+  // Month rings fit their seventh of the page (LS-917R4 C2): 40 pt, scaled
+  // with text, but never wider than the column less a 2 pt gap, so neighbours
+  // never touch. The date's own line is tighter so it stays round inside.
+  const ringSize = Math.min(40 * fontScale, Math.floor((width - 2 * spacing.xl) / 7) - 2);
   useEffect(() => {
     if (data.failed && !data.offline) void HapticService.error();
   }, [data.failed, data.offline]);
@@ -340,7 +344,7 @@ export function CalendarWeekPage({ data, onRefresh, onSession, onBook, onMonthCh
                 workoutsOn(day).length > 0 && c['C4-S-84'], checkOn(day) && c['C4-S-85']].filter(Boolean).join(', ')} testID={`month-day-${day}`}
               onPress={() => { void HapticService.selection(); setSelected(day); }} style={styles.cell}>
               {/* A day with both keeps the camel ring (the session still to come or held); its label says both. */}
-              <View style={[styles.cellCircle, { minWidth: 40 * fontScale, minHeight: 40 * fontScale, borderRadius: 20 * fontScale,
+              <View style={[styles.cellCircle, { minWidth: ringSize, minHeight: ringSize, borderRadius: ringSize / 2,
                 borderColor: session ? colors.camel : missed ? sc.data.missed : 'transparent', backgroundColor: on ? sc.accent : 'transparent' }]}>
                 <Text style={[styles.cellNumber, { color: on ? sc.textOnAccent : inMonth ? sc.textPrimary : sc.textMuted },
                   day === today && !on ? { textDecorationLine: 'underline', textDecorationColor: colors.camel } : null]}>{dayDate(day).getDate()}</Text>
@@ -470,7 +474,8 @@ const styles = StyleSheet.create({
   cellHead: { ...typography.caption, width: `${100 / 7}%`, textAlign: 'center', marginBottom: spacing.sm },
   cell: { width: `${100 / 7}%`, minHeight: 56, alignItems: 'center', paddingVertical: 2 },
   cellCircle: { alignItems: 'center', justifyContent: 'center', borderWidth: 1.5 },
-  cellNumber: { ...typography.h3 },
+  // h3 with a tighter line (25 -> 22) so the date stays inside a column-fit ring at 130% text.
+  cellNumber: { ...typography.h3, lineHeight: 22 },
   legend: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 6, rowGap: 4, marginTop: spacing.sm },
   legendMark: { marginLeft: spacing.sm },
   footer: { marginHorizontal: -spacing.xl, marginBottom: -spacing.xl, marginTop: -layout.footerTopGap, padding: spacing.xl },
