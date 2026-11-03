@@ -140,7 +140,7 @@ describe('FR-917R4 B3 edges: saved workouts cover every day shown', () => {
     expect(view.queryByText('Rest day')).toBeNull();
     // A failed read is not retried by the effect: one failed larger request only.
     await settle();
-    expect(limits().filter((limit) => limit > 50)).toEqual([100]);
+    expect(limits().filter((limit) => (limit ?? 0) > 50)).toEqual([100]);
     failing = false;
     await fireEvent.press(view.getByTestId('week-retry'));
     await waitFor(() => expect(view.getByTestId(`week-log-${uuid(100)}`)).toBeTruthy());
