@@ -61,11 +61,14 @@ it('Android must disclose the named 1:1 coaching before the sheet can sell a pla
   expect(r.getByText('1:1 coaching with Avery Stone')).toBeTruthy();
 });
 
-it('a failed iOS coach-name read must not start a sheet purchase with an unnamed coach', async () => {
+// 1TO1-FU-M (#186-P4 op 1, which replaces this file's earlier no-sale row on the plan sheet): only the name failed,
+// so there is no error; the existing "1:1 coaching with your coach" line stays and the plan can be chosen.
+it('a failed iOS coach-name read keeps the your-coach line with no error, and the plan can still be chosen', async () => {
   setOS('ios');
   mockFailName = true;
   const r = await select();
   expect(r.getByText('1:1 coaching with your coach')).toBeTruthy();
+  expect(r.queryByText(/could not load/)).toBeNull();
   await fireEvent.press(r.getByTestId('select-plan-btn'));
-  expect(mockStart).not.toHaveBeenCalled();
+  expect(mockStart).toHaveBeenCalledTimes(1);
 });
