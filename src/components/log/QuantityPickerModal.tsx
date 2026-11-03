@@ -104,8 +104,8 @@ export function QuantityPickerContent({
           <Text style={styles.quantityFoodBrand}>{selectedFood.brand}</Text>
         ) : null}
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.unitTabs}
-          contentContainerStyle={styles.unitTabRow} keyboardShouldPersistTaps="handled">
+        {/* FR-916R3 F2: the tabs wrap (as on main) so every unit shows at 320 pt and 130% text. */}
+        <View style={styles.unitTabs}>
           {units.map((u) => (
             <HapticPressable
               key={u}
@@ -120,7 +120,7 @@ export function QuantityPickerContent({
               <Text style={[styles.unitTabText, selectedUnit === u && styles.unitTabTextActive]}>{u}</Text>
             </HapticPressable>
           ))}
-        </ScrollView>
+        </View>
 
         <View style={styles.amountRow}>
           <TextInput
@@ -190,13 +190,12 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     marginTop: 2,
   },
   unitTabs: {
-    flexGrow: 0,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    columnGap: 8,
     marginTop: 4,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: sc.border,
-  },
-  unitTabRow: {
-    gap: 8,
   },
   unitTab: {
     minHeight: layout.touchMin,
