@@ -66,14 +66,20 @@ async function root() {
   </QueryClientProvider>);
 }
 
-it.each(['2026-05-01', '2026-05-15', '2026-05-31'])(
-  'LS-917R5M control: an in-month session on %s is paged in and never Rest day',
-  async (day) => {
+it.each([
+  { day: '2026-05-01', offset: 2 },
+  { day: '2026-05-01', offset: 0 },
+  { day: '2026-05-15', offset: 2 },
+  { day: '2026-05-31', offset: 2 },
+])(
+  'LS-917R5M control: an in-month session on $day is paged in with oldest offset $offset and never Rest day',
+  async ({ day, offset }) => {
     const page = [
       ...Array.from({ length: 19 }, (_, n) => session(n, addDays('2026-11-03', -7 * n))),
-      session(19, addDays(day, 2)),
+      session(19, addDays(day, offset)),
     ];
-    const older = session(20, day);
+    // A same-time next row must have a smaller UUID in the descending keyset.
+    const older = session(offset === 0 ? -1 : 20, day);
     const requests: unknown[] = [];
     jest.mocked(schedulingApi.listMySessions).mockImplementation(async (_limit, opts) => {
       if (opts?.scope !== 'past') return [];
