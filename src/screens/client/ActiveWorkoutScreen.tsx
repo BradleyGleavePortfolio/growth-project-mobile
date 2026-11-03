@@ -39,11 +39,12 @@ import { toServerMuscleGroup } from '../../utils/workout/muscleGroup';
 import {
   assignmentIdempotencyKey,
   isUntouchedSession,
-  localCalendarDate,
   resumedPausedMs,
   resumedSessionRouteParams,
   routineSessionExercises,
 } from '../../utils/workout/workoutLogging';
+import { workoutStartDay } from '../../utils/workout/workoutDay';
+import { catalogKey } from '../../utils/workout/exerciseId';
 // Offline-first write path (audit fix H-5: comments were left
 // referencing the deleted WatermelonDB stack — current implementation
 // is built on expo-sqlite, see src/offline/database.ts and
@@ -79,6 +80,7 @@ import type {
 } from './active-workout/types';
 import { ExerciseImage, MUSCLES } from './active-workout/ExerciseImage';
 import { ExerciseCard } from './active-workout/ExerciseCard';
+import { blockLetter } from './active-workout/blockLetter';
 import WorkoutFinishSummary from './active-workout/WorkoutFinishSummary';
 import { workoutApi } from '../../services/api';
 import { completedExercisePayload, moveExercise, newSessionExercise, previousSets, swapExercise, workoutSummary, type LoggedWorkout } from './active-workout/sessionQuality';
@@ -218,7 +220,8 @@ export default function ActiveWorkoutScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredExercises, setFilteredExercises] = useState<Exercise[]>([]);
   const [selectedMuscle, setSelectedMuscle] = useState('All');
-  const createWorkout = useCreateWorkout();
+  // The Finish save sends the session's queue key, as the queued retry does.
+  const createWorkout = useCreateWorkout(() => queueKeyRef.current);
   const summary = useMemo(() => workoutSummary(sessionExercises, history), [sessionExercises, history]);
 
   useEffect(() => {
@@ -557,6 +560,8 @@ export default function ActiveWorkoutScreen() {
     const wasCompleted = sessionExercises[exIdx].sets[setIdx].completed;
     updateSet(exIdx, setIdx, 'completed', !wasCompleted);
     if (!wasCompleted) {
+      const lastOrder = Math.max(0, ...sessionExercises.flatMap((e) => e.sets.map((s) => s.doneOrder ?? 0)));
+      updateSet(exIdx, setIdx, 'doneOrder', lastOrder + 1);
       // Set just marked complete — start rest timer.
       const rest = sessionExercises[exIdx].restSec ?? 0;
       startRest(rest, exIdx);
@@ -576,7 +581,13 @@ export default function ActiveWorkoutScreen() {
       const lastSet = updated[exIdx].sets[updated[exIdx].sets.length - 1];
       updated[exIdx] = {
         ...updated[exIdx],
-        sets: [...updated[exIdx].sets, { reps: lastSet?.reps || 10, weight: lastSet?.weight || 0, completed: false }],
+        sets: [...updated[exIdx].sets, {
+          reps: lastSet?.reps || 10,
+          weight: lastSet?.weight || 0,
+          completed: false,
+          // Another set of a coach's bodyweight exercise stays at the coach's 0.
+          ...(lastSet?.prescribedZero ? { prescribedZero: true } : {}),
+        }],
       };
       return updated;
     });
@@ -603,20 +614,11 @@ export default function ActiveWorkoutScreen() {
   };
 
   const openExerciseDetail = (exercise: SessionExercise) => {
-    // W-5 fix: prefer the catalog id when the upstream
-    // routine carries it (coach-assigned workouts always
-    // do; legacy local routines may not). Falling back to a
-    // slug derived from the human-readable name only when
-    // no id is present — the slug hit the "Exercise not
-    // found" path for almost every entry because the
-    // backend catalog is keyed on the real exercise id, not
-    // a name slug.
-    const idOrSlug =
-      (exercise.exerciseId && exercise.exerciseId.trim()) ||
-      exercise.exerciseName
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '');
+    // W-5 fix: prefer the catalog id when the upstream routine carries it
+    // (coach-assigned workouts always do). A saved routine's exercises have
+    // only the phone's fallback id (routine:...), which the catalog cannot
+    // resolve, so they open by the name's slug instead (catalogKey).
+    const idOrSlug = catalogKey(exercise.exerciseId, exercise.exerciseName);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (navigation as any).navigate('ExerciseDetail', {
       idOrSlug,
@@ -778,10 +780,10 @@ export default function ActiveWorkoutScreen() {
           // for the whole workout) and sent as-is, now or by the background
           // sync once there is signal.
           const workoutPayload = {
-            // The server keeps a calendar date (@db.Date). Sending the
-            // client's own calendar day keeps the history card on the day
-            // the client trained instead of the UTC day.
-            date: localCalendarDate(new Date()),
+            // The server keeps a calendar date (@db.Date): the client's own
+            // local day the workout began, so finishing after midnight keeps
+            // the start day (the shared rule in utils/workout/workoutDay).
+            date: workoutStartDay(sessionStartMsRef.current),
             workout_name: routineName || 'Workout',
             workout_type: 'strength',
             duration_minutes: durationMinutes,
@@ -870,6 +872,12 @@ export default function ActiveWorkoutScreen() {
           // Analytics gets the event name only, never workout values.
           track('workout_logged');
 
+          // Refresh the "From your coach" card and the assignment detail so a
+          // finished workout stops being offered again.
+          const refreshAssignments = () => {
+            queryClient?.invalidateQueries({ queryKey: ['assignments'] }).catch(() => undefined);
+          };
+
           // Attempt the server save now. Without signal the queued row is
           // sent by the sync engine on the next reconnect / foreground.
           createWorkout.mutate(
@@ -913,9 +921,14 @@ export default function ActiveWorkoutScreen() {
                 track(AnalyticsEvents.WORKOUT_COMPLETED);
                 // The queued copy of this workout is now on the server: mark it
                 // sent so the background sync never posts it a second time.
+                // The engine then sends the coach-assignment completion and
+                // keeps it queued until the server answers it.
                 if (queued) {
                   Promise.resolve()
                     .then(() => settleQueuedWorkout(queueKey, serverId))
+                    .then((assignmentAnswered) => {
+                      if (assignmentAnswered) refreshAssignments();
+                    })
                     .catch((error: unknown) => {
                       logger.warn('mwb.completion.mark-session-synced', {
                         ...buildCompletionLogBase({ ...completionLogBaseCtx, justCompletedId }),
@@ -941,19 +954,16 @@ export default function ActiveWorkoutScreen() {
                   });
                 });
 
-                // If this workout is linked to a coach assignment, call the
-                // assignment completion endpoint with the full exercise/set
-                // payload. Non-fatal — the generic workout is already saved.
-                if (assignmentId) {
+                // If this workout is linked to a coach assignment and the phone
+                // could not queue it (settleQueuedWorkout sends a queued one),
+                // call the assignment completion endpoint with the full
+                // exercise/set payload. Non-fatal — the workout is already saved.
+                if (assignmentId && !queued) {
                   workoutBuilderApi.completeMyAssignment(assignmentId, {
                     completion_payload: completionPayload,
                     idempotency_key: idempotencyKeyRef.current,
                     started_at: sessionStartTimeRef.current.toISOString(),
-                  }).then(() => {
-                    // Refresh the "From your coach" card and the assignment
-                    // detail so a finished workout stops being offered again.
-                    queryClient?.invalidateQueries({ queryKey: ['assignments'] }).catch(() => undefined);
-                  }).catch((error: unknown) => {
+                  }).then(refreshAssignments).catch((error: unknown) => {
                     // Non-fatal: generic workout already saved above.
                     logger.warn('mwb.completion.assignment-sync', {
                       ...buildCompletionLogBase({ ...completionLogBaseCtx, justCompletedId }),
@@ -1173,15 +1183,16 @@ export default function ActiveWorkoutScreen() {
   const totalSets = sessionExercises.reduce((sum, ex) => sum + ex.sets.length, 0);
   const completedSets = sessionExercises.reduce((sum, ex) => sum + ex.sets.filter((s) => s.completed).length, 0);
 
-  // §2.9 most recently completed set (last completed set, scanning exercises in
-  // order). Drives Roman's readback with the real logged weight/reps. A set
-  // with a zero weight (e.g. bodyweight) is still a valid readback, so the only
-  // gate is `completed`.
+  // §2.9 the set the client marked done last (highest doneOrder, wherever it
+  // sits in the list, so going back to an earlier exercise reads that set; sets
+  // saved without an order keep list order). Drives Roman's readback with the
+  // real logged weight/reps. A set with a zero weight (e.g. bodyweight) is still
+  // a valid readback, so the only gate is `completed`.
   const lastCompletedSet: SessionSet | null = (() => {
     let found: SessionSet | null = null;
     for (const ex of sessionExercises) {
       for (const s of ex.sets) {
-        if (s.completed) found = s;
+        if (s.completed && (!found || (s.doneOrder ?? 0) >= (found.doneOrder ?? 0))) found = s;
       }
     }
     return found;
@@ -1220,6 +1231,19 @@ export default function ActiveWorkoutScreen() {
     </View>
   ) : null;
 
+  // C1 v2: the exercise in progress is the first one with a set still to do.
+  const activeExercise = sessionExercises.findIndex((exercise) => exercise.sets.some((set) => !set.completed));
+  // The exercise holding the set ticked last stays open (its numbers and Add set stay at hand) until a set
+  // in another exercise is ticked; then a done exercise folds to its header.
+  const lastTicked = sessionExercises.reduce<{ at: number; order: number }>((best, exercise, at) => {
+    const order = Math.max(0, ...exercise.sets.map((set) => (set.completed ? set.doneOrder ?? 0 : 0)));
+    return order > best.order ? { at, order } : best;
+  }, { at: -1, order: 0 }).at;
+
+  // The header's block line: the block in progress, else the last block.
+  const blockCount = sessionExercises.length;
+  const heroBlock = activeExercise >= 0 ? activeExercise : blockCount - 1;
+
   return (
     <>
     <Screen
@@ -1250,10 +1274,19 @@ export default function ActiveWorkoutScreen() {
         </>
       }
     >
-        <View style={styles.hero}>
-          <Overline>Live workout</Overline>
-          <Headline level="h1" numberOfLines={3}>{routineName}</Headline>
-          <Text style={styles.heroMeta}>{completedSets} of {totalSets} sets completed</Text>
+        {/* C1 v2 (MOCKUP3/C1/style-c-v2 C2_logger): the block in progress and the
+            session's sets on one line above the progress line. */}
+        <View style={styles.hero} testID="live-header">
+          <View style={styles.heroLine}>
+            {blockCount > 0 ? (
+              <Text style={styles.heroBlock} testID="live-block-line" accessibilityLabel={`Block ${blockLetter(heroBlock)} of ${blockLetter(blockCount - 1)}`}>
+                {`Block ${blockLetter(heroBlock)} of ${blockLetter(blockCount - 1)}`}
+              </Text>
+            ) : <View />}
+            <Text style={styles.heroMeta} testID="live-set-count" accessibilityLabel={`${completedSets} of ${totalSets} sets done`}>
+              {`${completedSets} / ${totalSets} sets`}
+            </Text>
+          </View>
           <View
             style={styles.progressBar}
             accessibilityRole="progressbar"
@@ -1279,12 +1312,14 @@ export default function ActiveWorkoutScreen() {
           </View>
         ) : null}
 
-        <Overline style={styles.listOverline}>Exercises</Overline>
         {sessionExercises.length === 0 ? (
           <Text style={styles.emptyList} testID="active-workout-empty">No exercises yet. Add the first one below.</Text>
         ) : null}
         {sessionExercises.map((exercise, exIdx) => (
           <ExerciseCard
+            active={exIdx === activeExercise}
+            notStarted={exIdx !== activeExercise && exercise.sets.length > 0 && !exercise.sets.some((set) => set.completed)}
+            foldable={activeExercise >= 0 && exIdx !== lastTicked && exercise.sets.length > 0 && exercise.sets.every((set) => set.completed)}
             key={`${exercise.exerciseId}-${exIdx}`}
             exercise={exercise}
             exIdx={exIdx}

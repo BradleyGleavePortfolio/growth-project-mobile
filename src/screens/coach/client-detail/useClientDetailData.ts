@@ -14,6 +14,14 @@ import {
 } from './types';
 import type { OpenSafetyAlert } from './SafetyAlertCard';
 import { mapCoachWorkoutSessions, workoutTimelineSubtitle } from '../../../utils/workout/workoutLogging';
+import { dayStart, instantDay, workoutDay } from '../../../utils/workout/workoutDay';
+
+/** A workout's place on the timeline: when it was stored, or its recorded day when it synced on a later day. */
+function recordedAt(s: { date?: string; created_at?: string }): string {
+  const day = workoutDay(s);
+  if (s.created_at && instantDay(s.created_at) === day) return s.created_at;
+  return dayStart(day)?.toISOString() ?? s.created_at ?? s.date ?? '';
+}
 
 const openAlertOf = (data: { error?: unknown; open_safety_alert?: OpenSafetyAlert | null }) =>
   (data.error ? null : data.open_safety_alert ?? null);
@@ -205,7 +213,7 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
           title: s.workout_name || s.name || 'Workout',
           // FU-WORKLOG2-126: what was done, not "Logged" on every row.
           subtitle: workoutTimelineSubtitle(s),
-          date: s.created_at || s.date,
+          date: recordedAt(s),
           icon: 'barbell',
           iconColor: colors.primaryDark, // Round 3: hex → token (workout event icon)
         });
@@ -326,7 +334,7 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
       // Aggregate workout sessions
       if (Array.isArray(workouts)) {
         for (const session of workouts) {
-          const dateStr = (session.created_at || session.date || '').slice(0, 10);
+          const dateStr = workoutDay(session);
           if (!dateStr) continue;
           const week = ensureWeek(dateStr);
           week.workoutCount += 1;

@@ -102,6 +102,8 @@ export interface ClientWorkoutAssignment {
   assigned_by_coach_id: string;
   scheduled_for: string;
   completed_at: string | null;
+  /** When the client began the workout (sent with the done call); null on older rows. */
+  started_at?: string | null;
   post_rpe: number | null;
   post_notes: string | null;
 }

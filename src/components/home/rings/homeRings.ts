@@ -7,6 +7,7 @@
  */
 import { bucketDateLocal } from '../../../utils/date';
 import type { WorkoutRowLike } from '../../../utils/workout/workoutDoneToday';
+import { assignmentDay, workoutDay } from '../../../utils/workout/workoutDay';
 import { DEFAULT_SLEEP_NEED_MIN, recoveryScore, sleepDeficit } from '../../../screens/client/wearables/recoveryData';
 import type { WearableSamplesResponse } from '../../../api/wearablesSamplesApi';
 
@@ -49,12 +50,6 @@ export function weekBounds(now: Date): { start: string; end: string } {
   return { start: bucketDateLocal(monday), end: bucketDateLocal(next) };
 }
 
-const dayOf = (iso: string | undefined | null): string => {
-  if (typeof iso !== 'string' || !iso) return '';
-  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '' : bucketDateLocal(d);
-};
 const inWeek = (day: string, w: { start: string; end: string }): boolean => !!day && day >= w.start && day < w.end;
 
 export function trainDial(input: {
@@ -68,7 +63,8 @@ export function trainDial(input: {
   // A failed read is not a zero: a failed assignment read is no proof of no coach plan.
   if (input.loading || input.assignments === null) return unknown;
   const week = weekBounds(input.now);
-  const planned = input.assignments.filter((a) => inWeek(dayOf(a.scheduled_for), week));
+  // Each assignment on the day it was assigned for, each workout on its recorded day (utils/workout/workoutDay).
+  const planned = input.assignments.filter((a) => inWeek(assignmentDay(a), week));
   if (planned.length > 0) {
     const done = planned.filter((a) => !!a.completed_at).length;
     return { value: `${done} of ${planned.length}`, unit: 'workouts', sub: 'This week', progress: clamp01(done / planned.length) };
@@ -78,8 +74,7 @@ export function trainDial(input: {
   const days = new Set(
     input.history
       .filter((r) => r && r.completed !== false)
-      // `date` is a calendar day (UTC midnight): its day part, as isWorkoutDoneToday reads it.
-      .map((r) => (typeof r.date === 'string' && r.date.length >= 10 ? r.date.slice(0, 10) : dayOf(r.created_at ?? null)))
+      .map((r) => workoutDay(r))
       .filter((d) => inWeek(d, week)),
   );
   const goal = input.daysPerWeek && input.daysPerWeek > 0 ? Math.round(input.daysPerWeek) : 0;

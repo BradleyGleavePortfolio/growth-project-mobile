@@ -6,6 +6,7 @@
 import type { MacroTarget } from '../../api/macrosApi';
 import type { ClientProfile } from '../../types';
 import { bucketDateLocal } from '../date';
+import { assignmentDay, instantDay, workoutDay } from '../workout/workoutDay';
 import { dayWord } from './clientLookup';
 import { rosterActivityLine, type RosterClient } from './clientRoster';
 import { resolveCoachTargets } from './foodReview';
@@ -92,13 +93,15 @@ export function peekSlices(
   const foodText = rows(day.entries).length > 0 ? `${grouped(kcal)}${of}\u00a0kcal, protein ${grouped(num(day.total_protein_g) ?? 0)}\u00a0g` : NOTHING;
 
   const session = rows(s.recent_workouts)[0];
-  const sessionDay = session ? localDay(session.completed_at ?? session.created_at, true) : null;
+  // The day the client recorded, not the day it reached the server (utils/workout/workoutDay).
+  const sessionDay = session ? workoutDay({ date: text(session.date), created_at: text(session.completed_at) ?? text(session.created_at) }) || null : null;
   const name = session ? text(session.workout_name) ?? text(session.name) ?? 'Workout' : null;
-  const from = weekStart(today).getTime();
-  const to = from + 7 * 86_400_000;
+  const monday = weekStart(today);
+  const from = instantDay(monday);
+  const to = instantDay(new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 7));
   const week = rows(s.recent_assignments).filter((a) => {
-    const at = new Date(String(a.scheduled_for)).getTime();
-    return a.assigned_by_coach_id === coachId && at >= from && at < to;
+    const day = assignmentDay({ scheduled_for: text(a.scheduled_for) });
+    return a.assigned_by_coach_id === coachId && !!day && day >= from && day < to;
   });
   const done = week.filter((a) => a.completed_at != null).length;
   const count = week.length > 0 ? `, ${done} of ${week.length}` : '';

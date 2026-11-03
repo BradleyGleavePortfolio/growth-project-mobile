@@ -7,6 +7,7 @@ import { useTheme } from '../../../theme/ThemeProvider';
 import { radius, spacing, typography } from '../../../theme/tokens';
 import { useAssignWorkoutPlan } from '../../../hooks/useWorkoutBuilder';
 import { fireAiHaptic } from '../ai-builder/useAiBuilder';
+import { getTodayString } from '../../../utils/date';
 
 export const clientCopyCopy = (first: string) => ({
   intro: `${first}'s copy. Ask AI fits it to ${first}'s consultation answers. ${first} gets it when you assign it.`,
@@ -30,7 +31,8 @@ export function ClientCopyBar({ planId, clientId, firstName, prepare }: {
     setNote(null);
     if (!(await prepare()).ok) return setNote(copy.saving);
     try {
-      await assign.mutateAsync({ planId, input: { client_id: clientId, scheduled_for: new Date().toISOString() } });
+      // The server keeps a calendar day: today on this phone, not the UTC day of now.
+      await assign.mutateAsync({ planId, input: { client_id: clientId, scheduled_for: getTodayString() } });
       fireAiHaptic('success');
       setDone(true);
       setNote(copy.assigned);
