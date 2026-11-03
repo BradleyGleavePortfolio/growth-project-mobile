@@ -811,6 +811,7 @@ export default function MoneyScreen({
                     <Text
                       style={[
                         styles.rowSub,
+                        styles.rowEndText,
                         chargeIsProblem(ch) && styles.problem,
                       ]}
                     >
@@ -1185,7 +1186,10 @@ export const makeStyles = (colors: ThemeColors) =>
       borderBottomColor: colors.border,
     },
     rowText: { flex: 1, marginRight: 8 },
-    rowEnd: { alignItems: "flex-end" },
+    // The state label ("Waiting on your Stripe account") can be long; it wraps
+    // inside at most half the row so the client name keeps the other half.
+    rowEnd: { alignItems: "flex-end", flexShrink: 1, maxWidth: "50%" },
+    rowEndText: { textAlign: "right" },
     rowTitle: {
       fontFamily: "Inter_600SemiBold",
       fontSize: 15,
