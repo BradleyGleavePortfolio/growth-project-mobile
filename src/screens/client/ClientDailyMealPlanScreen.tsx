@@ -57,7 +57,7 @@ import LogPlannedMealButton, { plannedMealFromSlot } from '../../components/meal
 import { spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { SemanticTokens } from '../../theme/tokens';
-import { MastLine, mast, PaperPage, PlanMasthead, planStyleC, TimelineRow, useCoachItalic } from './mealplan/planStyleC';
+import { MastLine, mast, MealArt, PaperPage, PlanMasthead, planStyleC, TimelineRow, useCoachItalic } from './mealplan/planStyleC';
 
 // Route params: optional ISO date string (YYYY-MM-DD). Falls back to
 // today (useMealPlanToday's default) when omitted, matching the legacy
@@ -97,8 +97,10 @@ export default function ClientDailyMealPlanScreen() {
 
   const italic = useCoachItalic();
   const loaded = !isLoading && !isError;
-  // One plan (the usual day): its name and day total sit on the masthead, as
-  // the C2 coach's note does. Several plans keep each name and total with its meals.
+  // One plan (the usual day): its name, the coach's note and the day total sit
+  // on the masthead, as C2 C_day draws the coach's italic note there (FIX-927,
+  // LS-927 B1: the note shows once, on the masthead). Several plans keep each
+  // name, note and total with their own meals on the paper.
   const single = loaded && shown.length === 1 ? shown[0] : null;
   const singleTotal = single ? formatDayTotal(single.daily_meal_plan.slots) : null;
 
@@ -119,7 +121,10 @@ export default function ClientDailyMealPlanScreen() {
         testID="daily-meal-plan-masthead">
         {single ? (
           <>
-            <Text style={[styles.mastPlan, italic]}>{single.daily_meal_plan.name}</Text>
+            <Text style={styles.mastPlan}>{single.daily_meal_plan.name}</Text>
+            {single.daily_meal_plan.notes ? (
+              <Text style={[styles.mastNote, italic]} testID="daily-meal-plan-note">{single.daily_meal_plan.notes}</Text>
+            ) : null}
             {singleTotal ? <MastLine testID="daily-meal-plan-total" style={styles.tabular}>{singleTotal}</MastLine> : null}
           </>
         ) : null}
@@ -155,7 +160,7 @@ function PlanSection({ assignment, sc, styles, italic, onMasthead }: {
   sc: SemanticTokens;
   styles: Styles;
   italic: StyleProp<TextStyle>;
-  /** The name and day total already show on the masthead. */
+  /** The name, note and day total already show on the masthead. */
   onMasthead: boolean;
 }) {
   const plan = assignment.daily_meal_plan;
@@ -175,7 +180,7 @@ function PlanSection({ assignment, sc, styles, italic, onMasthead }: {
           {dayTotal}
         </Text>
       ) : null}
-      {plan.notes ? (
+      {plan.notes && !onMasthead ? (
         <Text style={[planStyleC.name, italic, styles.notes, { color: sc.textPrimary }]}>{plan.notes}</Text>
       ) : null}
       <View style={styles.timeline}>
@@ -208,9 +213,12 @@ function SlotGroup({
       </Text>
       {slots.map((s) => (
         <View key={s.id} style={styles.slotRow}>
-          <Text style={[styles.mealName, { color: sc.textPrimary }]}>
-            {s.meal_template.name}
-          </Text>
+          <View style={styles.mealHead}>
+            <Text style={[planStyleC.name, styles.mealName, { color: sc.textPrimary }]}>
+              {s.meal_template.name}
+            </Text>
+            <MealArt slot={s.slot_label} testID={`daily-meal-plan-art-${s.id}`} />
+          </View>
           <Text style={[planStyleC.meta, styles.tabular, { color: sc.textMuted }]}>
             {s.meal_template.calories_kcal} kcal • P {s.meal_template.protein_g}g • C{' '}
             {s.meal_template.carbs_g}g • F {s.meal_template.fats_g}g
@@ -302,6 +310,8 @@ function makeStyles(sc: SemanticTokens) {
     screen: { flex: 1, backgroundColor: sc.bgPrimary },
     content: { flexGrow: 1 },
     mastPlan: { ...typography.h2, color: mast.ink, marginTop: spacing.md },
+    // The coach's note in C2's italic, on the masthead in its muted ink (C_day).
+    mastNote: { ...typography.h2, fontSize: 19, lineHeight: 25, letterSpacing: 0, color: mast.muted, marginTop: spacing.sm },
     tabular: { fontVariant: ['tabular-nums'] },
     cardFill: { backgroundColor: sc.bgPrimary, borderColor: sc.border },
     state: { gap: spacing.md },
@@ -310,7 +320,9 @@ function makeStyles(sc: SemanticTokens) {
     timeline: { marginTop: spacing.sm },
     stop: { paddingBottom: spacing.xl },
     slotRow: { gap: spacing.xs, marginTop: spacing.xs },
-    // Meal names at the frame's size: Cormorant 24 (C2 Style C, "Greek yoghurt, oats and berries").
-    mealName: { ...typography.h2 },
+    // The name beside its cream tile (C2 C_day); the name wraps, the tile keeps its size.
+    mealHead: { flexDirection: 'row', alignItems: 'flex-start' },
+    // Meal names at the frame's 21 pt Cormorant (planStyleC.name; LS-927 B2).
+    mealName: { flex: 1, minWidth: 0 },
   });
 }

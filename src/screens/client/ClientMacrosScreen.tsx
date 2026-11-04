@@ -42,7 +42,7 @@ import api from '../../services/api';
 import { useTodayLog } from '../../hooks/useApi';
 import { getTodayString } from '../../utils/date';
 import QuietBar from '../../ui/progress/QuietBar';
-import { MastLine, mast, PaperPage, PlanMasthead, planStyleC, useCoachItalic } from './mealplan/planStyleC';
+import { MastLine, mast, MastTile, PaperPage, PlanMasthead, planStyleC, useCoachItalic } from './mealplan/planStyleC';
 
 export default function ClientMacrosScreen() {
   const { semanticColors: sc } = useTheme();
@@ -88,11 +88,23 @@ export default function ClientMacrosScreen() {
       <PlanMasthead title="Your daily targets" testID="macros-masthead"
         eyebrow={!isLoading && !isError && data ? (coachName ? `Set by ${coachName}` : 'Your target') : null}>
         {!isLoading && !isError && data ? (
-          <View accessible testID="macros-day-target">
-            <Text style={styles.kcal}>{data.calories_kcal}</Text>
-            <MastLine muted style={styles.kcalUnit}>kcal per day</MastLine>
-            {eaten.calories != null ? <MastLine>{`${Math.round(eaten.calories)} kcal eaten today`}</MastLine> : null}
-          </View>
+          <>
+            {/* K5 Style C: the day's number large in the serif with its unit beside it. */}
+            <View accessible testID="macros-day-target">
+              <View style={styles.kcalRow}>
+                <Text style={styles.kcal}>{data.calories_kcal}</Text>
+                <MastLine muted style={styles.kcalUnit}>kcal per day</MastLine>
+              </View>
+              {eaten.calories != null ? <MastLine>{`${Math.round(eaten.calories)} kcal eaten today`}</MastLine> : null}
+            </View>
+            {/* K5 Style C: one outlined tile per macro target on the forest. */}
+            <View style={styles.tiles} testID="macros-tiles">
+              {targetCells(mode).filter((k) => k !== 'fiber').map((k) => (
+                <MastTile key={k} label={CELL_LABEL[k]} testID={`macros-tile-${k}`}
+                  value={targetValue(data, k) === null ? '—' : `${targetValue(data, k)}g`} />
+              ))}
+            </View>
+          </>
         ) : null}
       </PlanMasthead>
 
@@ -127,7 +139,16 @@ export default function ClientMacrosScreen() {
 
 const CELL_LABEL = { protein: 'Protein', carbs: 'Carbs', fat: 'Fats', fiber: 'Fiber' } as const;
 
-/** Under the masthead: the macro cells flat on the paper (full width, so the eaten / target line fits), then the coach's note and the date it took effect. */
+function targetValue(target: MacroTarget, k: keyof typeof CELL_LABEL): number | null {
+  const v = { protein: target.protein_g, carbs: target.carbs_g, fat: target.fats_g, fiber: target.fiber_g }[k];
+  return typeof v === 'number' ? v : null;
+}
+
+/**
+ * Under the masthead (K5 Style C cards on the paper): the macro lines in one
+ * card, full width so the eaten / target line fits; the coach's note in the
+ * sage note card; then the date it took effect.
+ */
 function TargetCard({
   target,
   mode = 'full',
@@ -154,7 +175,7 @@ function TargetCard({
   const effective = formatDate(target.effective_from);
   return (
     <View style={styles.stack}>
-      <View style={styles.macroGrid} testID="macros-cells">
+      <View style={[planStyleC.card, styles.cardFill, styles.macroGrid]} testID="macros-cells">
         {targetCells(mode).map((k) => (
           <MacroCell key={k} label={CELL_LABEL[k]} value={values[k]} current={eaten[k]} sc={sc} />
         ))}
@@ -169,8 +190,8 @@ function TargetCard({
       </View>
 
       {target.notes ? (
-        <View style={styles.note}>
-          <Text style={[planStyleC.eyebrow, { color: sc.textMuted, marginBottom: spacing.sm }]}>
+        <View style={[styles.note, { backgroundColor: sc.surface.sage }]} testID="macros-note">
+          <Text style={[planStyleC.eyebrow, { color: sc.accentText, marginBottom: spacing.sm }]}>
             {coachName ? 'Note from your coach' : 'Target note'}
           </Text>
           <Text style={[planStyleC.name, italic, { color: sc.textPrimary }]}>
@@ -247,12 +268,15 @@ function makeStyles(sc: SemanticTokens) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: sc.bgPrimary },
     content: { flexGrow: 1 },
-    kcal: { ...typography.display, color: mast.ink, fontVariant: ['tabular-nums'], marginTop: spacing.sm },
-    kcalUnit: { marginTop: 0 },
+    // K5 Style C: the number at 60 pt in the display serif, the unit on its baseline (wraps under at large text).
+    kcalRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: spacing.md, marginTop: spacing.md },
+    kcal: { ...typography.display, fontSize: 60, lineHeight: 72, letterSpacing: 0, color: mast.ink, fontVariant: ['tabular-nums'] },
+    kcalUnit: { ...typography.body, marginTop: 0 },
+    tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.lg },
     cardFill: { backgroundColor: sc.bgPrimary, borderColor: sc.border },
     stack: { gap: spacing.xl },
     macroGrid: { gap: spacing.lg },
-    note: { paddingTop: spacing.xs },
+    note: { borderRadius: radius.card, padding: spacing.lg },
     empty: { gap: spacing.sm },
     after: { marginTop: spacing.lg },
     skeleton: { gap: spacing.md },
