@@ -128,6 +128,10 @@ async function coldWatch(which: 'saved UUID' | 'second saved UUID' | 'legacy nam
     : which === 'second saved UUID' ? ROW : PRESS;
   mockParams = { routineName: routine.name, exercises: JSON.stringify(routineToSessionExercises(routine)) };
   const live = await render(<ActiveWorkoutScreen />);
+  if (which === 'second saved UUID') {
+    await waitFor(() => expect(live.getByTestId('exercise-waiting-1')).toBeTruthy());
+    await fireEvent.press(live.getByTestId('exercise-waiting-1'));
+  }
   await waitFor(() => expect(live.getByLabelText(`Watch video for ${name}`)).toBeTruthy());
   await fireEvent.press(live.getByLabelText(`Watch video for ${name}`));
   expect(mockNavigate).toHaveBeenCalledWith('ExerciseDetail', { idOrSlug: key });
