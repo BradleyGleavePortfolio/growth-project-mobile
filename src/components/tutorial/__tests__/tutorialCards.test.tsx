@@ -184,6 +184,9 @@ describe('PlanExplanationCard', () => {
   });
 
   it('Next opens the first coach workout still to do, in the You stack (48)', async () => {
+    // FR-917R3 (LS-917R3 B5): Next uses Train's rule (the next day ahead, else the
+    // latest overdue), so "first still to do" holds on a day before both.
+    const today = jest.spyOn(require('../../../utils/date'), 'getTodayString').mockReturnValue('2026-10-11');
     mockAssignments = {
       isLoading: false,
       data: [
@@ -203,6 +206,7 @@ describe('PlanExplanationCard', () => {
       params: { assignmentId: 'a1' },
       initial: false,
     });
+    today.mockRestore();
   });
 
   it('K3FIX-SNAPSHOT: Next keeps the frozen workout name after the coach renames the plan', async () => {

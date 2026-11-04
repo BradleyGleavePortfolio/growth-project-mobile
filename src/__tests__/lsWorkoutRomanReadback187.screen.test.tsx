@@ -45,10 +45,12 @@ import ActiveWorkoutScreen from '../screens/client/ActiveWorkoutScreen';
 
 it('B-LS-WORKOUT-4 reads the latest completed set when the client returns to an earlier exercise', async () => {
   const view = await render(<ActiveWorkoutScreen />);
-  await waitFor(() => expect(view.getByTestId('set-done-1-0')).toBeTruthy());
+  // FR-917R3 (C1 v2): a block not started is one line; one tap opens it.
+  await waitFor(() => expect(view.getByTestId('exercise-waiting-1')).toBeTruthy());
+  await act(async () => { fireEvent.press(view.getByTestId('exercise-waiting-1')); });
   await act(async () => { fireEvent.press(view.getByTestId('set-done-1-0')); });
   expect(within(view.getByTestId('roman-voicelog-card')).getByText('135 pounds, 6 reps.')).toBeTruthy();
   await act(async () => { fireEvent.press(view.getByTestId('set-done-0-0')); });
-  expect(view.getByText('2 of 2 sets completed')).toBeTruthy();
+  expect(view.getByText('2 / 2 sets')).toBeTruthy();
   expect(within(view.getByTestId('roman-voicelog-card')).getByText('80 pounds, 8 reps.')).toBeTruthy();
 });

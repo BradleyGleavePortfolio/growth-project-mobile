@@ -127,19 +127,22 @@ describe.each(DEVICES)('live workout at $name', (device) => {
     expect(footer.getByText('Finish workout')).toBeTruthy();
     expect(flat(finish).borderRadius).toBe(radius.button);
     expect(flat(finish).minHeight).toBe(layout.buttonHeight);
-    // One filled forest element on the page (nothing logged yet, so no ticked set marks).
+    // Nothing logged yet, so no ticked set marks. FR-917R2 (C1 v2 logger, owner B4): besides Finish, the
+    // only forest fills are the active block's letter and the next set's "As planned".
     const fills = forestFills(view.container as unknown as Node).filter((n) => n.props.testID !== 'live-progress-fill');
-    expect(fills.map((n) => n.props.testID)).toEqual(['finish-workout']);
+    expect(fills.map((n) => n.props.testID)).toEqual(['exercise-letter-0', 'set-done-0-0', 'finish-workout']);
   });
 
   it('sets serif titles with a line height that never clips descenders', async () => {
     const view = await open();
-    for (const text of ['Upper Body A', 'Bench Press', 'Seated Row']) {
+    // FR-917R3 (C1 v2, owner-picked): the header is "Block A of B" and the set count, no workout title; only the
+    // block in progress has a serif name (a block not started is a sans line, as in C2_logger).
+    for (const text of ['Bench Press']) {
       const style = flat(view.getByText(text));
       expect(style.fontFamily).toMatch(/^CormorantGaramond/);
       expect(style.lineHeight!).toBeGreaterThanOrEqual(1.2 * style.fontSize!);
     }
-    expect(view.getByText('0 of 3 sets completed')).toBeTruthy();
+    expect(view.getByText('0 / 3 sets')).toBeTruthy();
   });
 
   it('keeps every exercise and set action wired, in sentence case', async () => {
@@ -148,15 +151,19 @@ describe.each(DEVICES)('live workout at $name', (device) => {
       'Set rest for Bench Press to 60 seconds', 'Notes for Bench Press', 'Workout notes']) {
       expect(view.getByLabelText(label)).toBeTruthy();
     }
-    expect(view.getAllByText('Add set')).toHaveLength(2);
+    // FR-917R3 (C1 v2): a block not started is one line until opened, so only the open block has Add set.
+    expect(view.getAllByText('Add set')).toHaveLength(1);
     expect(view.getByText('Coach note: Pause at the chest')).toBeTruthy();
     expect(view.queryByText('Add Set')).toBeNull();
     await act(async () => { fireEvent.changeText(view.getByTestId('set-weight-0-0'), '100'); await flush(); });
     expect(view.getByTestId('set-weight-0-0').props.value).toBe('100');
     const input = flat(view.getByTestId('set-weight-0-0'));
-    expect(input.borderRadius).toBe(radius.input);
+    // FR-917R3 (C1 v2): the next set's numbers are text with a dashed line, not boxed cells.
+    expect(input.borderStyle).toBe('dashed');
     expect(input.fontVariant).toEqual(['tabular-nums']);
-    expect(flat(view.getByTestId('set-done-0-0')).borderRadius).toBe(radius.chip);
+    // FR-917R2 (C1 v2): a set still to do is the rounded "As planned" pill.
+    expect(flat(view.getByTestId('set-done-0-0')).borderRadius).toBe(radius.button);
+    expect(within(view.getByTestId('set-done-0-0')).getByText('As planned')).toBeTruthy();
   });
 
   it('a ticked set starts the rest row inside the footer, above Finish, with +30s and Skip', async () => {
@@ -168,7 +175,7 @@ describe.each(DEVICES)('live workout at $name', (device) => {
     expect(flat(footer.getByTestId('rest-timer')).borderRadius).toBe(radius.card);
     await act(async () => { fireEvent.press(footer.getByLabelText('Skip rest timer')); await flush(); });
     expect(view.queryByTestId('rest-timer')).toBeNull();
-    expect(view.getByText('1 of 3 sets completed')).toBeTruthy();
+    expect(view.getByText('1 / 3 sets')).toBeTruthy();
     expect(view.getByTestId('workout-finish-summary')).toBeTruthy();
   });
 

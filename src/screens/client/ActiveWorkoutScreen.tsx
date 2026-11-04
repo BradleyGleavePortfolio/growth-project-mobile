@@ -80,6 +80,7 @@ import type {
 } from './active-workout/types';
 import { ExerciseImage, MUSCLES } from './active-workout/ExerciseImage';
 import { ExerciseCard } from './active-workout/ExerciseCard';
+import { blockLetter } from './active-workout/blockLetter';
 import WorkoutFinishSummary from './active-workout/WorkoutFinishSummary';
 import { workoutApi } from '../../services/api';
 import { completedExercisePayload, moveExercise, newSessionExercise, previousSets, swapExercise, workoutSummary, type LoggedWorkout } from './active-workout/sessionQuality';
@@ -1230,6 +1231,19 @@ export default function ActiveWorkoutScreen() {
     </View>
   ) : null;
 
+  // C1 v2: the exercise in progress is the first one with a set still to do.
+  const activeExercise = sessionExercises.findIndex((exercise) => exercise.sets.some((set) => !set.completed));
+  // The exercise holding the set ticked last stays open (its numbers and Add set stay at hand) until a set
+  // in another exercise is ticked; then a done exercise folds to its header.
+  const lastTicked = sessionExercises.reduce<{ at: number; order: number }>((best, exercise, at) => {
+    const order = Math.max(0, ...exercise.sets.map((set) => (set.completed ? set.doneOrder ?? 0 : 0)));
+    return order > best.order ? { at, order } : best;
+  }, { at: -1, order: 0 }).at;
+
+  // The header's block line: the block in progress, else the last block.
+  const blockCount = sessionExercises.length;
+  const heroBlock = activeExercise >= 0 ? activeExercise : blockCount - 1;
+
   return (
     <>
     <Screen
@@ -1260,10 +1274,19 @@ export default function ActiveWorkoutScreen() {
         </>
       }
     >
-        <View style={styles.hero}>
-          <Overline>Live workout</Overline>
-          <Headline level="h1" numberOfLines={3}>{routineName}</Headline>
-          <Text style={styles.heroMeta}>{completedSets} of {totalSets} sets completed</Text>
+        {/* C1 v2 (MOCKUP3/C1/style-c-v2 C2_logger): the block in progress and the
+            session's sets on one line above the progress line. */}
+        <View style={styles.hero} testID="live-header">
+          <View style={styles.heroLine}>
+            {blockCount > 0 ? (
+              <Text style={styles.heroBlock} testID="live-block-line" accessibilityLabel={`Block ${blockLetter(heroBlock)} of ${blockLetter(blockCount - 1)}`}>
+                {`Block ${blockLetter(heroBlock)} of ${blockLetter(blockCount - 1)}`}
+              </Text>
+            ) : <View />}
+            <Text style={styles.heroMeta} testID="live-set-count" accessibilityLabel={`${completedSets} of ${totalSets} sets done`}>
+              {`${completedSets} / ${totalSets} sets`}
+            </Text>
+          </View>
           <View
             style={styles.progressBar}
             accessibilityRole="progressbar"
@@ -1289,12 +1312,14 @@ export default function ActiveWorkoutScreen() {
           </View>
         ) : null}
 
-        <Overline style={styles.listOverline}>Exercises</Overline>
         {sessionExercises.length === 0 ? (
           <Text style={styles.emptyList} testID="active-workout-empty">No exercises yet. Add the first one below.</Text>
         ) : null}
         {sessionExercises.map((exercise, exIdx) => (
           <ExerciseCard
+            active={exIdx === activeExercise}
+            notStarted={exIdx !== activeExercise && exercise.sets.length > 0 && !exercise.sets.some((set) => set.completed)}
+            foldable={activeExercise >= 0 && exIdx !== lastTicked && exercise.sets.length > 0 && exercise.sets.every((set) => set.completed)}
             key={`${exercise.exerciseId}-${exIdx}`}
             exercise={exercise}
             exIdx={exIdx}

@@ -30,6 +30,7 @@ import { HapticService } from '../../../ui/haptics/haptics.service';
 import { assignmentPrescription } from '../../../utils/workout/assignmentPrescription';
 import { buildActiveWorkoutExercises, prettifyExerciseName } from '../../../utils/workout/buildActiveWorkout';
 import { assignmentDay, dayStart } from '../../../utils/workout/workoutDay';
+import { nextAssignment } from '../../../utils/workout/nextAssignment';
 import { doneLine, workoutWeek, type WorkoutWeek } from '../../coach/client-detail/thisWeek';
 import { DAY_LABELS } from '../habits/constants';
 
@@ -82,11 +83,8 @@ export function trainWeek(rows: ReadonlyArray<Row>, today: string): WorkoutWeek 
   return workoutWeek({ week_start, today, assignments: assignments.filter((a) => a.day >= week_start && a.day <= end) });
 }
 
-/** Today's open workout; else the next open one; else the latest still open (a missed day). A skipped day is not open. */
-export function featuredWorkout<T extends Row>(rows: ReadonlyArray<T>, today: string): T | null {
-  const open = rows.filter((a) => !a.completed_at && !a.skipped_at).sort((a, b) => dayOf(a).localeCompare(dayOf(b)));
-  return open.find((a) => dayOf(a) >= today) ?? open[open.length - 1] ?? null;
-}
+/** Today's open workout; else the next open one; else the latest still open (a missed day). The plan card's Next uses the same rule. */
+export const featuredWorkout = <T extends Row>(rows: ReadonlyArray<T>, today: string): T | null => nextAssignment(rows, today);
 
 export interface Block { letter: string; rows: AssignmentExercise[] }
 /** A, B, C in plan order; rows next to each other with the same `superset_group_id` share one letter. */

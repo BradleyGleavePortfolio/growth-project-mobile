@@ -177,12 +177,16 @@ export default function MoneyChargesScreen({ navigation, route }: Props) {
                 <Text style={styles.rowSub}>{movedAwayLine(ch)}</Text>
               ) : null}
             </View>
-            <View style={styles.rowEnd}>
+            <View style={styles.chargeRowEnd}>
               <Text style={styles.rowAmount}>
                 {money(ch.amountCents, ch.currency)}
               </Text>
               <Text
-                style={[styles.rowSub, chargeIsProblem(ch) && styles.problem]}
+                style={[
+                  styles.rowSub,
+                  styles.rowEndText,
+                  chargeIsProblem(ch) && styles.problem,
+                ]}
               >
                 {chargeStateLabel(ch)}
               </Text>

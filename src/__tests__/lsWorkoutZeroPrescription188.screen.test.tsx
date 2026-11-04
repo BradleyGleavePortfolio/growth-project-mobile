@@ -78,6 +78,20 @@ afterEach(async () => {
   jest.restoreAllMocks();
 });
 
+it('LS-917R2 B4: a coached live set exposes the newest C1 v2 As planned action', async () => {
+  // C1/style-c-v2/C2_logger_ios390_100.png has this action on pending
+  // prescribed sets. This uses the real screen, ExerciseCard and SetLogger.
+  const exercises = buildActiveWorkoutExercises({ exercises: [{
+    exercise_external_id: 'seed:pull-001', order: 0, sets: 3,
+    reps_or_duration_seconds: 8, weight_lbs: 0, rest_seconds: 0,
+    superset_group_id: null, notes: null,
+  }] }).map((exercise) => ({ ...exercise, exerciseName: 'Pull Up' }));
+  mockParams = { ...mockParams, exercises: JSON.stringify(exercises) };
+  const view = await render(<ActiveWorkoutScreen />);
+  await waitFor(() => expect(view.getByLabelText('Use previous set 1: 20 pounds, 8 reps')).toBeTruthy());
+  expect(view.getAllByText('As planned').length).toBeGreaterThan(0);
+});
+
 it.each([
   { scenario: 'a positive coach load', target: 15, typeZero: false, expected: 15 },
   { scenario: 'an unprescribed previous-set default', target: null, typeZero: false, expected: 20 },
