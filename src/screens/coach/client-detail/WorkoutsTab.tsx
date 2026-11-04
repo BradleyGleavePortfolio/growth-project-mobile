@@ -140,7 +140,7 @@ export function WorkoutsTab({
               {exList.map((e, i) => (
                 <View key={`${e.exerciseId}-${i}`} style={{ marginTop: i === 0 ? 0 : 8 }} testID={`coach-session-${session.id}-exercise-${i}`}>
                   <Text style={[body, { color: sc.textPrimary }]}>{e.exerciseName}</Text>
-                  <Text style={body}>{formatCoachSessionSets(e.sets)}</Text>
+                  <Text style={body}>{formatCoachSessionSets(e.sets, e.unit)}</Text>
                   {typeof e.rpe === 'number' ? <Text style={meta}>{`RPE ${e.rpe}`}</Text> : null}
                   {e.notes ? (
                     <Text style={body}>Client note: {e.notes}</Text>

@@ -186,7 +186,7 @@ interface ApiSession {
   workout_name?: string;
   duration_minutes: number;
   notes: string;
-  exercises: Array<{ muscle_group: string; exercise_name: string; sets_completed: number; weight_per_set: number[]; reps_per_set: number[]; notes?: string | null }>;
+  exercises: Array<{ muscle_group: string; exercise_name: string; sets_completed: number; weight_per_set: number[]; reps_per_set: number[]; notes?: string | null; asked_unit?: string | null }>;
 }
 
 /**
