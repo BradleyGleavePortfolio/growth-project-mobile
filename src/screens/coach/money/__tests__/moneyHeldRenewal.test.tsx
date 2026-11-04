@@ -224,7 +224,7 @@ describe("the charge screen", () => {
     expect(r.getByText(HELD_LABEL)).toBeTruthy();
     const held = r.getByTestId("money-charge-held");
     expect(within(held).getByText(/Earlier payments are counted below\./)).toBeTruthy();
-    expect(within(held).getByText(new RegExp(HELD_LINE.replace(/\./g, "\\.")))).toBeTruthy();
+    expect(within(held).getByText(`${HELD_LINE} Earlier payments are counted below.`)).toBeTruthy();
     expect(r.getByText("This plan so far")).toBeTruthy();
     expect(r.getByLabelText("Clients paid so far: $300.00")).toBeTruthy();
     expect(r.getByLabelText("Net to you: $285.00")).toBeTruthy();
