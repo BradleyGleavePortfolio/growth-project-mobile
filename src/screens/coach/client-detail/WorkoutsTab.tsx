@@ -26,7 +26,7 @@ export function WorkoutsTab({
   styles: ClientDetailStyles;
 }) {
   const { semanticColors: sc } = useTheme();
-  const parseExercises = (json: string): (SessionExercise & { rpe?: number | null })[] => {
+  const parseExercises = (json: string): (SessionExercise & { rpe?: number | null; unit?: string })[] => {
     try { return JSON.parse(json); } catch { return []; }
   };
 
