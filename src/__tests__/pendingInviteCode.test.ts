@@ -75,3 +75,23 @@ describe('pending invite code', () => {
     expect(authApi.attachInviteCode).not.toHaveBeenCalled();
   });
 });
+
+// 1TO1-FU-M (#185-S1 op 1, LS-1TO1R3 C1): the banner shows the existing not-accepting words for a coach who
+// cannot take a new client, never the raw server text ("Package not available"), before and after 1TO1-FU-BE.
+describe('a refused join to a coach who cannot take new clients', () => {
+  const NOT_ACCEPTING =
+    'Your coach is not accepting new clients through the app right now. Let them know, then try your code again.';
+  it.each<[string, number, Record<string, unknown>]>([
+    ['today: 404 PACKAGE_NOT_FOUND', 404, { statusCode: 404, error: 'PACKAGE_NOT_FOUND', message: 'Package not available' }],
+    ['after 1TO1-FU-BE: coach_not_accepting_clients', 409, { code: 'coach_not_accepting_clients', message: 'Coach is not accepting clients' }],
+    ['coach_not_accepting', 409, { code: 'coach_not_accepting', message: 'Coach is not accepting clients' }],
+  ])('%s', async (_name, status, data) => {
+    await writePendingInviteCode('GP-FULL');
+    (authApi.attachInviteCode as jest.Mock).mockRejectedValueOnce({ response: { status, data } });
+    const result = await claimPendingInviteCode();
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe('coach_not_accepting_clients');
+    expect(result.message).toBe(NOT_ACCEPTING);
+    expect(await readPendingInviteCode()).toBeNull();
+  });
+});

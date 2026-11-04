@@ -28,6 +28,8 @@ export interface RoutineExercise {
   sets: number;
   reps: number;
   restSec: number;
+  /** The library item's id (catalog uuid) the saved routine keeps, if any. */
+  catalogExerciseId?: string | null;
 }
 
 export interface WorkoutSession {

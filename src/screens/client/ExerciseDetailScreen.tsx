@@ -44,7 +44,9 @@ export default function ExerciseDetailScreen({ route }: Props) {
 
   const { idOrSlug } = route.params;
   const [detail, setDetail] = useState<ExerciseDetail | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // 'missing': the library has no details for this id (404, W3);
+  // 'failed': no network, a timeout, a 5xx or a refusal (Retry helps).
+  const [error, setError] = useState<'missing' | 'failed' | null>(null);
   const [loading, setLoading] = useState(true);
   const [attempt, setAttempt] = useState(0);
   const [mediaFailed, setMediaFailed] = useState(false);
@@ -59,9 +61,10 @@ export default function ExerciseDetailScreen({ route }: Props) {
       .then((res) => {
         if (!cancelled) setDetail(res.data as ExerciseDetail);
       })
-      .catch(() => {
+      .catch((err) => {
         if (!cancelled) {
-          setError('Exercise details did not load. Check your connection and try again.');
+          const status = (err as { response?: { status?: number } } | null)?.response?.status;
+          setError(status === 404 ? 'missing' : 'failed');
         }
       })
       .finally(() => {
@@ -91,13 +94,23 @@ export default function ExerciseDetailScreen({ route }: Props) {
     return <SkeletonScreen testID="exercise-detail-loading" count={5} />;
   }
 
+  if (error === 'missing') {
+    return (
+      <View style={[styles.screen, styles.center, styles.stateBody]} testID="exercise-detail-missing">
+        <Text style={styles.errorText}>No details for this exercise yet.</Text>
+      </View>
+    );
+  }
+
   if (error || !detail) {
     return (
       <View
-        style={[styles.screen, styles.center]}
+        style={[styles.screen, styles.center, styles.stateBody]}
         testID="exercise-detail-error"
       >
-        <Text style={styles.errorText}>{error ?? 'Exercise not found.'}</Text>
+        <Text style={styles.errorText}>
+          {error ? 'Exercise details did not load. Check your connection and try again.' : 'Exercise not found.'}
+        </Text>
         <HapticPressable disableAnimation style={styles.retry} accessibilityRole="button" onPress={() => setAttempt((value) => value + 1)}>
           <Text style={styles.retryText}>Retry</Text>
         </HapticPressable>
@@ -194,6 +207,9 @@ function makeStyles(sc: SemanticTokens) {
       alignItems: 'center',
       justifyContent: 'center',
     },
+    stateBody: {
+      paddingHorizontal: spacing.lg,
+    },
     title: {
       ...typography.h1,
       color: sc.textPrimary,
@@ -267,6 +283,7 @@ function makeStyles(sc: SemanticTokens) {
       paddingHorizontal: spacing.lg,
       alignItems: 'center',
       justifyContent: 'center',
+      borderRadius: radius.button,
       backgroundColor: sc.accent,
     },
     retryText: {
