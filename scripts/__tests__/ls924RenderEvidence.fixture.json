@@ -1,0 +1,15 @@
+{
+  "repository": "BradleyGleavePortfolio/tgp-agent-context",
+  "commit": "9d356e2ad2ada6f3d96e060fa5f7a541c6a0a4ad",
+  "folder": "handoffs/op-194/renders/COACH-DAY-ORDER-M",
+  "pngs": [
+    "timeline__after__android390__100.png",
+    "timeline__after__ios390__100.png",
+    "timeline__before__android390__100.png",
+    "timeline__before__ios390__100.png",
+    "weekly__after__android390__100.png",
+    "weekly__after__ios390__100.png",
+    "weekly__before__android390__100.png",
+    "weekly__before__ios390__100.png"
+  ]
+}
