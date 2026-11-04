@@ -43,6 +43,8 @@ interface Props {
    * Passed only by the Food tab behind featureFlags.foodPlanChecklist; without it no "After this plate" line.
    */
   dayLeft?: { kcal: number; protein: number } | null;
+  /** C2-S-33: "Add another food" logs this plate and keeps the add sheet open; it takes Cancel's place. */
+  onAddAnother?: () => void;
 }
 
 export default function QuantityPickerModal({ visible, ...props }: Props) {
@@ -79,6 +81,7 @@ export function QuantityPickerContent({
   blocked = false,
   mealLabel,
   dayLeft,
+  onAddAnother,
 }: Omit<Props, 'visible'>) {
   const quantity = parseQuantityInput(quantityInput);
   const { semanticColors: sc } = useTheme();
@@ -173,7 +176,12 @@ export function QuantityPickerContent({
           testID="quantity-log-food"
           style={styles.quantityLogButton}
         />
-        <TextLink label="Cancel" tone="accent" disabled={saving} onPress={onCancel} />
+        {onAddAnother ? (
+          <TextLink label="Add another food" tone="accent" disabled={saving || quantity == null || blocked} onPress={onAddAnother}
+            testID="quantity-add-another" />
+        ) : (
+          <TextLink label="Cancel" tone="accent" disabled={saving} onPress={onCancel} />
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );

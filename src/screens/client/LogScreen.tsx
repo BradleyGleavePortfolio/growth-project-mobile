@@ -144,6 +144,8 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
 
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchRequest = useRef(0);
+  // FOOD-DAY-STYLEC-M (C_portion, C2-S-33): "Log food" closes the add sheet; "Add another food" keeps it open.
+  const closeAddAfterLog = useRef(false);
 
   // Show "Searching 1M+ foods..." after 3 seconds of searching
   useEffect(() => {
@@ -363,6 +365,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
       setAddedFoodName(selectedFood.name);
       setSavedMessage(`${selectedFood.name} added to ${MEAL_SECTIONS.find((s) => s.type === activeMealType)?.label}.`);
       onSaved?.();
+      if (closeAddAfterLog.current) setModalVisible(false);
     } catch (err) {
       console.error('LogScreen: handleConfirmLog failed', err);
       // Phase 11 / Track 3: error haptic on failed API action
@@ -800,10 +803,11 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
             selectedUnit={selectedUnit}
             onQuantityChange={setQuantityInput}
             onUnitChange={setSelectedUnit}
-            onConfirm={handleConfirmLog}
+            onConfirm={() => { closeAddAfterLog.current = styleCDay; void handleConfirmLog(); }}
             saving={foodSaving}
             dayLeft={styleCDay && macroTargets && macroTargets.calories > 0
               ? { kcal: macroTargets.calories - dailyTotals.calories, protein: macroTargets.protein - dailyTotals.protein } : undefined}
+            onAddAnother={styleCDay ? () => { closeAddAfterLog.current = false; void handleConfirmLog(); } : undefined}
             onCancel={() => {
               setQuantityModalVisible(false);
               setSelectedFood(null);

@@ -104,7 +104,8 @@ it('UI-3d: Extras Add opens on the meal up next with the four meals, and files t
   expect(meal('Lunch').props.accessibilityState.checked).toBe(true);
   expect(meal('Snacks').props.accessibilityState.checked).toBe(false);
   await fireEvent.press(await screen.findByText('Rolled oats'));
-  await fireEvent.press(await screen.findByTestId('quantity-log-food'));
+  // C2-S-33: "Add another food" logs and keeps the add sheet open.
+  await fireEvent.press(await screen.findByTestId('quantity-add-another'));
   await waitFor(() => expect(logApi.logFood).toHaveBeenCalledTimes(1));
   expect(lastWrite()).toEqual(expect.objectContaining({ meal_type: 'lunch', food_item_id: 'f1' }));
   expect(lastWrite()).not.toHaveProperty('plan_slot_id');
