@@ -8,6 +8,7 @@
 import { peekSlices } from '../clientPeek';
 import { workoutWeek, type ClientWeek } from '../../../screens/coach/client-detail/thisWeek';
 import type { RosterClient } from '../clientRoster';
+import type { MacroTarget } from '../../../api/macrosApi';
 
 const TODAY = new Date(2026, 10, 4, 9, 41); // Wednesday, November 4, 2026 (local)
 const client = (toReview: number) => ({
@@ -19,7 +20,7 @@ const NONE = week([]);
 const summary = (over: Record<string, unknown> = {}) => ({
   profile: null, today: { entries: [{ id: 'e1' }], total_calories: 920, total_protein_g: 64 }, weight_logs: [], ...over,
 });
-const target = { calories_kcal: 1900, protein_g: 140, carbs_g: 200, fats_g: 60 };
+const target = { calories_kcal: 1900, protein_g: 140, carbs_g: 200, fats_g: 60 } as unknown as MacroTarget;
 const checkIn = [{ id: 'k1', date: '2026-11-04T00:00:00.000Z', energy: 3, notes: 'Knee a bit tight\nmore' }];
 
 describe('peekSlices: the values C_peek draws on one line each', () => {
@@ -37,7 +38,7 @@ describe('peekSlices: the values C_peek draws on one line each', () => {
     ['with a target', target, '920 of 1,900\u00a0kcal'],
     ['without a target', null, '920\u00a0kcal'],
   ])('Food %s: kcal alone, no protein and no second line', (_case, t, want) => {
-    expect(peekSlices(client(0), summary(), [], NONE, t, TODAY).food.text).toBe(want);
+    expect(peekSlices(client(0), summary(), [], NONE, t as MacroTarget | null, TODAY).food.text).toBe(want);
   });
 
   it('Food with nothing logged today reads "Nothing logged yet"', () => {
