@@ -10,7 +10,7 @@ import path from 'path';
 import { StyleSheet, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { render, screen } from '@testing-library/react-native';
 import QuantityPickerModal from '../QuantityPickerModal';
-import { layout, lightTokens, radius } from '../../../theme/tokens';
+import { gold, layout, lightTokens, radius } from '../../../theme/tokens';
 
 jest.mock('../../FoodImage', () => ({ __esModule: true, default: () => null }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
@@ -49,19 +49,18 @@ describe('Food sheets redesign (REDO-FOOD-133)', () => {
     const food = { name: 'Oats', calories: 300, protein: 12, carbs: 54, fat: 6, nutrient_basis: 'PER_100G' as const, serving_size_grams: 100 };
     await render(<QuantityPickerModal visible selectedFood={food} quantityInput="1" selectedUnit="serving" onQuantityChange={jest.fn()}
       onUnitChange={jest.fn()} onConfirm={jest.fn()} onCancel={jest.fn()} />);
-    expect(filledForest(screen.toJSON() as JsonNode)).toBe(1);
+    // Style C (STYLEC-916): the ruler needle is the only other forest fill; it is not an action.
+    expect(filledForest(screen.toJSON() as JsonNode)).toBe(2);
+    expect(flat(screen.getByTestId('portion-ruler-needle')).backgroundColor).toBe(lightTokens.accent);
     expect(flat(screen.getByRole('button', { name: 'Log food' }))).toMatchObject({ borderRadius: radius.button, minHeight: 54 });
-    expect(flat(screen.getByLabelText('Food quantity')).borderRadius).toBe(radius.input);
-    expect(flat(screen.getByLabelText('Portion unit serving'))).toMatchObject({ borderRadius: radius.chip, borderColor: lightTokens.accent });
-    expect(flat(screen.getByLabelText('Portion unit g'))).toMatchObject({ borderRadius: radius.chip, borderColor: lightTokens.border });
+    expect(flat(screen.getByLabelText('Portion unit serving')).borderBottomColor).toBe(gold[300]);
+    expect(flat(screen.getByLabelText('Portion unit g')).borderBottomColor).toBe('transparent');
     for (const unit of ['serving', 'g', 'oz']) {
-      expect(flat(screen.getByLabelText(`Portion unit ${unit}`))).toMatchObject({
-        minHeight: layout.touchMin,
-        minWidth: layout.touchMin,
-      });
+      const tab = flat(screen.getByLabelText(`Portion unit ${unit}`));
+      expect(tab.minHeight).toBe(layout.touchMin);
+      expect(Number(tab.minWidth)).toBeGreaterThanOrEqual(layout.touchMin);
     }
-    for (const value of ['300', '12g', '54g', '6g']) {
-      expect(flat(screen.getByText(value)).fontVariant).toEqual(['lining-nums', 'tabular-nums']);
-    }
+    expect(flat(screen.getByTestId('portion-summary')).fontVariant).toEqual(['lining-nums', 'tabular-nums']);
+    expect(screen.getByTestId('portion-summary')).toHaveTextContent('300 kcal, 12 g protein, 54 g carbs, 6 g fat.');
   });
 });

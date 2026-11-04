@@ -155,7 +155,7 @@ export default function MealPickerScreen({ route, navigation }: ProgramsScreenPr
         </>
       )}
       <QuantityPickerModal visible={!!food} selectedFood={food} quantityInput={qty} selectedUnit={unit} onQuantityChange={setQty}
-        onUnitChange={setUnit} onConfirm={() => void addFood()} onCancel={() => setFood(null)} saving={busy}
+        onUnitChange={setUnit} onConfirm={() => void addFood()} onCancel={() => setFood(null)} saving={busy} mealLabel={SLOT_NAMES[kind]}
         confirmLabel="Use this food" emptyHint="Enter a quantity greater than zero to use this food." blocked={over}
         notice={over ? 'Up to 2,000 kcal, 300 g protein, 400 g carbs and 200 g fat.' : create.error ? saveFailed(create.error) : null} />
     </Screen>
