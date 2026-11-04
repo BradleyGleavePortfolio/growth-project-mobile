@@ -83,7 +83,7 @@ function RecipeCard({ recipe, onPress }: { recipe: Recipe; onPress: () => void }
         </View>
       ) : null}
       <View style={styles.cardBody}>
-        <Text style={styles.cardTitle} numberOfLines={2}>{recipe.title}</Text>
+        <Text style={styles.cardTitle}>{recipe.title}</Text>
         {recipe.description ? (
           <Text style={styles.cardDesc} numberOfLines={2}>{recipe.description}</Text>
         ) : null}

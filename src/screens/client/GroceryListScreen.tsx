@@ -359,7 +359,7 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
   },
   qtyInput: {
     fontFamily: typography.body.fontFamily, fontVariant: ['tabular-nums'],
-    flex: 1,
+    width: 72,
     height: 44,
     borderBottomWidth: 1,
     borderColor: colors.border,
@@ -371,6 +371,7 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
   unitInput: {
     fontFamily: typography.body.fontFamily,
     flex: 1,
+    minWidth: 0,
     height: 44,
     borderBottomWidth: 1,
     borderColor: colors.border,
@@ -408,14 +409,14 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
     paddingHorizontal: 0,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    gap: 12,
+    gap: 10,
   },
   itemRowChecked: { opacity: 1 },
   checkbox: { width: 44, height: 44, marginLeft: -8, alignItems: 'center', justifyContent: 'center' },
-  itemContent: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  itemName: { ...typography.h3, fontFamily: 'CormorantGaramond_400Regular', fontSize: 21, lineHeight: 27, color: colors.textPrimary, flex: 1 },
+  itemContent: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 12 },
+  itemName: { ...typography.h3, fontFamily: 'CormorantGaramond_400Regular', fontSize: 20, lineHeight: 26, color: colors.textPrimary, flexGrow: 1, flexShrink: 1, flexBasis: '55%' },
   itemNameChecked: { textDecorationLine: 'line-through', color: colors.textMuted },
-  itemMeta: { ...typography.body, color: colors.textMuted, fontVariant: ['tabular-nums'], textAlign: 'right', maxWidth: '40%' },
+  itemMeta: { ...typography.body, color: colors.textMuted, fontVariant: ['tabular-nums'], textAlign: 'right', flexShrink: 0, marginLeft: 'auto' },
   deleteBtn: { width: 44, height: 44, marginRight: -12, alignItems: 'center', justifyContent: 'center' },
 
   });

@@ -115,7 +115,7 @@ export default function RecipeDetailScreen() {
   }, [isSaved, saving, recipe, queryClient]);
 
   if (isLoading && !recipe) {
-    return <StyleCPage head={<StyleCMasthead loading />}><StyleCLoadingLines rows={6} label="Loading" /></StyleCPage>;
+    return <StyleCPage head={<StyleCMasthead loading />} paperStyle={styles.errorContainer}><StyleCLoadingLines rows={6} label="Loading" /></StyleCPage>;
   }
 
   // A 404 wins over a cached copy (list cache or an earlier open): the recipe is
@@ -319,8 +319,7 @@ const makeStyles = (colors: SemanticTokens) =>
   macroValue: { ...typography.h2, color: colors.textPrimary, fontVariant: ['tabular-nums'] },
   macroLabel: { ...typography.bodySmall, color: colors.textMuted },
 
-  // Hairline rows (C_recipe ingredients).
-  listItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  listItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   bullet: {
     width: 6,
     height: 6,
