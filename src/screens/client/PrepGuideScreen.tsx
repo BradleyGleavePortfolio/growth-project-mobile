@@ -18,7 +18,7 @@ import { prepGuideApi, listsApi } from '../../services/api';
 import FadeInView from '../../components/FadeInView';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { typography, radius } from '../../theme/tokens';
-import { Screen } from '../../ui';
+import { StyleCLoadingLines, StyleCMasthead, StyleCPage } from '../../ui/layout/StyleCPage';
 import { getLocalWeekStart } from '../../utils/date';
 import { RecipeAllergenFields, recipeAllergenSummary } from '../../lib/recipeAllergens';
 
@@ -147,14 +147,7 @@ export default function PrepGuideScreen() {
   }, [data, addToGroceryMutation]);
 
   return (
-    <Screen edges={['top']} scroll={false} contentStyle={styles.bare} testID="grocery-prep-screen">
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back" onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Prep guide</Text>
-      </View>
+    <StyleCPage testID="grocery-prep-screen" paperStyle={styles.bare} head={<StyleCMasthead title="Prep guide" onBack={() => navigation.goBack()} />}>
 
       {/* Week selector: only where the week is real (the server filters by it) */}
       {showWeek ? <View style={styles.weekSelector}>
@@ -198,8 +191,8 @@ export default function PrepGuideScreen() {
       >
         {isLoading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={styles.loadingText}>Loading your prep guide…</Text>
+            <StyleCLoadingLines />
           </View>
         ) : isError ? (
           <EmptyState
@@ -321,7 +314,7 @@ export default function PrepGuideScreen() {
           </>
         )}
       </ScrollView>
-    </Screen>
+    </StyleCPage>
   );
 }
 
@@ -329,16 +322,8 @@ export default function PrepGuideScreen() {
 const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primary' | 'textPrimary' | 'textMuted' | 'textSecondary' | 'textOnPrimary' | 'border' | 'primaryPale'>) =>
   StyleSheet.create({
   // Screen owns the inset top (insets.top + 12) and the page colour.
-  bare: { paddingHorizontal: 0, paddingBottom: 0 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 12,
-    gap: 12,
-  },
-  backBtn: { width: 44, height: 44, justifyContent: 'center' },
-  title: { ...typography.h1, color: colors.textPrimary },
+  // StyleCPage owns the masthead, the inset top and the page colours.
+  bare: { paddingTop: 12 },
   summary: { ...typography.h2, color: colors.textPrimary, fontVariant: ['tabular-nums'] },
 
   weekSelector: {
@@ -347,8 +332,7 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: colors.surface,
-    marginHorizontal: 16,
+    marginHorizontal: 24,
     marginBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
@@ -369,9 +353,9 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
   },
 
   content: { flex: 1 },
-  contentInner: { padding: 16, paddingBottom: 60, gap: 14 },
+  contentInner: { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 60, gap: 14 },
 
-  loadingContainer: { alignItems: 'center', paddingTop: 60, gap: 12 },
+  loadingContainer: { paddingTop: 12, gap: 16 },
   loadingText: { ...typography.bodySmall, color: colors.textMuted },
 
   section: {
@@ -403,17 +387,15 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
   prepDayHint: { ...typography.bodySmall, color: colors.textMuted },
 
   recipeRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, minHeight: 44, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
-  stepNumber: { ...typography.h3, color: colors.textPrimary, fontVariant: ['tabular-nums'] },
+  // Serif numerals in muted ink (C_recipe method), not a filled chip.
+  stepNumber: { ...typography.h2, color: colors.textMuted },
   recipeIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.chip,
-    backgroundColor: colors.primaryPale,
+    width: 28,
     alignItems: 'center',
     justifyContent: 'center',
   },
   recipeInfo: { flex: 1 },
-  recipeName: { ...typography.bodyMd, color: colors.textPrimary },
+  recipeName: { ...typography.h3, fontSize: 21, lineHeight: 27, color: colors.textPrimary },
   recipeMeta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 4, marginTop: 2 },
   recipeMetaText: { ...typography.bodySmall, color: colors.textMuted, fontVariant: ['tabular-nums'] },
   recipeMetaDot: { ...typography.bodySmall, color: colors.textMuted },
@@ -429,7 +411,7 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
     borderRadius: radius.button,
   },
   addToGroceryBtnDisabled: { opacity: 0.6 },
-  addToGroceryBtnText: { ...typography.bodySmall, color: colors.textOnPrimary },
+  addToGroceryBtnText: { ...typography.bodyMd, color: colors.textOnPrimary },
 
   ingredientRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   ingredientBullet: {

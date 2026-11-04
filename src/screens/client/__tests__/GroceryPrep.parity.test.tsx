@@ -12,6 +12,8 @@ import PrepGuideScreen from '../PrepGuideScreen';
 const mockNavigation = { goBack: jest.fn(), navigate: jest.fn() };
 let mockTokens = lightTokens;
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => mockNavigation }));
+// The Style C masthead paints the status bar on focus; no navigator here (STYLE-KITCHEN-M).
+jest.mock('../../../components/StatusBarBand', () => ({ useStatusBarBand: () => undefined }));
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({ colors: jest.requireActual('../../../constants/colors').default, semanticColors: mockTokens }),
 }));

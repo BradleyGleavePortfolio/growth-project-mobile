@@ -15,6 +15,8 @@ const mockList = jest.fn(), mockListSaved = jest.fn(), mockGetById = jest.fn(), 
 const mockUpdate = jest.fn(async (_body: unknown) => ({})), mockGuide = jest.fn();
 let mockRestrictions: string[] | undefined = [];
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: mockBack, navigate: mockNavigate }), useRoute: () => ({ params: { recipeId: 'satay' } }) }));
+// The Style C masthead paints the status bar on focus; no navigator here (STYLE-KITCHEN-M).
+jest.mock('../../../components/StatusBarBand', () => ({ useStatusBarBand: () => undefined }));
 jest.mock('../../../theme/ThemeProvider', () => ({ useTheme: () => ({ semanticColors: require('../../../theme/tokens').lightTokens, colors: new Proxy({}, { get: () => 'legacy' }) }) }));
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'client', profile: { diet_restrictions: mockRestrictions } }) }));
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));

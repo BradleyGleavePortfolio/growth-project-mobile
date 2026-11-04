@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   TextInput,
   RefreshControl,
-  ActivityIndicator,
   Image,
   FlatList,
   ListRenderItem,
@@ -29,7 +28,7 @@ import EmptyState from '../../components/EmptyState';
 import AllergySafetyPrompt from '../../components/AllergySafetyPrompt';
 import { useTheme } from '../../theme/ThemeProvider';
 import { typography, radius, SemanticTokens } from '../../theme/tokens';
-import { Screen } from '../../ui';
+import { StyleCLoadingLines, StyleCMasthead, StyleCPage } from '../../ui/layout/StyleCPage';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { patchUserCache } from '../../lib/userCache';
 import { track } from '../../lib/analytics';
@@ -241,15 +240,7 @@ export default function RecipesScreen() {
   );
 
   return (
-    <Screen edges={['top']} scroll={false} contentStyle={styles.bare}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}
-          accessibilityRole="button" accessibilityLabel="Go back">
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Recipes</Text>
-      </View>
+    <StyleCPage paperStyle={styles.bare} head={<StyleCMasthead title="Recipes" onBack={() => navigation.goBack()} backLabel="Go back" />}>
 
       {/* Search */}
       <View style={styles.searchRow}>
@@ -295,8 +286,8 @@ export default function RecipesScreen() {
           mount-in animation. */}
       {isLoading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.accent} />
           <Text style={styles.loadingText}>Loading recipes…</Text>
+          <StyleCLoadingLines />
         </View>
       ) : (
         <FlatList<Recipe>
@@ -361,39 +352,28 @@ export default function RecipesScreen() {
         onSubmit={handleAllergySubmit}
         onLater={handleAllergyLater}
       />
-    </Screen>
+    </StyleCPage>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const makeStyles = (colors: SemanticTokens) =>
   StyleSheet.create({
-  // Screen owns the inset top (insets.top + 12) and the page colour.
-  bare: { paddingHorizontal: 0, paddingBottom: 0 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    marginBottom: 16,
-    gap: 12,
-  },
-  backBtn: { width: 44, height: 44, justifyContent: 'center' },
-  title: { ...typography.h1, color: colors.textPrimary },
+  // StyleCPage owns the masthead, the inset top and the page colours.
+  bare: { paddingTop: 24 },
 
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.bgPrimary,
-    borderRadius: radius.input,
+    // Underlined field (C_grocery "Add an item"), not a box.
     marginHorizontal: 24,
-    marginBottom: 12,
-    paddingHorizontal: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    height: 44,
+    marginBottom: 8,
+    borderBottomWidth: 1,
+    borderColor: colors.textPrimary,
+    minHeight: 48,
   },
-  searchIcon: { marginRight: 8 },
-  searchInput: { ...typography.body, flex: 1, color: colors.textPrimary, height: 44 },
+  searchIcon: { marginRight: 10 },
+  searchInput: { ...typography.body, fontSize: 17, flex: 1, color: colors.textPrimary, minHeight: 48 },
 
   tagFilterRow: { maxHeight: 44, marginBottom: 8 },
   tagFilterContent: { paddingHorizontal: 24, gap: 8, alignItems: 'center' },
@@ -416,11 +396,13 @@ const makeStyles = (colors: SemanticTokens) =>
   listContent: { paddingHorizontal: 24, paddingBottom: 40 },
   hiddenNote: { ...typography.bodySmall, color: colors.textMuted, paddingVertical: 8 },
 
-  loadingContainer: { alignItems: 'center', paddingTop: 60, gap: 12 },
+  loadingContainer: { paddingHorizontal: 24, paddingTop: 24, gap: 16 },
   loadingText: { ...typography.bodySmall, color: colors.textMuted },
 
+  // A row with a cream thumb tile at the left (C_kitchen), hairline between rows.
   card: {
-    backgroundColor: colors.bgPrimary,
+    flexDirection: 'row',
+    gap: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     overflow: 'hidden',
@@ -432,9 +414,10 @@ const makeStyles = (colors: SemanticTokens) =>
     justifyContent: 'center',
   },
   cardImageWrap: {
-    height: 160,
+    width: 72,
+    height: 72,
     marginTop: 20,
-    borderRadius: radius.card,
+    borderRadius: radius.button,
     overflow: 'hidden',
     backgroundColor: colors.bgSurface,
   },
@@ -451,8 +434,8 @@ const makeStyles = (colors: SemanticTokens) =>
     paddingVertical: 4,
     borderRadius: radius.chip,
   },
-  cardBody: { paddingVertical: 20, gap: 6 },
-  cardTitle: { ...typography.bodyMd, color: colors.textPrimary },
+  cardBody: { flex: 1, paddingVertical: 20, gap: 6 },
+  cardTitle: { ...typography.h3, fontSize: 21, lineHeight: 27, color: colors.textPrimary },
   cardDesc: { ...typography.bodySmall, color: colors.textMuted },
   cardMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginTop: 2 },
   cardMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
