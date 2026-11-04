@@ -431,7 +431,7 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
         letterStyle={s.indexLetter}
       />
       {peek ? null : nudge.modal}
-      <ClientPeekSheet client={peek} coachId={coachId} onClose={() => setPeek(null)} onOpen={openTarget} onNudge={nudge.open}>
+      <ClientPeekSheet client={peek} onClose={() => setPeek(null)} onOpen={openTarget} onNudge={nudge.open}>
         {peek ? nudge.modal : null}
       </ClientPeekSheet>
       <HomeSheet list={null} ask={ask} onCloseList={() => setAsk(null)} onCloseAsk={() => setAsk(null)} onSent={() => void loadSide()} />

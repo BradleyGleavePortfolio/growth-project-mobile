@@ -19,6 +19,8 @@ import { QuietError, QuietLoading } from '../../../ui/states/QuietStates';
 import { firstName, initialsOf } from '../../../utils/coach/clientLookup';
 import { peekJoinedLine, peekSlices, peekStatusLine, type PeekSlices } from '../../../utils/coach/clientPeek';
 import { rosterDisplayName, type RosterClient } from '../../../utils/coach/clientRoster';
+import { SegmentedRing } from '../../../ui/charts/StyleCMarks';
+import { doneLine, workoutWeek, type ClientWeek, type WorkoutWeek } from '../client-detail/thisWeek';
 
 export type PeekTarget =
   | { screen: 'ClientDetail'; tab?: 'logs' | 'workouts' | 'timeline' }
@@ -27,7 +29,6 @@ export type PeekTarget =
 
 type Props = {
   client: RosterClient | null;
-  coachId?: string;
   onClose: () => void;
   onOpen: (c: RosterClient, target: PeekTarget) => void;
   onNudge: (c: RosterClient) => void;
@@ -35,11 +36,12 @@ type Props = {
 };
 
 /** Each answer carries the client it was read for, so it is drawn only under that client's name. */
-type Load = { id: string; state: 'loading' | 'error' } | { id: string; state: 'ready'; summary: unknown; checkIns: unknown };
+type Load = { id: string; state: 'loading' | 'error' } | { id: string; state: 'ready'; summary: unknown; checkIns: unknown; week: WorkoutWeek };
 const LOAD_FAILED = 'Could not load this client. Please try again.';
+const RING = 76;
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {});
 
-export default function ClientPeekSheet({ client, coachId, onClose, onOpen, onNudge, children }: Props) {
+export default function ClientPeekSheet({ client, onClose, onOpen, onNudge, children }: Props) {
   const theme = useTheme();
   const s = useMemo(() => makeStyles(theme), [theme]);
   const { colors } = theme;
@@ -55,9 +57,12 @@ export default function ClientPeekSheet({ client, coachId, onClose, onOpen, onNu
     const mine = ++seq.current;
     setLoad({ id, state: 'loading' });
     try {
-      const [summary, checkIns] = await Promise.all([coachApi.getClientSummary(id), coachApi.getClientCheckIns(id, { limit: 1 })]);
+      // The week is the one the client file's ring reads (useThisWeek): the client's Monday to Sunday, in their zone.
+      const [summary, checkIns, week] = await Promise.all([
+        coachApi.getClientSummary(id), coachApi.getClientCheckIns(id, { limit: 1 }), coachApi.getClientWeek(id).then((r) => workoutWeek(r.data as ClientWeek)),
+      ]);
       if (obj(summary?.data).error) throw new Error('not found');
-      if (mine === seq.current) setLoad({ id, state: 'ready', summary: summary?.data, checkIns: checkIns?.data });
+      if (mine === seq.current) setLoad({ id, state: 'ready', summary: summary?.data, checkIns: checkIns?.data, week });
     } catch {
       if (mine === seq.current) setLoad({ id, state: 'error' });
     }
@@ -76,9 +81,14 @@ export default function ClientPeekSheet({ client, coachId, onClose, onOpen, onNu
   const stack = fontScale >= 1.3 || first.length > 12;
   const status = peekStatusLine(client);
   const slices: PeekSlices | null = own?.state === 'ready'
-    ? peekSlices(client, own.summary, own.checkIns, coachId, target.isSuccess ? target.data : null)
+    ? peekSlices(client, own.summary, own.checkIns, own.week, target.isSuccess ? target.data : null)
     : null;
   const open = (t: PeekTarget) => onOpen(client, t);
+  const sc = theme.semanticColors;
+  const light = { color: sc.textOnAccent };
+  const muted = { color: sc.textOnMastheadMuted };
+  const ring = slices?.workouts.week ?? null;
+  const lastDone = ring ? ring.segments.lastIndexOf('done') : -1;
   const chips: Array<[string, PeekTarget]> = [
     ['Food log', { screen: 'ClientDetail', tab: 'logs' }],
     ['Workouts', { screen: 'ClientDetail', tab: 'workouts' }],
@@ -104,14 +114,26 @@ export default function ClientPeekSheet({ client, coachId, onClose, onOpen, onNu
         <View style={[s.sheet, { paddingBottom: 20 + insets.bottom }]} accessibilityViewIsModal>
           <View style={s.grab} />
           <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
-            <View style={s.head}>
-              <View style={s.avatar}><Text style={s.avatarText}>{initialsOf(client)}</Text></View>
+            {/* K1 Style C (C_peek): a mini masthead with the file's week ring (SegmentedRing onDark, K1-S-38 inside and as
+                its spoken label); the initials until the week is read, and when this week has no session. */}
+            <View style={[s.head, { backgroundColor: sc.surface.masthead }]} testID="peek-masthead">
+              {ring ? (
+                <SegmentedRing
+                  onDark size={RING} segments={ring.segments} label={doneLine(ring)} testID="peek-week-ring"
+                  drawIndex={lastDone >= 0 ? lastDone : undefined} event={`${client.id}:${ring.week}`}
+                >
+                  <Text maxFontSizeMultiplier={1.15} numberOfLines={1} adjustsFontSizeToFit style={[s.ringCount, light]}>{`${ring.done} of ${ring.total}`}</Text>
+                  <Text maxFontSizeMultiplier={1.15} style={[typography.eyebrow, s.ringDone, muted]}>done</Text>
+                </SegmentedRing>
+              ) : (
+                <View style={s.avatar}><Text style={s.avatarText}>{initialsOf(client)}</Text></View>
+              )}
               <View style={s.mid}>
-                <Text style={s.name} accessibilityRole="header" numberOfLines={2}>{rosterDisplayName(client)}</Text>
-                <Text style={[s.small, s.muted]}>{peekJoinedLine(client)}</Text>
+                <Text style={[s.name, light]} accessibilityRole="header" numberOfLines={2}>{rosterDisplayName(client)}</Text>
+                <Text style={[s.small, muted]}>{peekJoinedLine(client)}</Text>
               </View>
               <HapticPressable intent="light" style={s.close} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" testID="peek-close">
-                <Ionicons name="close" size={20} color={colors.textPrimary} />
+                <Ionicons name="close" size={24} color={sc.textOnAccent} />
               </HapticPressable>
             </View>
             {status ? (
@@ -167,14 +189,15 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: sem.overlay },
     sheet: { maxHeight: '90%', paddingTop: 8, paddingHorizontal: layout.gutter, backgroundColor: colors.background, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet },
     grab: { width: 40, height: 5, borderRadius: radius.chip, backgroundColor: sem.border, alignSelf: 'center', marginBottom: 12 },
-    head: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    head: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, paddingRight: 8, borderRadius: radius.card },
     mid: { flex: 1, minWidth: 0 },
     avatar: { width: 48, height: 48, borderRadius: radius.chip, borderWidth: 1, borderColor: palette.camel, backgroundColor: palette.cream, alignItems: 'center', justifyContent: 'center' },
     avatarText: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 19, color: colors.textPrimary },
-    name: { ...typography.h3, color: colors.textPrimary },
+    name: { ...typography.h2 },
     small: { ...typography.bodySmall, color: colors.textPrimary },
-    muted: { color: colors.textMuted },
-    close: { width: 44, height: 44, borderRadius: radius.chip, borderWidth: StyleSheet.hairlineWidth, borderColor: sem.border, backgroundColor: sem.bgSurface, alignItems: 'center', justifyContent: 'center' },
+    close: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+    ringCount: { ...typography.h3, fontSize: 18, lineHeight: 21 },
+    ringDone: { fontSize: 10, lineHeight: 12 },
     status: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 10, marginBottom: 4 },
     statusText: { flexShrink: 1 },
     dot: { width: 7, height: 7, borderRadius: radius.chip, backgroundColor: colors.primary },

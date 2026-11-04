@@ -47,7 +47,7 @@ const summary = (recent_assignments: unknown[] = []) => ({
 });
 
 async function mount(c = client()) {
-  await render(<ClientPeekSheet client={c} coachId="coach-1" onClose={jest.fn()} onOpen={jest.fn()} onNudge={jest.fn()} />);
+  await render(<ClientPeekSheet client={c} onClose={jest.fn()} onOpen={jest.fn()} onNudge={jest.fn()} />);
   await waitFor(() => expect(screen.queryByText('Loading')).toBeNull());
 }
 const ringLabel = () => screen.getByTestId('peek-week-ring').props.accessibilityLabel;
