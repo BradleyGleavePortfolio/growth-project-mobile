@@ -297,7 +297,7 @@ describe('leaving a live workout never deletes it', () => {
     mockLoadSession.mockResolvedValue(stored([true, false, false], [false]));
     const view = await openScreen();
     expect(alerts).toEqual([]);
-    expect(view.getByText('1 of 4 sets completed')).toBeTruthy();
+    expect(view.getByText('1 / 4 sets')).toBeTruthy();
     expect(mockNavigation.setParams).toHaveBeenCalledWith(expect.objectContaining({ routineName: 'Push Day' }));
   });
 
@@ -310,7 +310,7 @@ describe('leaving a live workout never deletes it', () => {
     expect(allButtons().some((b) => NO_DELETE.includes(b))).toBe(false);
     expect(mockGoBack).not.toHaveBeenCalled();
     expect(mockMutate).not.toHaveBeenCalled();
-    expect(view.getByText('2 of 4 sets completed')).toBeTruthy();
+    expect(view.getByText('2 / 4 sets')).toBeTruthy();
   });
 
   it('Finish and log saves the workout through the normal finish path, then closes', async () => {
@@ -359,7 +359,7 @@ describe('leaving a live workout never deletes it', () => {
     mockLoadSession.mockResolvedValue({ isStale: false, session: { version: 1, updatedAtMs: Date.now(), ...draft } });
     const again = await openScreen();
     expect(again.getByLabelText('Workout notes').props.value).toBe('Left shoulder tight');
-    expect(again.getByText('0 of 2 sets completed')).toBeTruthy();
+    expect(again.getByText('0 / 2 sets')).toBeTruthy();
   });
   it.each(['Leave', 'Back'] as const)('%s right after opening, with nothing entered, still releases the empty session', async (how) => {
     mockRouteParams = FRESH;

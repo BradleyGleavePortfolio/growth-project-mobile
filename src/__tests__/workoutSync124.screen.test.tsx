@@ -183,14 +183,16 @@ describe('DES-W-127 live screen route/action parity', () => {
     await fireEvent.press(view.getByRole('button', { name: 'Biceps' }));
     await fireEvent.changeText(search, 'Curl');
     await fireEvent.press(view.getByText('Dumbbell Curl'));
+    // FR-917R3 (C1 v2): an added block not started is one line; one tap opens it.
+    await fireEvent.press(view.getByTestId('exercise-waiting-1'));
     expect(view.getByLabelText('Notes for Dumbbell Curl')).toBeTruthy();
     await fireEvent.press(view.getByLabelText('Watch video for Bench Press'));
     expect(mockNavigate).toHaveBeenCalledWith('ExerciseDetail', { idOrSlug: 'ex-1' });
     await fireEvent.changeText(view.getByLabelText('Workout notes'), 'Controlled session');
     await fireEvent.changeText(view.getByLabelText('Notes for Bench Press'), 'Smooth');
     await fireEvent.press(view.getByTestId('set-done-0-0'));
-    expect(view.getByTestId('set-weight-0-0').props.value).toBe('60');
-    expect(view.getByTestId('set-reps-0-0').props.value).toBe('10');
+    // FR-917R3 (C1 v2): a done set reads as text, "60 lb × 10".
+    expect(view.getByTestId('set-value-0-0')).toHaveTextContent('60 lb × 10');
     expect(view.getByLabelText('Skip rest timer')).toBeTruthy();
     await fireEvent.press(view.getByLabelText('Add 30 seconds to rest timer'));
     await fireEvent.press(view.getByLabelText('Skip rest timer'));
@@ -282,6 +284,8 @@ describe('Finish with no signal', () => {
       capturedMutateOptions!.onError!(Object.assign(new Error('HTTP 429'), { response: { status: 429, data: {} } }));
       await Promise.resolve();
     });
+    // FR-917R3 (C1 v2): a done set is text; tapping its numbers opens them.
+    await fireEvent.press(view.getByTestId('set-value-0-0'));
     await fireEvent.changeText(view.getByTestId('set-weight-0-0'), '155');
     // Meanwhile the background sync sent the first copy.
     mockQueueWorkout.mockResolvedValueOnce({ id: 'q1', alreadySynced: true, serverId: null });
