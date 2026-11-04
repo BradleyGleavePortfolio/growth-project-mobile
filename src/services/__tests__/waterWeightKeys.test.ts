@@ -304,3 +304,129 @@ describe('the client store: a glass added again after a lost answer counts once'
     expect(keysOf('/nutrition/water')[1]).toBe(keysOf('/nutrition/water')[0]);
   });
 });
+
+// FR-921R1 (LS-921 B1, the whole class): a lost glass's key waits until the
+// day the client sees has taken in a water read of that day. Every way a read
+// of the day can end is one row: the rows the screen never shows keep the key
+// (adding the glass again resends it, so the server keeps one row); the rows
+// the screen shows end it (the glass is on screen, so another tap is a new glass).
+let failFood = false;
+let failWaterRead = false;
+let holdWaterRead = false;
+let releaseWaterRead: (() => void) | null = null;
+type ReadEnd = { name: string; keeps: boolean; run: (date: string, other: string) => Promise<void> };
+const READ_ENDS: ReadEnd[] = [
+  {
+    name: 'the food read fails, so the store drops the water read',
+    keeps: true,
+    run: async (date) => {
+      failFood = true;
+      await useClientStore.getState().loadDayData('member-a', date);
+      failFood = false;
+    },
+  },
+  {
+    name: 'the client opens another day while the read is out, then comes back',
+    keeps: true,
+    run: async (date, other) => {
+      holdWaterRead = true;
+      const load = useClientStore.getState().loadDayData('member-a', date);
+      for (let i = 0; i < 50 && !releaseWaterRead; i += 1) await new Promise((r) => setImmediate(r));
+      expect(releaseWaterRead).toEqual(expect.any(Function));
+      useClientStore.getState().setSelectedDate(other);
+      releaseWaterRead?.();
+      await load;
+      holdWaterRead = false;
+      useClientStore.getState().setSelectedDate(date);
+    },
+  },
+  {
+    name: 'the water read itself fails',
+    keeps: true,
+    run: async (date) => {
+      failWaterRead = true;
+      await useClientStore.getState().loadDayData('member-a', date);
+      failWaterRead = false;
+    },
+  },
+  {
+    name: 'another day is read and shown, then the client comes back',
+    keeps: true,
+    run: async (date, other) => {
+      await useClientStore.getState().loadDayData('member-a', other);
+      useClientStore.getState().setSelectedDate(date);
+    },
+  },
+  {
+    name: 'the day is read and shown',
+    keeps: false,
+    run: async (date) => {
+      await useClientStore.getState().loadDayData('member-a', date);
+    },
+  },
+  {
+    name: 'the shown day is refreshed',
+    keeps: false,
+    run: async (date) => {
+      await useClientStore.getState().refreshShownDay('member-a', date);
+    },
+  },
+];
+
+describe.each(READ_ENDS)('a lost glass, then $name', ({ keeps, run }) => {
+  it(keeps ? 'adding the glass again resends its key: one row' : 'the glass is on screen: another glass is a new save', async () => {
+    const date = '2026-11-03';
+    const other = '2026-11-02';
+    failFood = false;
+    failWaterRead = false;
+    holdWaterRead = false;
+    releaseWaterRead = null;
+    useClientStore.getState().reset();
+    useClientStore.setState({ selectedDate: date, waterOz: 0, waterEntries: [] });
+    const stored = new Map<string, { id: string; amount_ml: number; logged_at: string }>();
+    let loseAnswer = true;
+    respond = (config) => {
+      const url = config.url ?? '';
+      if (config.method === 'post' && url === '/nutrition/water') {
+        const body = JSON.parse(config.data) as { client_uuid: string; amount_ml: number };
+        if (!stored.has(body.client_uuid)) {
+          stored.set(body.client_uuid, { id: `water-${stored.size + 1}`, amount_ml: body.amount_ml, logged_at: `${date}T08:00:00.000Z` });
+        }
+        if (loseAnswer) {
+          loseAnswer = false;
+          return noAnswer(config);
+        }
+        return ok(config, stored.get(body.client_uuid));
+      }
+      if (url.startsWith('/nutrition/water?date=')) {
+        if (failWaterRead) return httpFail(config, 503);
+        const logs = url.endsWith(date) ? [...stored.values()] : [];
+        const answer = () => ok(config, { total_ml: logs.reduce((n, row) => n + row.amount_ml, 0), logs }, 200);
+        if (!holdWaterRead) return answer();
+        return new Promise<AxiosResponse>((resolve) => {
+          releaseWaterRead = () => resolve(answer());
+        });
+      }
+      if (url.startsWith('/log/daily?date=')) return failFood ? httpFail(config, 503) : ok(config, { entries: [] }, 200);
+      throw new Error(`Unexpected request: ${url}`);
+    };
+
+    await useClientStore.getState().logWater('member-a', '', 8);
+    expect(stored.size).toBe(1);
+    expect(useClientStore.getState().waterOz).toBe(0);
+    await run(date, other);
+    expect(useClientStore.getState().selectedDate).toBe(date);
+    expect(useClientStore.getState().waterOz).toBe(keeps ? 0 : 8);
+
+    await useClientStore.getState().logWater('member-a', '', 8);
+    const [first, again] = keysOf('/nutrition/water');
+    expect(first).toEqual(expect.any(String));
+    if (keeps) {
+      expect(again).toBe(first);
+      expect(stored.size).toBe(1);
+    } else {
+      expect(again).not.toBe(first);
+      expect(stored.size).toBe(2);
+    }
+  });
+});
