@@ -4,6 +4,7 @@ import type { PastMeal } from '../../hooks/useFoodBrowse';
 import { SearchResult } from './types';
 import { planLink, type PlanLink } from './planLink';
 import { foodSaveIntent, withSaveKey } from './saveKey';
+import { enqueue as enqueueFoodLog } from '../../services/foodLogQueue';
 
 // Words in a search that describe the amount rather than the food
 // ("2 eggs", "150 g chicken"). They are ignored when matching foods the
@@ -82,6 +83,31 @@ export async function repeatPastMeal(meal: PastMeal, date: string, mealType: Mea
     .filter((_e, i) => settled[i].status === 'rejected')
     .map((e) => e.name);
   return { added: meal.entries.length - failedNames.length, failedNames };
+}
+
+/**
+ * OFFLINE-FOOD-M: Repeat with no signal. Each food of the meal goes to the offline queue as its own
+ * save with its own key (the same intent and key rule as repeatPastMeal, so a food whose online try
+ * lost its answer keeps that key), with the same portion; the queue sends each once on reconnect.
+ * One at a time, in the meal's order. Returns the number queued; a failed write throws after the
+ * foods before it are queued (the caller says what was saved).
+ */
+export async function queuePastMeal(meal: PastMeal, date: string, mealType: MealType, link?: PlanLink): Promise<number> {
+  let queued = 0;
+  for (const e of meal.entries) {
+    const log = {
+      date,
+      meal_type: mealType,
+      quantity_multiplier: e.quantityMultiplier,
+      original_quantity: e.originalQuantity,
+      original_unit: e.originalUnit,
+      ...planLink(link),
+    };
+    await withSaveKey(foodSaveIntent(log, e.foodItemId), (key) =>
+      enqueueFoodLog({ kind: 'search', foodItemId: e.foodItemId, shown: e.shown, log }, key));
+    queued += 1;
+  }
+  return queued;
 }
 
 /** "1 serving", "2 servings", "150 g", "0.5 cup" */

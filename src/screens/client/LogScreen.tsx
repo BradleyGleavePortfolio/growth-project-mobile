@@ -37,7 +37,9 @@ import { SearchResult, MEAL_SECTIONS, unitOptionsFor } from '../../utils/log/typ
 import { quantityMultiplier, parseQuantityInput } from '../../utils/log/macros';
 import { initialEditPortion, editUnitsFor, editPortionMultiplier } from '../../utils/log/editPortion';
 import { mapFoodItem, type RawFoodItem } from '../../utils/log/mapFoodItem';
-import { matchLoggedFoods, mergeWithLoggedMatches, repeatPastMeal } from '../../utils/log/quickLog';
+import { matchLoggedFoods, mergeWithLoggedMatches, queuePastMeal, repeatPastMeal } from '../../utils/log/quickLog';
+import { dropQueued } from '../../services/foodLogQueue';
+import { countsInDay } from '../../utils/log/queuedDay';
 import type { PlanLink } from '../../utils/log/planLink';
 import { addDays, getTodayString } from '../../utils/date';
 import { dayForNewLog } from '../../utils/logDay';
@@ -85,6 +87,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
     logWater,
     removeWaterEntry,
     removeFoodLogLocally,
+    queuedFoods,
   } = useClientStore();
 
   const { recentFoods, frequentFoods, lastMeals, browseUnavailable, loadBrowseFoods } = useFoodBrowse(
@@ -240,6 +243,13 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     if (query.length < 2) {
       setSearching(false);
+      return;
+    }
+    // OFFLINE-FOOD-M: no signal, no search: say so at once (the same words as a failed search) and
+    // keep the matches from the foods kept on this phone.
+    if (!online) {
+      setSearching(false);
+      setSearchError('Search unavailable. Check your connection.');
       return;
     }
     setSearching(true);
@@ -438,15 +448,34 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
   // (UI-3) repeats its usual meal through the same path.
   const repeatMealTo = async (meal: PastMeal | null, mealType: MealType, link?: PlanLink) => {
     if (!currentUser || !meal || foodSaving) return;
-    if (!online) {
-      Alert.alert(
-        'Connection needed',
-        'Repeating a past meal needs a connection. Search for a food or enter it manually to save it offline.',
-      );
-      return;
-    }
     const target = mealLabel(mealType);
     const day = takeLogDay();
+    // OFFLINE-FOOD-M: no signal: each food goes to the offline queue with its own key.
+    if (!online) {
+      setFoodSaving(true);
+      let queued = 0;
+      try {
+        queued = await queuePastMeal(meal, day, mealType, link);
+        HapticService.success();
+        setModalVisible(false);
+        Alert.alert(
+          'Saved offline',
+          `${queued === 1 ? meal.entries[0].name : `${queued} foods`} will sync when you reconnect.`,
+        );
+        onSaved?.();
+      } catch (err) {
+        console.error('LogScreen: repeat enqueue failed', err);
+        HapticService.error();
+        Alert.alert(
+          queued > 0 ? 'Some foods were not added' : "Couldn't repeat this meal",
+          `${queued} of ${meal.entries.length} foods added to ${target}. Not added: ${meal.entries.slice(queued).map((e) => e.name).join(', ')}. Check the connection, then add ${meal.entries.length - queued === 1 ? 'it' : 'them'} from Recent.`,
+        );
+      } finally {
+        void notifyPendingFoodLogs();
+        setFoodSaving(false);
+      }
+      return;
+    }
     setFoodSaving(true);
     try {
       const { added, failedNames } = await repeatPastMeal(meal, day, mealType, link);
@@ -508,6 +537,11 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
   // falling back to the multiplier when the row is a legacy one without
   // the original_* columns persisted.
   const handleEditFood = (log: FoodLog) => {
+    // OFFLINE-FOOD-M: a food saved offline is not on the server yet; its one action is Remove.
+    if (log.offline) {
+      handleDeleteFood(log);
+      return;
+    }
     setEditLog(log);
     const portion = initialEditPortion(log);
     setEditQty(String(portion.quantity));
@@ -562,6 +596,13 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
         style: 'destructive',
         onPress: async () => {
           setEditLog(null);
+          // OFFLINE-FOOD-M: a food saved offline (waiting or refused) leaves this phone's queue.
+          if (log.offline) {
+            removeFoodLogLocally(log.id);
+            await dropQueued(log.id).catch((err) => console.error('LogScreen: drop queued food failed', err));
+            void notifyPendingFoodLogs();
+            return;
+          }
           // The row and the day's totals update at once; the reload below
           // brings the entry back if the server did not delete it.
           removeFoodLogLocally(log.id);
@@ -607,8 +648,16 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
   const getMealLogs = (mealType: MealType) =>
     foodLogs.filter((f) => f.mealType === mealType);
 
+  // OFFLINE-FOOD-M: a food the server refused shows, marked, and is in no total.
   const getMealCalories = (mealType: MealType) =>
-    getMealLogs(mealType).reduce((sum, f) => sum + f.calories, 0);
+    getMealLogs(mealType).filter(countsInDay).reduce((sum, f) => sum + f.calories, 0);
+  // OFFLINE-FOOD-M: waiting foods already in this day's list and totals, and the rest (another day,
+  // a day not read yet, or a food queued by an older build with no name kept).
+  const queuedIds = new Set((queuedFoods ?? []).filter((q) => !q.parkedAt).map((q) => q.id));
+  const pendingInDay = featureFlags.offlineFoodInDay
+    ? foodLogs.filter((f) => f.offline === 'waiting' && queuedIds.has(f.id)).length
+    : 0;
+  const pendingElsewhere = Math.max(0, pendingFoods - pendingInDay);
 
   const remaining = macroTargets ? macroTargets.calories - dailyTotals.calories : null;
   const showDayLoading = !hasLoadedDay && (isLoading || !loadError);
@@ -633,11 +682,18 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
 
   const notesNode = (
     <>
-      {pendingFoods > 0 ? (
+      {pendingElsewhere > 0 ? (
         <Text style={styles.note} accessibilityLiveRegion="polite" testID="log-offline-pending">
-          {pendingFoods === 1
+          {pendingElsewhere === 1
             ? `1 food saved offline is not in this log or its totals yet. ${online ? 'Pull down to sync it now.' : 'It syncs when the connection returns.'}`
-            : `${pendingFoods} foods saved offline are not in this log or its totals yet. ${online ? 'Pull down to sync them now.' : 'They sync when the connection returns.'}`}
+            : `${pendingElsewhere} foods saved offline are not in this log or its totals yet. ${online ? 'Pull down to sync them now.' : 'They sync when the connection returns.'}`}
+        </Text>
+      ) : pendingInDay > 0 ? (
+        // OFFLINE-FOOD-M W1 (proposed words, behind featureFlags.offlineFoodInDay; waits on the owner).
+        <Text style={styles.note} accessibilityLiveRegion="polite" testID="log-offline-pending-in-day">
+          {pendingInDay === 1
+            ? `1 food saved offline is in this log and its totals. ${online ? 'Pull down to sync it now.' : 'It syncs when the connection returns.'}`
+            : `${pendingInDay} foods saved offline are in this log and its totals. ${online ? 'Pull down to sync them now.' : 'They sync when the connection returns.'}`}
         </Text>
       ) : null}
       {savedMessage ? (
@@ -675,7 +731,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
           on={featureFlags.foodPlanChecklist && !!currentUser}
           coached={!!currentUser?.coach_id}
           selectedDate={selectedDate}
-          foodLogs={foodLogs}
+          foodLogs={foodLogs.filter(countsInDay)}
           eaten={{ calories: dailyTotals.calories, protein: dailyTotals.protein }}
           targets={macroTargets ? { calories: macroTargets.calories, protein: macroTargets.protein } : null}
           ready={hasLoadedDay && !loadError}

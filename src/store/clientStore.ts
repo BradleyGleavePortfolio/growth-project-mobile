@@ -6,6 +6,9 @@ import { logger } from '../utils/logger';
 import { mapFoodItem, type RawFoodItem } from '../utils/log/mapFoodItem';
 import { forgetSaveKeys, waterDayShown, withSaveKey } from '../utils/log/saveKey';
 import { dayForNewLog } from '../utils/logDay';
+import { featureFlags } from '../config/featureFlags';
+import { readQueue, type PendingFoodLog } from '../services/foodLogQueue';
+import { withQueuedFoods } from '../utils/log/queuedDay';
 
 interface DailyTotals {
   calories: number;
@@ -25,6 +28,12 @@ interface ClientStore {
   hasLoadedDay: boolean;
   isLoading: boolean;
   loadError: string | null;
+  // OFFLINE-FOOD-M: the server's own read of the day on screen, and the foods on this phone. With
+  // featureFlags.offlineFoodInDay on, foodLogs and dailyTotals are the two joined (utils/log/queuedDay).
+  serverDay: { date: string; userId: string; logs: FoodLog[]; totals: DailyTotals } | null;
+  queuedFoods: PendingFoodLog[];
+  // Foods the last sync sent, kept in the day until the next good read of it (which holds them).
+  sentFoods: PendingFoodLog[];
 
   setSelectedDate: (date: string) => void;
   loadDayData: (userId: string, date?: string) => Promise<void>;
@@ -46,6 +55,9 @@ interface ClientStore {
   // Drops an entry from the day on screen and takes its nutrition off the
   // day's totals straight away, before the server confirms the delete.
   removeFoodLogLocally: (entryId: string) => void;
+  // OFFLINE-FOOD-M: the phone's queue changed (a food saved offline, sent, refused or removed).
+  showQueuedFoods: (queue: PendingFoodLog[]) => void;
+  holdSentFoods: (sent: PendingFoodLog[]) => void;
   // Security: reset all in-memory state on logout so the next user on the
   // same device doesn't briefly see the previous user's food/water data.
   reset: () => void;
@@ -61,7 +73,16 @@ const initialClientState = {
   hasLoadedDay: false,
   isLoading: false,
   loadError: null as string | null,
+  serverDay: null as ClientStore['serverDay'],
+  queuedFoods: [] as PendingFoodLog[],
+  sentFoods: [] as PendingFoodLog[],
 };
+
+/** The day on screen: the server's read, plus this phone's queued foods of that day when the flag is on. */
+function shownDay(serverDay: NonNullable<ClientStore['serverDay']>, queue: PendingFoodLog[], sent: PendingFoodLog[] = []) {
+  if (!featureFlags.offlineFoodInDay) return { foodLogs: serverDay.logs, dailyTotals: serverDay.totals };
+  return withQueuedFoods(serverDay.logs, serverDay.totals, [...queue, ...sent], serverDay.date, serverDay.userId);
+}
 
 // LS-PAYFAIL B10: one generation per signed-in account. reset() runs on every
 // sign-out (resetUserScopedStores) and starts a new one, so a reply, refresh or
@@ -87,6 +108,8 @@ export const useClientStore = create<ClientStore>((set, get) => ({
     waterEntries: [],
     hasLoadedDay: false,
     loadError: null,
+    serverDay: null,
+    sentFoods: [],
     };
   }),
 
@@ -105,12 +128,14 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       set({ isLoading: true, loadError: null });
 
       // Fetch food logs and water in parallel
-      const [foodResponse, waterResponse] = await Promise.all([
+      const [foodResponse, waterResponse, queue] = await Promise.all([
         logApi.getDaily(d),
         waterApi.getDaily(d).catch((err: unknown) => {
           logger.error('ClientStore', 'water data load failed', err);
           return null;
         }),
+        // OFFLINE-FOOD-M: the phone's queue, read with the day so the two join on one answer.
+        featureFlags.offlineFoodInDay ? readQueue().catch(() => get().queuedFoods) : Promise.resolve(get().queuedFoods),
       ]);
       if (mine !== session || get().selectedDate !== d) return;
       const data = foodResponse.data;
@@ -129,6 +154,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
         food_item?: RawFoodItem;
         plan_slot_id?: string | null;
         fills_usual_meal?: boolean;
+        client_uuid?: string | null;
       }
       const entries = (data.entries || []) as DailyLogEntry[];
       // The existing mapping intentionally writes both `foodName` (the
@@ -172,6 +198,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
           userId: e.user_id,
           planSlotId: e.plan_slot_id || undefined,
           fillsUsualMeal: e.fills_usual_meal === true || undefined,
+          clientUuid: e.client_uuid || undefined,
           coachId: '',
           createdAt: e.logged_at || e.created_at || new Date().toISOString(),
         } as FoodLog & { name: string });
@@ -181,14 +208,22 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       const totalMl = waterResponse?.data?.total_ml || 0;
       const waterOz = waterResponse ? Math.round(totalMl / 29.5735) : get().waterOz;
 
-      set({
-        foodLogs: logs,
-        dailyTotals: {
+      const serverDay = {
+        date: d,
+        userId: _userId,
+        logs,
+        totals: {
           calories: data.total_calories || 0,
           protein: data.total_protein_g || 0,
           carbs: data.total_carbs_g || 0,
           fat: data.total_fat_g || 0,
         },
+      };
+      set({
+        ...shownDay(serverDay, queue),
+        serverDay,
+        queuedFoods: queue,
+        sentFoods: [],
         waterOz,
         waterEntries: waterResponse ? waterResponse.data.logs || [] : get().waterEntries,
         selectedDate: d,
@@ -245,6 +280,28 @@ export const useClientStore = create<ClientStore>((set, get) => ({
     set((state) => {
       const removed = state.foodLogs.find((f) => f.id === entryId);
       if (!removed) return {};
+      // OFFLINE-FOOD-M: the day is the server's read joined with the queue; take the row off the
+      // side it came from and join again, so the totals stay the sum of what is shown.
+      if (state.serverDay && state.serverDay.date === state.selectedDate) {
+        const sd = state.serverDay;
+        const fromServer = !removed.offline;
+        const t0 = sd.totals;
+        const serverDay = fromServer
+          ? {
+              ...sd,
+              logs: sd.logs.filter((f) => f.id !== entryId),
+              totals: {
+                calories: Math.max(0, t0.calories - removed.calories),
+                protein: Math.max(0, t0.protein - removed.protein),
+                carbs: Math.max(0, t0.carbs - removed.carbs),
+                fat: Math.max(0, t0.fat - removed.fat),
+              },
+            }
+          : sd;
+        const queuedFoods = fromServer ? state.queuedFoods : state.queuedFoods.filter((q) => q.id !== entryId);
+        const sentFoods = fromServer ? state.sentFoods : state.sentFoods.filter((q) => q.id !== entryId);
+        return { serverDay, queuedFoods, sentFoods, ...shownDay(serverDay, queuedFoods, sentFoods) };
+      }
       const t = state.dailyTotals;
       return {
         foodLogs: state.foodLogs.filter((f) => f.id !== entryId),
@@ -255,6 +312,20 @@ export const useClientStore = create<ClientStore>((set, get) => ({
           fat: Math.max(0, t.fat - removed.fat),
         },
       };
+    }),
+
+  showQueuedFoods: (queue: PendingFoodLog[]) =>
+    set((state) => {
+      if (!state.serverDay || state.serverDay.date !== state.selectedDate) return { queuedFoods: queue };
+      return { queuedFoods: queue, ...shownDay(state.serverDay, queue, state.sentFoods) };
+    }),
+
+  holdSentFoods: (sent: PendingFoodLog[]) =>
+    set((state) => {
+      if (sent.length === 0) return {};
+      const sentFoods = [...state.sentFoods.filter((q) => !sent.some((s) => s.id === q.id)), ...sent];
+      if (!state.serverDay || state.serverDay.date !== state.selectedDate) return { sentFoods };
+      return { sentFoods, ...shownDay(state.serverDay, state.queuedFoods, sentFoods) };
     }),
 
   logWater: async (userId: string, _coachId: string, amountOz: number) => {

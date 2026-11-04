@@ -24,6 +24,7 @@ import {
   pushQueuedWorkouts,
 } from '../offline/sync/sync-engine';
 import { flush as flushFoodLogQueue, getQueueLength as foodQueueLength } from './foodLogQueue';
+import { BROWSE_COPY_KEY_PREFIX } from '../utils/log/browseCache';
 import { OUTBOX_KEY_PREFIX, outboxLength, releaseOutbox, sendOutboxBeforeSignOut } from './messageOutbox';
 import { activeWorkoutSessionKey } from '../storage/activeWorkoutSession';
 import { AUTOSAVE_MIRROR_KEY_PREFIX } from '../storage/autosaveMirror';
@@ -151,6 +152,8 @@ const PER_USER_KEY_PREFIXES = [
   'macro_targets:', // useMacroTargets — per-user macro cache
   // Offline food queue: another account's unsent foods stay on the phone.
   'pending_food_logs_',
+  // OFFLINE-FOOD-M: the add sheet's kept Recent, Frequent and Repeat lists (utils/log/browseCache).
+  BROWSE_COPY_KEY_PREFIX,
   // Per-coach Roman import-offer answer (UX-01 J0/J1), keyed
   // `import_offer_decision:<userId>`. Non-secret and readable only under the
   // owning coach's key, so — like macro_targets — only the signing-out coach's

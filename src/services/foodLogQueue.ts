@@ -35,8 +35,23 @@ const ANONYMOUS_QUEUE_KEY = 'pending_food_logs_anonymous';
 const getQueueKey = (userId?: string): string =>
   userId ? `pending_food_logs_${userId}` : ANONYMOUS_QUEUE_KEY;
 
+/**
+ * OFFLINE-FOOD-M: what the day shows for a queued food until the server's entry replaces it: its
+ * name and its macros for one unit of `quantity_multiplier` (the server food item's own basis, so
+ * shown = value x multiplier, as the server counts it). Items queued by older builds have none; a
+ * `food` block serves instead, and a food with neither stays out of the day (the note counts it).
+ */
+export interface QueuedFoodShown {
+  name: string;
+  calories: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+}
+
 export interface PendingSearchLog {
   kind: 'search';
+  shown?: QueuedFoodShown;
   // If the food already exists in the backend, pass its id. Otherwise pass the
   // `food` block and the flush will create it first.
   foodItemId?: string;
@@ -73,6 +88,7 @@ export interface PendingSearchLog {
 
 export interface PendingManualLog {
   kind: 'manual';
+  shown?: QueuedFoodShown;
   food: PendingSearchLog['food'];
   log: PendingSearchLog['log'];
 }
@@ -177,6 +193,20 @@ export async function enqueue(
 export async function getQueueLength(opts: { includeParked?: boolean } = {}): Promise<number> {
   const queue = await readQueueForKey(getQueueKey(currentOwnerId()));
   return (opts.includeParked ? queue : waiting(queue)).length;
+}
+
+/** OFFLINE-FOOD-M: every food on this phone for the signed-in owner, waiting and refused (parkedAt). */
+export async function readQueue(): Promise<PendingFoodLog[]> {
+  return readQueueForKey(getQueueKey(currentOwnerId()));
+}
+
+/**
+ * OFFLINE-FOOD-M: the member removes a food saved offline (waiting or refused) from this phone, the
+ * same Remove they use on any food in the day. A send already in flight may still land; the server's
+ * entry then shows on the next read, under the same key, once.
+ */
+export async function dropQueued(id: string): Promise<void> {
+  await changeQueue(currentOwnerId(), (queue) => queue.filter((q) => q.id !== id));
 }
 
 export async function clearQueue(): Promise<void> {
