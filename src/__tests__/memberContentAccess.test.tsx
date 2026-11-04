@@ -1812,3 +1812,13 @@ describe('LO-911R4 B1: a via file\'s other export does not carry its part\'s mut
     expect(unnamedWith({ [f]: t, [s]: st })).toContain(`list ${s}`);
   });
 });
+
+// ─── LO-911R4 outside the fix (failing test, review only): the LS-911 B1 cases write real files into src/ ────────
+// checkSource (:1081, from 4710da51) makes src/screens/LS911Inventory-*/Fixture.tsx on disk and removes it after the
+// scan. Other suites walk src/ in parallel workers; run 41686966257 failed declaredDependencies.test.ts with ENOENT on
+// src/screens/LS911Inventory-gTo4Lg/Fixture.tsx. Smallest fix: pass the fixtures as a scanCtx overlay, as the later
+// cases do, so nothing is written under src/.
+it('LO-911R4 outside: no case in this file writes a fixture under src/', () => {
+  const self = fs.readFileSync(__filename, 'utf8');
+  expect(self.includes(['mkdtemp', 'Sync(path.join(SRC'].join(''))).toBe(false);
+});
