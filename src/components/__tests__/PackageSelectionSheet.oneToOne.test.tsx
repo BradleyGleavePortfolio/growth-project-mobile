@@ -2,8 +2,9 @@
  * #161-5 op 1: on iPhone the unsolicited sheet sells only 1:1 coaching. It
  * lists the client's own coach's packages (the ClientPackages list, every one
  * 1:1 coaching) and nothing else, under the ClientPackages label
- * oneToOneCoachingLabel(). FR-1TO1R2 (LS/LO B1, 184-W6 op 1): Android too, and until the coach
- * is named the sheet does not sell; a failed read shows the U-5 retry line.
+ * oneToOneCoachingLabel(). FR-1TO1R2 (LS/LO B1, 184-W6 op 1): Android too. 1TO1-FU-M (#186-P4 op 1):
+ * when only the coach's name fails to load the sheet shows no error; it keeps the existing
+ * "1:1 coaching with your coach" line and the client can still choose a plan.
  */
 import React from 'react';
 import { Platform } from 'react-native';
@@ -53,7 +54,7 @@ it('iOS: the sheet lists only 1:1 packages, under the 1:1 coaching label', async
   expect(mockGet.mock.calls.map(([url]) => url).sort()).toEqual(['/v1/clients/me/coach', '/v1/clients/me/coach/packages']);
 });
 
-it.each(['ios', 'android'])('%s: the coach name read fails: label says your coach, no sale, retry line re-reads', async (os) => {
+it.each(['ios', 'android'])('%s: only the coach name read fails: no error, the your-coach line, the plan can be chosen', async (os) => {
   setOS(os);
   mockCoach = async () => { throw new Error('network'); };
   const r = await mount();
@@ -61,13 +62,10 @@ it.each(['ios', 'android'])('%s: the coach name read fails: label says your coac
   expect(r.getByTestId('package-sheet-one-to-one').props.children).toBe('1:1 coaching with your coach');
   expect(r.getAllByRole('radio')).toHaveLength(2);
   await fireEvent.press(r.getByTestId('package-card-p-1'));
-  expect(r.getByTestId('select-plan-btn').props.accessibilityState.disabled).toBe(true);
-  expect(r.getByText("Your coach's plans could not load. Check your connection, then tap to try again.")).toBeTruthy();
-  mockCoach = async () => ({ data: { id: 'coach-1', name: 'Avery Stone' } });
-  await fireEvent.press(r.getByTestId('package-sheet-coach-retry'));
-  await waitFor(() => expect(r.getByTestId('package-sheet-one-to-one').props.children).toBe('1:1 coaching with Avery Stone'));
-  expect(r.queryByTestId('package-sheet-coach-retry')).toBeNull();
   expect(r.getByTestId('select-plan-btn').props.accessibilityState.disabled).toBe(false);
+  expect(r.queryByText(/could not load/)).toBeNull();
+  expect(r.queryByTestId('package-sheet-coach-retry')).toBeNull();
+  expect(r.queryByTestId('package-sheet-error')).toBeNull();
 });
 
 it('Android: the same label and the same coach read as iOS (FR-1TO1R2)', async () => {
