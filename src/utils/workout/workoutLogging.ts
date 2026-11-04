@@ -3,7 +3,7 @@
  * React / navigation / storage imports so they are cheap to test.
  */
 import { randomUuid } from '../idempotency';
-import { routineExerciseId } from './exerciseId';
+import { libraryExerciseId, routineExerciseId } from './exerciseId';
 import { toServerMuscleGroup } from './muscleGroup';
 import { instantDay, workoutDay } from './workoutDay';
 import { unitField } from './exerciseUnit';
@@ -32,6 +32,8 @@ export interface RoutineBuilderExercise {
   restSec: number;
   /** Server MuscleGroup value (POST /routines requires one per exercise). */
   muscleGroup: string;
+  /** The library item's id (catalog uuid), or none: saved as catalog_exercise_id. */
+  catalogExerciseId?: string | null;
 }
 
 /**
@@ -44,14 +46,20 @@ export interface RoutineBuilderExercise {
 export function buildRoutinePayload(name: string, exercises: RoutineBuilderExercise[]) {
   return {
     name: name.trim(),
-    exercises: exercises.map((e, i) => ({
-      exercise_name: e.exerciseName,
-      muscle_group: toServerMuscleGroup(e.muscleGroup),
-      default_sets: Math.max(1, Math.round(e.sets || 0)),
-      default_reps: Math.max(1, Math.round(e.reps || 0)),
-      default_rest_seconds: Math.max(0, Math.round(e.restSec || 0)),
-      order_index: i,
-    })),
+    exercises: exercises.map((e, i) => {
+      // PUT replaces every row, so each kept exercise sends its library id
+      // again; an exercise with none sends no field (the server stores null).
+      const catalogId = libraryExerciseId(e.catalogExerciseId);
+      return {
+        exercise_name: e.exerciseName,
+        muscle_group: toServerMuscleGroup(e.muscleGroup),
+        default_sets: Math.max(1, Math.round(e.sets || 0)),
+        default_reps: Math.max(1, Math.round(e.reps || 0)),
+        default_rest_seconds: Math.max(0, Math.round(e.restSec || 0)),
+        order_index: i,
+        ...(catalogId ? { catalog_exercise_id: catalogId } : {}),
+      };
+    }),
   };
 }
 
@@ -66,6 +74,8 @@ export interface ApiRoutine {
     default_sets: number;
     default_reps: number;
     default_rest_seconds?: number;
+    /** Library item's id; null or absent on a row saved without one. */
+    catalog_exercise_id?: string | null;
   }>;
   is_template?: boolean;
 }
@@ -79,6 +89,7 @@ export function routineToBuilderExercises(routine: Pick<ApiRoutine, 'exercises'>
     reps: e.default_reps || 10,
     restSec: e.default_rest_seconds ?? 60,
     muscleGroup: toServerMuscleGroup(e.muscle_group),
+    catalogExerciseId: libraryExerciseId(e.catalog_exercise_id),
   }));
 }
 
@@ -89,7 +100,9 @@ export function routineToBuilderExercises(routine: Pick<ApiRoutine, 'exercises'>
  */
 export function routineToSessionExercises(routine: ApiRoutine) {
   return (routine.exercises || []).map((e) => ({
-    exerciseId: routineExerciseId(routine.id, e.exercise_name),
+    // The library id opens Watch video and instructions by id, whatever the
+    // name; with none, the routine-scoped fallback (catalogKey uses the slug).
+    exerciseId: libraryExerciseId(e.catalog_exercise_id) ?? routineExerciseId(routine.id, e.exercise_name),
     exerciseName: e.exercise_name,
     sets: e.default_sets || 3,
     reps: e.default_reps || 10,
