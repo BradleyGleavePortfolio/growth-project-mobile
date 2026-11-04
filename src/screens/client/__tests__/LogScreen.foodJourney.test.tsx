@@ -195,7 +195,7 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     await waitFor(() => expect(useClientStore.getState().foodLogs).toHaveLength(1));
     expect(logApi.logFood).toHaveBeenCalledWith({
       food_item_id: 'oats', date: mockDate, meal_type: 'breakfast',
-      quantity_multiplier: 0.6, original_quantity: 60, original_unit: 'g',
+      quantity_multiplier: 0.6, original_quantity: 60, original_unit: 'g', client_uuid: expect.stringMatching(/^pfl_/),
     });
     expect(useClientStore.getState().dailyTotals.calories).toBeCloseTo(227.4);
     expect(screen.queryByLabelText('Food quantity')).toBeNull();
@@ -233,7 +233,7 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     await waitFor(() => expect(useClientStore.getState().foodLogs).toHaveLength(1));
     expect(logApi.logFood).toHaveBeenLastCalledWith({
       date: mockDate, meal_type: 'breakfast', food_item_id: 'oats',
-      quantity_multiplier: 0.6, original_quantity: 60, original_unit: 'g',
+      quantity_multiplier: 0.6, original_quantity: 60, original_unit: 'g', client_uuid: expect.stringMatching(/^pfl_/),
     });
     expect(useClientStore.getState().dailyTotals.calories).toBeCloseTo(227.4);
     expect(await screen.findByText('1 food added to Breakfast.')).toBeTruthy();
@@ -271,14 +271,14 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     await fireEvent.press(screen.getAllByText('Add food')[0]);
     await fireEvent.changeText(screen.getByPlaceholderText('Search foods...'), 'foods');
     await fireEvent.press(await screen.findByText('Banana'));
-    await fireEvent.press(screen.getByRole('button', { name: 'Portion unit g' }));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Portion unit g' }));
     await fireEvent.changeText(screen.getByLabelText('Food quantity'), '100');
     await fireEvent.press(screen.getByRole('button', { name: 'Log food' }));
     expect(await screen.findByText('Added Banana.')).toBeTruthy();
     expect(screen.getByPlaceholderText('Search foods...').props.value).toBe('foods');
     expect(useClientStore.getState().dailyTotals.calories).toBe(89);
     await fireEvent.press(screen.getByText('Rolled oats'));
-    await fireEvent.press(screen.getByRole('button', { name: 'Portion unit g' }));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Portion unit g' }));
     await fireEvent.changeText(screen.getByLabelText('Food quantity'), '100');
     await fireEvent.press(screen.getByRole('button', { name: 'Log food' }));
     expect(await screen.findByText('Added Rolled oats.')).toBeTruthy();
@@ -297,9 +297,9 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     await render(<LogScreen onSaved={onSaved} />);
     await fireEvent.press(screen.getAllByText('Add food')[0]);
     await fireEvent.press(screen.getByText('Frequent'));
-    expect(screen.getByText('Most logged, last 7 days')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Frequent' }).props.accessibilityState.selected).toBe(true);
     await fireEvent.press(screen.getByText('Recent'));
-    expect(screen.getByText('Recent foods, last 7 days')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Recent' }).props.accessibilityState.selected).toBe(true);
     jest.mocked(foodApi.search).mockRejectedValueOnce(new Error('Network Error'));
     await fireEvent.changeText(screen.getByPlaceholderText('Search foods...'), 'fruit');
     await fireEvent.press(await screen.findByText(/^(Retry Search|Try again)$/));

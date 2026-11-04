@@ -125,11 +125,11 @@ describe('Food Log fast paths', () => {
     await waitFor(() => expect(logApi.logFood).toHaveBeenCalledTimes(2));
     expect(logApi.logFood).toHaveBeenCalledWith({
       date: mockToday, meal_type: 'breakfast', food_item_id: 'food-oats',
-      quantity_multiplier: 0.6, original_quantity: 60, original_unit: 'g',
+      quantity_multiplier: 0.6, original_quantity: 60, original_unit: 'g', client_uuid: expect.stringMatching(/^pfl_/),
     });
     expect(logApi.logFood).toHaveBeenCalledWith({
       date: mockToday, meal_type: 'breakfast', food_item_id: 'food-banana',
-      quantity_multiplier: 1.18, original_quantity: 1, original_unit: 'serving',
+      quantity_multiplier: 1.18, original_quantity: 1, original_unit: 'serving', client_uuid: expect.stringMatching(/^pfl_/),
     });
     expect(mockStore.loadDayData).toHaveBeenCalledWith('user', mockToday);
     expect(await screen.findByText('2 foods added to Breakfast.')).toBeTruthy();
@@ -151,7 +151,8 @@ describe('Food Log fast paths', () => {
       fireEvent.changeText(screen.getByPlaceholderText('Search foods...'), 'oats');
     });
     expect(screen.getByText('Rolled oats')).toBeTruthy();
-    expect(screen.getByText('From your log · Last time 60 g')).toBeTruthy();
+    // STYLEC-916: a food from the log shows its last portion on the row's one line.
+    expect(screen.getByText(/^60 g, .* g protein$/)).toBeTruthy();
   });
 
   it('takes a deleted entry off the day before the server answers', async () => {

@@ -358,7 +358,7 @@ const PLACED: Record<string, { why: string; lines: string[] }> = {
   'src/db/workoutDb.ts': { why: 'on-device exercise volume; getDailyVolumeBreakdown has no caller (checked below)', lines: ['date: r.day'] },
   'src/screens/client/WorkoutAssignmentDetailScreen.tsx': { why: 'completed_at read only as done or not done', lines: [] },
   'src/screens/client/home/RingsHomeScreen.tsx': { why: "today's date line and a style name; ring counts come from homeRings.ts", lines: ['styles.date', 'date: { marginBottom'] },
-  'src/screens/client/LogScreen.tsx': { why: 'meal days (food log calendar dates), not a workout', lines: ['date: selectedDate', 'repeatMeal.date === addDays(selectedDate, -1)', 'new Date(`${repeatMeal.date}T00:00:00`)'] },
+  'src/screens/client/LogScreen.tsx': { why: 'meal days (food log calendar dates), not a workout', lines: ['date: day', 'repeatMeal.date === addDays(selectedDate, -1)', 'new Date(`${repeatMeal.date}T00:00:00`)'] },
   'src/screens/client/ProgressScreen.tsx': { why: 'weigh-in days (calendar dates), not a workout', lines: ['a.date.localeCompare(b.date)', 'l.date === dateStr', 'date: getTodayString()', 'formatSince(firstLog.date)', 'new Date(`${log.date}T00:00:00`)', 'lastLog.date', 'formatLogDate(log.date)'] },
   'src/screens/client/progress/ProgressV2.tsx': { why: 'weigh-in days and bests already dated by progressV2.ts', lines: ['a.date.localeCompare(b.date)', 'l.date !== today', "date: today, weight: lbs", 'P.monthDay(logs[0].date)', 'short(best.date)', 'short(l.date)'] },
 };

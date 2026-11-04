@@ -51,7 +51,7 @@ describe('LS-914R2 B1: water answers keep their selected-day ownership', () => {
       let reject!: (e: Error) => void;
       mockAddWater.mockReturnValueOnce(new Promise((res, rej) => { resolve = res; reject = rej; }));
       const pending = useClientStore.getState().logWater('synthetic-client', '', 8);
-      expect(mockAddWater).toHaveBeenCalledWith({ amount_ml: 237, date: A });
+      expect(mockAddWater).toHaveBeenCalledWith({ amount_ml: 237, date: A }, expect.stringMatching(/^pfl_/));
       expect(useClientStore.getState().waterOz).toBe(48);
 
       if (changedDate) {
