@@ -16,6 +16,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { LayoutAnimation, Pressable, StyleSheet, Text, View, useWindowDimensions, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
+import * as Navigation from '@react-navigation/native';
 import { CormorantGaramond_400Regular_Italic, useFonts } from '@expo-google-fonts/cormorant-garamond';
 import api, { logApi } from '../../services/api';
 import { mealTemplatesApi } from '../../api/mealTemplatesApi';
@@ -89,9 +90,15 @@ function useClock(enabled: boolean): number {
 }
 
 /** The forest status bar over the masthead (the coach's page runs to the top edge, as Train's masthead). */
-function ForestBand() {
+function ForestBandOwner() {
   useStatusBarBand(palette.forest);
   return null;
+}
+// The band follows screen focus, so it needs a navigator; outside one (a test, a render harness) there is no band.
+const NO_NAVIGATION = React.createContext<unknown>(undefined);
+function ForestBand() {
+  const navigation = React.useContext((Navigation.NavigationContext as React.Context<unknown> | undefined) ?? NO_NAVIGATION);
+  return navigation ? <ForestBandOwner /> : null;
 }
 
 /** The timeline mark: filled forest once eaten (fills in 200 ms; Reduce Motion: at once). */
