@@ -89,7 +89,8 @@ jest.mock('../../../api/coachAiConsentApi', () => ({
 
 // Pins EXPO_PUBLIC_FF_FIRST_RUN_V2 off: this file is the classic auth screens (AuthStyleB.tsx:15 swaps in Style B).
 beforeEach(() => {
-  jest.replaceProperty(jest.requireActual('../../../config/featureFlags').featureFlags, 'firstRunV2', false);
+  const { featureFlags } = jest.requireActual<typeof import('../../../config/featureFlags')>('../../../config/featureFlags');
+  jest.replaceProperty(featureFlags, 'firstRunV2', false);
 });
 
 import CreateAccountScreen from '../CreateAccountScreen';
