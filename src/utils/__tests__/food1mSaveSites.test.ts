@@ -28,7 +28,7 @@ const SAVE_LAYER = ['services/api.ts', 'services/foodLogQueue.ts', 'utils/log/lo
 const DAY_AT: Record<string, [number, string[]]> = {
   submitSearchLogOnline: [0, ['date']], submitSearchLogOffline: [0, ['date']],
   submitManualLogOnline: [0, ['date']], submitManualLogOnlineWithId: [0, ['date']], submitManualLogOffline: [0, ['date']],
-  repeatPastMeal: [1, []], logFood: [0, ['date']], 'queue.enqueue': [0, ['log', 'date']], 'waterApi.log': [0, ['date']],
+  repeatPastMeal: [1, []], queuePastMeal: [1, []], logFood: [0, ['date']], 'queue.enqueue': [0, ['log', 'date']], 'waterApi.log': [0, ['date']],
 };
 /**
  * FR-916R2 F2: save-layer functions that reach a save but take no day: each says where its day comes from.
