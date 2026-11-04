@@ -1,6 +1,6 @@
 /**
  * Style C page (C2 section 5; frames C_kitchen, C_recipe, C_grocery, C_loading, C_error): a forest
- * masthead under the status bar with a 1 pt gold rule under its words, and a paper sheet whose 24 pt
+ * masthead (surface.forestBand, the frames' #2C4A36) under the status bar with a 1 pt gold rule under its words, and a paper sheet whose 24 pt
  * top corners overlap it. Also the round check, the warm notice and the static loading lines those
  * frames draw. Gold is only ever the rule here, never text on light.
  */
@@ -22,10 +22,10 @@ export function StyleCMasthead({ title, onBack, backLabel = 'Back', trailing, lo
 }) {
   const sc = useTheme().semanticColors;
   const insets = useScreenInsets();
-  useStatusBarBand(sc.surface.masthead);
+  useStatusBarBand(sc.surface.forestBand);
   const bar = { backgroundColor: withAlpha(sc.textOnAccent, 0.16) };
   return (
-    <View style={[s.head, { backgroundColor: sc.surface.masthead, paddingTop: insets.top + layout.statusBarGap }]}>
+    <View style={[s.head, { backgroundColor: sc.surface.forestBand, paddingTop: insets.top + layout.statusBarGap }]}>
       {onBack || trailing ? (
         <View style={s.bar}>
           {onBack ? (
@@ -53,7 +53,7 @@ export function StyleCPage({ head, children, testID, paperStyle }: {
   const insets = useScreenInsets();
   return (
     <View testID={testID} style={[s.root, { backgroundColor: sc.bgPrimary }]}>
-      <View style={[s.root, { backgroundColor: sc.surface.masthead, paddingLeft: insets.left, paddingRight: insets.right }]}>
+      <View style={[s.root, { backgroundColor: sc.surface.forestBand, paddingLeft: insets.left, paddingRight: insets.right }]}>
         {head}
         <View style={[s.paper, { backgroundColor: sc.bgSurface }, paperStyle]}>{children}</View>
       </View>

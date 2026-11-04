@@ -264,7 +264,7 @@ const makeStyles = (colors: SemanticTokens) =>
   StyleSheet.create({
   // The masthead scrolls with the recipe; the paper runs to the bottom.
   page: { flex: 1, backgroundColor: colors.bgSurface },
-  content: { flexGrow: 1, backgroundColor: colors.surface.masthead, paddingBottom: 0 },
+  content: { flexGrow: 1, backgroundColor: colors.surface.forestBand, paddingBottom: 0 },
   heroImage: {
     width: '100%',
     height: 200,
