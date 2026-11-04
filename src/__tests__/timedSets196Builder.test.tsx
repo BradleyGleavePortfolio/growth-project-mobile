@@ -382,7 +382,7 @@ describe('Adjust for client copies the unit', () => {
     jest.spyOn(workoutBuilderApi, 'createPlan').mockResolvedValue({ data: { id: 'copy-1' } } as never);
     const put = jest.spyOn(workoutBuilderApi, 'setExercises').mockResolvedValue({ data: {} } as never);
     await copyWorkoutForClient('plan-1', 'Jordan');
-    const rows = put.mock.calls[0][1] as Array<Record<string, unknown>>;
+    const rows = put.mock.calls[0][1] as unknown as Array<Record<string, unknown>>;
     expect(rows.map((r) => [r.exercise_external_id, r.unit])).toEqual([['bench', undefined], ['plank', 'seconds']]);
     expect('unit' in rows[0]).toBe(false);
   });
