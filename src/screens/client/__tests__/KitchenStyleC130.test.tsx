@@ -47,7 +47,7 @@ function mount(Screen: React.ComponentType) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   return render(<QueryClientProvider client={client}><Screen /></QueryClientProvider>);
 }
-type Ui = ReturnType<typeof render>;
+type Ui = Awaited<ReturnType<typeof render>>;
 /** No text is clamped (numberOfLines) or held below 130% (maxFontSizeMultiplier under 1.3), except the masthead title at 120% like the client file. */
 type Node = { type: string; props: Record<string, unknown>; children: (Node | string)[] | null };
 function texts(node: Node | Node[] | string | null): Node[] {
