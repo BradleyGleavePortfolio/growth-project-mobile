@@ -18,7 +18,8 @@ import { prepGuideApi, listsApi } from '../../services/api';
 import FadeInView from '../../components/FadeInView';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { typography, radius } from '../../theme/tokens';
-import { StyleCLoadingLines, StyleCMasthead, StyleCPage } from '../../ui/layout/StyleCPage';
+import { Screen } from '../../ui';
+import { StyleCLoadingLines, StyleCMasthead, StyleCPaper, useStyleCScreen } from '../../ui/layout/StyleCPage';
 import { getLocalWeekStart } from '../../utils/date';
 import { RecipeAllergenFields, recipeAllergenSummary } from '../../lib/recipeAllergens';
 
@@ -74,6 +75,7 @@ function formatWeekLabel(weekStart: string): string {
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function PrepGuideScreen() {
+  const page = useStyleCScreen();
   const { semanticColors: sc } = useTheme();
   const colors = useMemo(() => ({
     background: sc.bgPrimary, surface: sc.bgPrimary, primary: sc.accent,
@@ -147,7 +149,9 @@ export default function PrepGuideScreen() {
   }, [data, addToGroceryMutation]);
 
   return (
-    <StyleCPage testID="grocery-prep-screen" paperStyle={styles.bare} head={<StyleCMasthead title="Prep guide" onBack={() => navigation.goBack()} />}>
+    <Screen edges={['top']} scroll={false} {...page} testID="grocery-prep-screen">
+      <StyleCMasthead title="Prep guide" onBack={() => navigation.goBack()} />
+      <StyleCPaper style={styles.bare}>
 
       {/* Week selector: only where the week is real (the server filters by it) */}
       {showWeek ? <View style={styles.weekSelector}>
@@ -314,15 +318,15 @@ export default function PrepGuideScreen() {
           </>
         )}
       </ScrollView>
-    </StyleCPage>
+    </StyleCPaper>
+    </Screen>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primary' | 'textPrimary' | 'textMuted' | 'textSecondary' | 'textOnPrimary' | 'border' | 'primaryPale'>) =>
   StyleSheet.create({
-  // Screen owns the inset top (insets.top + 12) and the page colour.
-  // StyleCPage owns the masthead, the inset top and the page colours.
+  // Screen owns the inset top (forest via useStyleCScreen); the masthead and paper are Style C.
   bare: { paddingTop: 12 },
   summary: { ...typography.h2, color: colors.textPrimary, fontVariant: ['tabular-nums'] },
 

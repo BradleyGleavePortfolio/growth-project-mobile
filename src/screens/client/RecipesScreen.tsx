@@ -28,7 +28,8 @@ import EmptyState from '../../components/EmptyState';
 import AllergySafetyPrompt from '../../components/AllergySafetyPrompt';
 import { useTheme } from '../../theme/ThemeProvider';
 import { typography, radius, SemanticTokens } from '../../theme/tokens';
-import { StyleCLoadingLines, StyleCMasthead, StyleCPage } from '../../ui/layout/StyleCPage';
+import { Screen } from '../../ui';
+import { StyleCLoadingLines, StyleCMasthead, StyleCPaper, useStyleCScreen } from '../../ui/layout/StyleCPage';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { patchUserCache } from '../../lib/userCache';
 import { track } from '../../lib/analytics';
@@ -124,6 +125,7 @@ const ALL_TAGS = [
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function RecipesScreen() {
+  const page = useStyleCScreen();
   const { semanticColors: colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
@@ -240,7 +242,9 @@ export default function RecipesScreen() {
   );
 
   return (
-    <StyleCPage paperStyle={styles.bare} head={<StyleCMasthead title="Recipes" onBack={() => navigation.goBack()} backLabel="Go back" />}>
+    <Screen edges={['top']} scroll={false} {...page}>
+      <StyleCMasthead title="Recipes" onBack={() => navigation.goBack()} backLabel="Go back" />
+      <StyleCPaper style={styles.bare}>
 
       {/* Search */}
       <View style={styles.searchRow}>
@@ -352,14 +356,15 @@ export default function RecipesScreen() {
         onSubmit={handleAllergySubmit}
         onLater={handleAllergyLater}
       />
-    </StyleCPage>
+    </StyleCPaper>
+    </Screen>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const makeStyles = (colors: SemanticTokens) =>
   StyleSheet.create({
-  // StyleCPage owns the masthead, the inset top and the page colours.
+  // Screen owns the inset top (forest via useStyleCScreen); the masthead and paper are Style C.
   bare: { paddingTop: 24 },
 
   searchRow: {

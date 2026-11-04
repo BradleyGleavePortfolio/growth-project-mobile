@@ -1,8 +1,9 @@
 /**
  * Style C page (C2 section 5; frames C_kitchen, C_recipe, C_grocery, C_loading, C_error): a forest
- * masthead (surface.forestBand, the frames' #2C4A36) under the status bar with a 1 pt gold rule under its words, and a paper sheet whose 24 pt
- * top corners overlap it. Also the round check, the warm notice and the static loading lines those
- * frames draw. Gold is only ever the rule here, never text on light.
+ * masthead (surface.forestBand, the frames' #2C4A36) with a 1 pt gold rule under its words, and a
+ * paper sheet whose 24 pt top corners overlap it. The screen keeps its Screen wrapper, which owns the
+ * inset top (insets.top + 12); useStyleCScreen() turns that wrapper forest. Also the round check,
+ * the warm notice and the static loading lines those frames draw. Gold is only ever the rule here, never text on light.
  */
 import React, { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
@@ -11,7 +12,6 @@ import { useStatusBarBand } from '../../components/StatusBarBand';
 import { useTheme } from '../../theme/ThemeProvider';
 import { gold, layout, radius, typography, withAlpha } from '../../theme/tokens';
 import { HapticService } from '../haptics/haptics.service';
-import { useScreenInsets } from './Screen';
 
 export function StyleCMasthead({ title, onBack, backLabel = 'Back', trailing, loading }: {
   title?: string; onBack?: () => void; backLabel?: string;
@@ -21,11 +21,10 @@ export function StyleCMasthead({ title, onBack, backLabel = 'Back', trailing, lo
   loading?: boolean;
 }) {
   const sc = useTheme().semanticColors;
-  const insets = useScreenInsets();
   useStatusBarBand(sc.surface.forestBand);
   const bar = { backgroundColor: withAlpha(sc.textOnAccent, 0.16) };
   return (
-    <View style={[s.head, { backgroundColor: sc.surface.forestBand, paddingTop: insets.top + layout.statusBarGap }]}>
+    <View style={s.head}>
       {onBack || trailing ? (
         <View style={s.bar}>
           {onBack ? (
@@ -45,26 +44,15 @@ export function StyleCMasthead({ title, onBack, backLabel = 'Back', trailing, lo
   );
 }
 
-/** The page: root in the page colour (keeps the screen's testID), masthead, then the paper sheet. */
-export function StyleCPage({ head, children, testID, paperStyle }: {
-  head: React.ReactNode; children?: React.ReactNode; testID?: string; paperStyle?: StyleProp<ViewStyle>;
-}) {
-  const sc = useTheme().semanticColors;
-  const insets = useScreenInsets();
-  return (
-    <View testID={testID} style={[s.root, { backgroundColor: sc.bgPrimary }]}>
-      <View style={[s.root, { backgroundColor: sc.surface.forestBand, paddingLeft: insets.left, paddingRight: insets.right }]}>
-        {head}
-        <View style={[s.paper, { backgroundColor: sc.bgSurface }, paperStyle]}>{children}</View>
-      </View>
-    </View>
-  );
+/** Props for the screen's Screen wrapper: the forest page (its inset top included), no gutter, no bottom pad. */
+export function useStyleCScreen(): { style: ViewStyle; contentStyle: ViewStyle } {
+  return { style: { backgroundColor: useTheme().semanticColors.surface.forestBand }, contentStyle: s.bare };
 }
 
-/** The paper sheet on its own, under a masthead that scrolls with the page. */
-export function StyleCPaper({ children }: { children?: React.ReactNode }) {
+/** The paper sheet under the masthead: fills a fixed page, or grows under a masthead that scrolls. */
+export function StyleCPaper({ children, scrolls, style }: { children?: React.ReactNode; scrolls?: boolean; style?: StyleProp<ViewStyle> }) {
   const sc = useTheme().semanticColors;
-  return <View style={[s.paper, s.paperFlow, { backgroundColor: sc.bgSurface }]}>{children}</View>;
+  return <View style={[s.paper, scrolls && s.paperFlow, { backgroundColor: sc.bgSurface }, style]}>{children}</View>;
 }
 
 /** Round check (C_grocery): a ring, filled forest with a light tick when checked. Visual only. */
@@ -101,7 +89,7 @@ export function StyleCLoadingLines({ rows = 4, label }: { rows?: number; label?:
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1 },
+  bare: { flexGrow: 1, paddingHorizontal: 0, paddingBottom: 0 },
   head: { paddingHorizontal: layout.gutter, paddingBottom: radius.sheet + 16 },
   bar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: -10, marginBottom: 4 },
   icon: { minWidth: layout.touchMin, minHeight: layout.touchMin, alignItems: 'center', justifyContent: 'center' },
@@ -111,10 +99,10 @@ const s = StyleSheet.create({
   barLine: { height: 14, width: '78%', borderRadius: radius.button },
   paper: { flex: 1, marginTop: -radius.sheet, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, overflow: 'hidden' },
   paperFlow: { flex: 0, flexGrow: 1 },
-  check: { width: 28, height: 28, borderRadius: 14, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  check: { width: 28, height: 28, borderRadius: radius.chip, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   notice: { borderLeftWidth: 3, borderRadius: radius.button, paddingHorizontal: 16, paddingVertical: 14 },
   lines: { gap: 24, paddingVertical: 8 },
   lineRow: { gap: 10 },
-  lineShort: { height: 12, width: '40%', borderRadius: 6 },
-  lineLong: { height: 22, width: '86%', borderRadius: 11 },
+  lineShort: { height: 12, width: '40%', borderRadius: radius.control },
+  lineLong: { height: 22, width: '86%', borderRadius: radius.button },
 });

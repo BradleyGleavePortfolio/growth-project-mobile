@@ -149,7 +149,8 @@ it('describes fetching the prep guide without claiming it is being built', async
 it.each([GroceryListScreen, ShoppingListScreen, PrepGuideScreen])('uses semantic page colors in dark mode', async (Screen) => {
   mockTokens = darkTokens;
   const view = await mount(Screen);
-  expect(StyleSheet.flatten(view.getByTestId('grocery-prep-screen').props.style).backgroundColor).toBe(darkTokens.bgPrimary);
+  // STYLE-KITCHEN-M: the page under the inset top is the Style C forest masthead token; the paper is bgSurface.
+  expect(StyleSheet.flatten(view.getByTestId('grocery-prep-screen').props.style).backgroundColor).toBe(darkTokens.surface.forestBand);
 });
 
 describe('prep guide says where its recipes come from (NUTR-AUD-128 B1)', () => {

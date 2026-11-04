@@ -20,9 +20,9 @@ import { listsApi } from '../../services/api';
 import FadeInView from '../../components/FadeInView';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { typography, radius } from '../../theme/tokens';
-import { PrimaryButton, TextLink } from '../../ui';
+import { PrimaryButton, TextLink, Screen } from '../../ui';
 import { HapticService } from '../../ui/haptics/haptics.service';
-import { StyleCCheck, StyleCLoadingLines, StyleCMasthead, StyleCNotice, StyleCPage } from '../../ui/layout/StyleCPage';
+import { StyleCCheck, StyleCLoadingLines, StyleCMasthead, StyleCNotice, StyleCPaper, useStyleCScreen } from '../../ui/layout/StyleCPage';
 
 function EmptyState({ title, subtitle }: { icon: string; title: string; subtitle: string }) {
   const { semanticColors: sc } = useTheme();
@@ -60,6 +60,7 @@ const fromShopping = (item: ListItem) => item.list_type === 'shopping';
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function GroceryListScreen() {
+  const page = useStyleCScreen();
   const { semanticColors: sc } = useTheme();
   const colors = useMemo(() => ({
     background: sc.bgPrimary, surface: sc.bgPrimary, primary: sc.accent,
@@ -223,7 +224,9 @@ export default function GroceryListScreen() {
   ];
 
   return (
-    <StyleCPage testID="grocery-prep-screen" paperStyle={styles.paper} head={<StyleCMasthead title="Grocery list" onBack={() => navigation.goBack()} />}>
+    <Screen edges={['top']} scroll={false} {...page} testID="grocery-prep-screen">
+      <StyleCMasthead title="Grocery list" onBack={() => navigation.goBack()} />
+      <StyleCPaper style={styles.paper}>
       {!isLoading && !isError && items.length > 0 ? <Text style={[styles.summary, hasShoppingItems && styles.summaryWithNote]}>{unchecked.length > 0 ? `${unchecked.length} to get.` : 'All items checked.'}</Text> : null}
       {!isLoading && !isError && hasShoppingItems ? <Text style={styles.note}>Includes items from your shopping list.</Text> : null}
 
@@ -325,14 +328,15 @@ export default function GroceryListScreen() {
           showsVerticalScrollIndicator={false}
         />
       )}
-    </StyleCPage>
+    </StyleCPaper>
+    </Screen>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primary' | 'textPrimary' | 'textMuted' | 'textOnPrimary' | 'border' | 'error'>) =>
   StyleSheet.create({
-  // StyleCPage owns the masthead, the inset top and the page colours; the paper holds the list.
+  // Screen owns the inset top (forest via useStyleCScreen); the masthead and paper are Style C; the paper holds the list.
   paper: { paddingTop: 24 },
   summary: { ...typography.h2, color: colors.textPrimary, paddingHorizontal: 24, marginBottom: 24, fontVariant: ['tabular-nums'] },
   summaryWithNote: { marginBottom: 4 },

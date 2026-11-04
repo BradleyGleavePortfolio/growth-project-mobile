@@ -86,7 +86,7 @@ it.each([
   }
   expect(StyleSheet.flatten(ui.getByLabelText('Check Milk').props.style).width).toBe(44);
   expect(StyleSheet.flatten(ui.getByLabelText('Remove Milk').props.style).width).toBe(44);
-  expect(bg(ui, 'grocery-prep-screen')).toBe(lightTokens.bgPrimary);
+  expect(bg(ui, 'grocery-prep-screen')).toBe(lightTokens.surface.forestBand);
   expectNothingClamped(ui);
 });
 

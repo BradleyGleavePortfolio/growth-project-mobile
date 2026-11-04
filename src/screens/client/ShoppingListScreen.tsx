@@ -19,9 +19,9 @@ import { listsApi } from '../../services/api';
 import FadeInView from '../../components/FadeInView';
 import { useTheme } from '../../theme/ThemeProvider';
 import { typography } from '../../theme/tokens';
-import { PrimaryButton, TextLink } from '../../ui';
+import { PrimaryButton, TextLink, Screen } from '../../ui';
 import { HapticService } from '../../ui/haptics/haptics.service';
-import { StyleCCheck, StyleCLoadingLines, StyleCMasthead, StyleCNotice, StyleCPage } from '../../ui/layout/StyleCPage';
+import { StyleCCheck, StyleCLoadingLines, StyleCMasthead, StyleCNotice, StyleCPaper, useStyleCScreen } from '../../ui/layout/StyleCPage';
 import { makeListStyles as makeStyles } from './GroceryListScreen';
 
 function EmptyState({ title, subtitle }: { icon: string; title: string; subtitle: string }) {
@@ -44,6 +44,7 @@ const QUERY_KEY = ['lists', LIST_TYPE];
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function ShoppingListScreen() {
+  const page = useStyleCScreen();
   const { semanticColors: sc } = useTheme();
   const colors = useMemo(() => ({
     background: sc.bgPrimary, surface: sc.bgPrimary, primary: sc.accent,
@@ -202,7 +203,9 @@ export default function ShoppingListScreen() {
   ];
 
   return (
-    <StyleCPage testID="grocery-prep-screen" paperStyle={styles.paper} head={<StyleCMasthead title="Shopping list" onBack={() => navigation.goBack()} />}>
+    <Screen edges={['top']} scroll={false} {...page} testID="grocery-prep-screen">
+      <StyleCMasthead title="Shopping list" onBack={() => navigation.goBack()} />
+      <StyleCPaper style={styles.paper}>
       {!isLoading && !isError && items.length > 0 ? <Text style={styles.summary}>{unchecked.length > 0 ? `${unchecked.length} to get.` : 'All items checked.'}</Text> : null}
 
       {/* Add item input */}
@@ -303,6 +306,7 @@ export default function ShoppingListScreen() {
           showsVerticalScrollIndicator={false}
         />
       )}
-    </StyleCPage>
+    </StyleCPaper>
+    </Screen>
   );
 }

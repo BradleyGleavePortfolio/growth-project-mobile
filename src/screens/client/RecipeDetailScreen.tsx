@@ -19,8 +19,8 @@ import { RecipeAllergenFields, isHiddenForAllergens, recipeAllergenDetail } from
 import FadeInView from '../../components/FadeInView';
 import { useTheme } from '../../theme/ThemeProvider';
 import { typography, radius, SemanticTokens } from '../../theme/tokens';
-import { PrimaryButton } from '../../ui';
-import { StyleCLoadingLines, StyleCMasthead, StyleCNotice, StyleCPage, StyleCPaper } from '../../ui/layout/StyleCPage';
+import { PrimaryButton, Screen } from '../../ui';
+import { StyleCLoadingLines, StyleCMasthead, StyleCNotice, StyleCPaper, useStyleCScreen } from '../../ui/layout/StyleCPage';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Recipe extends RecipeAllergenFields {
@@ -58,6 +58,7 @@ function MacroCard({ label, value, unit }: {
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function RecipeDetailScreen() {
+  const page = useStyleCScreen();
   const { semanticColors: colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
@@ -115,7 +116,7 @@ export default function RecipeDetailScreen() {
   }, [isSaved, saving, recipe, queryClient]);
 
   if (isLoading && !recipe) {
-    return <StyleCPage head={<StyleCMasthead loading />} paperStyle={styles.errorContainer}><StyleCLoadingLines rows={6} label="Loading" /></StyleCPage>;
+    return <Screen edges={['top']} scroll={false} {...page}><StyleCMasthead loading /><StyleCPaper style={styles.errorContainer}><StyleCLoadingLines rows={6} label="Loading" /></StyleCPaper></Screen>;
   }
 
   // A 404 wins over a cached copy (list cache or an earlier open): the recipe is
@@ -125,7 +126,9 @@ export default function RecipeDetailScreen() {
   if (!recipe || gone) {
     const unavailable = !recipeId || gone || !isError;
     return (
-      <StyleCPage head={<StyleCMasthead />} paperStyle={styles.errorContainer}>
+      <Screen edges={['top']} scroll={false} {...page}>
+        <StyleCMasthead />
+        <StyleCPaper style={styles.errorContainer}>
         <StyleCNotice>
           {isHiddenForAllergens(error)
             ? 'This recipe is hidden because it lists an allergen saved on your profile.'
@@ -139,11 +142,13 @@ export default function RecipeDetailScreen() {
         <TouchableOpacity onPress={() => navigation.goBack()} accessibilityRole="button">
           <Text style={styles.errorLink}>Go back</Text>
         </TouchableOpacity>
-      </StyleCPage>
+        </StyleCPaper>
+      </Screen>
     );
   }
 
   return (
+    <Screen edges={['top']} scroll={false} {...page}>
     <ScrollView style={styles.page} contentContainerStyle={styles.content}>
       {/* C_recipe: back, save and the title on the masthead; the recipe on the paper. */}
       <StyleCMasthead title={recipe.title} onBack={() => navigation.goBack()} backLabel="Go back" trailing={
@@ -167,7 +172,7 @@ export default function RecipeDetailScreen() {
           )}
         </TouchableOpacity>} />
 
-      <StyleCPaper>
+      <StyleCPaper scrolls>
       <FadeInView duration={250}>
         <View style={styles.section}>
           {recipe.image_url ? <Image source={{ uri: recipe.image_url }} style={styles.heroImage} resizeMode="cover" accessibilityIgnoresInvertColors /> : null}
@@ -256,13 +261,14 @@ export default function RecipeDetailScreen() {
       </FadeInView>
       </StyleCPaper>
     </ScrollView>
+    </Screen>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const makeStyles = (colors: SemanticTokens) =>
   StyleSheet.create({
-  // The masthead scrolls with the recipe; the paper runs to the bottom.
+  // Screen owns the inset top (forest via useStyleCScreen); the masthead scrolls with the recipe.
   page: { flex: 1, backgroundColor: colors.bgSurface },
   content: { flexGrow: 1, backgroundColor: colors.surface.forestBand, paddingBottom: 0 },
   heroImage: {
