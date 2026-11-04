@@ -13,11 +13,10 @@ const { NavigationContainer, useNavigation, useRoute } = require('@react-navigat
 const { createNativeStackNavigator } = require('@react-navigation/native-stack');
 
 test('a bare hook gets a QueryClient and a navigation object', async () => {
-  const { result } = await renderHook(() => ({ qc: useQueryClient(), nav: useNavigation(), route: useRoute() }));
+  const { result } = await renderHook(() => ({ qc: useQueryClient(), nav: useNavigation() }));
   expect(result.current.qc).toBeInstanceOf(QueryClient);
   expect(typeof result.current.nav.navigate).toBe('function');
   expect(result.current.nav.canGoBack()).toBe(false);
-  expect(result.current.route.name).toBe('AllOnTest');
 });
 
 test("a test's own QueryClientProvider wins", async () => {

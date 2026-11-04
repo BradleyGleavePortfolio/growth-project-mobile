@@ -26,8 +26,9 @@
  * screen test renders a component bare. With every switch on, more screens
  * read a query or the navigation object, so render and renderHook get a
  * default outer wrapper here: a fresh QueryClient (retry off) and a root
- * navigation stand-in that answers useNavigation/useRoute/useFocusEffect when
- * the test mounts no NavigationContainer. Anything the test supplies itself
+ * navigation stand-in that answers useNavigation/useFocusEffect when the
+ * test mounts no NavigationContainer (no route default: a route context would
+ * make a test's own navigator read as nested). Anything the test supplies itself
  * (its own wrapper, QueryClientProvider, NavigationContainer, navigator or a
  * jest.mock of the module) sits inside, so it wins (providersOwnWins.check.js).
  *
@@ -65,7 +66,7 @@ jest.mock('@testing-library/react-native', () => {
   const actual = jest.requireActual('@testing-library/react-native');
   const React = jest.requireActual('react');
   const { QueryClient, QueryClientProvider } = jest.requireActual('@tanstack/react-query');
-  const { NavigationContainerRefContext, NavigationRouteContext } = jest.requireActual('@react-navigation/core');
+  const { NavigationContainerRefContext } = jest.requireActual('@react-navigation/core');
   const noop = () => undefined;
   const rootNavigation = () => {
     const state = { key: 'all-on-root', index: 0, routeNames: ['AllOnTest'], routes: [{ key: 'all-on-test', name: 'AllOnTest' }], type: 'stack', stale: false };
@@ -93,7 +94,6 @@ jest.mock('@testing-library/react-native', () => {
       removeListener: noop,
     };
   };
-  const route = { key: 'all-on-test', name: 'AllOnTest', params: undefined };
   const withDefaults = (options) => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
     const navigation = rootNavigation();
@@ -105,11 +105,7 @@ jest.mock('@testing-library/react-native', () => {
         React.createElement(
           NavigationContainerRefContext.Provider,
           { value: navigation },
-          React.createElement(
-            NavigationRouteContext.Provider,
-            { value: route },
-            Inner ? React.createElement(Inner, null, children) : children,
-          ),
+          Inner ? React.createElement(Inner, null, children) : children,
         ),
       );
     return { ...options, wrapper };
