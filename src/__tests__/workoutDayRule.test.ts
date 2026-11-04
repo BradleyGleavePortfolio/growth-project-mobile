@@ -118,7 +118,6 @@ const OLD_PATTERNS: Array<[what: string, pattern: RegExp]> = [
 const NOT_A_WORKOUT_DAY: Record<string, Array<[line: string, why: string]>> = {
   'src/screens/coach/client-detail/useClientDetailData.ts': [
     ['bucketDateLocal(new Date(w.date))', 'a weight log sent as a timestamp, not a workout'],
-    ['events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());', 'timeline order of event instants'],
   ],
 };
 
@@ -291,9 +290,9 @@ const LISTED_LINES: Record<string, Array<[snippet: string, why: string]>> = {
   'src/screens/client/ClientWorkoutViewerScreen.tsx': [['formatScheduled(a.scheduled_for)', 'formatScheduled reads assignmentDay (checked below)']],
   'src/components/tutorial/PlanExplanationCard.tsx': [['weekdayOf(first.scheduled_for)', 'weekdayOf reads assignmentDay (checked below)']],
   'src/hooks/useApi.ts': [["['check-ins', 'day', vars.date]", 'a cache key'], ['({ date, volume })', 'volume per day key, keyed by workoutDay above']],
-  'src/utils/workout/workoutLogging.ts': [['const finishedAt = s.completed_at || s.created_at || s.date', "the session's sort instant; its day is workoutDay(s)"]],
+  'src/utils/workout/workoutLogging.ts': [['const finishedAt = s.completed_at || s.created_at || s.date', "the session's sort instant; its day is workoutDay(s)"], ['Date.parse(textOf(row.created_at))', 'the save moment, a tie-break inside the day workoutDay picked']],
   'src/screens/coach/client-detail/WorkoutsTab.tsx': [['{ date: dayOfSession(s), weight }', 'dayOfSession reads s.day or instantDay (listed above)'], ['a.date.localeCompare(b.date)', 'points dated by dayOfSession'], ['dayText(p.date)', 'points dated by dayOfSession'], ['dayText(points[0].date)', 'points dated by dayOfSession'], ['dayText(points[points.length - 1].date)', 'points dated by dayOfSession']],
-  'src/screens/coach/client-detail/useClientDetailData.ts': [['if (s.created_at && instantDay(s.created_at) === day) return s.created_at;', 'recordedAt: the stored instant when it falls on workoutDay(s)'], ["?? s.created_at ?? s.date ?? ''", 'recordedAt: fallback instant after the start of workoutDay(s)'], ['date: today,', 'a food row dated today'], ['bucketDateLocal(new Date(w.date))', 'a weight log sent as a timestamp, not a workout'], ["date: typeof w.date === 'string' ? w.date.slice(0, 10)", 'a weight log day'], ['(meal.date || meal.logged_at', 'a meal day'], ["date: dateStr + 'T", 'a timeline event instant'], ["(w.date || '').slice(0, 10)", 'a weight log day'], ['date: recordedAt(s)', 'recordedAt returns workoutDay'], ["date: String(c.date || '').slice(0, 10)", 'a check-in day'], ['new Date(b.date).getTime() - new Date(a.date).getTime()', 'timeline order of event instants']],
+  'src/screens/coach/client-detail/useClientDetailData.ts': [['if (s.created_at && instantDay(s.created_at) === day) return s.created_at;', 'recordedAt: the stored instant when it falls on workoutDay(s)'], ["?? s.created_at ?? s.date ?? ''", 'recordedAt: fallback instant after the start of workoutDay(s)'], ['date: today,', 'a food row dated today'], ['bucketDateLocal(new Date(w.date))', 'a weight log sent as a timestamp, not a workout'], ["date: typeof w.date === 'string' ? w.date.slice(0, 10)", 'a weight log day'], ['(meal.date || meal.logged_at', 'a meal day'], ["date: dateStr + 'T", 'a timeline event instant'], ["(w.date || '').slice(0, 10)", 'a weight log day'], ['date: recordedAt(s)', 'recordedAt returns workoutDay'], ["date: String(c.date || '').slice(0, 10)", 'a check-in day'], ["add(String(c.date || '').slice(0, 10)", 'a check-in day, its timeline place']],
   'src/utils/coach/clientPeek.ts': [['localDay(latest.date, false)', 'a check-in day'], ['localDay(weight.date, false)', 'a weight log day']],
 };
 
@@ -358,7 +357,7 @@ const PLACED: Record<string, { why: string; lines: string[] }> = {
   'src/db/workoutDb.ts': { why: 'on-device exercise volume; getDailyVolumeBreakdown has no caller (checked below)', lines: ['date: r.day'] },
   'src/screens/client/WorkoutAssignmentDetailScreen.tsx': { why: 'completed_at read only as done or not done', lines: [] },
   'src/screens/client/home/RingsHomeScreen.tsx': { why: "today's date line and a style name; ring counts come from homeRings.ts", lines: ['styles.date', 'date: { marginBottom'] },
-  'src/screens/client/LogScreen.tsx': { why: 'meal days (food log calendar dates), not a workout', lines: ['date: selectedDate', 'repeatMeal.date === addDays(selectedDate, -1)', 'new Date(`${repeatMeal.date}T00:00:00`)'] },
+  'src/screens/client/LogScreen.tsx': { why: 'meal days (food log calendar dates), not a workout', lines: ['date: day', 'repeatMeal.date === addDays(selectedDate, -1)', 'new Date(`${repeatMeal.date}T00:00:00`)'] },
   'src/screens/client/ProgressScreen.tsx': { why: 'weigh-in days (calendar dates), not a workout', lines: ['a.date.localeCompare(b.date)', 'l.date === dateStr', 'date: getTodayString()', 'formatSince(firstLog.date)', 'new Date(`${log.date}T00:00:00`)', 'lastLog.date', 'formatLogDate(log.date)'] },
   'src/screens/client/progress/ProgressV2.tsx': { why: 'weigh-in days and bests already dated by progressV2.ts', lines: ['a.date.localeCompare(b.date)', 'l.date !== today', "date: today, weight: lbs", 'P.monthDay(logs[0].date)', 'short(best.date)', 'short(l.date)'] },
 };

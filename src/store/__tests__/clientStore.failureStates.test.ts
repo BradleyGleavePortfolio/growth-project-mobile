@@ -177,7 +177,7 @@ describe('client day data failure state', () => {
     await useClientStore.getState().loadDayData('client', '2026-10-06');
     mockLogWater.mockRejectedValueOnce(new Error('Network Error'));
     await useClientStore.getState().logWater('client', '', 250 / 29.5735);
-    expect(mockLogWater).toHaveBeenCalledWith({ amount_ml: 250, date: '2026-10-06' });
+    expect(mockLogWater).toHaveBeenCalledWith({ amount_ml: 250, date: '2026-10-06' }, expect.stringMatching(/^pfl_/));
     expect(useClientStore.getState().waterOz).toBeCloseTo(20);
     expect(useClientStore.getState().loadError)
       .toBe('8 oz of water was not saved. Check the connection, then add it again.');

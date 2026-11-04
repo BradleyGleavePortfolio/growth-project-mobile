@@ -18,6 +18,7 @@ import type { PastMeal } from '../../hooks/useFoodBrowse';
 import FoodSearchView from './FoodSearchView';
 import MealChoiceRow from './MealChoiceRow';
 import ManualFoodEntryForm, { ManualFields } from './ManualFoodEntryForm';
+import SheetGrip from './SheetGrip';
 
 interface Props {
   visible: boolean;
@@ -93,16 +94,18 @@ export default function FoodSearchModal(props: Props) {
           style={[styles.modalContainer, frame]}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
+          <SheetGrip />
           <View style={styles.modalHeader}>
-            <HapticPressable intent="light" onPress={onClose} disabled={props.saving} style={styles.closeButton} accessibilityRole="button" accessibilityLabel="Close food search">
-              <Ionicons name="close" size={22} color={sc.textPrimary} />
-            </HapticPressable>
-            <Text style={styles.modalTitle} accessibilityRole="header" numberOfLines={1}>
+            <Text style={styles.modalTitle} accessibilityRole="header">
               Add to {MEAL_SECTIONS.find((s) => s.type === activeMealType)?.label}
             </Text>
             {props.addedFoodName ? (
               <TextLink label="Done" tone="accent" underline={false} disabled={props.saving} onPress={onClose} style={styles.closeButton} />
-            ) : <View style={styles.closeButton} />}
+            ) : (
+              <HapticPressable intent="light" onPress={onClose} disabled={props.saving} style={styles.closeButton} accessibilityRole="button" accessibilityLabel="Close food search">
+                <Ionicons name="close" size={26} color={sc.textPrimary} />
+              </HapticPressable>
+            )}
           </View>
 
           {props.onMealChange ? (
@@ -161,20 +164,18 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   modalContainer: {
     flex: 1,
   },
+  // STYLEC-916 (C2 C_add): the heading sits left under the grip, the close at the right; no rule under it.
   modalHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    paddingHorizontal: layout.gutter - 12,
-    paddingTop: 12,
-    paddingBottom: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: sc.border,
+    paddingLeft: layout.gutter,
+    paddingRight: layout.gutter - 12,
   },
   modalTitle: {
-    ...typography.h3,
-    flexShrink: 1,
-    textAlign: 'center',
+    ...typography.h1,
+    flex: 1,
+    paddingTop: 2,
     color: sc.textPrimary,
   },
 });

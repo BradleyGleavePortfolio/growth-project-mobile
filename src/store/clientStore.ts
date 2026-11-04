@@ -4,6 +4,8 @@ import { getTodayString } from '../utils/date';
 import { MealType, FoodLog } from '../types';
 import { logger } from '../utils/logger';
 import { mapFoodItem, type RawFoodItem } from '../utils/log/mapFoodItem';
+import { forgetSaveKeys, withSaveKey } from '../utils/log/saveKey';
+import { dayForNewLog } from '../utils/logDay';
 
 interface DailyTotals {
   calories: number;
@@ -14,6 +16,8 @@ interface DailyTotals {
 
 interface ClientStore {
   selectedDate: string;
+  // FOOD-1-M R2: the calendar day it was when selectedDate was put on screen (utils/logDay).
+  selectedOn: string;
   foodLogs: FoodLog[];
   dailyTotals: DailyTotals;
   waterOz: number;
@@ -49,6 +53,7 @@ interface ClientStore {
 
 const initialClientState = {
   selectedDate: getTodayString(),
+  selectedOn: getTodayString(),
   foodLogs: [] as FoodLog[],
   dailyTotals: { calories: 0, protein: 0, carbs: 0, fat: 0 },
   waterOz: 0,
@@ -75,6 +80,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
     view += 1;
     return {
     selectedDate: date,
+    selectedOn: getTodayString(),
     foodLogs: [],
     dailyTotals: { ...initialClientState.dailyTotals },
     waterOz: 0,
@@ -87,7 +93,8 @@ export const useClientStore = create<ClientStore>((set, get) => ({
   reset: () => {
     session += 1;
     view += 1;
-    set({ ...initialClientState, selectedDate: getTodayString() });
+    forgetSaveKeys();
+    set({ ...initialClientState, selectedDate: getTodayString(), selectedOn: getTodayString() });
   },
 
   loadDayData: async (_userId: string, date?: string) => {
@@ -214,13 +221,15 @@ export const useClientStore = create<ClientStore>((set, get) => ({
   logFood: async (data) => {
     const mine = session;
     try {
-      await logApi.logFood({
+      const save = {
         date: data.date,
         meal_type: data.mealType,
         food_item_id: data.foodItemId,
         quantity_multiplier: data.quantityMultiplier || 1.0,
         notes: data.notes,
-      });
+      };
+      // FOOD-1-M R3: one key per intended save, kept for a tap again after a lost answer.
+      await withSaveKey(['food', save], (key) => logApi.logFood({ ...save, client_uuid: key }));
       // LS-914R3 B1: a day opened while this was saving stays open; the
       // logged day is read again only while it is the day on screen.
       if (mine === session) await get().refreshShownDay(data.userId, data.date);
@@ -250,8 +259,12 @@ export const useClientStore = create<ClientStore>((set, get) => ({
     // answer belongs to the day it was sent on; it is applied only while that
     // same day view is still open (same account, no day change in between).
     const mine = session;
+    // FOOD-1-M R2: the shared day rule. A day left on today past midnight moves to the new today,
+    // and that day is read, before it takes the glass.
+    const date = dayForNewLog(get());
+    if (date !== get().selectedDate) await get().loadDayData(userId, date);
+    if (mine !== session) return;
     const shown = view;
-    const date = get().selectedDate;
     const ours = () => mine === session && shown === view;
     // Another day opened meanwhile: drop the answer; if the client is back on
     // the sent day (A -> B -> A), read that day again so it shows the truth.
@@ -261,7 +274,8 @@ export const useClientStore = create<ClientStore>((set, get) => ({
     set((state) => ({ waterOz: state.waterOz + amountOz }));
     try {
       const amountMl = Math.round(amountOz * 29.5735);
-      const response = await waterApi.log({ amount_ml: amountMl, date });
+      // FOOD-1-M R3: the glass's key, kept if the answer is lost and the same glass is added again.
+      const response = await withSaveKey(['water', date, amountMl], (key) => waterApi.log({ amount_ml: amountMl, date }, key));
       if (!ours()) return settleElsewhere();
       const saved = response.data;
       if (saved.id) {

@@ -136,7 +136,7 @@ describe('LogPlannedMealButton', () => {
     await screen.findByText("Saved offline. It syncs to today's dinner when the connection returns.");
     expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({
       kind: 'manual', log: expect.objectContaining({ date: '2026-10-07', meal_type: 'dinner' }),
-    }));
+    }), expect.stringMatching(/^pfl_/));
     expect(foodApi.create).not.toHaveBeenCalled();
     expect(screen.queryByText('Undo')).toBeNull();
   });

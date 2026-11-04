@@ -113,7 +113,12 @@ export function TimelineTab({
   const formatDate = (dateStr: string): string => {
     const d = new Date(dateStr);
     const now = new Date();
-    const diff = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
+    // COACH-DAY-ORDER-M: calendar days between the event's local day and today, not
+    // 24-hour spans: last night's 22:00 workout reads "Yesterday" at 08:00. Rounding
+    // absorbs the 23- and 25-hour days at a clock change.
+    const midnight = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+    const diff = Math.round((midnight(now) - midnight(d)) / (1000 * 60 * 60 * 24));
+    if (diff < 0) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     if (diff === 0) return 'Today';
     if (diff === 1) return 'Yesterday';
     if (diff < 7) return `${diff} days ago`;
