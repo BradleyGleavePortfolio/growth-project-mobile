@@ -40,6 +40,9 @@ const log = (id: string, mealType: FoodLog['mealType'], foodName: string, calori
 });
 const breakfast = log('1', 'breakfast', 'Greek yoghurt, oats and berries', 420, '07:40', 'b');
 const flatWhite = log('2', 'snack', 'Flat white', 110, '10:15');
+const lunch = log('3', 'lunch', 'Chicken, rice and greens', 680, '12:35', 'l');
+// C_day's own numbers: breakfast, the flat white and lunch eaten (1,210 kcal, 87 g protein) of 1,850 kcal and 150 g.
+const cDay = { foodLogs: [breakfast, flatWhite, lunch], eaten: { calories: 1210, protein: 87 } };
 
 let workouts: unknown[] = [];
 function serve(body: unknown, fail = false) {
@@ -82,11 +85,11 @@ beforeEach(() => {
 describe('C_day: masthead, timeline and now line', () => {
   it('draws the coach page: masthead with the note and what is left, then the day in clock order with the now line', async () => {
     serve(timed);
-    await show();
+    await show(cDay);
     expect(await screen.findByText("Sam's plan for today")).toBeTruthy();
     expect(screen.getByTestId('food-day-masthead')).toBeTruthy();
     expect(screen.getByText('\u201CProtein at every meal. Water before coffee.\u201D')).toBeTruthy();
-    expect(screen.getByText('1,320 kcal and 90 g protein left.')).toBeTruthy();
+    expect(screen.getByText('640 kcal and 63 g protein left.')).toBeTruthy();
     expect(order()).toEqual(['food-day-slot-b', 'food-day-extra-2', 'food-day-slot-l', 'food-day-now', 'food-day-next', 'food-day-slot-d']);
     // Each entry: time, meal, name, calories (section 5).
     const b = screen.getByTestId('food-day-slot-b');
@@ -96,8 +99,10 @@ describe('C_day: masthead, timeline and now line', () => {
     expect(within(b).getByText('Logged as planned')).toBeTruthy();
     const x = screen.getByTestId('food-day-extra-2');
     expect([within(x).getByText('10:15 am'), within(x).getByText('EXTRAS, NOT IN THE PLAN'), within(x).getByText('Logged to snack')]).toBeTruthy();
-    // A meal still to eat shows the coach's time; the now line shows the clock.
-    expect(within(screen.getByTestId('food-day-slot-l')).getByText('12:30 pm')).toBeTruthy();
+    // A done meal shows when it was logged, a meal still to eat the coach's time; the now line shows the clock.
+    expect(within(screen.getByTestId('food-day-slot-l')).getByText('12:35 pm')).toBeTruthy();
+    expect(within(screen.getByTestId('food-day-next')).getByText('5:30 pm')).toBeTruthy();
+    expect(within(screen.getByTestId('food-day-slot-d')).getByText('7:30 pm')).toBeTruthy();
     expect(within(screen.getByTestId('food-day-now')).getByText('3:10 pm')).toBeTruthy();
     expect(within(screen.getByTestId('food-day-next')).getByText('UP NEXT, PRE-WORKOUT')).toBeTruthy();
     expect(within(screen.getByTestId('food-day-next')).getByText('Banana 1 medium, Whey protein 30 g')).toBeTruthy();
@@ -144,7 +149,7 @@ describe('C_workout: the workout from Train on the same line', () => {
   it('shows the workout at its time and says the pre-workout meal logs under Snacks', async () => {
     workouts = [{ id: 'w1', scheduled_for: today, scheduled_time: '18:00', completed_at: null, workout_plan: { name: 'Full body A' } }];
     serve(timed);
-    await show();
+    await show(cDay);
     const w = await screen.findByTestId('food-day-workout');
     expect([within(w).getByText('WORKOUT'), within(w).getByText('Full body A'), within(w).getByText('6:00 pm')]).toBeTruthy();
     expect(order()).toEqual(['food-day-slot-b', 'food-day-extra-2', 'food-day-slot-l', 'food-day-now', 'food-day-next', 'food-day-workout', 'food-day-slot-d']);
@@ -154,7 +159,7 @@ describe('C_workout: the workout from Train on the same line', () => {
   it('says only "Before Full body A" when the workout has no time', async () => {
     workouts = [{ id: 'w1', scheduled_for: today, completed_at: null, workout_plan: { name: 'Full body A' } }];
     serve(timed);
-    await show();
+    await show(cDay);
     expect(await screen.findByText('Before Full body A. Logs under Snacks.')).toBeTruthy();
   });
 });

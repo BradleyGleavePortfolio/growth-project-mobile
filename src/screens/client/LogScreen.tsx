@@ -612,6 +612,8 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
 
   const remaining = macroTargets ? macroTargets.calories - dailyTotals.calories : null;
   const showDayLoading = !hasLoadedDay && (isLoading || !loadError);
+  // UI-3 / FOOD-DAY-STYLEC-M: behind featureFlags.foodPlanChecklist the day shows as the C2 Style C coach's page.
+  const styleCDay = featureFlags.foodPlanChecklist && !!currentUser;
 
   const onRefresh = useCallback(async () => {
     if (!currentUser) return;
@@ -658,7 +660,8 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
   return (
     <>
       <Screen
-        edges={['top']}
+        // FOOD-DAY-STYLEC-M: the Style C day's forest masthead runs to the top edge and owns the top inset.
+        edges={styleCDay ? [] : ['top']}
         testID="log-screen"
         contentStyle={styles.content}
         refreshControl={
@@ -672,13 +675,14 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
       >
         {/* UI-3: behind featureFlags.foodPlanChecklist the day's plan checklist shows first; with no plan, this Food log. */}
         <FoodDayGate
-          on={featureFlags.foodPlanChecklist && !!currentUser}
+          on={styleCDay}
           coached={!!currentUser?.coach_id}
           selectedDate={selectedDate}
           foodLogs={foodLogs}
           eaten={{ calories: dailyTotals.calories, protein: dailyTotals.protein }}
           targets={macroTargets ? { calories: macroTargets.calories, protein: macroTargets.protein } : null}
           ready={hasLoadedDay && !loadError}
+          dayLoading={showDayLoading}
           saving={foodSaving}
           notes={notesNode}
           water={waterNode}
