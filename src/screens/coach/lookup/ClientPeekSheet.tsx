@@ -39,6 +39,7 @@ type Props = {
 type Load = { id: string; state: 'loading' | 'error' } | { id: string; state: 'ready'; summary: unknown; checkIns: unknown; week: WorkoutWeek };
 const LOAD_FAILED = 'Could not load this client. Please try again.';
 const RING = 76;
+const RING_NARROW = 64; // 320-wide phones: the name keeps its room beside the ring
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {});
 
 export default function ClientPeekSheet({ client, onClose, onOpen, onNudge, children }: Props) {
@@ -46,7 +47,7 @@ export default function ClientPeekSheet({ client, onClose, onOpen, onNudge, chil
   const s = useMemo(() => makeStyles(theme), [theme]);
   const { colors } = theme;
   const insets = useScreenInsets();
-  const { fontScale } = useWindowDimensions();
+  const { fontScale, width } = useWindowDimensions();
   const payments = useFeatureFlags().flags.coach_payment_actions === true;
   const target = useCurrentMacrosForClient(client?.id);
   const [load, setLoad] = useState<Load | null>(null);
@@ -119,7 +120,7 @@ export default function ClientPeekSheet({ client, onClose, onOpen, onNudge, chil
             <View style={[s.head, { backgroundColor: sc.surface.masthead }]} testID="peek-masthead">
               {ring ? (
                 <SegmentedRing
-                  onDark size={RING} segments={ring.segments} label={doneLine(ring)} testID="peek-week-ring"
+                  onDark size={width < 360 ? RING_NARROW : RING} segments={ring.segments} label={doneLine(ring)} testID="peek-week-ring"
                   drawIndex={lastDone >= 0 ? lastDone : undefined} event={`${client.id}:${ring.week}`}
                 >
                   <Text maxFontSizeMultiplier={1.15} numberOfLines={1} adjustsFontSizeToFit style={[s.ringCount, light]}>{`${ring.done} of ${ring.total}`}</Text>
@@ -189,7 +190,7 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: sem.overlay },
     sheet: { maxHeight: '90%', paddingTop: 8, paddingHorizontal: layout.gutter, backgroundColor: colors.background, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet },
     grab: { width: 40, height: 5, borderRadius: radius.chip, backgroundColor: sem.border, alignSelf: 'center', marginBottom: 12 },
-    head: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, paddingRight: 8, borderRadius: radius.card },
+    head: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, paddingRight: 4, borderRadius: radius.card },
     mid: { flex: 1, minWidth: 0 },
     avatar: { width: 48, height: 48, borderRadius: radius.chip, borderWidth: 1, borderColor: palette.camel, backgroundColor: palette.cream, alignItems: 'center', justifyContent: 'center' },
     avatarText: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 19, color: colors.textPrimary },
