@@ -1,15 +1,15 @@
 /**
- * UI-4 peek sheet (client-peek-sheet mockup): one line per slice from GET /coach/clients/:id/summary,
- * the latest check-in and (Workouts) the client file's week. A slice with nothing in it reads the
- * existing "Nothing logged yet" (Workouts: "Nothing planned this week"), never an empty value.
- * #SHARE-SIMPLE: every slice reaches the current coach, so no slice is "not shared".
+ * UI-4 peek sheet, drawn as K1 Style C (C_peek): one line per row from GET /coach/clients/:id/summary, the
+ * roster's check-ins to review, the latest check-in and (Workouts) the client file's week. A row with nothing
+ * in it reads the existing "Nothing logged yet" (Workouts: "Nothing planned this week"), never an empty value.
+ * #SHARE-SIMPLE: every row reaches the current coach, so no row is "not shared".
  */
 import type { MacroTarget } from '../../api/macrosApi';
 import type { ClientProfile } from '../../types';
 import { bucketDateLocal } from '../date';
 import { weekHeadline, workoutsLine, type WorkoutWeek } from '../../screens/coach/client-detail/thisWeek';
 import { dayWord } from './clientLookup';
-import { rosterActivityLine, type RosterClient } from './clientRoster';
+import { rosterReviewBadge, type RosterClient } from './clientRoster';
 import { resolveCoachTargets } from './foodReview';
 
 type Row = Record<string, unknown>;
@@ -38,16 +38,6 @@ export function peekJoinedLine(c: RosterClient): string {
   return `Active, joined ${MONTHS[m - 1]} ${d}`;
 }
 
-/** "Logged today. 2 check-ins waiting for you." Null when the client logged nothing (each slice says so). */
-export function peekStatusLine(c: RosterClient, today: Date = new Date()): { text: string; ok: boolean } | null {
-  const a = c.activity;
-  const n = a?.checkInsToReview ?? 0;
-  if (!a || (!a.lastActiveOn && n === 0)) return null; // the slices already say so
-  const line = a.lastActiveOn ? rosterActivityLine(c, today) : { text: NOTHING, tone: 'quiet' as const };
-  const waiting = n > 0 ? ` ${n} ${n === 1 ? 'check-in' : 'check-ins'} waiting for you.` : '';
-  return { text: `${line.text}.${waiting}`, ok: line.tone === 'ok' };
-}
-
 export interface PeekSlices {
   checkIn: { text: string; hasOne: boolean };
   food: { text: string };
@@ -57,7 +47,7 @@ export interface PeekSlices {
 }
 
 export function peekSlices(
-  _c: RosterClient,
+  c: RosterClient,
   summary: unknown,
   checkIns: unknown,
   week: WorkoutWeek,
@@ -71,14 +61,15 @@ export function peekSlices(
   const energy = latest ? num(latest.energy) : null;
   const note = latest ? text(latest.notes)?.split('\n')[0] ?? null : null;
   const parts = [energy != null ? `energy ${energy} of 5` : null, note].filter(Boolean);
-  const checkText = checkDay ? `${dayWord(checkDay, today)}${parts.length ? `: ${parts.join(', ')}` : ''}` : NOTHING;
+  // C_peek: K1-S-19 "{n} to review" (the roster's count, as on the list row); with none waiting, main's latest check-in.
+  const checkText = rosterReviewBadge(c) ?? (checkDay ? `${dayWord(checkDay, today)}${parts.length ? `: ${parts.join(', ')}` : ''}` : NOTHING);
 
   const day = obj(s.today);
   const targets = resolveCoachTargets(target ?? null, (s.profile as ClientProfile | null) ?? null);
   const kcal = num(day.total_calories) ?? 0;
   const of = targets?.calories != null ? ` of ${grouped(targets.calories)}` : '';
-  // A no-break space keeps each number with its unit when the line wraps ("96 g", never "96" / "g").
-  const foodText = rows(day.entries).length > 0 ? `${grouped(kcal)}${of}\u00a0kcal, protein ${grouped(num(day.total_protein_g) ?? 0)}\u00a0g` : NOTHING;
+  // C_peek draws kcal alone on one line (its "so far today" is not an approved word, so main's "{n} of {m} kcal" stays).
+  const foodText = rows(day.entries).length > 0 ? `${grouped(kcal)}${of}\u00a0kcal` : NOTHING;
 
   // CLIENT-FILE-DAYS-M: the week the client file's ring reads (GET /coach/clients/:id/week, the client's own
   // Monday-to-Sunday in their zone), in the file's words: K1-S-39 "Missed {day}", else K1-S-38 "{n} of {m} done".
@@ -91,7 +82,7 @@ export function peekSlices(
   const weighText = lbs != null && weightDay ? `${dayWord(weightDay, today)}: ${Math.round(lbs * 10) / 10}\u00a0lb` : NOTHING;
 
   return {
-    checkIn: { text: checkText, hasOne: !!checkDay },
+    checkIn: { text: checkText, hasOne: !!checkDay || (c.activity?.checkInsToReview ?? 0) > 0 },
     food: { text: foodText },
     workouts: { text: workoutText, week: week.total > 0 ? week : null },
     weighIn: { text: weighText },
