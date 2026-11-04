@@ -80,6 +80,10 @@ import WinStreaksScreen from '../screens/coach/command-center/WinStreaksScreen';
 import InboxScreen from '../screens/coach/command-center/InboxScreen';
 import ActionQueueScreen from '../screens/coach/command-center/ActionQueueScreen';
 import TeamManagementScreen from '../screens/coach/TeamManagementScreen';
+import { featureFlags } from '../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_COACH_HOME_V11 off: this file is the Home with its top tab row (V11 drops the row, spec #688).
+jest.replaceProperty(featureFlags, 'coachHomeV11', false);
 
 const api = mockApi;
 const flat = (node: { props: { style?: unknown } }): TextStyle =>
