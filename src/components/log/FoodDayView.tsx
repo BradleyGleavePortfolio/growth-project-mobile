@@ -117,10 +117,14 @@ function Mark({ done, reduced, style, fill }: { done: boolean; reduced: boolean;
 
 export default function FoodDayView(p: FoodDayViewProps) {
   const { semanticColors: sc } = useTheme();
-  const { fontScale } = useWindowDimensions();
+  const { fontScale, width } = useWindowDimensions();
   // The time gutter grows with the text size so "12:35 pm" never wraps at 130 percent.
-  const gutter = Math.round(56 * Math.min(Math.max(fontScale, 1), 1.6));
-  const s = useMemo(() => makeStyles(sc, gutter), [sc, gutter]);
+  const scale = Math.min(Math.max(fontScale, 1), 1.6);
+  const gutter = Math.round(62 * scale);
+  // On a narrow phone or at large text the up-next card takes the page's width under the gutter, so its
+  // button keeps two lines at most ("Repeat yesterday's breakfast" at 320 wide, 130 percent).
+  const wideCard = width - 2 * layout.gutter - gutter - RAIL - 8 < 215 * scale;
+  const s = useMemo(() => makeStyles(sc, gutter, wideCard), [sc, gutter, wideCard]);
   const { messageCoach } = useEntitlement();
   const insets = useScreenInsets();
   const reduced = useReducedMotion();
@@ -217,7 +221,7 @@ export default function FoodDayView(p: FoodDayViewProps) {
       </HapticPressable>
       <Pressable onPress={() => { void HapticService.softImpact(); p.onDateChange(today); }} accessibilityRole="button"
         accessibilityLabel={isToday ? 'Viewing today' : `Viewing ${dayLabel}, tap to go to today`} style={s.dateLabel}>
-        <Text style={s.dateText} numberOfLines={2}>{dayLabel.toUpperCase()}</Text>
+        <Text style={s.dateText}>{dayLabel.toUpperCase()}</Text>
       </Pressable>
       <HapticPressable intent="light" disableAnimation onPress={() => p.onDateChange(addDays(p.selectedDate, 1))}
         accessibilityRole="button" accessibilityLabel="Next day" style={s.chevron}>
@@ -415,7 +419,9 @@ export default function FoodDayView(p: FoodDayViewProps) {
         )}
         <View style={[s.progress, (left?.over || !isPlan) && s.progressStack]}>
           <View style={s.segs} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-            {day.slots.map((x) => <View key={x.key} style={[s.seg, (x.logs.length > 0 || left?.over) && s.segDone]} />)}
+            {/* Done meals fill from the left, as C_day draws them. */}
+            {[...day.slots].sort((a, b) => Number(b.logs.length > 0) - Number(a.logs.length > 0))
+              .map((x) => <View key={x.key} style={[s.seg, (x.logs.length > 0 || left?.over) && s.segDone]} />)}
           </View>
           {isPlan ? (
             <Text style={s.mastLine}>
@@ -522,7 +528,8 @@ function DaySkeleton({ s, top }: { s: Styles; top: number }) {
 }
 
 const MARK = 16;
-const makeStyles = (sc: SemanticTokens, gutter: number) => StyleSheet.create({
+const RAIL = 24;
+const makeStyles = (sc: SemanticTokens, gutter: number, wideCard = false) => StyleSheet.create({
   grow: { flex: 1, minWidth: 0 },
   // Masthead (section 3: deep forest, Cormorant-led, gold rule); it runs edge to edge under the page gutters.
   mast: { marginHorizontal: -layout.gutter, paddingHorizontal: layout.gutter, paddingBottom: 24 + 16, backgroundColor: palette.forest },
@@ -553,8 +560,8 @@ const makeStyles = (sc: SemanticTokens, gutter: number) => StyleSheet.create({
   lead: { ...typography.bodySmall, fontSize: 15, color: sc.textMuted, marginBottom: 16 },
   timeline: { marginTop: 4 },
   row: { flexDirection: 'row', alignItems: 'stretch', paddingBottom: 22 },
-  time: { ...typography.bodySmall, width: gutter, textAlign: 'right', color: sc.textMuted, paddingTop: 1, fontVariant: ['tabular-nums'] },
-  rail: { width: 30, marginLeft: 10, alignItems: 'flex-start' },
+  time: { ...typography.bodySmall, fontSize: 13, lineHeight: 20, width: gutter, textAlign: 'right', color: sc.textMuted, paddingTop: 1, fontVariant: ['tabular-nums'] },
+  rail: { width: RAIL, marginLeft: 8, alignItems: 'flex-start' },
   line: { position: 'absolute', left: 0, top: 0, bottom: -22, borderLeftWidth: 1, borderStyle: 'dotted', borderColor: sc.textMuted },
   mark: { width: MARK, height: MARK, borderRadius: MARK / 2, marginTop: 2, marginLeft: -1, borderWidth: 1.5, borderColor: sc.textMuted,
     backgroundColor: sc.bgSurface, overflow: 'hidden' },
@@ -565,8 +572,8 @@ const makeStyles = (sc: SemanticTokens, gutter: number) => StyleSheet.create({
   workoutMark: { width: MARK, height: MARK, borderRadius: radius.control - 2, marginTop: 2, marginLeft: -1, backgroundColor: gold[300] },
   body: { flex: 1, minWidth: 0 },
   eyebrowRow: { flexShrink: 1 },
-  eyebrow: { ...typography.eyebrow, fontSize: 12, lineHeight: 18, letterSpacing: 1.6, color: sc.textMuted },
-  kcal: { ...typography.bodyMd, fontSize: 14, lineHeight: 18, letterSpacing: 1, color: sc.textPrimary, fontVariant: ['tabular-nums'] },
+  eyebrow: { ...typography.eyebrow, fontSize: 12, lineHeight: 18, letterSpacing: 1.2, color: sc.textMuted },
+  kcal: { ...typography.bodyMd, fontSize: 13, lineHeight: 18, letterSpacing: 0.6, color: sc.textPrimary, fontVariant: ['tabular-nums'] },
   serifName: { ...typography.h2, fontSize: 22, lineHeight: 28, color: sc.textPrimary, marginTop: 2 },
   sansName: { ...typography.bodyMd, fontSize: 17, lineHeight: 24, color: sc.textPrimary, marginTop: 2 },
   nothing: { ...typography.body, fontSize: 17, lineHeight: 24, color: sc.textMuted, marginTop: 2 },
@@ -574,17 +581,18 @@ const makeStyles = (sc: SemanticTokens, gutter: number) => StyleSheet.create({
   food: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: layout.touchMin, paddingLeft: gutter, marginTop: -14, marginBottom: 8 },
   small: { ...typography.bodySmall, color: sc.textPrimary },
   smallMuted: { ...typography.bodySmall, color: sc.textMuted, fontVariant: ['tabular-nums'] },
-  card: { marginTop: 12, padding: 16, borderRadius: radius.card, backgroundColor: palette.cream, gap: 6 },
+  card: { marginTop: 12, padding: 16, borderRadius: radius.card, backgroundColor: palette.cream, gap: 6,
+    marginLeft: wideCard ? -(gutter + RAIL + 8) : 0 },
   cardText: { ...typography.body, color: sc.textPrimary },
   cardMeta: { ...typography.bodySmall, fontSize: 15, color: sc.textMuted },
-  cardPrimary: { marginTop: 10 },
+  cardPrimary: { marginTop: 10, paddingHorizontal: 12 },
   link: { minHeight: layout.touchMin, alignItems: 'center', justifyContent: 'center', alignSelf: 'center', paddingHorizontal: 8 },
   linkText: { ...typography.bodyMd, color: sc.accentText, textDecorationLine: 'underline' },
   addEnd: { alignSelf: 'flex-end' },
   nowRow: { flexDirection: 'row', alignItems: 'center', minHeight: layout.touchMin, marginTop: -12, marginBottom: 10 },
-  nowTime: { ...typography.bodyMd, fontSize: 14, color: sc.accentText, paddingTop: 0 },
+  nowTime: { ...typography.bodyMd, fontSize: 13, color: sc.accentText, paddingTop: 0 },
   nowDot: { position: 'absolute', left: -4, top: -4, width: 9, height: 9, borderRadius: 5, backgroundColor: gold[300] },
-  nowRule: { flex: 1, height: 2, marginLeft: -30, backgroundColor: gold[300] },
+  nowRule: { flex: 1, height: 2, marginLeft: -RAIL, backgroundColor: gold[300] },
   nowAdd: { minHeight: layout.touchMin, minWidth: layout.touchMin, alignItems: 'flex-end', justifyContent: 'center', paddingLeft: 12 },
   // C_first's one tool and the search field (Photo of a meal and Scan a barcode are v1.1, owner #192-E2).
   tool: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingHorizontal: 16, borderRadius: radius.card,
