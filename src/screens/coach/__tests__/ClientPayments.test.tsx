@@ -35,7 +35,8 @@ jest.mock("../../../ui/haptics/haptics.service", () => ({
 jest.mock("../../../utils/idempotency", () => ({ generateIdempotencyKey: () => `key-${++mockKey}` }));
 jest.mock("@react-navigation/native", () => ({
   ...jest.requireActual("@react-navigation/native"),
-  useNavigation: () => ({ canGoBack: () => true, goBack: jest.fn(), getParent: () => undefined }),
+  // EXPO_PUBLIC_FF_COACH_TABS_V2: MoneyBack.tsx:28 reads the stack index (a pushed screen).
+  useNavigation: () => ({ canGoBack: () => true, getState: () => ({ index: 1 }), goBack: jest.fn(), getParent: () => undefined }),
 }));
 jest.mock("../../../hooks/useMacros", () => ({
   useCurrentMacrosForClient: () => ({ data: undefined, isLoading: true, isError: false, refetch: jest.fn() }),

@@ -27,6 +27,8 @@ jest.mock("react-native-safe-area-context", () => {
 jest.mock("../../../../theme/ThemeProvider", () => ({
   useTheme: () => ({
     colors: new Proxy({}, { get: () => "#123456" }),
+    // EXPO_PUBLIC_FF_MEAL_PLANS_V2: the library's Programs/Meals tabs (mealUi.tsx) read semanticColors.
+    semanticColors: new Proxy({}, { get: (_t, k) => (k === "data" ? new Proxy({}, { get: () => "#123456" }) : "#123456") }),
   }),
 }));
 

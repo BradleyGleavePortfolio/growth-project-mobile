@@ -27,7 +27,8 @@ jest.mock("../../../../services/api", () => ({
   __esModule: true,
   default: { get: (...a: unknown[]) => mockGet(...a), post: jest.fn() },
 }));
-jest.mock("../../../../services/sentry", () => ({ captureError: jest.fn() }));
+// All switches on: a mounted screen reads useCurrentUser, which sets the Sentry user (useCurrentUser.ts:78).
+jest.mock("../../../../services/sentry", () => ({ captureError: jest.fn(), setSentryUser: jest.fn() }));
 jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn() }));
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
 jest.mock("../../../../hooks/useNetworkStatus", () => ({

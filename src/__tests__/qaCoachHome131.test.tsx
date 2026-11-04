@@ -15,7 +15,8 @@ import { fireEvent, render, waitFor, within } from '@testing-library/react-nativ
 const mockNavigate = jest.fn();
 jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'),
-  useNavigation: () => ({ navigate: mockNavigate }),
+  // EXPO_PUBLIC_FF_COACH_TABS_V2: TeamManagementScreen.tsx:109 asks canGoBack.
+  useNavigation: () => ({ navigate: mockNavigate, canGoBack: () => false }),
 }));
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 47, bottom: 0, left: 0, right: 0 }),

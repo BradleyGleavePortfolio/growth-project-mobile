@@ -143,7 +143,8 @@ jest.mock("@react-navigation/native", () => {
   const actual = jest.requireActual("@react-navigation/native");
   return {
     ...actual,
-    useNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn() }),
+    // EXPO_PUBLIC_FF_COACH_TABS_V2: SettingsScreen.tsx:435 asks canGoBack (Settings is a tab root).
+    useNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn(), canGoBack: () => false }),
   };
 });
 
