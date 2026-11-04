@@ -45,9 +45,9 @@ describe('FOOD-1-M R3 the save key', () => {
       { headers: { 'Idempotency-Key': 'pfl_k1' } });
   });
 
-  it('waterApi.log sends the key in the header only (the water body takes no key)', async () => {
+  it('waterApi.log sends its one key in the body as client_uuid (the field the server reads) and the same key in the header', async () => {
     await waterApi.log({ amount_ml: 237, date: '2026-10-30' }, 'pfl_w1');
-    expect(post).toHaveBeenCalledWith('/nutrition/water', { amount_ml: 237, date: '2026-10-30' },
+    expect(post).toHaveBeenCalledWith('/nutrition/water', { amount_ml: 237, date: '2026-10-30', client_uuid: 'pfl_w1' },
       { headers: { 'Idempotency-Key': 'pfl_w1' } });
   });
 
