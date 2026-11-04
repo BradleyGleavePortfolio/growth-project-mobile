@@ -140,3 +140,47 @@ it('LS-921R3 B2: a refresh snapshot before a lost glass cannot retire that glass
   expect(sent[1]).toBe(sent[0]);
   expect(stored.size).toBe(1);
 });
+
+it('LS-921R3 B2 converse: a shown glass stays retired if its lost reply arrives later', async () => {
+  const sent: string[] = [];
+  const stored = new Map<string, { id: string; amount_ml: number; logged_at: string }>();
+  let entered!: () => void;
+  const accepted = new Promise<void>((resolve) => { entered = resolve; });
+  let rejectFirst!: () => void;
+  let first = true;
+  api.defaults.adapter = ((config) => {
+    if (config.url === `/log/daily?date=${date}`) return ok(config, { entries: [] });
+    if (config.url === `/nutrition/water?date=${date}`) {
+      const logs = [...stored.values()];
+      return ok(config, { total_ml: logs.reduce((sum, row) => sum + row.amount_ml, 0), logs });
+    }
+    if (config.method === 'post' && config.url === '/nutrition/water') {
+      const body = JSON.parse(config.data) as { client_uuid: string; amount_ml: number };
+      sent.push(body.client_uuid);
+      if (!stored.has(body.client_uuid)) {
+        stored.set(body.client_uuid, { id: `row-${stored.size + 1}`, amount_ml: body.amount_ml, logged_at: `${date}T08:00:00Z` });
+      }
+      if (first) {
+        first = false;
+        entered();
+        return new Promise<AxiosResponse>((_resolve, reject) => {
+          rejectFirst = () => reject(failure(config, 0));
+        });
+      }
+      return ok(config, stored.get(body.client_uuid));
+    }
+    throw new Error(`unexpected route ${config.url}`);
+  }) as AxiosAdapter;
+
+  const glass = useClientStore.getState().logWater('member-a', '', 8);
+  await accepted;
+  await useClientStore.getState().loadDayData('member-a', date);
+  expect(useClientStore.getState().waterEntries.map((row) => row.id)).toEqual(['row-1']);
+  expect(useClientStore.getState().waterOz).toBe(8);
+  rejectFirst(); // The first glass was already shown; this late failure cannot revive its key.
+  await glass;
+  await useClientStore.getState().logWater('member-a', '', 8);
+
+  expect(sent[1]).not.toBe(sent[0]);
+  expect(stored.size).toBe(2);
+});
