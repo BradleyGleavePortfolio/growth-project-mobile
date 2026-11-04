@@ -566,8 +566,9 @@ export default function WorkoutScreen() {
 
   const startRoutine = (routine: ApiRoutine) => {
     // Convert API routine exercises to the format ActiveWorkoutScreen expects.
-    // The API routine does not carry catalog ids — synthesize a deterministic
-    // fallback so downstream writes never persist an empty exerciseId (B2).
+    // An exercise saved with a library id (catalog_exercise_id) keeps it as its
+    // id; one without gets a deterministic routine-scoped fallback, so
+    // downstream writes never persist an empty exerciseId (B2).
     const exercisesForSession = routineToSessionExercises(routine);
     navigation.navigate('ActiveWorkout', { routineId: routine.id, routineName: routine.name, exercises: JSON.stringify(exercisesForSession) });
   };
