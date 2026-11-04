@@ -283,6 +283,7 @@ function makeStyles(sc: SemanticTokens) {
       paddingHorizontal: spacing.lg,
       alignItems: 'center',
       justifyContent: 'center',
+      borderRadius: radius.button,
       backgroundColor: sc.accent,
     },
     retryText: {
