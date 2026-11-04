@@ -81,15 +81,14 @@ it('UI-3b: a coached client with no plan sees the usual day, repeats it, and is 
   expect(await screen.findByText('1 food added to Snacks.')).toBeTruthy();
 });
 
-it('UI-3b: a coached client with no plan and no usual meal keeps the classic Food log', async () => {
+it('UI-3b: a coached client with no plan and no usual meal gets the Style C first day (C_first)', async () => {
   await show();
-  expect(await screen.findByLabelText('Add food to breakfast')).toBeTruthy();
+  expect(await screen.findByText('Log what you eat today')).toBeTruthy();
   await waitFor(() => expect(logApi.getDaily).toHaveBeenCalledTimes(7));
-  expect(screen.queryByTestId('food-day')).toBeNull();
-  // The classic section Add keeps its own meal: no meal choice.
-  await fireEvent.press(screen.getByLabelText('Add food to dinner'));
+  expect(screen.getByTestId('food-day')).toBeTruthy();
+  // A meal row with nothing logged opens the add sheet on that meal.
+  await fireEvent.press(screen.getByTestId('food-day-first-dinner'));
   expect(await screen.findByText('Add to Dinner')).toBeTruthy();
-  expect(screen.queryByTestId('food-search-meals')).toBeNull();
 });
 
 it('UI-3d: Extras Add opens on the meal up next with the four meals, and files the food under the meal picked', async () => {

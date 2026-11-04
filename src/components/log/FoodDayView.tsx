@@ -316,7 +316,7 @@ export default function FoodDayView(p: FoodDayViewProps) {
     return (
       <View key={x.key}>
         <HapticPressable intent="light" disableAnimation disabled={!isDone} onPress={() => setOpen(expanded ? null : x.key)}
-          accessibilityRole={isDone ? 'button' : undefined} accessibilityState={isDone ? { expanded } : undefined}
+          accessibilityRole={isDone ? 'button' : 'text'} accessibilityState={isDone ? { expanded } : undefined}
           accessibilityLabel={`${min != null ? `${clockOf(min)}. ` : ''}${x.label}. ${name}.${sub ? ` ${sub}.` : ''} ${n(kcal)} kcal${x.plan ? `. From ${x.plan}.` : ''}`}
           style={s.row} testID={`food-day-slot-${x.key}`}>
           <Text style={s.time}>{min != null ? clockOf(min) : ''}</Text>

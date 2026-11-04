@@ -5,7 +5,7 @@
 import React from 'react';
 import { Text } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { FoodDayGate } from '../../../components/log/FoodDayView';
 import { flush, getQueueLength } from '../../../services/foodLogQueue';
@@ -86,7 +86,9 @@ it('keeps an offline Something else meal done through the queue, a relaunch, the
   const first = await relaunchAndShow();
   expect(useClientStore.getState().foodLogs.map((l) => l.planSlotId)).toEqual(['b', undefined]);
   expect(await screen.findByText('Logged with a change: Eggs on toast')).toBeTruthy();
-  expect(screen.getByText('1 of 2 meals done')).toBeTruthy();
+  // Style C: one plan meal marked done on the timeline, the other up next.
+  expect(screen.getAllByTestId(/^food-day-slot-/)).toHaveLength(1);
+  expect(screen.getByTestId('food-day-next')).toBeTruthy();
   expect(screen.getByLabelText('Overnight oats, logged to breakfast, 390 kcal')).toBeTruthy();
   await first.unmount();
 
@@ -128,7 +130,8 @@ it('keeps a usual-day meal logged through the queue, a relaunch, the server row 
   };
   const first = await relaunchAndShow(false, onRepeat);
   expect(useClientStore.getState().foodLogs.map((l) => l.fillsUsualMeal)).toEqual([true, undefined]);
-  expect(await screen.findByText('1 of 2 meals logged')).toBeTruthy();
+  expect(await screen.findByTestId('food-day-next')).toBeTruthy();
+  expect(screen.getAllByTestId(/^food-day-slot-/)).toHaveLength(1);
   expect(screen.getByText('Eggs on toast')).toBeTruthy();
   expect(screen.getByText('UP NEXT, YOUR USUAL SNACK')).toBeTruthy();
   expect(screen.getByLabelText('Greek yogurt, logged to snack, 210 kcal')).toBeTruthy();
@@ -142,7 +145,8 @@ it('keeps a usual-day meal logged through the queue, a relaunch, the server row 
   // Sign out and in, a cleared cache or another phone: the phone's storage is empty, the server rows are not.
   await AsyncStorage.clear();
   await relaunchAndShow(false);
-  expect(await screen.findByText('2 of 2 meals logged')).toBeTruthy();
+  await waitFor(() => expect(screen.getAllByTestId(/^food-day-slot-/)).toHaveLength(2));
+  expect(screen.queryByTestId('food-day-next')).toBeNull();
   expect(useClientStore.getState().foodLogs.map((l) => l.fillsUsualMeal)).toEqual([true, undefined, true]);
   expect(screen.getByLabelText('Greek yogurt, logged to snack, 210 kcal')).toBeTruthy();
   expect(screen.queryByText(/^UP NEXT/)).toBeNull();
