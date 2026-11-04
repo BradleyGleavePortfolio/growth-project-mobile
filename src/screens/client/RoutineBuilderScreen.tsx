@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp, NavigationProp, ParamListBase } from '@react-navigation/native';
 
 import { getAllExercises } from '../../db/workoutDb';
+import { exerciseCatalogApi } from '../../api/exerciseCatalog';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { typography, radius } from '../../theme/tokens';
 import { Screen } from '../../ui';
@@ -33,7 +34,29 @@ import {
   useDeleteRoutine,
 } from '../../hooks/useApi';
 
-type RoutineExercise = RoutineBuilderExercise;
+// lookupKey ties a row added here to its library-id lookup; it is never sent
+// (buildRoutinePayload picks the fields it saves).
+type RoutineExercise = RoutineBuilderExercise & { lookupKey?: string };
+
+// How long Save waits for a library-id lookup still in flight before it saves
+// the exercise without the id (the server stores null, as before).
+export const LIBRARY_ID_WAIT_MS = 8000;
+
+// Each row whose lookup has answered gets its library id (or keeps none).
+function withLibraryIds(rows: RoutineExercise[], found: Map<string, string | null>): RoutineExercise[] {
+  return rows.map((row) => {
+    const id = row.lookupKey && !row.catalogExerciseId ? found.get(row.lookupKey) : null;
+    return id ? { ...row, catalogExerciseId: id } : row;
+  });
+}
+
+// Resolves when every lookup has answered or the wait is over, whichever is first.
+function settleWithin(lookups: Array<Promise<unknown>>, ms: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<void>((resolve) => { timer = setTimeout(resolve, ms); });
+  return Promise.race([Promise.all(lookups).then(() => undefined), timeout])
+    .finally(() => clearTimeout(timer));
+}
 
 interface Exercise {
   id: string;
@@ -74,6 +97,20 @@ export default function RoutineBuilderScreen() {
   const updateRoutine = useUpdateRoutine();
   const deleteRoutine = useDeleteRoutine();
   const isSaving = createRoutine.isPending || updateRoutine.isPending;
+  // Save waits for library-id lookups still in flight (LS-918 B1), in the same
+  // busy state as the save itself.
+  const [settling, setSettling] = useState(false);
+  const busy = isSaving || settling;
+  const nextLookupKey = useRef(0);
+  const pendingLookups = useRef(new Map<string, Promise<unknown>>());
+  const foundLibraryIds = useRef(new Map<string, string | null>());
+  const latest = useRef({ name, exercises });
+  latest.current = { name, exercises };
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
 
   useEffect(() => {
     if (!routineId || !routinesQ.data) return;
@@ -123,6 +160,7 @@ export default function RoutineBuilderScreen() {
   };
 
   const addExercise = (exercise: Exercise) => {
+    const lookupKey = `lookup-${nextLookupKey.current++}`;
     setExercises((prev) => [
       ...prev,
       {
@@ -132,9 +170,24 @@ export default function RoutineBuilderScreen() {
         reps: 10,
         restSec: 60,
         muscleGroup: toServerMuscleGroup(exercise.muscle),
+        catalogExerciseId: null,
+        lookupKey,
       },
     ]);
     setShowAddModal(false);
+    // This list is the phone's own (its ids are not library ids): keep the
+    // library item's id on the row so the saved routine carries it. It never
+    // fails (no match or no answer is null); Save waits for it.
+    const lookup = exerciseCatalogApi.libraryId(exercise.name)
+      .catch(() => null)
+      .then((catalogExerciseId) => {
+        foundLibraryIds.current.set(lookupKey, catalogExerciseId);
+        pendingLookups.current.delete(lookupKey);
+        if (catalogExerciseId && mounted.current) {
+          setExercises((prev) => withLibraryIds(prev, foundLibraryIds.current));
+        }
+      });
+    pendingLookups.current.set(lookupKey, lookup);
   };
 
   const removeExercise = (idx: number) => {
@@ -177,16 +230,34 @@ export default function RoutineBuilderScreen() {
     },
   }).panHandlers;
 
-  const handleSave = () => {
-    if (!name.trim()) {
+  const canSave = (routineName: string, rows: RoutineExercise[]) => {
+    if (!routineName.trim()) {
       Alert.alert('Routine name needed', 'Give your routine a name.');
-      return;
+      return false;
     }
-    if (exercises.length === 0) {
+    if (rows.length === 0) {
       Alert.alert('Exercise needed', 'Add at least one exercise.');
-      return;
+      return false;
     }
-    const payload = buildRoutinePayload(name, exercises);
+    return true;
+  };
+
+  const handleSave = async () => {
+    if (busy || !canSave(name, exercises)) return;
+    // A row whose library-id lookup is still running would save without the
+    // id: wait for it (removed rows are not waited for or saved).
+    const waiting = exercises.flatMap((row) => {
+      const lookup = row.lookupKey ? pendingLookups.current.get(row.lookupKey) : undefined;
+      return lookup ? [lookup] : [];
+    });
+    if (waiting.length) {
+      setSettling(true);
+      await settleWithin(waiting, LIBRARY_ID_WAIT_MS);
+      if (!mounted.current) return;
+      setSettling(false);
+      if (!canSave(latest.current.name, latest.current.exercises)) return;
+    }
+    const payload = buildRoutinePayload(latest.current.name, withLibraryIds(latest.current.exercises, foundLibraryIds.current));
     const onSuccess = () => navigation.goBack();
     const onError = (err: unknown) => {
       Alert.alert("Couldn't save routine", errorMessage(err, 'Check your connection and save the routine again.'));
@@ -235,8 +306,8 @@ export default function RoutineBuilderScreen() {
         )}
       </View>}
       footer={
-        <HapticPressable style={styles.saveBtn} disableAnimation accessibilityLabel="Save routine" accessibilityState={{ busy: isSaving }} disabled={isSaving} onPress={handleSave}>
-          <Text style={styles.saveBtnText}>{isSaving ? 'Saving routine…' : 'Save routine'}</Text>
+        <HapticPressable style={styles.saveBtn} disableAnimation accessibilityLabel="Save routine" accessibilityState={{ busy }} disabled={busy} onPress={() => { void handleSave(); }}>
+          <Text style={styles.saveBtnText}>{busy ? 'Saving routine…' : 'Save routine'}</Text>
         </HapticPressable>
       }
     >
