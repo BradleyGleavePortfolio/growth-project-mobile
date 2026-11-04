@@ -1,0 +1,44 @@
+name: LS-918 review verification
+on:
+  push:
+    branches: ['ci/171-LS-918-*']
+permissions:
+  contents: read
+jobs:
+  full:
+    name: Full checks and routes
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.13
+          cache: npm
+      - run: npm ci
+      - run: npm run lint --if-present
+      - run: npx tsc --noEmit
+      - run: npm test --if-present -- --ci --passWithNoTests
+      - run: npx jest scripts/__tests__/routeContract.test.js --ci --runInBand
+      - run: node scripts/route-contract/check.js
+  all-on:
+    name: All switches on
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.13
+          cache: npm
+      - run: npm ci
+      - name: Find switches
+        id: find
+        run: node .github/all-switches-on/switches.js find
+      - run: npx jest --ci --testMatch '<rootDir>/.github/all-switches-on/*.check.js'
+      - run: npx tsc --noEmit
+        if: ${{ !cancelled() && steps.find.outcome == 'success' }}
+      - run: npm test --if-present -- --ci --passWithNoTests --json --outputFile="$RUNNER_TEMP/all-switches-on-jest.json"
+        if: ${{ !cancelled() && steps.find.outcome == 'success' }}
+      - run: node .github/all-switches-on/switches.js report "$RUNNER_TEMP/all-switches-on-jest.json"
+        if: ${{ !cancelled() && steps.find.outcome == 'success' }}
