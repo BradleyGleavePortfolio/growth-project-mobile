@@ -36,12 +36,15 @@ const realOS = Platform.OS;
 const setOS = (os: string) => Object.defineProperty(Platform, 'OS', { configurable: true, get: () => os });
 afterEach(() => setOS(realOS));
 
-it('LO-1TO1R2 B1: iOS, a failed coach-name read cannot sell from the plan sheet under an unnamed coach', async () => {
+// 1TO1-FU-M (#186-P4 op 1, which replaces LO-1TO1R2 B1's no-sale rule on the plan sheet): when only the coach's
+// name fails to load there is no error; the line reads "1:1 coaching with your coach" and the plan can be chosen.
+it('iOS, a failed coach-name read: the your-coach line, no error, and the plan can still be chosen', async () => {
   setOS('ios');
   const r = await render(<Sheet visible onDismiss={jest.fn()} onPaymentSuccess={jest.fn()} />);
   await waitFor(() => expect(r.getByTestId('package-card-p-1')).toBeTruthy());
   await fireEvent.press(r.getByTestId('package-card-p-1'));
+  expect(r.getByText('1:1 coaching with your coach')).toBeTruthy();
+  expect(r.queryByText(/could not load/)).toBeNull();
   await fireEvent.press(r.getByTestId('select-plan-btn'));
-  // The sale may start only once the coach is named (as on ClientPackages after FR-1TO1).
-  expect(mockStart).not.toHaveBeenCalled();
+  expect(mockStart).toHaveBeenCalledTimes(1);
 });

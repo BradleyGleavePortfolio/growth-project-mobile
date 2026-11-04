@@ -57,7 +57,6 @@ import PurchaseFeedback, { styleCSuccess } from './purchase/PurchaseFeedback';
 import { PlanActiveBar, usePlanMoment } from './purchase/PlanActiveMoment';
 import { QuietOverline as Overline } from '../ui/sections/QuietSection';
 import { oneToOneCoachingLabel } from '../config/purchaseSurfaces';
-import { PLANS_LOAD_ERROR } from '../constants/packageCoachingCopy';
 import { HouseJoined } from './renewal/CoachMonogram';
 import { forestPop } from '../theme/tokens';
 import {
@@ -70,7 +69,8 @@ import {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 /** FR-1TO1R2: the coach's name for the 1:1 line, as ClientPackagesScreen reads it; null when the read
- *  fails or the name is blank (the sheet then does not sell and offers the retry line). */
+ *  fails or the name is blank. 1TO1-FU-M (#186-P4 op 1): the line then reads "1:1 coaching with your
+ *  coach", with no error, and the plans can still be chosen. */
 async function readCoachName(): Promise<string | null> {
   try {
     const name = (await api.get<{ name?: unknown }>('/v1/clients/me/coach'))?.data?.name;
@@ -166,14 +166,6 @@ export default function PackageSelectionSheet({
   const [ready, setReady] = useState(false); // passed 24h suppression check
   const [reloadTick, setReloadTick] = useState(0);
   const [coachName, setCoachName] = useState<string | null>(null);
-  // FR-1TO1R2 (LS/LO B1): ClientPackagesScreen's rule on both platforms. Until the coach is named the
-  // sheet does not sell; a failed read shows the U-5 retry line and a tap reads the name again.
-  const [coachNameFailed, setCoachNameFailed] = useState(false);
-  const mountedRef = useRef(true);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => { mountedRef.current = false; };
-  }, []);
 
   // Latest-ref pattern: callers may pass an inline onDismiss that re-creates
   // every render. Subscribing the effects below to `onDismiss` directly would
@@ -269,7 +261,6 @@ export default function PackageSelectionSheet({
         const name = await coachRead;
         if (cancelled) return;
         if (name) setCoachName(name);
-        else if (firstLoad) setCoachNameFailed(true);
         setPackages(list);
         setDescriptions(desc);
         if (firstLoad && initialPackageId && list.some((p) => p.id === initialPackageId)) {
@@ -284,15 +275,6 @@ export default function PackageSelectionSheet({
     })();
     return () => { cancelled = true; };
   }, [ready, reloadTick, initialPackageId, houseId, houseName]);
-
-  const retryCoachName = useCallback(() => {
-    setCoachNameFailed(false);
-    void readCoachName().then((name) => {
-      if (!mountedRef.current) return;
-      if (name) setCoachName(name);
-      else setCoachNameFailed(true);
-    });
-  }, []);
 
   const selected = packages.find((p) => p.id === selectedId) ?? null;
 
@@ -329,7 +311,7 @@ export default function PackageSelectionSheet({
 
   if (!visible || !ready) return null;
 
-  const ctaDisabled = !selected || busy || !coachName;
+  const ctaDisabled = !selected || busy;
   const ctaLabel = selected ? planTerms(selected).cta : 'Select this plan';
 
   return (
@@ -357,12 +339,6 @@ export default function PackageSelectionSheet({
 
           {!loading ? (
             <Overline testID="package-sheet-one-to-one">{oneToOneCoachingLabel(coachName)}</Overline>
-          ) : null}
-          {!loading && coachNameFailed && !coachName ? (
-            <TouchableOpacity onPress={retryCoachName} style={styles.retryLine} accessibilityRole="button"
-              testID="package-sheet-coach-retry">
-              <Text style={styles.retryLineText}>{PLANS_LOAD_ERROR}</Text>
-            </TouchableOpacity>
           ) : null}
 
           {/* Package cards */}
@@ -534,14 +510,6 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
     skeletonLine: {
       borderRadius: 2,
       backgroundColor: semanticColors.border,
-    },
-    // FR-1TO1R2: the U-5 retry line, as on ClientPackagesScreen's plan cards.
-    retryLine: {
-      minHeight: 44, justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 12, marginBottom: 12,
-      borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: semanticColors.border, backgroundColor: semanticColors.bgPrimary,
-    },
-    retryLineText: {
-      fontFamily: tokens.typography.bodySmall.fontFamily, fontSize: 13, lineHeight: 19, color: semanticColors.textPrimary,
     },
     // CTA
     ctaBtn: {
