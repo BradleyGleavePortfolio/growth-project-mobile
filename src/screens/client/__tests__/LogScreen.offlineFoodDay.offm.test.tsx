@@ -94,7 +94,7 @@ describe('Food Log: foods saved offline count in the day', () => {
     mockStore.dailyTotals = { calories: 220, protein: 11, carbs: 27, fat: 8 };
     await render(<LogScreen />);
     expect(screen.getByText('Rolled oats')).toBeTruthy();
-    expect(screen.getByTestId('food-offline-pfl_1').props.children).toBe('Saved offline');
+    expect(screen.getByTestId('food-offline-pfl_1').props.children).toBe('Saved offline. Rolled oats will sync when you reconnect.');
     expect(screen.queryByTestId('log-offline-pending')).toBeNull();
     expect(screen.getByTestId('log-offline-pending-in-day').props.children).toBe(
       '1 food saved offline is in this log and its totals. It syncs when the connection returns.',

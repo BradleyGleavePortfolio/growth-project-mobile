@@ -30,7 +30,8 @@ interface ClientStore {
   loadError: string | null;
   // OFFLINE-FOOD-M: the server's own read of the day on screen, and the foods on this phone. With
   // featureFlags.offlineFoodInDay on, foodLogs and dailyTotals are the two joined (utils/log/queuedDay).
-  serverDay: { date: string; userId: string; logs: FoodLog[]; totals: DailyTotals } | null;
+  // `unread`: no read of this day reached the server yet (offline); only the phone's foods show.
+  serverDay: { date: string; userId: string; logs: FoodLog[]; totals: DailyTotals; unread?: true } | null;
   queuedFoods: PendingFoodLog[];
   // Foods the last sync sent, kept in the day until the next good read of it (which holds them).
   sentFoods: PendingFoodLog[];
@@ -92,6 +93,10 @@ let session = 0;
 // a new one, so a water answer for the day it was sent on never lands on
 // another day the client has opened since.
 let view = 0;
+/** OFFLINE-FOOD-M (LS-931 B1): a day no read has reached yet: nothing from the server, no totals. */
+const unreadDay = (date: string, userId: string) => ({
+  date, userId, logs: [] as FoodLog[], totals: { calories: 0, protein: 0, carbs: 0, fat: 0 },
+});
 
 export const useClientStore = create<ClientStore>((set, get) => ({
   ...initialClientState,
@@ -123,10 +128,17 @@ export const useClientStore = create<ClientStore>((set, get) => ({
   loadDayData: async (_userId: string, date?: string) => {
     const mine = session;
     const d = date || get().selectedDate;
+    let queueRead: Promise<PendingFoodLog[]> | null = null;
     try {
       get().setSelectedDate(d);
       set({ isLoading: true, loadError: null });
 
+      // OFFLINE-FOOD-M: the phone's queue, read with the day so the two join on one answer. It is read
+      // on its own, so a day the server cannot answer (no signal, a cold start) still shows its queued
+      // foods. A queue that cannot be read never costs the server's day: the last queue told stays.
+      queueRead = featureFlags.offlineFoodInDay
+        ? Promise.resolve().then(() => readQueue()).catch(() => get().queuedFoods)
+        : Promise.resolve(get().queuedFoods);
       // Fetch food logs and water in parallel
       const [foodResponse, waterResponse, queue] = await Promise.all([
         logApi.getDaily(d),
@@ -134,11 +146,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
           logger.error('ClientStore', 'water data load failed', err);
           return null;
         }),
-        // OFFLINE-FOOD-M: the phone's queue, read with the day so the two join on one answer.
-        // A queue that cannot be read never costs the server's day: the last queue the store was told stays.
-        featureFlags.offlineFoodInDay
-          ? Promise.resolve().then(() => readQueue()).catch(() => get().queuedFoods)
-          : Promise.resolve(get().queuedFoods),
+        queueRead,
       ]);
       if (mine !== session || get().selectedDate !== d) return;
       const data = foodResponse.data;
@@ -246,6 +254,18 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       set({
         isLoading: false,
         loadError: 'Food and water data could not refresh. Check your connection and try again.',
+      });
+      // OFFLINE-FOOD-M (LS-931 B1): no read of this day reached the server (no signal, a cold start,
+      // a day not opened before). The day's queued foods still show and count, on the server read
+      // already held for this day or, with none, on an empty base marked unread (the day's own
+      // numbers stay hidden until a read lands: hasLoadedDay stays false).
+      if (!featureFlags.offlineFoodInDay) return;
+      const queue = await (queueRead ?? Promise.resolve(get().queuedFoods)).catch(() => get().queuedFoods);
+      if (mine !== session || get().selectedDate !== d) return;
+      set((state) => {
+        const held = state.serverDay && state.serverDay.date === d ? state.serverDay : null;
+        const serverDay = held ?? { ...unreadDay(d, _userId), unread: true as const };
+        return { serverDay, queuedFoods: queue, ...shownDay(serverDay, queue, state.sentFoods) };
       });
     }
   },

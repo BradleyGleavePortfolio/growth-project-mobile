@@ -4,6 +4,11 @@ import { queuePastMeal } from '../quickLog';
 import { withQueuedFoods } from '../queuedDay';
 import { readQueue } from '../../../services/foodLogQueue';
 
+// FIX-931 setup: the usual day (and so its Repeat link) exists only with the plan checklist on.
+jest.mock('../../../config/featureFlags', () => {
+  const actual = jest.requireActual('../../../config/featureFlags');
+  return { ...actual, featureFlags: { ...actual.featureFlags, foodPlanChecklist: true } };
+});
 jest.mock('../../../lib/userCache', () => ({
   readUserCacheSync: jest.fn(() => ({ id: 'member-1' })),
 }));

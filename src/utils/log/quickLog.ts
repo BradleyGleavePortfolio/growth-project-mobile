@@ -4,7 +4,7 @@ import type { PastMeal } from '../../hooks/useFoodBrowse';
 import { SearchResult } from './types';
 import { planLink, type PlanLink } from './planLink';
 import { foodSaveIntent, withSaveKey } from './saveKey';
-import { enqueue as enqueueFoodLog } from '../../services/foodLogQueue';
+import { enqueue as enqueueFoodLog, type QueuedFoodShown } from '../../services/foodLogQueue';
 
 // Words in a search that describe the amount rather than the food
 // ("2 eggs", "150 g chicken"). They are ignored when matching foods the
@@ -92,6 +92,17 @@ export async function repeatPastMeal(meal: PastMeal, date: string, mealType: Mea
  * One at a time, in the meal's order. Returns the number queued; a failed write throws after the
  * foods before it are queued (the caller says what was saved).
  */
+/**
+ * LS-931 B3: a meal entry from a producer that kept no `shown` still shows in the day: its name and
+ * its calories per unit (the entry's calories are for its own multiplier). Macros it does not hold
+ * stay unknown rather than invented.
+ */
+function shownOfEntry(e: PastMeal['entries'][number]): QueuedFoodShown {
+  const k = e.quantityMultiplier;
+  const perUnit = Number.isFinite(e.calories) && Number.isFinite(k) && k > 0 ? e.calories / k : null;
+  return { name: e.name, calories: perUnit, protein_g: null, carbs_g: null, fat_g: null };
+}
+
 export async function queuePastMeal(meal: PastMeal, date: string, mealType: MealType, link?: PlanLink): Promise<number> {
   let queued = 0;
   for (const e of meal.entries) {
@@ -104,7 +115,7 @@ export async function queuePastMeal(meal: PastMeal, date: string, mealType: Meal
       ...planLink(link),
     };
     await withSaveKey(foodSaveIntent(log, e.foodItemId), (key) =>
-      enqueueFoodLog({ kind: 'search', foodItemId: e.foodItemId, shown: e.shown, log }, key));
+      enqueueFoodLog({ kind: 'search', foodItemId: e.foodItemId, shown: e.shown ?? shownOfEntry(e), log }, key));
     queued += 1;
   }
   return queued;
