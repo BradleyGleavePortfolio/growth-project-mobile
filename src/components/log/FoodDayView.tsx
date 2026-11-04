@@ -536,7 +536,7 @@ const makeStyles = (sc: SemanticTokens, gutter: number, wideCard = false) => Sty
   dateRow: { flexDirection: 'row', alignItems: 'center', marginHorizontal: -10, minHeight: layout.touchMin },
   chevron: { width: layout.touchMin, height: layout.touchMin, alignItems: 'center', justifyContent: 'center' },
   dateLabel: { flex: 1, minHeight: layout.touchMin, alignItems: 'center', justifyContent: 'center' },
-  dateText: { ...typography.eyebrow, fontSize: 13, lineHeight: 17, letterSpacing: 2, color: sc.textOnMastheadMuted, textAlign: 'center' },
+  dateText: { ...typography.eyebrow, fontSize: 12, lineHeight: 17, letterSpacing: 1.6, color: sc.textOnMastheadMuted, textAlign: 'center' },
   title: { ...typography.h1, color: sc.textOnAccent, marginTop: 14 },
   note: { ...typography.h3, fontFamily: typography.h2.fontFamily, fontStyle: 'italic', color: sc.textOnMastheadMuted, marginTop: 6 },
   italic: { fontFamily: 'CormorantGaramond_400Regular_Italic', fontStyle: 'normal' },
