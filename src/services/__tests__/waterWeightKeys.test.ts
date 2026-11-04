@@ -34,7 +34,7 @@ jest.mock('../secureStorage', () => {
 import api, { __resetRefreshStateForTests, __setRefreshSessionForTests, __setSignOutForTests, waterApi, weightApi } from '../api';
 import { holdSessionFence, sessionGeneration } from '../sessionFence';
 import { useClientStore } from '../../store/clientStore';
-import { withSaveKey } from '../../utils/log/saveKey';
+import { waterDayShown, withSaveKey } from '../../utils/log/saveKey';
 
 const secure = jest.requireMock('../secureStorage') as { __store: Map<string, string> };
 
@@ -277,6 +277,35 @@ describe('one key per glass, through the client store and the real api', () => {
     expect(a.header).toBe(a.body?.client_uuid);
     expect(b.header).toBe(b.body?.client_uuid);
     expect(b.body?.client_uuid).not.toBe(a.body?.client_uuid);
+  });
+});
+
+// FR-921R2: the shown water day ends only that day's glasses. A food save's
+// key and another day's glass keep theirs (m#916's food keys are untouched).
+describe('waterDayShown ends only the glasses of the day shown', () => {
+  it('food and another day keep their waiting keys', async () => {
+    useClientStore.getState().reset();
+    const food = ['food', '2026-11-03', 'breakfast', 1, null, false, 'oats'];
+    const sends: Record<string, string[]> = { day: [], other: [], food: [] };
+    const lose = () => Promise.reject(new AxiosError('Network Error', 'ERR_NETWORK'));
+    const keep = (name: string) => (key: string) => {
+      sends[name].push(key);
+      return lose();
+    };
+    await expect(withSaveKey(['water', '2026-11-03', 237], keep('day'))).rejects.toBeTruthy();
+    await expect(withSaveKey(['water', '2026-11-02', 237], keep('other'))).rejects.toBeTruthy();
+    await expect(withSaveKey(food, keep('food'))).rejects.toBeTruthy();
+    waterDayShown('2026-11-03');
+    const answer = (name: string) => (key: string) => {
+      sends[name].push(key);
+      return Promise.resolve(key);
+    };
+    await withSaveKey(['water', '2026-11-03', 237], answer('day'));
+    await withSaveKey(['water', '2026-11-02', 237], answer('other'));
+    await withSaveKey(food, answer('food'));
+    expect(sends.day[1]).not.toBe(sends.day[0]);
+    expect(sends.other[1]).toBe(sends.other[0]);
+    expect(sends.food[1]).toBe(sends.food[0]);
   });
 });
 
