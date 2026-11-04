@@ -1778,3 +1778,37 @@ describe('FR-911R3 F2: every sign and every registered place is named by what it
     expect(classify('screens/client/FR911R3Plain.tsx', text, ctx)).toEqual({ composer: false, list: false });
   });
 });
+
+// ─── LO-911R4 B1 (B-TEST, review only): a via row's muting must not hide a new drawer of its gap part ─────────────
+// FR-911R3 F1 replaced the via row's per-export stop with muted() (:810): in a via file, every use of a part is read as
+// empty for the row's kind, in every declaration of the file, so the muting rides out on any export of the via file. A
+// new export of a via file that wraps the gap part (ProgressScreen's ShareSheet, CommandCenterScreen's InboxScreen),
+// drawn on a new screen, leaves that screen unnamed. At 095906fa (round-3 head) both new screens below were named:
+// a via row stopped only its default and file-named exports (stoppedLocals), so this round reopened LO-911R2 B1's
+// class. Smallest fix: mute a part only at the via file's own root and inside the exports its row stops
+// (stoppedLocals); any other export of a via file carries its parts' kinds to its callers.
+describe('LO-911R4 B1: a via file\'s other export does not carry its part\'s muting to a new screen', () => {
+  const unnamedWith = (overlay: Record<string, string>) => {
+    const ctx = scanCtx(overlay);
+    const out: string[] = [];
+    for (const [file, text] of ctx.files) {
+      const k = classify(file, text, ctx);
+      (['composer', 'list'] as Kind[]).forEach((x) => { if (k[x] && !registered(file, x)) out.push(`${x} ${file}`); });
+    }
+    return out;
+  };
+  it('a new Home card drawing ProgressScreen\'s new ShareToCoach (ShareSheet, a KNOWN GAP part) is named a composer', () => {
+    const f = 'screens/client/ProgressScreen.tsx';
+    const t = `${read(f)}\nexport function ShareToCoach() { return <ShareSheet card={null} onClose={() => undefined} />; }\n`;
+    const s = 'screens/client/HomeShareCard.tsx';
+    const st = "import React from 'react';\nimport { ShareToCoach } from './ProgressScreen';\nexport default function HomeShareCard() { return <ShareToCoach />; }\n";
+    expect(unnamedWith({ [f]: t, [s]: st })).toContain(`composer ${s}`);
+  });
+  it('a new coach Home peek drawing CommandCenterScreen\'s new InboxPeek (InboxScreen, a KNOWN GAP part) is named a list', () => {
+    const f = 'screens/coach/command-center/CommandCenterScreen.tsx';
+    const t = `${read(f)}\nexport function InboxPeek() { return <InboxScreen onOpenThread={() => undefined} />; }\n`;
+    const s = 'screens/coach/HomeInboxPeek.tsx';
+    const st = "import React from 'react';\nimport { InboxPeek } from './command-center/CommandCenterScreen';\nexport default function HomeInboxPeek() { return <InboxPeek />; }\n";
+    expect(unnamedWith({ [f]: t, [s]: st })).toContain(`list ${s}`);
+  });
+});
