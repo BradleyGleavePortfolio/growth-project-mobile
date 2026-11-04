@@ -49,20 +49,27 @@ export function useCoachItalic(): StyleProp<TextStyle> {
 /**
  * The phone's status-bar inset in the masthead's forest (FIX-927, LO-927 B1):
  * the screen asks the app's StatusBarBand for forest while it is focused, as
- * Progress v2 and the coach meal screens do. Required lazily so a screen test
- * that stubs @react-navigation/native without useFocusEffect still mounts.
+ * Progress v2 and the coach meal screens do. The band needs a navigator, so it
+ * mounts only inside one (every app route is); a screen test without a
+ * NavigationContainer, or one that stubs @react-navigation/native, still mounts.
  */
-type BandHook = (color: string) => void;
-let bandHook: BandHook = () => undefined;
+const NoNavigator = React.createContext<unknown>(null);
+let NavigatorContext: React.Context<unknown> = NoNavigator;
+let bandHook: ((color: string) => void) | null = null;
 try {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const nav = require('@react-navigation/native');
-  if (typeof nav?.useFocusEffect === 'function') {
+  if (nav?.NavigationContext && typeof nav.useFocusEffect === 'function') {
+    NavigatorContext = nav.NavigationContext;
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     bandHook = require('../../../components/StatusBarBand').useStatusBarBand;
   }
 } catch {
-  bandHook = () => undefined;
+  bandHook = null;
+}
+function ForestBand({ color }: { color: string }) {
+  bandHook?.(color);
+  return null;
 }
 
 interface MastheadProps {
@@ -75,9 +82,10 @@ interface MastheadProps {
 
 /** Deep-forest masthead: letterspaced eyebrow, serif title, then the screen's summary. */
 export function PlanMasthead({ eyebrow, title, titleTestID, testID, children }: MastheadProps) {
-  bandHook(mast.ground);
+  const inNavigator = React.useContext(NavigatorContext) != null;
   return (
     <View style={s.mast} testID={testID}>
+      {inNavigator && bandHook ? <ForestBand color={mast.ground} /> : null}
       {/* iOS overscroll above the masthead stays forest, never a bone strip. */}
       <View style={s.overscroll} importantForAccessibility="no" accessibilityElementsHidden pointerEvents="none" />
       {eyebrow ? <Text style={s.eyebrow}>{eyebrow}</Text> : null}

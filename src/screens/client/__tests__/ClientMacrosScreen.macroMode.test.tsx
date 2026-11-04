@@ -5,7 +5,7 @@
  */
 import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, within } from '@testing-library/react-native';
 import { typography } from '../../../theme/tokens';
 
 let mockData: Record<string, unknown> | null = null;
@@ -68,8 +68,9 @@ describe('ClientMacrosScreen display mode', () => {
     mockData = { ...TARGET };
     await render(<ClientMacrosScreen />);
     expect(screen.getByText('1789')).toBeTruthy();
+    // FIX-927: the K5 tiles repeat each label on the masthead, so the lines are read in their card.
     for (const label of ['Protein', 'Carbs', 'Fats', 'Fiber']) {
-      expect(screen.getByText(label)).toBeTruthy();
+      expect(within(screen.getByTestId('macros-cells')).getByText(label)).toBeTruthy();
     }
     expect(screen.queryByTestId('macros-simple-note')).toBeNull();
   });
@@ -79,7 +80,9 @@ describe('ClientMacrosScreen display mode', () => {
     await render(<ClientMacrosScreen />);
     expect(await screen.findByTestId('macros-simple-note')).toBeTruthy();
     expect(screen.getByText('1789')).toBeTruthy();
-    expect(screen.getByText('Protein')).toBeTruthy();
+    expect(within(screen.getByTestId('macros-cells')).getByText('Protein')).toBeTruthy();
+    expect(screen.getByTestId('macros-tile-protein')).toBeTruthy();
+    expect(screen.queryByTestId('macros-tile-carbs')).toBeNull();
     expect(screen.getByText('50g eaten / 150g target')).toBeTruthy();
     expect(screen.queryByText('Carbs')).toBeNull();
     expect(screen.queryByText('Fats')).toBeNull();
@@ -89,7 +92,7 @@ describe('ClientMacrosScreen display mode', () => {
   it('returns to every target once simple_until has passed', async () => {
     mockData = { ...TARGET, macro_display_mode: 'simple', simple_until: '2000-01-01' };
     await render(<ClientMacrosScreen />);
-    expect(screen.getByText('Carbs')).toBeTruthy();
+    expect(within(screen.getByTestId('macros-cells')).getByText('Carbs')).toBeTruthy();
     expect(screen.queryByTestId('macros-simple-note')).toBeNull();
   });
 
