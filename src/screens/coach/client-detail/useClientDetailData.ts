@@ -13,7 +13,7 @@ import {
   type WorkoutSession,
 } from './types';
 import type { OpenSafetyAlert } from './SafetyAlertCard';
-import { mapCoachWorkoutSessions, newestWorkoutsFirst, workoutTimelineSubtitle } from '../../../utils/workout/workoutLogging';
+import { mapCoachWorkoutSessions, newestWorkoutsFirst, workoutTimelineSubtitle, type CoachSessionRow } from '../../../utils/workout/workoutLogging';
 import { dayStart, instantDay, workoutDay } from '../../../utils/workout/workoutDay';
 
 /** A workout's place on the timeline: when it was stored, or its recorded day when it synced on a later day. */
@@ -213,7 +213,7 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
 
       // Workout events
       // Day, then save time, then id, newest first (newestWorkoutsFirst).
-      for (const s of newestWorkoutsFirst(data.workouts || [])) {
+      for (const s of newestWorkoutsFirst((data.workouts || []) as CoachSessionRow[])) {
         add(workoutDay(s), 1, {
           id: `workout_${s.id}`,
           type: 'workout',

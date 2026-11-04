@@ -131,7 +131,7 @@ type CoachSessionExercise = {
   sets_data?: unknown[];
   notes?: string | null;
 };
-type CoachSessionRow = {
+export type CoachSessionRow = {
   id: string;
   workout_name?: string;
   name?: string;
