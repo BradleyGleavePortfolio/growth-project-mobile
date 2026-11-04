@@ -87,6 +87,8 @@ const SAVES_AND_READS: Array<[file: string, what: string, uses: RegExp]> = [
   ['src/screens/client/YouScreen.tsx', 'You: next coach workout day', /assignmentDay\(/],
   ['src/screens/client/ClientWorkoutViewerScreen.tsx', 'assigned plans: order and day label', /assignmentDay\(/],
   ['src/components/tutorial/PlanExplanationCard.tsx', 'plan card: weekday of the assigned day', /assignmentDay\(/],
+  // FOOD-DAY-STYLEC-M: the Style C food day shows today's workout from Train on its timeline.
+  ['src/components/log/FoodDayView.tsx', "food day: today's workout from Train is the assignment for the shown day", /assignmentDay\(w\) === p\.selectedDate/],
   ['src/utils/workout/nextAssignment.ts', "Train's Today and the plan card's Next: the open workout by its assigned day", /assignmentDay\(a\)/],
   ['src/hooks/useApi.ts', 'weekly volume: workouts this week', /workoutDay\(/],
   // Coach reads
@@ -289,6 +291,10 @@ const LISTED_LINES: Record<string, Array<[snippet: string, why: string]>> = {
   'src/screens/client/progress/weekReview.ts': [['inWeek(d.date, week)', 'a food day'], ['inWeek(c.date, week)', 'a check-in day'], ['r.date <= week.end', 'a weigh-in day'], ['c.date.slice(0, 10) === day', 'a check-in day'], ['foodDays.map((d) => d.date.slice(0, 10))', 'food days'], ['inWeek(w.date, week)', 'a weigh-in day']],
   'src/screens/client/ClientWorkoutViewerScreen.tsx': [['formatScheduled(a.scheduled_for)', 'formatScheduled reads assignmentDay (checked below)']],
   'src/components/tutorial/PlanExplanationCard.tsx': [['weekdayOf(first.scheduled_for)', 'weekdayOf reads assignmentDay (checked below)']],
+  'src/components/log/FoodDayView.tsx': [
+    ['[{ date: dates[i], entries: r.value.data?.entries ?? [] }]', 'past food days (food log calendar dates) for the usual day, not a workout'],
+    ['dayWord(x.usual.meal.date, yesterday)', 'a usual meal\'s food day ("yesterday", "Monday"), not a workout'],
+  ],
   'src/hooks/useApi.ts': [["['check-ins', 'day', vars.date]", 'a cache key'], ['({ date, volume })', 'volume per day key, keyed by workoutDay above']],
   'src/utils/workout/workoutLogging.ts': [['const finishedAt = s.completed_at || s.created_at || s.date', "the session's sort instant; its day is workoutDay(s)"], ['Date.parse(textOf(row.created_at))', 'the save moment, a tie-break inside the day workoutDay picked']],
   'src/screens/coach/client-detail/WorkoutsTab.tsx': [['{ date: dayOfSession(s), weight }', 'dayOfSession reads s.day or instantDay (listed above)'], ['a.date.localeCompare(b.date)', 'points dated by dayOfSession'], ['dayText(p.date)', 'points dated by dayOfSession'], ['dayText(points[0].date)', 'points dated by dayOfSession'], ['dayText(points[points.length - 1].date)', 'points dated by dayOfSession']],
