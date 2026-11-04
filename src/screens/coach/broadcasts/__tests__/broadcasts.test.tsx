@@ -39,6 +39,10 @@ import BroadcastComposerScreen, { composerProblem } from '../BroadcastComposerSc
 import CoachBroadcastsScreen from '../CoachBroadcastsScreen';
 import { BroadcastsEntry } from '../BroadcastsEntry';
 import { describeRepeat, recurrenceFor, sectionOf, segmentFor } from '../broadcastFormat';
+import { featureFlags } from '../../../../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_COACH_TABS_V2 off: broadcasts open over Clients here, the five-tab layout (with six tabs they sit in Messages).
+jest.replaceProperty(featureFlags, 'coachTabsV2', false);
 
 const http = { get: mockGet, post: mockPost };
 const off = { isAxiosError: true, response: { status: 503, data: { code: 'broadcasts.disabled', message: 'Broadcasts are not available on your account yet.' } } };

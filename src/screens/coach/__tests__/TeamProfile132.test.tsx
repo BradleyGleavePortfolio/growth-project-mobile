@@ -47,6 +47,10 @@ import CoachTeamProfileScreen from '../CoachTeamProfileScreen';
 import { coachTeamApi } from '../../../api/coachTeamApi';
 import { BillingSection } from '../settings/BillingSection';
 import { makeStyles as settingsStyles } from '../settings/styles';
+import { featureFlags } from '../../../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_COACH_TABS_V2 off: Open Money goes to Money inside Settings here, the five-tab layout (with six tabs Money is its own tab).
+jest.replaceProperty(featureFlags, 'coachTabsV2', false);
 
 const profile: TeamProfile = {
   id: 'test-profile',
