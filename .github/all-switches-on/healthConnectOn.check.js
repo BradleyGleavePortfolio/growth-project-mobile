@@ -20,7 +20,7 @@ it('LS-923 B1: discovery enables the runtime Android Health Connect gate', () =>
     }
     expect(process.env.TGP_ANDROID_HEALTH_CONNECT).toBe('1');
     Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
-    const { isAndroidHealthConnectEnabled } = require('../healthConnect');
+    const { isAndroidHealthConnectEnabled } = require('../../src/config/healthConnect');
     expect(isAndroidHealthConnectEnabled()).toBe(true);
   } finally {
     process.env = before;

@@ -39,8 +39,10 @@ jobs:
         # Prints the list, the count and how it compares with V1_PRS_LEFT's 70.
         run: node .github/all-switches-on/switches.js find
 
+      # switchesOn.setup.js turns on the two layers env cannot reach (build
+      # metadata and the server switches); the normal suite never loads it.
       - name: Prove the switches read on
-        run: npx jest --ci --testMatch '<rootDir>/.github/all-switches-on/*.check.js'
+        run: npx jest --ci --testMatch '<rootDir>/.github/all-switches-on/*.check.js' --setupFilesAfterEnv '<rootDir>/jest.setup.js' '<rootDir>/.github/all-switches-on/switchesOn.setup.js'
 
       - name: Typecheck
         if: ${{ !cancelled() && steps.find.outcome == 'success' }}
@@ -48,7 +50,7 @@ jobs:
 
       - name: Test (full suite, every switch on)
         if: ${{ !cancelled() && steps.find.outcome == 'success' }}
-        run: npm test --if-present -- --ci --passWithNoTests --json --outputFile="$RUNNER_TEMP/all-switches-on-jest.json"
+        run: npm test --if-present -- --ci --passWithNoTests --json --outputFile="$RUNNER_TEMP/all-switches-on-jest.json" --setupFilesAfterEnv '<rootDir>/jest.setup.js' '<rootDir>/.github/all-switches-on/switchesOn.setup.js'
 
       - name: List every failing test
         if: ${{ !cancelled() && steps.find.outcome == 'success' }}

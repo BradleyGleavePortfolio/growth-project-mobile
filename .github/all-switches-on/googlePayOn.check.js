@@ -2,7 +2,7 @@ import { execFileSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { resolveWalletConfig } from '../wallets';
+import { resolveWalletConfig } from '../../src/config/wallets';
 
 test('LS-923 B2: all-on discovery enables the runtime Android Google Pay gate', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ls923-wallet-'));

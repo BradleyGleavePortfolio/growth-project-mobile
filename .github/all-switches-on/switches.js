@@ -9,17 +9,24 @@
  *   node .github/all-switches-on/switches.js report <jest --json file>
  *     Prints every failing suite and test of the all-on run.
  *
- * A switch is found in three places, so a new one is picked up without
+ * An env switch is found in four places, so a new one is picked up without
  * editing the job:
  *   1. config/expected-env.json, every name of kind "flag" (the env manifest
  *      guard already makes every EXPO_PUBLIC_* the app reads declare itself
  *      there);
- *   2. every literal process.env.EXPO_PUBLIC_FF_* or EXPO_PUBLIC_FEATURE_*
+ *   2. config/expected-env.json, every name of kind "optional" whose default
+ *      reads "off" (an on/off switch such as EXPO_PUBLIC_GOOGLE_PAY_ENABLED;
+ *      the other optional names hold an id, URL, key, country or environment
+ *      and stay as the code reads them);
+ *   3. every literal process.env.EXPO_PUBLIC_FF_* or EXPO_PUBLIC_FEATURE_*
  *      read in app code (src/, plugins/, app.config.js; tests left out);
- *   3. every eas.json build env value that is a plain on/off ("0", "1",
+ *   4. every eas.json build env value that is a plain on/off ("0", "1",
  *      "true", "false"), for build switches such as TGP_ANDROID_HEALTH_CONNECT.
  * Mock and capture modes (a name with MOCK or SCREENSHOT_MODE) are found but
  * not turned on: they swap the real data paths for fakes and are not features.
+ * Two more layers are printed here and turned on by switchesOn.setup.js:
+ * build metadata (app.config.js extra, read through expo-constants) and the
+ * server switches (SERVER_FEATURE_FLAG_KEYS, read from GET /me/feature-flags).
  */
 'use strict';
 
@@ -35,6 +42,8 @@ const TEST_FILE = /\.(test|spec)\.[jt]sx?$/;
 const CODE_FILE = /\.[jt]sx?$/;
 const READ = /process\.env\.(EXPO_PUBLIC_(?:FF|FEATURE)_[A-Z0-9_]*[A-Z0-9])\b/g;
 const BOOL = /^(0|1|true|false)$/i;
+const OFF_DEFAULT = /^off\b/i;
+const SERVER_KEYS = /SERVER_FEATURE_FLAG_KEYS = \[([\s\S]*?)\] as const/;
 
 function readJson(file) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -70,7 +79,10 @@ function find() {
     found.get(name).add(where);
   };
 
-  for (const [name, v] of Object.entries(manifest)) if (v.kind === 'flag') add(name, 'manifest');
+  for (const [name, v] of Object.entries(manifest)) {
+    if (v.kind === 'flag') add(name, 'manifest');
+    if (v.kind === 'optional' && OFF_DEFAULT.test(String(v.default))) add(name, 'manifest-optional');
+  }
   for (const file of APP_CODE.flatMap((e) => codeFiles(e))) {
     for (const m of fs.readFileSync(file, 'utf8').matchAll(READ)) add(m[1], 'code');
   }
@@ -83,8 +95,17 @@ function find() {
   const on = names.filter((n) => !NOT_A_FEATURE.test(n));
   const left = names.filter((n) => NOT_A_FEATURE.test(n));
   const settings = Object.entries(manifest)
-    .filter(([n, v]) => v.kind === 'optional' && /^off\b/i.test(String(v.default)) && !found.has(n))
+    .filter(([n, v]) => v.kind === 'optional' && !found.has(n))
     .map(([n]) => n);
+  const serverKeys = [...(fs.readFileSync('src/api/featureFlagsApi.ts', 'utf8').match(SERVER_KEYS) || ['', ''])[1]
+    .replace(/\/\/.*$/gm, '')
+    .matchAll(/'([a-z0-9_]+)'/g)].map((m) => m[1]);
+  const saved = { ...process.env };
+  for (const n of on) process.env[n] = ON;
+  const appExtra = require(path.resolve('app.json')).expo.extra || {};
+  const builtExtra = require(path.resolve('app.config.js'))().extra || {};
+  process.env = saved;
+  const metadata = Object.keys(builtExtra).filter((k) => typeof builtExtra[k] === 'boolean' && !(k in appExtra));
   const prodOn = (n) => /^(1|true)$/i.test(String(production[n] ?? ''));
   const prodOnCount = on.filter(prodOn).length;
 
@@ -99,13 +120,18 @@ function find() {
     ...rows,
     `Found but not turned on (${left.length}), each a mock or capture mode that swaps real data paths for fakes, not a feature:`,
     ...left.map((n) => `     ${n}  [${[...found.get(n)].join('+')}]`),
-    `Settings left as the code reads them (${settings.length}), manifest kind "optional", not a switch:`,
+    `Value settings left as the code reads them (${settings.length}), manifest kind "optional", each an id, URL, key, country or environment, not a switch:`,
     ...settings.map((n) => `     ${n}  default: ${manifest[n].default}`),
+    `Build metadata the phone reads through expo-constants (${metadata.length}), on in this job through switchesOn.setup.js (app.config.js run with the env above):`,
+    ...metadata.map((k) => `     extra.${k} = ${builtExtra[k]}`),
+    `Server switches the phone reads from GET /me/feature-flags (${serverKeys.length}), on in this job through switchesOn.setup.js:`,
+    ...serverKeys.map((k) => `     ${k}`),
+    `Total: ${on.length + serverKeys.length} switches on (${on.length} env, ${serverKeys.length} server); ${metadata.length} build metadata value(s) follow from the env.`,
   ];
   console.log(lines.join('\n'));
 
-  if (on.length < 10) {
-    console.error(`::error::Only ${on.length} switches found; the discovery is broken.`);
+  if (on.length < 10 || serverKeys.length === 0 || metadata.some((k) => builtExtra[k] !== true)) {
+    console.error(`::error::Discovery is broken: ${on.length} env switches, ${serverKeys.length} server switches, build metadata ${JSON.stringify(builtExtra)}.`);
     process.exit(1);
   }
   const envFile = process.env.GITHUB_ENV;
