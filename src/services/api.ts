@@ -80,7 +80,7 @@ import { entitlementEvents } from '../entitlements/entitlementEvents';
 import { withTutorialSignal } from '../tutorial/tutorialEvents';
 import { logger } from '../utils/logger';
 import { generateIdempotencyKey } from '../utils/idempotency';
-import { saveKeys } from './saveKeys';
+import { saveKeys, waterKeys, waterSave } from './saveKeys';
 import { getTodayString } from '../utils/date';
 import { REQUEST_ID_HEADER, extractRequestId, newRequestId } from '../utils/correlation';
 import {
@@ -859,7 +859,6 @@ export const fastingApi = {
 // WATER-WEIGHT-KEYS-M: a water or weight save sends its one-time key, and a
 // resend of the same save sends the same key (./saveKeys.ts; backend #1206).
 const weightKeys = saveKeys();
-const waterKeys = saveKeys();
 
 export const weightApi = {
   log: (data: { weight_lbs: number; date?: string; notes?: string }) =>
@@ -1105,19 +1104,12 @@ export const waterApi = {
 
 // WATER-WEIGHT-KEYS-M: each glass sends its key in the body as client_uuid, the same key on every resend of that
 // glass (./saveKeys.ts). Added beside waterApi, not inside it, so the food lane's change to log above merges as is.
+// A glass's waiting key ends once the client store shows a water read of that day (waterDayShown, LS-921 B1).
 const sendWater = waterApi.log;
-const readWaterDay = waterApi.getDaily;
 waterApi.log = (data, ...rest) =>
-  waterKeys.send(`${data.date ?? ''}|${data.amount_ml}`, (client_uuid) => {
+  waterKeys.send(waterSave(data.date, data.amount_ml), (client_uuid) => {
     const body = { ...data, client_uuid };
     return sendWater(body, ...rest);
-  });
-// Once a day's water is read again the screen shows what the server holds, so the next glass that day is a new
-// save with a new key.
-waterApi.getDaily = (date) =>
-  readWaterDay(date).then((res) => {
-    waterKeys.forget((save) => save.startsWith(`${date}|`));
-    return res;
   });
 
 export const lessonsApi = {

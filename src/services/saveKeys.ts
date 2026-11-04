@@ -43,3 +43,20 @@ export function saveKeys() {
     },
   };
 }
+
+/** The waiting keys of water saves (waterApi.log). */
+export const waterKeys = saveKeys();
+
+/** A water save, as waterKeys holds it: the save's own date and amount. */
+export const waterSave = (date: string | undefined, amountMl: number): string => `${date ?? ''}|${amountMl}`;
+
+/**
+ * LS-921 B1: the client store calls this once a water read of `date` is on
+ * screen (applied to the day the client sees). Only then does the client see
+ * every glass the server holds for that day, so the next glass is a new save
+ * with a new key. A read that is dropped (the food read failed, or another
+ * day or account opened meanwhile) ends no key.
+ */
+export function waterDayShown(date: string): void {
+  waterKeys.forget((save) => save.startsWith(`${date}|`));
+}

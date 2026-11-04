@@ -211,23 +211,17 @@ describe.each(SAVES)('$name save: its one-time key', ({ url, save, other }) => {
   });
 });
 
-describe('water: a read of the day ends its waiting keys', () => {
-  it("once the day's water is read again, the next glass is a new save", async () => {
+// LS-921 B1: a read alone ends no key; only a read the client store puts on
+// screen does (the table at the end of this file).
+describe('water: a read the screen never shows leaves the waiting key', () => {
+  it.each([
+    ['the same day', '2026-11-03'],
+    ['another day', '2026-11-02'],
+  ])('a read of %s through waterApi alone keeps the key', async (_label, day) => {
     respond = (config) => noAnswer(config);
     await expect(waterApi.log({ amount_ml: 237, date: '2026-11-03' })).rejects.toBeTruthy();
     respond = (config) => ok(config, { total_ml: 237, logs: [] }, 200);
-    await waterApi.getDaily('2026-11-03');
-    respond = (config) => ok(config, { id: 'r' });
-    await waterApi.log({ amount_ml: 237, date: '2026-11-03' });
-    const [a, b] = keysOf('/nutrition/water');
-    expect(b).not.toBe(a);
-  });
-
-  it('a read of another day leaves the waiting key in place', async () => {
-    respond = (config) => noAnswer(config);
-    await expect(waterApi.log({ amount_ml: 237, date: '2026-11-03' })).rejects.toBeTruthy();
-    respond = (config) => ok(config, { total_ml: 0, logs: [] }, 200);
-    await waterApi.getDaily('2026-11-02');
+    await waterApi.getDaily(day);
     respond = (config) => ok(config, { id: 'r' });
     await waterApi.log({ amount_ml: 237, date: '2026-11-03' });
     const [a, b] = keysOf('/nutrition/water');
