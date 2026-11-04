@@ -802,6 +802,8 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
             onUnitChange={setSelectedUnit}
             onConfirm={handleConfirmLog}
             saving={foodSaving}
+            dayLeft={styleCDay && macroTargets && macroTargets.calories > 0
+              ? { kcal: macroTargets.calories - dailyTotals.calories, protein: macroTargets.protein - dailyTotals.protein } : undefined}
             onCancel={() => {
               setQuantityModalVisible(false);
               setSelectedFood(null);
