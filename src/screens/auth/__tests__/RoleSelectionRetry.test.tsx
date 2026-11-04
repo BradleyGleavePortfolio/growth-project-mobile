@@ -149,6 +149,25 @@ describe('RoleSelection retry step', () => {
     expect(mockSelectRole).not.toHaveBeenCalled();
   });
 
+  // 1TO1-FU-M (#185-S1 op 1, LS-1TO1R3 C1): a coach who cannot take a new client says so, before and after
+  // 1TO1-FU-BE (today's 404 PACKAGE_NOT_FOUND, then the not-accepting code), with the existing words.
+  it.each<[string, number, Record<string, unknown>]>([
+    ['today: 404 PACKAGE_NOT_FOUND', 404, { statusCode: 404, error: 'PACKAGE_NOT_FOUND', message: 'Package not available' }],
+    ['after 1TO1-FU-BE: coach_not_accepting_clients', 409, { code: 'coach_not_accepting_clients', message: 'Coach is not accepting clients' }],
+  ])('a refused retry (%s) says the coach is not accepting new clients', async (_name, status, data) => {
+    mockAttach.mockRejectedValue({ response: { status, data } });
+    const { findByTestId, getByTestId, findAllByText, queryByText } = await render(
+      <RoleSelectionScreen navigation={{} as never} route={route({ inviteAttachError: 'invalid', inviteCode: 'GP-FULL' })} />,
+    );
+    await findByTestId('invite-attach-retry-banner');
+    await fireEvent.press(getByTestId('role-continue'));
+    expect(
+      (await findAllByText('Your coach is not accepting new clients through the app right now. Let them know, then try your code again.')).length,
+    ).toBeGreaterThan(0);
+    expect(queryByText(/Package not available|could not be found/)).toBeNull();
+    expect(mockSelectRole).not.toHaveBeenCalled();
+  });
+
   it('explicit skip is offered only when the policy is codeless', async () => {
     mockSelectRole.mockResolvedValue({ data: { role: 'student' } });
     const { findByTestId, getByTestId } = await render(

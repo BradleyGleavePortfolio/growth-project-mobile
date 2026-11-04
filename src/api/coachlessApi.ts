@@ -18,6 +18,7 @@
 import { z } from 'zod';
 import api from '../services/api';
 import { plansChanged } from '../lib/packagePayment';
+import { isCoachNotAcceptingRefusal, isNotAcceptingCode } from '../lib/coachNotAccepting';
 
 export const COACHLESS_REQUEST_TIMEOUT_MS = 15_000;
 
@@ -138,6 +139,9 @@ export function coachlessFailureOf(err: unknown): CoachlessFailure {
   const rid = field(data, 'request_id');
   const requestId = typeof rid === 'string' && rid ? rid : null;
   if (isCoachlessCode(code)) return { code, status, requestId };
+  // 1TO1-FU-M: a coach who cannot take you says so (the attach code, or today's 404 PACKAGE_NOT_FOUND);
+  // only a 404 without it still reads as the coachless switch off.
+  if (isCoachNotAcceptingRefusal(err)) return { code: 'coach_not_accepting', status, requestId };
   if (status === 0) return { code: 'network', status, requestId };
   if (status === 429) return { code: 'rate_limited', status, requestId };
   if (status === 400) return { code: 'bad_format', status, requestId };
@@ -147,6 +151,7 @@ export function coachlessFailureOf(err: unknown): CoachlessFailure {
 
 /** A `{ valid: false, code }` check answer as a failure (an unknown code reads as code_invalid). */
 export function failureFromCheck(code: string): CoachlessFailure {
+  if (isNotAcceptingCode(code)) return { code: 'coach_not_accepting', status: 200, requestId: null };
   return { code: isCoachlessCode(code) ? code : 'code_invalid', status: 200, requestId: null };
 }
 
