@@ -1,0 +1,33 @@
+name: LS-918 independent probes
+on:
+  push:
+    branches: ['ci/171-LS-918-probes-*']
+permissions:
+  contents: read
+jobs:
+  btest:
+    name: B1 expected red at reviewed product head
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.13
+          cache: npm
+      - run: npm ci
+      - run: npx jest src/__tests__/ls918PendingCatalogSave.screen.test.tsx --ci --runInBand
+  baseline:
+    name: Main consultation timer baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: 12f158c1cb4a9e1ee79622d3f3709dbb03fe9bc0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.13
+          cache: npm
+      - run: npm ci
+      - run: npx jest src/screens/consultation/__tests__/consultationOrdering.test.tsx --ci --runInBand
