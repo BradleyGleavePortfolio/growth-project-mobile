@@ -95,6 +95,10 @@ import { CoachSignupUnavailableError } from '../../../lib/intendedRole';
 import { SIGNUP_ROLE_NOTICE_KEY } from '../../../lib/signupRoleNotice';
 import { COACH_SIGNUP_UNCONFIRMED_KEY, rememberUnconfirmedCoachSignup } from '../../../lib/coachSignupAttempt';
 import { colors, darkTokens, lightTokens } from '../../../theme/tokens';
+import { featureFlags } from '../../../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_FIRST_RUN_V2 off: this file is the classic auth screens (AuthStyleB.tsx:15 swaps in Style B).
+beforeEach(() => { jest.replaceProperty(featureFlags, 'firstRunV2', false); });
 
 function makeNav() {
   return { replace: jest.fn(), navigate: jest.fn() };

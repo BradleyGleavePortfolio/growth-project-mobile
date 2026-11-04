@@ -35,6 +35,10 @@ jest.mock('../../../theme/ThemeProvider', () => ({
 import LoginScreen from '../LoginScreen';
 import { __resetSignupPolicyCacheForTests } from '../../../lib/signupPolicy';
 import { PRIVACY_POLICY_URL, TERMS_URL } from '../../../config/env';
+import { featureFlags } from '../../../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_FIRST_RUN_V2 off: this file is the classic auth screens (AuthStyleB.tsx:15 swaps in Style B).
+jest.replaceProperty(featureFlags, 'firstRunV2', false);
 
 const flat = (node: unknown): string =>
   typeof node === 'string'

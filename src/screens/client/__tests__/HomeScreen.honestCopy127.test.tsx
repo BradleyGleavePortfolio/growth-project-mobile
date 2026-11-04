@@ -61,6 +61,10 @@ jest.mock('../../../components/coachless/CoachlessHomeSlot', () => () => null);
 jest.mock('../../../components/PendingInviteBanner', () => () => null);
 import HomeScreen from '../HomeScreen';
 import { homeDateLine } from '../homeDate';
+import { featureFlags } from '../../../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_CLIENT_HOME_RINGS off: this file is the classic Home grid (HomeScreen.tsx:369 swaps in the rings layout).
+jest.replaceProperty(featureFlags, 'clientHomeRings', false);
 beforeEach(() => {
   jest.clearAllMocks();
   mockUser.coach_id = 'c1'; mockUser.profile = {}; mockTargets = null; mockMacroMode = 'full';
