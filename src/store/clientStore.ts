@@ -4,7 +4,7 @@ import { getTodayString } from '../utils/date';
 import { MealType, FoodLog } from '../types';
 import { logger } from '../utils/logger';
 import { mapFoodItem, type RawFoodItem } from '../utils/log/mapFoodItem';
-import { forgetSaveKeys, withSaveKey } from '../utils/log/saveKey';
+import { forgetSaveKeys, waterDayShown, withSaveKey } from '../utils/log/saveKey';
 import { dayForNewLog } from '../utils/logDay';
 
 interface DailyTotals {
@@ -198,6 +198,9 @@ export const useClientStore = create<ClientStore>((set, get) => ({
           ? null
           : 'Water data could not refresh. Check your connection and try again.',
       });
+      // LS-921 B1: this day's water read is on screen now, so a glass whose
+      // answer was lost shows (or was never stored): the next glass is new.
+      if (waterResponse) waterDayShown(d);
     } catch (err) {
       if (mine !== session || get().selectedDate !== d) return;
       // Preserve data only for a refresh of the same selected day.
