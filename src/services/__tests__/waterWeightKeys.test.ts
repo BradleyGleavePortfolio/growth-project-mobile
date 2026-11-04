@@ -7,6 +7,11 @@
  * waterApi and client store. Only SecureStore and the transport adapter are
  * doubled: the adapter records each body that would have been sent and never
  * touches the network. Tokens are synthetic unsigned JWTs.
+ *
+ * FR-921R2 (LO-921R2 N1): a glass of water has one key. The client store makes
+ * it (withSaveKey, src/utils/log/saveKey.ts) and waterApi.log sends that key in
+ * the body as client_uuid (the field the server reads) and the same key in the
+ * Idempotency-Key header; every resend of the glass sends it again.
  */
 import { AxiosError, type AxiosAdapter, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios';
 
@@ -29,6 +34,7 @@ jest.mock('../secureStorage', () => {
 import api, { __resetRefreshStateForTests, __setRefreshSessionForTests, __setSignOutForTests, waterApi, weightApi } from '../api';
 import { holdSessionFence, sessionGeneration } from '../sessionFence';
 import { useClientStore } from '../../store/clientStore';
+import { withSaveKey } from '../../utils/log/saveKey';
 
 const secure = jest.requireMock('../secureStorage') as { __store: Map<string, string> };
 
@@ -44,6 +50,8 @@ interface Sent {
   method: string;
   url: string;
   body: Record<string, unknown> | undefined;
+  /** The Idempotency-Key header, when the request had one. */
+  header: unknown;
 }
 let sent: Sent[];
 let respond: (config: InternalAxiosRequestConfig) => Promise<AxiosResponse>;
@@ -54,6 +62,7 @@ const adapter: AxiosAdapter = (config) => {
     method: (config.method ?? '').toUpperCase(),
     url: config.url ?? '',
     body: typeof raw === 'string' && raw ? JSON.parse(raw) : raw,
+    header: config.headers?.get('Idempotency-Key') ?? undefined,
   });
   return respond(config);
 };
@@ -79,6 +88,11 @@ function newSession(): void {
 
 const posts = (url: string) => sent.filter((s) => s.method === 'POST' && s.url === url);
 const keysOf = (url: string) => posts(url).map((s) => s.body?.client_uuid);
+const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
+
+/** A glass of water as the client store saves it (clientStore.logWater): withSaveKey holds the glass's key. */
+const glass = (amount_ml: number, date = '2026-11-03') =>
+  withSaveKey(['water', date, amount_ml], (key) => waterApi.log({ amount_ml, date }, key));
 
 beforeEach(() => {
   __resetRefreshStateForTests();
@@ -98,23 +112,26 @@ const SAVES = [
   {
     name: 'weight',
     url: '/weight',
+    key: new RegExp(`^${UUID}$`),
     save: (n = 182.4) => weightApi.log({ weight_lbs: n, date: '2026-11-03', notes: 'Morning' }),
     other: () => weightApi.log({ weight_lbs: 181.2, date: '2026-11-03', notes: 'Morning' }),
   },
   {
     name: 'water',
     url: '/nutrition/water',
-    save: (n = 237) => waterApi.log({ amount_ml: n, date: '2026-11-03' }),
-    other: () => waterApi.log({ amount_ml: 500, date: '2026-11-03' }),
+    // The offline queue's id shape (newSaveKey): pfl_ and a UUID.
+    key: new RegExp(`^pfl_${UUID}$`),
+    save: (n = 237) => glass(n),
+    other: () => glass(500),
   },
 ] as const;
 
-describe.each(SAVES)('$name save: its one-time key', ({ url, save, other }) => {
+describe.each(SAVES)('$name save: its one-time key', ({ url, key, save, other }) => {
   it('sends a key with the save, beside the fields it sent before', async () => {
     await save();
     const [one] = posts(url);
     expect(typeof one.body?.client_uuid).toBe('string');
-    expect(String(one.body?.client_uuid)).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(String(one.body?.client_uuid)).toMatch(key);
     expect(String(one.body?.client_uuid).length).toBeLessThanOrEqual(128); // the server's MaxLength
   });
 
@@ -192,7 +209,9 @@ describe.each(SAVES)('$name save: its one-time key', ({ url, save, other }) => {
   it('a waiting key never crosses a sign-out: the next session sends a new key', async () => {
     respond = (config) => noAnswer(config);
     await expect(save()).rejects.toBeTruthy();
+    // Sign-out moves the session and resets the client store (authActions resetUserScopedStores).
     newSession();
+    useClientStore.getState().reset();
     respond = (config) => ok(config, { id: 'r' });
     await save();
     const [a, b] = keysOf(url);
@@ -219,14 +238,45 @@ describe('water: a read the screen never shows leaves the waiting key', () => {
     ['another day', '2026-11-02'],
   ])('a read of %s through waterApi alone keeps the key', async (_label, day) => {
     respond = (config) => noAnswer(config);
-    await expect(waterApi.log({ amount_ml: 237, date: '2026-11-03' })).rejects.toBeTruthy();
+    await expect(glass(237)).rejects.toBeTruthy();
     respond = (config) => ok(config, { total_ml: 237, logs: [] }, 200);
     await waterApi.getDaily(day);
     respond = (config) => ok(config, { id: 'r' });
-    await waterApi.log({ amount_ml: 237, date: '2026-11-03' });
+    await glass(237);
     const [a, b] = keysOf('/nutrition/water');
     expect(a).toEqual(expect.any(String));
     expect(b).toBe(a);
+  });
+});
+
+// FR-921R2 (LO-921R2 N1): one key per glass. The key the server reads (body
+// client_uuid) and the Idempotency-Key header are the same key, the one the
+// client store made for the glass, on the first send and on every resend.
+describe('one key per glass, through the client store and the real api', () => {
+  it('a lost glass and its redo send one key, in the body and the header alike', async () => {
+    const date = '2026-11-03';
+    useClientStore.getState().reset();
+    useClientStore.setState({ selectedDate: date, waterOz: 0, waterEntries: [] });
+    respond = (config) => noAnswer(config);
+    await useClientStore.getState().logWater('member-a', '', 8);
+    respond = (config) => ok(config, { id: 'w1', amount_ml: 237, logged_at: `${date}T08:00:00.000Z` });
+    await useClientStore.getState().logWater('member-a', '', 8);
+    const sends = posts('/nutrition/water');
+    expect(sends).toHaveLength(2);
+    const keys = sends.flatMap((s) => [s.body?.client_uuid, s.header]);
+    expect(String(keys[0])).toMatch(new RegExp(`^pfl_${UUID}$`));
+    expect(new Set(keys)).toEqual(new Set([keys[0]]));
+  });
+
+  it('a new glass after an answered one sends a new key, again one key in body and header', async () => {
+    useClientStore.getState().reset();
+    useClientStore.setState({ selectedDate: '2026-11-03', waterOz: 0, waterEntries: [] });
+    await useClientStore.getState().logWater('member-a', '', 8);
+    await useClientStore.getState().logWater('member-a', '', 8);
+    const [a, b] = posts('/nutrition/water');
+    expect(a.header).toBe(a.body?.client_uuid);
+    expect(b.header).toBe(b.body?.client_uuid);
+    expect(b.body?.client_uuid).not.toBe(a.body?.client_uuid);
   });
 });
 
