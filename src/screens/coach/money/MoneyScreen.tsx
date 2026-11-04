@@ -804,13 +804,14 @@ export default function MoneyScreen({
                       <Text style={styles.rowSub}>{movedAwayLine(ch)}</Text>
                     ) : null}
                   </View>
-                  <View style={styles.rowEnd}>
+                  <View style={styles.chargeRowEnd}>
                     <Text style={styles.rowAmount}>
                       {money(ch.amountCents, ch.currency)}
                     </Text>
                     <Text
                       style={[
                         styles.rowSub,
+                        styles.rowEndText,
                         chargeIsProblem(ch) && styles.problem,
                       ]}
                     >
@@ -1186,6 +1187,11 @@ export const makeStyles = (colors: ThemeColors) =>
     },
     rowText: { flex: 1, marginRight: 8 },
     rowEnd: { alignItems: "flex-end" },
+    // A charge row's state label ("Waiting on your Stripe account") can be
+    // long; it wraps inside at most half the row so the client name keeps the
+    // other half.
+    chargeRowEnd: { alignItems: "flex-end", flexShrink: 1, maxWidth: "50%" },
+    rowEndText: { textAlign: "right" },
     rowTitle: {
       fontFamily: "Inter_600SemiBold",
       fontSize: 15,

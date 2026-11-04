@@ -140,7 +140,7 @@ it('Resume → discard the untouched session by leaving → Train opens the work
   expect(navigation.getRootState().routes.find((route) => route.name === 'WorkoutTab')?.state).toBeUndefined();
 
   await fireEvent.press(await view.findByLabelText('Resume workout'));
-  expect(await view.findByText('Saved strength')).toBeTruthy();
+  expect(await view.findByTestId('live-set-count')).toBeTruthy(); // FR-917R3: C1 v2 header, no workout name
   await fireEvent.press(await view.findByLabelText('Leave workout'));
   await waitFor(async () => expect(await loadActiveWorkoutSession(mockUser.id)).toBeNull());
   await fireEvent.press(view.getByLabelText('Train'));

@@ -10,8 +10,11 @@ import type {
   MoneyTotals,
   PayoutStatus,
 } from "../../api/coachMoneyApi";
+import { chargeHeld } from "../../api/coachMoneyApi";
 import { formatCurrencyCents } from "../../utils/currency";
 import { requirementLabels } from "../coachSetup/connectCopy";
+
+export { chargeHeld };
 
 export const money = (cents: number, currency = "usd"): string =>
   formatCurrencyCents(cents, currency);
@@ -115,6 +118,9 @@ export function humanize(raw: string): string {
 }
 
 export function chargeStateLabel(c: MoneyCharge): string {
+  // HELD-RENEWAL-M: TGP holds this renewal until the coach's Stripe account
+  // can take payments; it is not a failed payment (W1, needs owner).
+  if (chargeHeld(c)) return "Waiting on your Stripe account";
   switch (c.state) {
     case "paid":
       return "Paid";
@@ -154,6 +160,8 @@ export function bankSaid(reason: string | null | undefined): string | null {
 
 /** True for states that should read as a problem (colour + label). */
 export function chargeIsProblem(c: MoneyCharge): boolean {
+  // HELD-RENEWAL-M: a held renewal is not a client's failed payment.
+  if (chargeHeld(c)) return false;
   return (
     c.state === "failed" ||
     c.state === "disputed" ||

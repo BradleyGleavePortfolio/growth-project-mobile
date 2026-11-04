@@ -15,6 +15,10 @@ export interface SessionSet {
   reps: number;
   weight: number;
   completed: boolean;
+  /** The coach prescribed 0 lb (bodyweight): shown as 0, never filled from the last weight. */
+  prescribedZero?: boolean;
+  /** Order the client marked sets done in (1, 2, ...): Roman reads back the latest. */
+  doneOrder?: number;
 }
 
 export interface RoutineExercise {
@@ -24,7 +28,7 @@ export interface RoutineExercise {
   reps: number;
   restSec: number;
   workoutPlanExerciseId?: string;
-  /** Coach target weight (lb) for coach-assigned workouts. */
+  /** Coach target weight (lb, 0 = bodyweight) for coach-assigned workouts. */
   weightLbs?: number;
   /** Server MuscleGroup value for routine exercises. */
   muscleGroup?: string;

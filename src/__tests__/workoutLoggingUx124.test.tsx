@@ -50,6 +50,7 @@ function Harness({ onWeight }: { onWeight: (w: number) => void }) {
       set={set}
       setIdx={0}
       exIdx={0}
+      nextUp
       onUpdate={(_e, _s, field, value) => {
         setSet((prev) => ({ ...prev, [field]: value }));
         if (field === 'weight') onWeight(value as number);

@@ -3,8 +3,8 @@
  * the client's answers, pinned on Train. Every field comes from the
  * onboarding complete payload (`program.name`, `weeks`, `days_per_week`,
  * `why[]`); the card renders nothing without a program. Its "Next" row opens
- * the first coach workout still to do (the real assignment, WorkoutAssignment
- * Detail), which is the real action that satisfies the tour's plan beat
+ * the coach workout Train's Today opens (nextAssignment; the real assignment,
+ * WorkoutAssignmentDetail), which is the real action that satisfies the tour's plan beat
  * (prototype 48). "Why this plan" keeps the reasons one tap away.
  */
 import React, { useState } from 'react';
@@ -12,7 +12,6 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { useMyWorkoutAssignments } from '../../hooks/useWorkoutBuilder';
-import type { ClientWorkoutAssignmentWithPlan } from '../../api/workoutBuilderApi';
 import { assignmentPlanName } from '../../utils/workout/assignmentPrescription';
 import { Headline } from '../../ui';
 import { typography, radius } from '../../theme/tokens';
@@ -23,6 +22,9 @@ import { useTutorialStore } from '../../tutorial/tutorialStore';
 import type { OnboardingProgram } from '../../tutorial/types';
 import { useCoachlessClient } from '../../hooks/useCoachlessClient';
 import TutorialTarget from './TutorialTarget';
+import { assignmentDay, dayStart } from '../../utils/workout/workoutDay';
+import { nextAssignment } from '../../utils/workout/nextAssignment';
+import { getTodayString } from '../../utils/date';
 
 /**
  * The closing line under "Why this plan". A coached client's coach can change
@@ -51,12 +53,11 @@ export interface PlanNextDay {
   onPress: () => void;
 }
 
-/** Weekday of a YYYY-MM-DD (or ISO) day, read as a calendar day. */
+/** Weekday of an assignment's scheduled_for (YYYY-MM-DD or ISO). */
 export function weekdayOf(day: string | null | undefined): string | null {
-  const m = typeof day === 'string' ? /^(\d{4})-(\d{2})-(\d{2})/.exec(day) : null;
-  if (!m) return null;
-  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString('en-US', { weekday: 'long' });
+  // The day it was assigned for (utils/workout/workoutDay assignmentDay).
+  const d = dayStart(assignmentDay(day));
+  return d && !Number.isNaN(d.getTime()) ? d.toLocaleDateString('en-US', { weekday: 'long' }) : null;
 }
 
 export function PlanExplanationCardView({
@@ -106,7 +107,8 @@ export function PlanExplanationCardView({
           testID="plan-next-day"
           style={[styles.disclosure, { borderTopColor: sc.border }]}
         >
-          <Text style={[styles.disclosureText, styles.grow, { color: sc.textPrimary }]} numberOfLines={1}>
+          {/* LS-917R3 B4: the name wraps at 320 and 130% text, never cut or shrunk. */}
+          <Text style={[styles.disclosureText, styles.grow, { color: sc.textPrimary }]}>
             {next.title ? `Next: ${next.title}` : 'Your workouts'}
           </Text>
           {next.when ? <Text style={[styles.meta, { color: sc.textMuted }]}>{next.when}</Text> : null}
@@ -146,15 +148,6 @@ export function PlanExplanationCardView({
   );
 }
 
-/** The earliest coach workout not yet done (the plan's next day). */
-export function firstPendingAssignment(
-  rows: ClientWorkoutAssignmentWithPlan[] | undefined,
-): ClientWorkoutAssignmentWithPlan | undefined {
-  return (Array.isArray(rows) ? rows : [])
-    .filter((a) => !a.completed_at)
-    .sort((a, b) => String(a.scheduled_for ?? '').localeCompare(String(b.scheduled_for ?? '')))[0];
-}
-
 /** Store-connected, flag-gated card for Train. */
 export default function PlanExplanationCard(): React.ReactElement | null {
   const program = useTutorialStore((s) => s.payload?.program ?? null);
@@ -163,7 +156,9 @@ export default function PlanExplanationCard(): React.ReactElement | null {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const assignments = useMyWorkoutAssignments();
   if (!featureFlags.clientTutorial || !program?.name) return null;
-  const first = firstPendingAssignment(assignments.data);
+  // The same workout Train's Today opens (nextAssignment): skipped days are
+  // not next, a future day comes before a missed one.
+  const first = nextAssignment(assignments.data, getTodayString());
   // Same cross-tab route as Train's own "Open workout" (MoreStack screens).
   const open = (screen: string, params?: object) =>
     navigation.getParent()?.navigate('MoreTab', { screen, ...(params ? { params } : {}), initial: false });
@@ -204,7 +199,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   disclosureText: { ...typography.bodyMd },
-  grow: { flex: 1, marginRight: 8 },
+  grow: { flex: 1, marginRight: 8, paddingVertical: 10 },
   body: { paddingBottom: 14 },
   reason: { ...typography.bodySmall, marginTop: 6 },
   note: { ...typography.caption, marginTop: 10 },
