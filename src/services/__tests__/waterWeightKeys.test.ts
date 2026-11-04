@@ -254,4 +254,53 @@ describe('the client store: a glass added again after a lost answer counts once'
     expect(useClientStore.getState().waterEntries.map((e) => e.id)).toEqual(['w1']);
     expect(useClientStore.getState().loadError).toBeNull();
   });
+
+  it("a water read discarded after a food refresh failure keeps the lost save's key", async () => {
+    const date = '2026-11-03';
+    useClientStore.getState().reset();
+    useClientStore.setState({ selectedDate: date, waterOz: 0, waterEntries: [] });
+    const stored = new Map<string, { id: string; amount_ml: number; logged_at: string }>();
+    let loseAnswer = true;
+    respond = (config) => {
+      if (config.method === 'post' && config.url === '/nutrition/water') {
+        const body = JSON.parse(config.data) as { client_uuid: string; amount_ml: number };
+        if (!stored.has(body.client_uuid)) {
+          stored.set(body.client_uuid, {
+            id: `water-${stored.size + 1}`,
+            amount_ml: body.amount_ml,
+            logged_at: `${date}T08:00:00.000Z`,
+          });
+        }
+        if (loseAnswer) {
+          loseAnswer = false;
+          return noAnswer(config);
+        }
+        return ok(config, stored.get(body.client_uuid));
+      }
+      if (config.url === `/nutrition/water?date=${date}`) {
+        const logs = [...stored.values()];
+        return ok(config, { total_ml: logs.reduce((n, row) => n + row.amount_ml, 0), logs }, 200);
+      }
+      // The food and water refresh are independent requests. The water read
+      // succeeds, but loadDayData discards both results when food fails.
+      if (config.url === `/log/daily?date=${date}`) return httpFail(config, 503);
+      throw new Error(`Unexpected request: ${config.url}`);
+    };
+
+    // The first glass is stored, but the answer is lost and the visible
+    // count rolls back. The client then tries the existing refresh action.
+    await useClientStore.getState().logWater('member-a', '', 8);
+    expect(stored.size).toBe(1);
+    expect(useClientStore.getState().waterOz).toBe(0);
+    await useClientStore.getState().loadDayData('member-a', date);
+    expect(useClientStore.getState().loadError).toBe('Food and water data could not refresh. Check your connection and try again.');
+    expect(useClientStore.getState().waterOz).toBe(0);
+    expect(useClientStore.getState().waterEntries).toEqual([]);
+
+    // Nothing showed the first glass, so adding it again must resend its
+    // key rather than create a second stored row.
+    await useClientStore.getState().logWater('member-a', '', 8);
+    expect(stored.size).toBe(1);
+    expect(keysOf('/nutrition/water')[1]).toBe(keysOf('/nutrition/water')[0]);
+  });
 });
