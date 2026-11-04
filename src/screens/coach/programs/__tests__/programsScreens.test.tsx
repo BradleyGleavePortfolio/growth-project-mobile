@@ -33,6 +33,8 @@ jest.mock("../../../../theme/ThemeProvider", () => ({
 }));
 
 jest.mock("@tanstack/react-query", () => ({
+  // EXPO_PUBLIC_FF_COACH_LESSONS (lessons entry on the library) reads a query; it stays loading here.
+  useQuery: () => ({ data: undefined, isLoading: true, isError: false, refetch: jest.fn() }),
   useQueryClient: () => ({
     setQueryData: jest.fn(),
     invalidateQueries: jest.fn(),

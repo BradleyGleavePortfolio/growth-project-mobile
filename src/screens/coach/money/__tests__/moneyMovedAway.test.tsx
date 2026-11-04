@@ -40,7 +40,7 @@ jest.mock("@react-navigation/native", () => {
       goBack: jest.fn(),
       canGoBack: () => true,
       // EXPO_PUBLIC_FF_COACH_TABS_V2: MoneyBack.tsx:28 reads the stack index (a pushed screen).
-      getState: () => ({ index: 1 }),
+      getState: () => ({ index: 1, routes: [] }),
       getParent: () => ({ navigate: jest.fn() }),
     }),
     useIsFocused: () => true,

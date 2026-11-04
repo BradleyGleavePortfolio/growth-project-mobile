@@ -9,6 +9,10 @@ import { render, fireEvent, waitFor } from "@testing-library/react-native";
 import { Linking } from "react-native";
 import { act } from "@testing-library/react-native";
 import { featureFlags } from "../../config/featureFlags";
+import { featureFlags } from "../../config/featureFlags";
+
+// Pins EXPO_PUBLIC_FF_COACH_TABS_V2 off: this file is Money inside Settings, the five-tab layout (with six tabs Money is its own tab).
+beforeEach(() => { jest.replaceProperty(featureFlags, "coachTabsV2", false); });
 // Required lazily so the Settings harness loads on a head without it.
 const noteHeadCoachHandlesMoney = (v: boolean): void => {
   // eslint-disable-next-line @typescript-eslint/no-var-requires

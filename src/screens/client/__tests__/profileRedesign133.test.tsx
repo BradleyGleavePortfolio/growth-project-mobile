@@ -12,6 +12,10 @@ import { fireEvent, render } from '@testing-library/react-native';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { layout, lightTokens } from '../../../theme/tokens';
 import ProfileScreen from '../ProfileScreen';
+import { featureFlags } from '../../../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_LEARN_HUB off: this file keeps Learn as a quick route on the profile (ProfileScreen.tsx:187 moves it to the You list).
+jest.replaceProperty(featureFlags, 'learnHub', false);
 
 const mockGoBack = jest.fn();
 const mockNavigate = jest.fn();
