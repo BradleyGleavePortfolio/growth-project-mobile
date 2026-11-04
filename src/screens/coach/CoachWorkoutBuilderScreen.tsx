@@ -1880,6 +1880,7 @@ export default function CoachWorkoutBuilderScreen() {
               {/* TIMED-SETS-M: K3 Style C row sheet, "Count by" Reps | Seconds (K3-C-19, K3-S-40, K3-S-41). */}
               <View style={styles.countByRow}>
                 <Text style={[typography.caption, styles.countByLabel, { color: sc.textMuted }]}>Count by</Text>
+                <View style={styles.countChips}>
                 {(['reps', 'seconds'] as const).map((u) => {
                   const on = unitOf(row) === u;
                   return (
@@ -1890,7 +1891,7 @@ export default function CoachWorkoutBuilderScreen() {
                       accessibilityState={{ disabled: editorLocked, selected: on }}
                       disabled={editorLocked}
                       onPress={() => updateRow(idx, { unit: u })}
-                      style={[styles.typeChip, { borderColor: on ? sc.accentText : sc.border }, on && styles.typeSelected]}
+                      style={[styles.countChip, { borderColor: on ? sc.accentText : sc.border }, on && styles.typeSelected]}
                     >
                       <Text style={[typography.body, { color: on ? sc.accentText : sc.textPrimary }]}>
                         {u === 'reps' ? 'Reps' : 'Seconds'}
@@ -1898,6 +1899,7 @@ export default function CoachWorkoutBuilderScreen() {
                     </HapticPressable>
                   );
                 })}
+                </View>
               </View>
               <View style={styles.rowInputs}>
                 <NumberField
@@ -1909,10 +1911,14 @@ export default function CoachWorkoutBuilderScreen() {
                   editable={!editorLocked}
                   value={row.sets}
                   onChange={(v) => updateRow(idx, { sets: v })}
+                  flex={0.75}
                   sc={sc}
                 />
                 <NumberField
                   label={unitOf(row) === 'seconds' ? 'Seconds' : 'Reps'}
+                  // "Seconds" is one long word: this column takes a little of
+                  // Sets' room so it never breaks mid-word at 320 wide, large text.
+                  flex={1.25}
                   editable={!editorLocked}
                   value={row.reps_or_duration_seconds}
                   onChange={(v) => updateRow(idx, { reps_or_duration_seconds: v })}
@@ -2004,10 +2010,11 @@ function NumberField(props: {
   sc: SemanticTokens;
   editable?: boolean;
   inputRef?: (input: TextInput | null) => void;
+  flex?: number;
 }) {
-  const { label, value, onChange, sc, editable = true, inputRef } = props;
+  const { label, value, onChange, sc, editable = true, inputRef, flex = 1 } = props;
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex }}>
       <Text style={[typography.caption, { color: sc.textMuted, fontSize: 13 }]}>{label}</Text>
       <TextInput
         ref={inputRef}
@@ -2101,8 +2108,21 @@ function makeStyles(sc: SemanticTokens) {
       borderRadius: radius.button, alignItems: 'center', justifyContent: 'center',
     },
     rowInputs: { flexDirection: 'row', gap: spacing.sm },
-    countByRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
-    countByLabel: { fontSize: 13 },
+    // K3 C row: "Count by" at the start, the two choices at the end. Selection
+    // follows this screen's pill rule (outline), as the type choices do.
+    // The two choices move under the label as one group when they do not fit
+    // (320 wide, large text).
+    countByRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginBottom: spacing.sm },
+    countByLabel: { flexGrow: 1, fontSize: 13 },
+    countChips: { flexDirection: 'row', gap: spacing.sm },
+    countChip: {
+      minHeight: 44,
+      paddingHorizontal: spacing.md,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderRadius: radius.chip,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
     searchResults: { marginTop: spacing.sm },
     searchHit: {
       flexDirection: 'row',
