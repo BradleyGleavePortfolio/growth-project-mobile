@@ -551,13 +551,16 @@ const makeStyles = (colors: SemanticTokens) =>
     fontVariant: ['tabular-nums'],
     marginTop: 4,
   },
+  // The chips wrap to a second row at large text sizes so "12:12" never runs past its chip (320 pt at 130%).
   protocolRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 6,
     marginBottom: 24,
   },
   protocolBtn: {
-    flex: 1,
+    flexGrow: 1,
+    paddingHorizontal: spacing.md,
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',

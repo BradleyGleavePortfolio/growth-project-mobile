@@ -127,7 +127,7 @@ export default function ClientMacrosScreen() {
 
 const CELL_LABEL = { protein: 'Protein', carbs: 'Carbs', fat: 'Fats', fiber: 'Fiber' } as const;
 
-/** Under the masthead: the macro cells on a cream card, then the coach's note and the date it took effect. */
+/** Under the masthead: the macro cells flat on the paper (full width, so the eaten / target line fits), then the coach's note and the date it took effect. */
 function TargetCard({
   target,
   mode = 'full',
@@ -154,7 +154,7 @@ function TargetCard({
   const effective = formatDate(target.effective_from);
   return (
     <View style={styles.stack}>
-      <View style={[planStyleC.card, styles.cardFill, styles.macroGrid]} testID="macros-cells">
+      <View style={styles.macroGrid} testID="macros-cells">
         {targetCells(mode).map((k) => (
           <MacroCell key={k} label={CELL_LABEL[k]} value={values[k]} current={eaten[k]} sc={sc} />
         ))}
