@@ -56,3 +56,12 @@ export function catalogKey(exerciseId: string | undefined, name: string): string
   const id = (exerciseId ?? '').trim();
   return id && !PHONE_MADE_ID.test(id) ? id : slugifyExerciseName(name);
 }
+
+// A name slug (lowercase words joined by dashes, at least one letter): the key
+// Watch video sends for an exercise with no catalog id. A library uuid has the
+// same shape. /exercises holds neither (only `seed:`, ExerciseDB number and
+// v2 `exr_` ids), so only the catalog can resolve one.
+const NAME_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+export function isCatalogOnlyKey(key: string): boolean {
+  return NAME_SLUG.test(key) && /[a-z]/.test(key);
+}

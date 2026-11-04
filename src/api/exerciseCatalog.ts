@@ -23,7 +23,7 @@ import api from '../services/api';
 import type { AxiosResponse } from 'axios';
 import { exerciseLibraryApi } from './exerciseLibraryApi';
 import type { Exercise as LibraryExercise } from './exerciseLibraryApi';
-import { libraryExerciseId, slugifyExerciseName } from '../utils/workout/exerciseId';
+import { isCatalogOnlyKey, libraryExerciseId, slugifyExerciseName } from '../utils/workout/exerciseId';
 import type {
   Exercise,
   ExerciseDetail,
@@ -100,13 +100,15 @@ export const exerciseCatalogApi = {
   },
 
   // Existing assigned workouts use ExerciseDB/seed IDs, not catalog UUIDs.
-  // Fall back only on a missing catalog entry, never on an access error.
+  // Fall back only on a missing catalog entry, never on an access error, and
+  // only for a key /exercises can hold: it answers a name slug or a library
+  // uuid with a 500, so the catalog's 404 (no details yet) is kept for those.
   getDetail: async (idOrSlug: string): Promise<AxiosResponse<ExerciseDetail>> => {
     try {
       return await exerciseCatalogApi.getByIdOrSlug(idOrSlug);
     } catch (error) {
       const status = (error as { response?: { status?: number } }).response?.status;
-      if (status !== 404) throw error;
+      if (status !== 404 || isCatalogOnlyKey(idOrSlug)) throw error;
       const response = await exerciseLibraryApi.getById(idOrSlug);
       const exercise = response.data;
       const data: ExerciseDetail = {
