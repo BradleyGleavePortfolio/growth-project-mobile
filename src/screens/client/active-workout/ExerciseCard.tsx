@@ -76,7 +76,7 @@ export function ExerciseCard({
   );
   // C1 v2: "C  Romanian deadlift  3 × 8 · 135 lb", one tap opens the block.
   if (waiting) {
-    const plan = planLine(exercise.sets);
+    const plan = planLine(exercise.sets, exercise.unit === 'seconds');
     return (
       <HapticPressable intent="light" style={styles.exerciseCard} onPress={() => setOpen(true)}
         accessibilityRole="button" accessibilityState={{ expanded: false }}
@@ -194,6 +194,7 @@ export function ExerciseCard({
           previous={previous?.[setIdx]}
           editable={!disabled}
           nextUp={setIdx === nextSet}
+          timed={exercise.unit === 'seconds'}
         />
       ))}
 
@@ -217,12 +218,15 @@ export function ExerciseCard({
   );
 }
 
-/** C1 v2 plan line from the block's first set: "3 × 8 · 135 lb"; a coach's zero stays "0 lb". */
-export function planLine(sets: SessionSet[]): string {
+/**
+ * C1 v2 plan line from the block's first set: "3 × 8 · 135 lb"; a coach's zero
+ * stays "0 lb". TIMED-SETS-M: a timed block reads "3 × 60 sec".
+ */
+export function planLine(sets: SessionSet[], timed = false): string {
   const first = sets[0];
   if (!first) return '';
   const weight = first.weight > 0 || first.prescribedZero ? ` · ${first.weight} lb` : '';
-  return first.reps > 0 ? `${sets.length} × ${first.reps}${weight}` : `${sets.length} ${sets.length === 1 ? 'set' : 'sets'}${weight}`;
+  return first.reps > 0 ? `${sets.length} × ${first.reps}${timed ? ' sec' : ''}${weight}` : `${sets.length} ${sets.length === 1 ? 'set' : 'sets'}${weight}`;
 }
 
 export { blockLetter };

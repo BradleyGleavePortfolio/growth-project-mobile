@@ -10,6 +10,17 @@ export interface LoggedExercise {
   notes?: string | null;
   rpe?: number | null;
   video_url?: string | null;
+  /**
+   * SET-ASKED (b#1219): the assignment and row order a logged exercise came
+   * from. Sent only for an exercise logged from an assignment.
+   */
+  plan_assignment_id?: string | null;
+  plan_order?: number | null;
+  /** Read only: what the coach asked, as the server froze it. Never sent. */
+  asked_sets?: number | null;
+  asked_count?: number | null;
+  asked_unit?: string | null;
+  asked_weight_lbs?: number | null;
 }
 
 export interface LoggedWorkout {
@@ -71,7 +82,22 @@ export function swapExercise(exercises: SessionExercise[], index: number, replac
   return result;
 }
 
-export function completedExercisePayload(exercise: SessionExercise): LoggedExercise {
+/**
+ * TIMED-SETS-M: `{ plan_assignment_id, plan_order }` for an exercise logged
+ * from an assignment (both known), else `{}`. A free workout, an added or a
+ * swapped-in exercise has no plan order, so it sends neither.
+ */
+function planRowFields(
+  exercise: SessionExercise,
+  planAssignmentId?: string,
+): { plan_assignment_id?: string; plan_order?: number } {
+  const id = exercise.planAssignmentId ?? planAssignmentId;
+  return typeof id === 'string' && id.length > 0 && typeof exercise.planOrder === 'number'
+    ? { plan_assignment_id: id, plan_order: exercise.planOrder }
+    : {};
+}
+
+export function completedExercisePayload(exercise: SessionExercise, planAssignmentId?: string): LoggedExercise {
   const sets = exercise.sets.filter((s) => s.completed);
   return {
     exercise_name: exercise.exerciseName,
@@ -80,6 +106,7 @@ export function completedExercisePayload(exercise: SessionExercise): LoggedExerc
     weight_per_set: sets.map((s) => s.weight),
     reps_per_set: sets.map((s) => s.reps),
     notes: exercise.notes ?? '',
+    ...planRowFields(exercise, planAssignmentId),
   };
 }
 
@@ -104,6 +131,10 @@ export function loggedWorkoutExercises(workout: LoggedWorkout): SessionExercise[
     exerciseName: e.exercise_name,
     muscleGroup: e.muscle_group,
     notes: e.notes ?? '',
+    // The plan row the server stored is sent back as it was (PUT is replace-all).
+    ...(typeof e.plan_assignment_id === 'string' && e.plan_assignment_id && typeof e.plan_order === 'number'
+      ? { planAssignmentId: e.plan_assignment_id, planOrder: e.plan_order }
+      : {}),
     sets: Array.from({ length: e.sets_completed }, (_, i) => ({
       weight: e.weight_per_set[i] ?? 0,
       reps: e.reps_per_set[i] ?? 0,

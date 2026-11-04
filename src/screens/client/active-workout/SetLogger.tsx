@@ -119,6 +119,7 @@ export function SetLogger({
   editable = true,
   hideCompletion = false,
   nextUp = false,
+  timed = false,
 }: {
   set: SessionSet;
   setIdx: number;
@@ -132,7 +133,12 @@ export function SetLogger({
   hideCompletion?: boolean;
   /** C1 v2: the next set to do in the exercise in progress (filled "As planned"). */
   nextUp?: boolean;
+  /** TIMED-SETS-M: a timed row; the count is seconds (still saved as reps_per_set). */
+  timed?: boolean;
 }) {
+  // The count's words: "reps" as on main, "seconds" / "sec" for a timed row.
+  const spoken = timed ? 'seconds' : 'reps';
+  const shownUnit = timed ? ' sec' : '';
   // An explicitly typed zero is an entry, not a blank ghost to replace.
   const [weightBlank, setWeightBlank] = useState(set.weight <= 0 && !set.prescribedZero);
   const [repsBlank, setRepsBlank] = useState(set.reps <= 0);
@@ -177,7 +183,7 @@ export function SetLogger({
       placeholder={String(previous?.reps ?? 0)}
       keyboardType="number-pad"
       placeholderTextColor={sc.textMuted}
-      accessibilityLabel={`Set ${setIdx + 1} reps`}
+      accessibilityLabel={`Set ${setIdx + 1} ${spoken}`}
       testID={`set-reps-${exIdx}-${setIdx}`}
     />
   );
@@ -187,14 +193,14 @@ export function SetLogger({
       disabled={set.completed || !editable}
       style={hideCompletion ? styles.previousSet : styles.previousLine}
       accessibilityRole="button"
-      accessibilityLabel={`Use previous set ${setIdx + 1}: ${previous.weight} pounds, ${previous.reps} reps`}
+      accessibilityLabel={`Use previous set ${setIdx + 1}: ${previous.weight} pounds, ${previous.reps} ${spoken}`}
       onPress={() => {
         onUpdate(exIdx, setIdx, 'weight', previous.weight);
         onUpdate(exIdx, setIdx, 'reps', previous.reps);
       }}
     >
       <Text style={styles.previousSetLabel}>Previous</Text>
-      <Text style={styles.previousSetValue}>{previous.weight} × {previous.reps}</Text>
+      <Text style={styles.previousSetValue}>{previous.weight} × {previous.reps}{shownUnit}</Text>
     </HapticPressable>
   ) : null;
   // The history edit (no done button) keeps main's grid row.
@@ -230,12 +236,13 @@ export function SetLogger({
             {weightCell([styles.setLineInput, styles.setLineWeight, nextUp && styles.setLineInputNext], editing, { min: 40, size: 18 })}
             <Text style={styles.setLineUnit} accessible={false}>lb ×</Text>
             {repsCell([styles.setLineInput, styles.setLineReps, nextUp && styles.setLineInputNext], { min: 28, size: 18 })}
+            {timed ? <Text style={styles.setLineUnit} accessible={false}>sec</Text> : null}
           </View>
         ) : (
           <HapticPressable intent="light" style={[styles.setLineValue, nextUp && styles.setLineInputNext]} onPress={() => setEditing(true)}
-            accessibilityRole="button" accessibilityLabel={`Set ${setIdx + 1}, ${shownWeight} pounds, ${shownReps} reps. Change the numbers`}
+            accessibilityRole="button" accessibilityLabel={`Set ${setIdx + 1}, ${shownWeight} pounds, ${shownReps} ${spoken}. Change the numbers`}
             testID={`set-value-${exIdx}-${setIdx}`}>
-            <Text style={[styles.setLineText, (ghost || (!set.completed && !nextUp)) && styles.setLineTextQuiet]}>{`${shownWeight} lb × ${shownReps}`}</Text>
+            <Text style={[styles.setLineText, (ghost || (!set.completed && !nextUp)) && styles.setLineTextQuiet]}>{`${shownWeight} lb × ${shownReps}${shownUnit}`}</Text>
           </HapticPressable>
         )}
       </View>

@@ -788,7 +788,8 @@ export default function ActiveWorkoutScreen() {
             workout_type: 'strength',
             duration_minutes: durationMinutes,
             notes: workoutNotes,
-            exercises: completedExercises.map(completedExercisePayload),
+            // TIMED-SETS-M: each exercise from the assignment names its plan row.
+            exercises: completedExercises.map((e) => completedExercisePayload(e, assignmentId ?? undefined)),
           };
           // Coach assignment completion (full exercise/set detail).
           const completionPayload = {

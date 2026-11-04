@@ -6,6 +6,7 @@ import { randomUuid } from '../idempotency';
 import { routineExerciseId } from './exerciseId';
 import { toServerMuscleGroup } from './muscleGroup';
 import { instantDay, workoutDay } from './workoutDay';
+import { unitField } from './exerciseUnit';
 import type { RoutineExercise, SessionExercise } from '../../screens/client/active-workout/types';
 
 // PATCH /assignments/:id/complete validates `idempotency_key` with
@@ -302,6 +303,9 @@ export function routineSessionExercises(exercisesJson: string): SessionExercise[
       muscleGroup: re.muscleGroup,
       // FU-WORKLOG-126: the coach's cue stays visible mid-workout.
       ...(re.coachNote ? { coachNote: re.coachNote } : {}),
+      // TIMED-SETS-M: a timed row stays timed; plan_order goes back on save.
+      ...unitField(re.unit),
+      ...(typeof re.planOrder === 'number' ? { planOrder: re.planOrder } : {}),
     }));
   } catch (err) {
     // Best-effort parse of the routine JSON. An empty list lets the user add
