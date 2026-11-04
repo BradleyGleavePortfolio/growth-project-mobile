@@ -11,6 +11,7 @@ import { profileApi, authApi, preferencesApi, notificationsApi } from '../../ser
 import { keepDayOneAnswers } from './answers';
 import { patchUserCache } from '../../lib/userCache';
 import { presentJoinFrom } from '../../lib/joinPackage';
+import { isCoachNotAcceptingRefusal } from '../../lib/coachNotAccepting';
 import { logger } from '../../utils/logger';
 
 // ─── Error shape ─────────────────────────────────────────────────────────────
@@ -72,6 +73,8 @@ function classify(err: unknown): DayOneError {
   const reason = e?.response?.data?.reason;
   const code = e?.response?.data?.code;
   const serverMessage = e?.response?.data?.message;
+  // 1TO1-FU-M: a coach who cannot take you, before (404 PACKAGE_NOT_FOUND) and after 1TO1-FU-BE (the code).
+  if (status >= 400 && status < 500 && isCoachNotAcceptingRefusal(err)) return { kind: 'coach_unavailable', serverMessage };
   if (status >= 400 && status < 500 && typeof code === 'string' && ATTACH_CODE_KINDS[code]) {
     return { kind: ATTACH_CODE_KINDS[code], serverMessage };
   }

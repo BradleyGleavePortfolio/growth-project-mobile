@@ -8,5 +8,6 @@
 export const EVERY_PACKAGE_INCLUDES_COACHING = 'Every package includes 1:1 coaching with you.';
 
 /** U-5 (approved): the buyer pages' retry line while the coach's name or plans could not load
- *  (ClientPackagesScreen plan cards and, FR-1TO1R2, the plan sheet). */
+ *  (ClientPackagesScreen plan cards). The plan sheet no longer shows it when only the name fails
+ *  (1TO1-FU-M, #186-P4 op 1: "1:1 coaching with your coach", no error). */
 export const PLANS_LOAD_ERROR = "Your coach's plans could not load. Check your connection, then tap to try again.";
