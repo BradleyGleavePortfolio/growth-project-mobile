@@ -13,6 +13,7 @@
  *     functions in this file. Callers compose them explicitly, which is
  *     easier to test and easier to read.
  */
+import { instantDay } from '../../utils/workout/workoutDay';
 
 export type SyncStatus = 'pending' | 'synced' | 'conflict' | 'dead_letter';
 
@@ -101,9 +102,9 @@ export function parsedSets(log: WorkoutLog): ParsedSet[] {
 export function toServerPayload(log: WorkoutLog): WorkoutPayload {
   const sets = parsedSets(log).filter((s) => s.completed);
   return {
-    date: log.loggedAt
-      ? log.loggedAt.toISOString()
-      : new Date().toISOString(),
+    // The server keeps a calendar date: the client's local day, never the
+    // UTC day of an instant (utils/workout/workoutDay).
+    date: instantDay(log.loggedAt ?? new Date()),
     duration_minutes: log.durationMinutes ?? 0,
     notes: log.sessionName ?? '',
     exercises: [

@@ -1,4 +1,4 @@
-import { bucketDateLocal } from '../date';
+import { workoutDay } from './workoutDay';
 
 export interface WorkoutRowLike {
   date?: string;
@@ -11,16 +11,11 @@ export interface WorkoutRowLike {
  *
  * WorkoutSession has no `completed` column, so the Home line's old
  * `completed === true` test never matched and Home kept saying "One
- * workout to go." after the client finished. `date` is a calendar date
- * (YYYY-MM-DD at UTC midnight): compare its day part; a row created today
- * on this device also counts. A row explicitly marked incomplete never does.
+ * workout to go." after the client finished. A workout counts on its
+ * recorded day (workoutDay): an older workout synced today is not today's;
+ * only a row without a recorded date falls back to the day it was stored.
+ * A row explicitly marked incomplete never counts.
  */
 export function isWorkoutDoneToday(rows: WorkoutRowLike[] | undefined, todayStr: string): boolean {
-  return (rows || []).some((r) => {
-    if (!r || r.completed === false) return false;
-    const day = typeof r.date === 'string' ? r.date.slice(0, 10) : '';
-    if (day === todayStr) return true;
-    const created = r.created_at ? new Date(r.created_at) : null;
-    return !!created && !Number.isNaN(created.getTime()) && bucketDateLocal(created) === todayStr;
-  });
+  return (rows || []).some((r) => !!r && r.completed !== false && workoutDay(r) === todayStr);
 }

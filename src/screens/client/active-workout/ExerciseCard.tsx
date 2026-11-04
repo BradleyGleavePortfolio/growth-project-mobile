@@ -1,13 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../../../components/HapticPressable';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
-import { lightTokens as sc, typography } from '../../../theme/tokens';
+import { lightTokens as sc, radius, typography } from '../../../theme/tokens';
 import { Headline } from '../../../ui';
 import type { SessionExercise, SessionSet } from './types';
 import type { ActiveWorkoutStyles } from './styles';
 import { SetLogger } from './SetLogger';
+import { blockLetter } from './blockLetter';
 
 export function ExerciseCard({
   exercise,
@@ -26,6 +27,9 @@ export function ExerciseCard({
   onChangeRest,
   isLast,
   disabled = false,
+  active = false,
+  foldable = false,
+  notStarted = false,
 }: {
   exercise: SessionExercise;
   exIdx: number;
@@ -43,21 +47,85 @@ export function ExerciseCard({
   onChangeRest?: (index: number, seconds: number) => void;
   isLast?: boolean;
   disabled?: boolean;
+  /** C1 v2: the exercise in progress sits on the sage card. */
+  active?: boolean;
+  /** C1 v2: every set is done and the client has moved on, so the block folds. */
+  foldable?: boolean;
+  /** C1 v2: a later block with no set done yet is one line with its plan until tapped. */
+  notStarted?: boolean;
 }) {
+  const [open, setOpen] = useState(false);
+  const folded = foldable && !open;
+  const waiting = notStarted && !open && !active;
+  const done = exercise.sets.length > 0 && exercise.sets.every((set) => set.completed);
+  // The first set still to do gets the filled "As planned" in the active block.
+  const nextSet = active ? exercise.sets.findIndex((set) => !set.completed) : -1;
+  const summary = (
+    <Text style={styles.exerciseSummary}>
+      {exercise.sets.filter((set) => set.completed).length} of {exercise.sets.length} {exercise.sets.length === 1 ? 'set' : 'sets'} complete
+    </Text>
+  );
+  // C1 v2 (MOCKUP3/C1/style-c-v2/C2_logger): lettered blocks A, B, C...
+  const letter = (
+    <View style={[local.letter, done ? local.letterDone : active ? local.letterActive : local.letterOpen]}
+      testID={`exercise-letter-${exIdx}`} accessible={false} importantForAccessibility="no-hide-descendants">
+      {done
+        ? <Ionicons name="checkmark" size={16} color={sc.textOnAccent} />
+        : <Text style={[local.letterText, { color: active ? sc.textOnAccent : sc.accentText }]}>{blockLetter(exIdx)}</Text>}
+    </View>
+  );
+  // C1 v2: "C  Romanian deadlift  3 × 8 · 135 lb", one tap opens the block.
+  if (waiting) {
+    const plan = planLine(exercise.sets);
+    return (
+      <HapticPressable intent="light" style={styles.exerciseCard} onPress={() => setOpen(true)}
+        accessibilityRole="button" accessibilityState={{ expanded: false }}
+        accessibilityLabel={`Show sets for ${exercise.exerciseName}${plan ? `, ${plan}` : ''}`}
+        testID={`exercise-waiting-${exIdx}`}>
+        <View style={[styles.exerciseHeader, local.foldedHeader]}>
+          {letter}
+          <View style={styles.exerciseHeaderText}>
+            <Text style={styles.exerciseName}>{exercise.exerciseName}</Text>
+            {plan ? <Text style={styles.exerciseSummary}>{plan}</Text> : null}
+          </View>
+        </View>
+      </HapticPressable>
+    );
+  }
+  if (folded) {
+    const sets = exercise.sets.length;
+    return (
+      <HapticPressable intent="light" style={styles.exerciseCard} onPress={() => setOpen(true)}
+        accessibilityRole="button" accessibilityState={{ expanded: false }}
+        accessibilityLabel={`Show sets for ${exercise.exerciseName}, ${sets} of ${sets} ${sets === 1 ? 'set' : 'sets'} complete`}
+        testID={`exercise-folded-${exIdx}`}>
+        <View style={[styles.exerciseHeader, local.foldedHeader]}>
+          {letter}
+          <View style={styles.exerciseHeaderText}>
+            <Text style={styles.exerciseName}>{`${blockLetter(exIdx)} · ${exercise.exerciseName}`}</Text>
+            {summary}
+          </View>
+          <Ionicons name="chevron-down" size={20} color={sc.textPrimary} />
+        </View>
+      </HapticPressable>
+    );
+  }
   return (
-    <View style={styles.exerciseCard}>
+    <View style={[styles.exerciseCard, active && local.activeCard]} testID={active ? `exercise-active-${exIdx}` : undefined}>
       <View pointerEvents={disabled ? 'none' : 'auto'}>
-      {/* REDO-LIVE-133: numbered serif title, as in the clientfile-workouts reference. */}
+      {/* C1 v2: a lettered block; the open one is the sage card. */}
       <View style={styles.exerciseHeader}>
-        <Text style={[local.index, { color: sc.textMuted }]} accessible={false} importantForAccessibility="no">
-          {exIdx + 1}
-        </Text>
+        {letter}
         <View style={styles.exerciseHeaderText}>
           <Headline level="h3">{exercise.exerciseName}</Headline>
-          <Text style={styles.exerciseSummary}>
-            {exercise.sets.filter((set) => set.completed).length} of {exercise.sets.length} {exercise.sets.length === 1 ? 'set' : 'sets'} complete
-          </Text>
+          {summary}
         </View>
+        {foldable ? (
+          <HapticPressable intent="light" style={styles.toolButton} onPress={() => setOpen(false)}
+            accessibilityRole="button" accessibilityState={{ expanded: true }} accessibilityLabel={`Hide sets for ${exercise.exerciseName}`}>
+            <Ionicons name="chevron-up" size={20} color={sc.textPrimary} />
+          </HapticPressable>
+        ) : null}
       </View>
       {/* FU-WORKLOG-126: the coach's note used to show only on the screen
           before Start, never while the client was doing the sets. */}
@@ -111,13 +179,7 @@ export function ExerciseCard({
       </View>}
       {onChangeRest && ![60, 90, 120].includes(exercise.restSec ?? 0) && <Text style={styles.previousSetText}>Rest: {exercise.restSec ?? 0}s · From the plan</Text>}
 
-      {/* Set Headers */}
-      <View style={styles.setHeaderRow}>
-        <Text style={[styles.setHeaderText, { width: 36 }]}>Set</Text>
-        <Text style={[styles.setHeaderText, { flex: 1 }]}>Weight (lbs)</Text>
-        <Text style={[styles.setHeaderText, { flex: 1 }]}>Reps</Text>
-        <View style={{ width: 44 }} />
-      </View>
+      {/* C1 v2: each set is its own text row ("Set 2  155 lb × 6"), so no column headers. */}
 
       {exercise.sets.map((set, setIdx) => (
         <SetLogger
@@ -131,6 +193,7 @@ export function ExerciseCard({
           styles={styles}
           previous={previous?.[setIdx]}
           editable={!disabled}
+          nextUp={setIdx === nextSet}
         />
       ))}
 
@@ -154,7 +217,32 @@ export function ExerciseCard({
   );
 }
 
+/** C1 v2 plan line from the block's first set: "3 × 8 · 135 lb"; a coach's zero stays "0 lb". */
+export function planLine(sets: SessionSet[]): string {
+  const first = sets[0];
+  if (!first) return '';
+  const weight = first.weight > 0 || first.prescribedZero ? ` · ${first.weight} lb` : '';
+  return first.reps > 0 ? `${sets.length} × ${first.reps}${weight}` : `${sets.length} ${sets.length === 1 ? 'set' : 'sets'}${weight}`;
+}
+
+export { blockLetter };
+
 const local = StyleSheet.create({
-  // Serif tabular index beside the exercise name; decorative, so screen readers skip it.
-  index: { ...typography.h3, fontVariant: ['tabular-nums'], minWidth: 18 },
+  // The block letter beside the exercise name; decorative, so screen readers skip it.
+  letter: { width: 32, height: 32, borderRadius: radius.input, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+  letterOpen: { borderWidth: 1, borderColor: sc.accentText, backgroundColor: 'transparent' },
+  letterActive: { backgroundColor: sc.accent },
+  letterDone: { backgroundColor: sc.accent },
+  letterText: { ...typography.h3, fontSize: 17, lineHeight: 22 },
+  foldedHeader: { marginBottom: 0, alignItems: 'center' },
+  // C1 v2: the exercise in progress on a sage card with a sage line.
+  activeCard: {
+    backgroundColor: sc.surface.sage,
+    borderWidth: 1,
+    borderColor: sc.surface.sageLine,
+    borderBottomColor: sc.surface.sageLine,
+    borderRadius: radius.card,
+    paddingHorizontal: 16,
+    marginVertical: 12,
+  },
 });

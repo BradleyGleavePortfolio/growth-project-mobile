@@ -106,7 +106,7 @@ it.each([true, false])('finishing a workout (romanChat=%s) leaves one WorkoutMai
     params: { routineName: 'Push Day', exercises: '[]', assignmentId: null },
   }));
   expect(trainStack(ref)?.routes.map((route) => route.name)).toEqual(['WorkoutMain', 'ActiveWorkout']);
-  await waitFor(() => expect(view.getByText('Push Day')).toBeTruthy());
+  await waitFor(() => expect(view.getByTestId('live-set-count')).toBeTruthy()); // FR-917R3: C1 v2 header, no workout name
 
   await act(async () => { await fireEvent.press(view.getByText('Finish workout')); });
   await waitFor(() => expect(mockMutateOptions?.onSuccess).toBeTruthy());
@@ -152,7 +152,7 @@ describe('NAV-FIX: a Train link keeps open work', () => {
       screen: 'ActiveWorkout',
       params: { routineName: 'Push Day', exercises: '[]', assignmentId: null },
     }));
-    await waitFor(() => expect(view.getByText('Push Day')).toBeTruthy());
+    await waitFor(() => expect(view.getByTestId('live-set-count')).toBeTruthy()); // FR-917R3: C1 v2 header, no workout name
     await act(async () => ref.navigate('Home'));
 
     await act(async () => tap());
@@ -160,7 +160,7 @@ describe('NAV-FIX: a Train link keeps open work', () => {
     expect(focusedTab(ref)).toBe('WorkoutTab');
     expect(stackOf(ref, 'WorkoutTab')).toEqual(['WorkoutMain', 'ActiveWorkout']);
     expect(Alert.alert).not.toHaveBeenCalledWith('Log this workout?', expect.anything(), expect.anything());
-    expect(view.getByText('Push Day')).toBeTruthy();
+    expect(view.getByTestId('live-set-count')).toBeTruthy(); // FR-917R3: C1 v2 header, no workout name
   });
 
   it.each(['RoutineBuilder', 'WorkoutHistoryEdit'])('a workout push keeps an open %s and its edits', async (screen) => {
