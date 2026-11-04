@@ -60,12 +60,20 @@ const KEPT = {
   }],
 };
 
-async function addBenchAndSave(method: 'POST' | 'PUT') {
+// Leaving the screen: the navigator unmounts it.
+let leave!: () => void;
+function Host() {
+  const [shown, setShown] = React.useState(true);
+  leave = () => setShown(false);
+  return shown ? <RoutineBuilderScreen /> : null;
+}
+
+async function addBenchAndSave(method: 'POST' | 'PUT', screen: React.ReactElement = <RoutineBuilderScreen />) {
   if (method === 'PUT') {
     mockParams = { routineId: 'existing' };
     mockRoutines = [KEPT];
   }
-  const view = await render(<RoutineBuilderScreen />);
+  const view = await render(screen);
   if (method === 'PUT') {
     await waitFor(() => expect(view.getByLabelText('Routine name').props.value).toBe('Push'));
   } else {
@@ -148,8 +156,9 @@ describe.each(['POST', 'PUT'] as const)('%s', (method) => {
   });
 
   it('saves nothing when the member leaves the screen while Save waits', async () => {
-    const view = await addBenchAndSave(method);
-    view.unmount();
+    const view = await addBenchAndSave(method, <Host />);
+    await act(async () => { leave(); });
+    expect(view.queryByLabelText('Save routine')).toBeNull();
     await act(async () => { lookup.resolve({ data: { id: LIB_PRESS } }); });
     expect(mutation()).not.toHaveBeenCalled();
   });
