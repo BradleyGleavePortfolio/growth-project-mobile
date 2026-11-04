@@ -135,7 +135,10 @@ export const useClientStore = create<ClientStore>((set, get) => ({
           return null;
         }),
         // OFFLINE-FOOD-M: the phone's queue, read with the day so the two join on one answer.
-        featureFlags.offlineFoodInDay ? readQueue().catch(() => get().queuedFoods) : Promise.resolve(get().queuedFoods),
+        // A queue that cannot be read never costs the server's day: the last queue the store was told stays.
+        featureFlags.offlineFoodInDay
+          ? Promise.resolve().then(() => readQueue()).catch(() => get().queuedFoods)
+          : Promise.resolve(get().queuedFoods),
       ]);
       if (mine !== session || get().selectedDate !== d) return;
       const data = foodResponse.data;
