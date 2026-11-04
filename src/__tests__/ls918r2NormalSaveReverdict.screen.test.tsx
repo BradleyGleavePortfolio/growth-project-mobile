@@ -122,10 +122,11 @@ describe.each(['POST', 'PUT'] as const)('normal %s', (method) => {
     expect(body.exercises.find((row: { exercise_name: string }) => row.exercise_name === pair[0].name).default_sets).toBe(5);
   });
 
-  it('keeps identity with its row after reordering before Save', async () => {
+  it.each(['before Save', 'during Save'] as const)('keeps identity with its row after reordering %s', async (timing) => {
     const view = await open(method);
+    if (timing === 'during Save') await fireEvent.press(view.getByLabelText('Save routine'));
     await fireEvent.press(view.getByLabelText('Move Seated Cable Row up'));
-    await fireEvent.press(view.getByLabelText('Save routine'));
+    if (timing === 'before Save') await fireEvent.press(view.getByLabelText('Save routine'));
     await reply('barbell-bench-press', PRESS);
     expect(mutation(method)).not.toHaveBeenCalled();
     await reply('seated-cable-row', ROW);
@@ -152,25 +153,28 @@ describe.each(['POST', 'PUT'] as const)('normal %s', (method) => {
     check(method, [pair[1]]);
   });
 
-  it.each(['network', '404', 'no matching id'] as const)(
-    'keeps the successful row id separate from a %s lookup',
-    async (failure) => {
-      const view = await open(method);
-      await fireEvent.press(view.getByLabelText('Save routine'));
-      await reply('barbell-bench-press', PRESS);
-      expect(mutation(method)).not.toHaveBeenCalled();
-      if (failure === 'no matching id') {
-        await reply('seated-cable-row', null);
-      } else {
-        await act(async () => {
-          answers.get('/exercise-catalog/seated-cable-row')!.reject(
-            failure === '404' ? { response: { status: 404 } } : { message: 'Network Error' },
-          );
-        });
-      }
-      check(method, [pair[0], { name: pair[1].name }]);
-    },
-  );
+  describe.each(['before Save', 'during Save'] as const)('lookup failure %s', (timing) => {
+    it.each(['network', '404', 'no matching id'] as const)(
+      'keeps the successful row id separate from a %s lookup',
+      async (failure) => {
+        const view = await open(method);
+        if (timing === 'during Save') await fireEvent.press(view.getByLabelText('Save routine'));
+        await reply('barbell-bench-press', PRESS);
+        expect(mutation(method)).not.toHaveBeenCalled();
+        if (failure === 'no matching id') {
+          await reply('seated-cable-row', null);
+        } else {
+          await act(async () => {
+            answers.get('/exercise-catalog/seated-cable-row')!.reject(
+              failure === '404' ? { response: { status: 404 } } : { message: 'Network Error' },
+            );
+          });
+        }
+        if (timing === 'before Save') await fireEvent.press(view.getByLabelText('Save routine'));
+        check(method, [pair[0], { name: pair[1].name }]);
+      },
+    );
+  });
 
   it('uses one eight-second bound and keeps an answered id when the other lookup hangs', async () => {
     jest.useFakeTimers();
