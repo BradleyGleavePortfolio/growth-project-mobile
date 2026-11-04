@@ -24,9 +24,10 @@
  *      "true", "false"), for build switches such as TGP_ANDROID_HEALTH_CONNECT.
  * Mock and capture modes (a name with MOCK or SCREENSHOT_MODE) are found but
  * not turned on: they swap the real data paths for fakes and are not features.
- * Two more layers are printed here and turned on by switchesOn.setup.js:
- * build metadata (app.config.js extra, read through expo-constants) and the
- * server switches (SERVER_FEATURE_FLAG_KEYS, read from GET /me/feature-flags).
+ * Three more layers are printed here and turned on by switchesOn.setup.js:
+ * build metadata (app.config.js extra, read through expo-constants), the
+ * server switches (SERVER_FEATURE_FLAG_KEYS, read from GET /me/feature-flags)
+ * and the server switch state inside the community payloads.
  */
 'use strict';
 
@@ -100,6 +101,7 @@ function find() {
   const serverKeys = [...(fs.readFileSync('src/api/featureFlagsApi.ts', 'utf8').match(SERVER_KEYS) || ['', ''])[1]
     .replace(/\/\/.*$/gm, '')
     .matchAll(/'([a-z0-9_]+)'/g)].map((m) => m[1]);
+  const payloadStates = (fs.readFileSync('src/api/communityApi.ts', 'utf8').match(/feature_flag_state: FlagState/g) || []).length;
   const saved = { ...process.env };
   for (const n of on) process.env[n] = ON;
   const appExtra = require(path.resolve('app.json')).expo.extra || {};
@@ -126,11 +128,12 @@ function find() {
     ...metadata.map((k) => `     extra.${k} = ${builtExtra[k]}`),
     `Server switches the phone reads from GET /me/feature-flags (${serverKeys.length}), on in this job through switchesOn.setup.js:`,
     ...serverKeys.map((k) => `     ${k}`),
-    `Total: ${on.length + serverKeys.length} switches on (${on.length} env, ${serverKeys.length} server); ${metadata.length} build metadata value(s) follow from the env.`,
+    `Server switch state inside community payloads (${payloadStates} schemas carry feature_flag_state; GET /community/me also a flags map), on in this job through switchesOn.setup.js.`,
+    `Total: ${on.length + serverKeys.length} switches on (${on.length} env, ${serverKeys.length} server) plus the community payload state; ${metadata.length} build metadata value(s) follow from the env.`,
   ];
   console.log(lines.join('\n'));
 
-  if (on.length < 10 || serverKeys.length === 0 || metadata.some((k) => builtExtra[k] !== true)) {
+  if (on.length < 10 || serverKeys.length === 0 || payloadStates === 0 || metadata.some((k) => builtExtra[k] !== true)) {
     console.error(`::error::Discovery is broken: ${on.length} env switches, ${serverKeys.length} server switches, build metadata ${JSON.stringify(builtExtra)}.`);
     process.exit(1);
   }

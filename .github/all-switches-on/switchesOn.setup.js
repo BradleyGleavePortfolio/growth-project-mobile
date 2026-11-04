@@ -3,7 +3,7 @@
  * required)" job (its proof and test steps pass it with --setupFilesAfterEnv
  * after jest.setup.js). The normal suite and the app never load it.
  *
- * Two switch layers do not reach jest through process.env, so the job turns
+ * Three switch layers do not reach jest through process.env, so the job turns
  * them on here:
  *   1. Build metadata. src/config/healthConnect.ts reads
  *      Constants.expoConfig.extra.healthConnectEnabled, which app.config.js
@@ -13,8 +13,13 @@
  *   2. Server switches. useFeatureFlags reads GET /me/feature-flags; the jest
  *      run has no backend, so getFeatureFlags resolves every key in
  *      SERVER_FEATURE_FLAG_KEYS on, in the shape the strict schema accepts.
- * A test file that mocks expo-constants or featureFlagsApi itself keeps its own
- * mock: its jest.mock runs after this file and replaces this one.
+ *   3. Server switch state inside the community payloads. GET /community/me,
+ *      /today and /cohorts carry feature_flag_state (and /me a flags map),
+ *      read by SpaceTree.tsx and CommunityTodayScreen.tsx. Whatever payload a
+ *      test supplies, communityApi answers it with the state enabled and
+ *      every flag on; the rest of the payload is the test's own.
+ * A test file that mocks expo-constants, featureFlagsApi or communityApi itself
+ * keeps its own mock: its jest.mock runs after this file and replaces this one.
  */
 jest.mock('expo-constants', () => {
   const actual = jest.requireActual('expo-constants');
@@ -37,4 +42,25 @@ jest.mock('../../src/api/featureFlagsApi', () => {
       evaluated_at: new Date().toISOString(),
     });
   return { ...actual, featureFlagsApi: { ...actual.featureFlagsApi, getFeatureFlags } };
+});
+
+jest.mock('../../src/api/communityApi', () => {
+  const actual = jest.requireActual('../../src/api/communityApi');
+  const on = (v) =>
+    v && typeof v === 'object' && 'feature_flag_state' in v
+      ? {
+          ...v,
+          feature_flag_state: 'enabled',
+          ...(v.flags && typeof v.flags === 'object' ? { flags: Object.fromEntries(Object.keys(v.flags).map((k) => [k, true])) } : {}),
+        }
+      : v;
+  const wrap = (fn) =>
+    function wrapped(...args) {
+      const out = fn.apply(actual.communityApi, args);
+      return out && typeof out.then === 'function' ? out.then(on) : on(out);
+    };
+  const communityApi = Object.fromEntries(
+    Object.entries(actual.communityApi).map(([k, v]) => [k, typeof v === 'function' ? wrap(v) : v]),
+  );
+  return { ...actual, communityApi };
 });
