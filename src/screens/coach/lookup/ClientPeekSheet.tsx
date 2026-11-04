@@ -38,8 +38,7 @@ type Props = {
 /** Each answer carries the client it was read for, so it is drawn only under that client's name. */
 type Load = { id: string; state: 'loading' | 'error' } | { id: string; state: 'ready'; summary: unknown; checkIns: unknown; week: WorkoutWeek };
 const LOAD_FAILED = 'Could not load this client. Please try again.';
-const RING = 76;
-const RING_NARROW = 64; // 320-wide phones: the name keeps its room beside the ring
+const RING = 60; // C_peek draws the ring about 60 pt across at 390 and 360 (the file's own ring is 104)
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {});
 
 export default function ClientPeekSheet({ client, onClose, onOpen, onNudge, children }: Props) {
@@ -47,7 +46,7 @@ export default function ClientPeekSheet({ client, onClose, onOpen, onNudge, chil
   const s = useMemo(() => makeStyles(theme), [theme]);
   const { colors } = theme;
   const insets = useScreenInsets();
-  const { fontScale, width } = useWindowDimensions();
+  const { fontScale } = useWindowDimensions();
   const payments = useFeatureFlags().flags.coach_payment_actions === true;
   const target = useCurrentMacrosForClient(client?.id);
   const [load, setLoad] = useState<Load | null>(null);
@@ -120,11 +119,11 @@ export default function ClientPeekSheet({ client, onClose, onOpen, onNudge, chil
             <View style={[s.head, { backgroundColor: sc.surface.masthead }]} testID="peek-masthead">
               {ring ? (
                 <SegmentedRing
-                  onDark size={width < 360 ? RING_NARROW : RING} segments={ring.segments} label={doneLine(ring)} testID="peek-week-ring"
+                  onDark size={RING} segments={ring.segments} label={doneLine(ring)} testID="peek-week-ring"
                   drawIndex={lastDone >= 0 ? lastDone : undefined} event={`${client.id}:${ring.week}`}
                 >
-                  <Text maxFontSizeMultiplier={1.15} numberOfLines={1} adjustsFontSizeToFit style={[s.ringCount, light]}>{`${ring.done} of ${ring.total}`}</Text>
-                  <Text maxFontSizeMultiplier={1.15} style={[typography.eyebrow, s.ringDone, muted]}>done</Text>
+                  <Text maxFontSizeMultiplier={1} numberOfLines={1} adjustsFontSizeToFit style={[s.ringCount, light]}>{`${ring.done} of ${ring.total}`}</Text>
+                  <Text maxFontSizeMultiplier={1} style={[typography.eyebrow, s.ringDone, muted]}>done</Text>
                 </SegmentedRing>
               ) : (
                 <View style={s.avatar}><Text style={s.avatarText}>{initialsOf(client)}</Text></View>
@@ -197,8 +196,10 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     name: { ...typography.h2 },
     small: { ...typography.bodySmall, color: colors.textPrimary },
     close: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-    ringCount: { ...typography.h3, fontSize: 18, lineHeight: 21 },
-    ringDone: { fontSize: 10, lineHeight: 12 },
+    // The ring is a fixed 60 pt drawing, so its centre does not grow with text size; the Workouts row and the ring's
+    // spoken label carry the same words at the coach's size.
+    ringCount: { ...typography.h3, fontSize: 16, lineHeight: 19 },
+    ringDone: { fontSize: 11, lineHeight: 13 },
     status: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 10, marginBottom: 4 },
     statusText: { flexShrink: 1 },
     dot: { width: 7, height: 7, borderRadius: radius.chip, backgroundColor: colors.primary },
