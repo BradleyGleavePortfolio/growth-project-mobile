@@ -80,7 +80,7 @@ import { entitlementEvents } from '../entitlements/entitlementEvents';
 import { withTutorialSignal } from '../tutorial/tutorialEvents';
 import { logger } from '../utils/logger';
 import { generateIdempotencyKey } from '../utils/idempotency';
-import { saveKeys, waterKeys, waterSave } from './saveKeys';
+import { saveKeys } from './saveKeys';
 import { getTodayString } from '../utils/date';
 import { REQUEST_ID_HEADER, extractRequestId, newRequestId } from '../utils/correlation';
 import {
@@ -860,8 +860,9 @@ export const fastingApi = {
     api.delete(`/fasting/${encodeURIComponent(id)}`),
 };
 
-// WATER-WEIGHT-KEYS-M: a water or weight save sends its one-time key, and a
-// resend of the same save sends the same key (./saveKeys.ts; backend #1206).
+// WATER-WEIGHT-KEYS-M: a weight save sends its one-time key, and a resend of
+// the same save sends the same key (./saveKeys.ts; backend #1206). Water's key
+// is the client store's (waterApi.log below).
 const weightKeys = saveKeys();
 
 export const weightApi = {
@@ -1096,9 +1097,12 @@ export interface WaterEntry {
 }
 
 export const waterApi = {
-  // `key` (FOOD-1-M R3): the add's client key, in the Idempotency-Key header only (the body takes no key).
+  // `key` (FOOD-1-M R3; FR-921R2): the glass's one key, made and kept by the client store (withSaveKey). It goes in
+  // the body as client_uuid, the field the server reads (backend #1206), and the same key in the Idempotency-Key header.
   log: (data: { amount_ml: number; date?: string }, key?: string) =>
-    key ? api.post<WaterEntry>('/nutrition/water', data, { headers: { 'Idempotency-Key': key } }) : api.post<WaterEntry>('/nutrition/water', data),
+    key
+      ? api.post<WaterEntry>('/nutrition/water', { ...data, client_uuid: key }, { headers: { 'Idempotency-Key': key } })
+      : api.post<WaterEntry>('/nutrition/water', data),
   getDaily: (date: string) =>
     api.get<{ total_ml: number; logs?: WaterEntry[] }>(`/nutrition/water?date=${date}`),
   getWeekly: (startDate: string) =>
@@ -1106,16 +1110,6 @@ export const waterApi = {
   deleteEntry: (id: string) =>
     api.delete(`/nutrition/water/${encodeURIComponent(id)}`),
 };
-
-// WATER-WEIGHT-KEYS-M: each glass sends its key in the body as client_uuid, the same key on every resend of that
-// glass (./saveKeys.ts). Added beside waterApi, not inside it, so the food lane's change to log above merges as is.
-// A glass's waiting key ends once the client store shows a water read of that day (waterDayShown, LS-921 B1).
-const sendWater = waterApi.log;
-waterApi.log = (data, ...rest) =>
-  waterKeys.send(waterSave(data.date, data.amount_ml), (client_uuid) => {
-    const body = { ...data, client_uuid };
-    return sendWater(body, ...rest);
-  });
 
 export const lessonsApi = {
   getAll: () => api.get('/lessons'),

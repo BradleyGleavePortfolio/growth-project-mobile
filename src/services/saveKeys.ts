@@ -1,5 +1,7 @@
 /**
- * WATER-WEIGHT-KEYS-M: the one-time key (client_uuid) of a water or weight save.
+ * WATER-WEIGHT-KEYS-M: the one-time key (client_uuid) of a weight save.
+ * (A glass of water's key is the client store's: withSaveKey in
+ * src/utils/log/saveKey.ts, FR-921R2.)
  *
  * The server stores a keyed save once and answers a resend of the same key
  * with the first row (backend #1206, CONTRACT 6588001442). The key is made
@@ -10,7 +12,7 @@
  * another member's key: a new key, never the same one again).
  *
  * Keys live in memory only. An app restart, a sign-out or sign-in (a new
- * session generation) or forget() ends every waiting key.
+ * session generation) ends every waiting key.
  */
 import { generateIdempotencyKey } from '../utils/idempotency';
 import { sessionGeneration } from './sessionFence';
@@ -37,26 +39,5 @@ export function saveKeys() {
         throw err;
       }
     },
-    /** Ends the waiting keys of the saves that `match` picks. */
-    forget(match: (save: string) => boolean): void {
-      waiting = waiting.filter((w) => !match(w.save));
-    },
   };
-}
-
-/** The waiting keys of water saves (waterApi.log). */
-export const waterKeys = saveKeys();
-
-/** A water save, as waterKeys holds it: the save's own date and amount. */
-export const waterSave = (date: string | undefined, amountMl: number): string => `${date ?? ''}|${amountMl}`;
-
-/**
- * LS-921 B1: the client store calls this once a water read of `date` is on
- * screen (applied to the day the client sees). Only then does the client see
- * every glass the server holds for that day, so the next glass is a new save
- * with a new key. A read that is dropped (the food read failed, or another
- * day or account opened meanwhile) ends no key.
- */
-export function waterDayShown(date: string): void {
-  waterKeys.forget((save) => save.startsWith(`${date}|`));
 }

@@ -353,7 +353,7 @@ const PLACED: Record<string, { why: string; lines: string[] }> = {
   'src/api/workoutBuilderApi.ts': { why: 'types and request shapes only', lines: [] },
   'src/screens/coach/client-detail/types.ts': { why: 'types only', lines: [] },
   'src/utils/workout/workoutDay.ts': { why: 'the rule itself', lines: ['row?.scheduled_for'] },
-  'src/services/api.ts': { why: 'request shapes; workout and assignment dates pass through unread; the water and weight save keys (m#921) name the save by its own calendar date, not a workout day', lines: ['JSON.stringify([data.weight_lbs, data.date ?? null', 'waterSave(data.date, data.amount_ml)'] },
+  'src/services/api.ts': { why: 'request shapes; workout and assignment dates pass through unread; the weight save key (m#921) names the save by its own calendar date, not a workout day', lines: ['JSON.stringify([data.weight_lbs, data.date ?? null'] },
   'src/api/coachAiExecutionApi.ts': { why: 'AI action rows ordered by when they were made, not a workout day', lines: ['created_at: now', 'a.created_at < b.created_at'] },
   'src/db/workoutDb.ts': { why: 'on-device exercise volume; getDailyVolumeBreakdown has no caller (checked below)', lines: ['date: r.day'] },
   'src/screens/client/WorkoutAssignmentDetailScreen.tsx': { why: 'completed_at read only as done or not done', lines: [] },

@@ -1,11 +1,10 @@
 import { create } from 'zustand';
 import { logApi, waterApi, type WaterEntry } from '../services/api';
-import { waterDayShown } from '../services/saveKeys';
 import { getTodayString } from '../utils/date';
 import { MealType, FoodLog } from '../types';
 import { logger } from '../utils/logger';
 import { mapFoodItem, type RawFoodItem } from '../utils/log/mapFoodItem';
-import { forgetSaveKeys, withSaveKey } from '../utils/log/saveKey';
+import { forgetSaveKeys, waterDayShown, withSaveKey } from '../utils/log/saveKey';
 import { dayForNewLog } from '../utils/logDay';
 
 interface DailyTotals {
