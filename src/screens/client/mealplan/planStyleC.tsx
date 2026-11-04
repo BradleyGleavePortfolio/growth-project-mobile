@@ -1,16 +1,11 @@
 /**
- * C2 Style C parts for the meal plan, macros and fasting screens
- * (STYLE-MEALPLAN-M; planning/MOCKUP3/C2/index.md section 3 and 5).
- *
- * The forest masthead carries the screen's own eyebrow and serif title on
- * surface.masthead; the bone paper page (top radius 24) overlaps it; the
- * timeline row draws the plan's gutter with a hollow dot per meal time.
- * Masthead colours are the same in light and dark (theme README, Style C v2),
- * so they come from lightTokens and never from a second palette. These parts
- * hold no words of their own: every string comes from the screen, as on main.
- * The masthead ground is the frame's forest (surface.forestBand, #2C4A36) and
- * its foot is the frame's 1 pt gold rule (gold.500, a non-text accent; C2
- * index colour note), the same two values the Food day masthead uses.
+ * C2 Style C parts for the meal plan, macros and fasting screens (STYLE-MEALPLAN-M;
+ * planning/MOCKUP3/C2/index.md sections 3 and 5). The forest masthead (the frame's
+ * #2C4A36, surface.forestBand) carries the screen's eyebrow and serif title over a
+ * 1 pt gold foot rule (gold.500, non-text); the cream paper page (top radius 24)
+ * overlaps it; the timeline row draws the gutter with a hollow dot per meal.
+ * Masthead colours are the same in both schemes, so they come from lightTokens.
+ * These parts hold no words: every string comes from the screen, as on main.
  */
 import React from 'react';
 import { StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
@@ -19,8 +14,6 @@ import { gold, layout, lightTokens, radius, spacing, typography } from '../../..
 /** Masthead roles (identical in both schemes). */
 export const mast = {
   ground: lightTokens.surface.forestBand,
-  band: lightTokens.surface.forestBand,
-  line: lightTokens.surface.forestBandLine,
   ink: lightTokens.textOnAccent,
   muted: lightTokens.textOnMastheadMuted,
   rule: gold[500],
@@ -76,7 +69,7 @@ export function MastLine({ children, muted, testID, style }: { children: React.R
   return <Text style={[s.line, muted && s.lineMuted, style]} testID={testID}>{children}</Text>;
 }
 
-/** The bone paper page: top radius 24, overlapping the masthead's lower edge. */
+/** The paper page: top radius 24, overlapping the masthead's lower edge. */
 export function PaperPage({ children, bg, testID }: { children: React.ReactNode; bg: string; testID?: string }) {
   return <View style={[s.paper, { backgroundColor: bg }]} testID={testID}>{children}</View>;
 }
@@ -109,7 +102,7 @@ const DOT = 11;
 const GUTTER = 24;
 
 export const planStyleC = StyleSheet.create({
-  /** Cream inner card on the bone page (C2 meal card). */
+  /** Inner card on the cream paper (state and stats cards). */
   card: { borderRadius: radius.card, borderWidth: StyleSheet.hairlineWidth, padding: spacing.lg },
   /** Serif meal / row name (C2: 21 pt serif; the scale's h3). */
   name: { ...typography.h3 },
@@ -121,11 +114,6 @@ export const planStyleC = StyleSheet.create({
     justifyContent: 'center', paddingHorizontal: spacing.xl,
   },
   primaryLabel: { ...typography.bodyMd },
-  /** Quiet outlined action, radius 12, 44 pt floor. */
-  quiet: {
-    minHeight: layout.touchMin, borderRadius: radius.button, borderWidth: 1, alignItems: 'center',
-    justifyContent: 'center', paddingHorizontal: spacing.lg, alignSelf: 'flex-start',
-  },
 });
 
 const s = StyleSheet.create({
