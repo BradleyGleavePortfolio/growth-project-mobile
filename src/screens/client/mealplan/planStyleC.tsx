@@ -129,18 +129,20 @@ interface TimelineProps {
   last?: boolean;
   /** A filled dot (C2: a meal logged, a fast completed); hollow otherwise. */
   filled?: boolean;
+  /** Dot drop from the row top, to sit level with a serif first line (default: level with an eyebrow). */
+  dotTop?: number;
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
   testID?: string;
 }
 
 /** One stop on the day's gutter: a hollow dot level with the eyebrow, a line on to the next stop. */
-export function TimelineRow({ line, dot, bg, last, filled, children, style, testID }: TimelineProps) {
+export function TimelineRow({ line, dot, bg, last, filled, dotTop, children, style, testID }: TimelineProps) {
   return (
     <View style={[s.tlRow, style]} testID={testID}>
       <View style={s.gutter} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-        {!last ? <View style={[s.tlLine, { backgroundColor: line }]} /> : null}
-        <View style={[s.dot, { borderColor: dot, backgroundColor: filled ? dot : bg }]} />
+        {!last ? <View style={[s.tlLine, { backgroundColor: line }, dotTop != null && { top: dotTop + DOT + 3 }]} /> : null}
+        <View style={[s.dot, { borderColor: dot, backgroundColor: filled ? dot : bg }, dotTop != null && { marginTop: dotTop }]} />
       </View>
       <View style={s.tlBody}>{children}</View>
     </View>

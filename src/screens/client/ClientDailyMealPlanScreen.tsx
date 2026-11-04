@@ -213,21 +213,24 @@ function SlotGroup({
       </Text>
       {slots.map((s) => (
         <View key={s.id} style={styles.slotRow}>
+          {/* The meal's words beside its cream tile (C2 C_day); the words wrap, the tile keeps its size. */}
           <View style={styles.mealHead}>
-            <Text style={[planStyleC.name, styles.mealName, { color: sc.textPrimary }]}>
-              {s.meal_template.name}
-            </Text>
+            <View style={styles.mealWords}>
+              <Text style={[planStyleC.name, { color: sc.textPrimary }]}>
+                {s.meal_template.name}
+              </Text>
+              <Text style={[planStyleC.meta, styles.tabular, { color: sc.textMuted }]}>
+                {s.meal_template.calories_kcal} kcal • P {s.meal_template.protein_g}g • C{' '}
+                {s.meal_template.carbs_g}g • F {s.meal_template.fats_g}g
+              </Text>
+              {s.meal_template.description ? (
+                <Text style={[typography.bodySmall, { color: sc.textMuted }]}>
+                  {s.meal_template.description}
+                </Text>
+              ) : null}
+            </View>
             <MealArt slot={s.slot_label} testID={`daily-meal-plan-art-${s.id}`} />
           </View>
-          <Text style={[planStyleC.meta, styles.tabular, { color: sc.textMuted }]}>
-            {s.meal_template.calories_kcal} kcal • P {s.meal_template.protein_g}g • C{' '}
-            {s.meal_template.carbs_g}g • F {s.meal_template.fats_g}g
-          </Text>
-          {s.meal_template.description ? (
-            <Text style={[typography.bodySmall, { color: sc.textMuted }]}>
-              {s.meal_template.description}
-            </Text>
-          ) : null}
           <LogPlannedMealButton meal={plannedMealFromSlot(s)} slot={s.slot_label} planSlotId={s.id} />
         </View>
       ))}
@@ -320,9 +323,8 @@ function makeStyles(sc: SemanticTokens) {
     timeline: { marginTop: spacing.sm },
     stop: { paddingBottom: spacing.xl },
     slotRow: { gap: spacing.xs, marginTop: spacing.xs },
-    // The name beside its cream tile (C2 C_day); the name wraps, the tile keeps its size.
     mealHead: { flexDirection: 'row', alignItems: 'flex-start' },
-    // Meal names at the frame's 21 pt Cormorant (planStyleC.name; LS-927 B2).
-    mealName: { flex: 1, minWidth: 0 },
+    // Meal names at the frame's 21 pt Cormorant (planStyleC.name; LS-927 B2), then the meta and the description.
+    mealWords: { flex: 1, minWidth: 0, gap: spacing.xs },
   });
 }

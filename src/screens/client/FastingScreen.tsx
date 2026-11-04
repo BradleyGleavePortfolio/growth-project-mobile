@@ -21,7 +21,7 @@ import { scheduleFastEndAlert, cancelFastEndAlert } from '../../utils/fastingAle
 import { bucketDateLocal } from '../../utils/date';
 import { useTheme } from '../../theme/ThemeProvider';
 import { layout, radius, spacing, typography, type SemanticTokens } from '../../theme/tokens';
-import { MastLine, mast, PaperPage, PlanMasthead, planStyleC } from './mealplan/planStyleC';
+import { GoldLine, MastLine, mast, PaperPage, PlanMasthead, planStyleC, TimelineRow } from './mealplan/planStyleC';
 
 type Protocol = { label: string; hours: number };
 
@@ -313,7 +313,8 @@ export default function FastingScreen() {
       <View style={styles.container}>
         <PlanMasthead title="Fasting" />
         <PaperPage bg={colors.bgSurface}>
-          <View style={styles.skeleton} accessible accessibilityRole="progressbar" testID="fasting-loading">
+          {/* Loading bones are shapes only, so readers skip them (LO-927 C1: no unnamed progress bar). */}
+          <View style={styles.skeleton} testID="fasting-loading" importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
             <View style={[styles.bone, { width: '70%' }]} />
             <View style={[styles.bone, styles.boneTall]} />
             <View style={[styles.bone, { width: '45%' }]} />
@@ -388,6 +389,8 @@ export default function FastingScreen() {
             <Text style={styles.timerValue}>{selectedProtocol}h</Text>
           )}
         </View>
+        {/* C2's gold progress line: the share of the target the fast has run (the card's percent in words). */}
+        {activeFast ? <GoldLine share={progress} testID="fasting-gold-line" /> : null}
       </PlanMasthead>
 
       <PaperPage bg={colors.bgSurface}>
@@ -497,25 +500,29 @@ export default function FastingScreen() {
       {history.length > 0 ? (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Recent fasts</Text>
-          {history.slice(0, 10).map((session) => {
+          {history.slice(0, 10).map((session, i, shownFasts) => {
             const startMs = new Date(session.startTime).getTime();
             const endMs = session.endTime ? new Date(session.endTime).getTime() : 0;
             const hours = endMs ? (endMs - startMs) / (1000 * 60 * 60) : 0;
+            // C2's timeline: a filled dot for a completed fast, a hollow one for a fast ended early.
             return (
-              <View key={session.id} style={styles.historyRow}>
-                <View style={styles.historyLeft}>
-                  <Text style={styles.historyDate}>
-                    {new Date(session.startTime).toLocaleDateString()}
-                  </Text>
+              <TimelineRow key={session.id} line={colors.border} dot={session.completed ? colors.accent : colors.textMuted}
+                bg={colors.bgSurface} filled={session.completed} last={i === shownFasts.length - 1} dotTop={8}
+                testID={`fasting-history-${session.id}`}>
+                <View style={styles.historyStop}>
+                  {/* The date and its hours on one line; the meta and the remove control take the full width under it. */}
+                  <View style={styles.historyRow}>
+                    <Text style={[styles.historyDate, styles.historyLeft]}>
+                      {new Date(session.startTime).toLocaleDateString()}
+                    </Text>
+                    <Text style={styles.historyDuration}>{hours.toFixed(1)}h</Text>
+                  </View>
                   <Text style={styles.historyTarget}>
                     {`${session.targetHours}h target · ${session.completed ? 'Completed' : 'Ended early'}`}
                   </Text>
+                  <View style={styles.historyRight}>{removeFastControl(session)}</View>
                 </View>
-                <View style={styles.historyRight}>
-                  <Text style={styles.historyDuration}>{hours.toFixed(1)}h</Text>
-                  {removeFastControl(session)}
-                </View>
-              </View>
+              </TimelineRow>
             );
           })}
         </View>
@@ -591,8 +598,12 @@ const makeStyles = (colors: SemanticTokens) =>
     color: mast.muted,
     marginBottom: 8,
   },
+  // The hero number at 60 pt in the display serif (C2 / K5 Style C scale), as on Macro targets.
   timerValue: {
     ...typography.display,
+    fontSize: 60,
+    lineHeight: 72,
+    letterSpacing: 0,
     fontVariant: ['tabular-nums'],
     color: mast.ink,
   },
@@ -673,14 +684,15 @@ const makeStyles = (colors: SemanticTokens) =>
     color: colors.textMuted,
     marginBottom: 12,
   },
+  // A stop on the gutter; the dot sits level with the date.
+  historyStop: {
+    paddingBottom: spacing.md,
+  },
   historyRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    minHeight: 44,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    alignItems: 'baseline',
+    gap: spacing.md,
   },
   historyLeft: {
     flex: 1,
@@ -688,7 +700,7 @@ const makeStyles = (colors: SemanticTokens) =>
     gap: 2,
   },
   historyDate: {
-    ...typography.h3,
+    ...planStyleC.name,
     color: colors.textPrimary,
   },
   historyTarget: {

@@ -146,3 +146,51 @@ it('fasting: Start fast, the protocols and the history keep a 44 pt floor and ar
   expect(smallButtons()).toEqual([]);
   expect(textProblems()).toEqual([]);
 });
+
+// FIX-927 (fix round 1) rows: the K5 target tiles, the meal tiles and the loading bones.
+it('macros: the masthead tiles show each target the card below measures against', async () => {
+  await render(<ClientMacrosScreen />);
+  for (const [k, v, label] of [['protein', '160g', 'Protein'], ['carbs', '220g', 'Carbs'], ['fat', '70g', 'Fats']]) {
+    const tile = screen.getByTestId(`macros-tile-${k}`);
+    expect(tile.props.accessible).toBe(true);
+    expect(screen.getAllByText(v).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(label).length).toBeGreaterThan(0);
+  }
+  expect(screen.queryByTestId('macros-tile-fiber')).toBeNull();
+  expect(screen.getByTestId('macros-note')).toBeTruthy();
+  expect(textProblems()).toEqual([]);
+});
+
+it('meal plan: each meal gets one cream tile, hidden from readers, and the note shows once', async () => {
+  mockDaily.mockReturnValue({ data: { date: '2026-10-13', assignments: [{
+    id: 'a1', daily_meal_plan_id: 'dp', client_id: 'u1', assigned_by_coach_id: 'coach', starts_on: '2026-10-01',
+    ends_on: null, created_at: '2026-10-01', daily_meal_plan: { id: 'dp', coach_id: 'coach', name: "Sam's plan for today",
+      notes: 'Protein at every meal.', created_at: '2026-10-01', archived_at: null,
+      slots: [slot('a', 'breakfast', 420), slot('b', 'lunch', 680)] } }] },
+    isLoading: false, isError: false, isRefetching: false, refetch: jest.fn() });
+  await render(<ClientDailyMealPlanScreen />);
+  for (const id of ['a', 'b']) {
+    const art = screen.getByTestId(`daily-meal-plan-art-${id}`, { includeHiddenElements: true });
+    expect(art.props.accessibilityElementsHidden).toBe(true);
+    expect(art.props.importantForAccessibility).toBe('no-hide-descendants');
+  }
+  expect(screen.getAllByText('Protein at every meal.')).toHaveLength(1);
+  expect(screen.getByTestId('daily-meal-plan-note')).toBeTruthy();
+});
+
+it('loading: the plan and fasting bones are shapes only, never an unnamed progress bar (LO-927 C1)', async () => {
+  const unnamed = () => hosts().filter((n) => (n.props.accessible === true || n.props.accessibilityRole === 'progressbar')
+    && !n.props.accessibilityLabel && !(n.children ?? []).some((c) => typeof c === 'string'
+      || (typeof c === 'object' && c.type === 'Text'))).map((n) => String(n.props.testID ?? n.type));
+  mockDaily.mockReturnValue({ data: undefined, isLoading: true, isError: false, isRefetching: false, refetch: jest.fn() });
+  await render(<ClientDailyMealPlanScreen />);
+  expect(unnamed()).toEqual([]);
+  screen.unmount();
+  (fastingApi.getHistory as jest.Mock).mockReturnValue(new Promise(() => undefined));
+  await render(<FastingScreen />);
+  const bones = screen.getByTestId('fasting-loading', { includeHiddenElements: true });
+  expect(bones.props.accessibilityElementsHidden).toBe(true);
+  expect(bones.props.accessible).toBeUndefined();
+  expect(bones.props.accessibilityRole).toBeUndefined();
+  expect(unnamed()).toEqual([]);
+});
