@@ -95,6 +95,7 @@ import { AiMomentumLine, AiWinToast } from '../../components/coach/ai-builder/Ai
 import { fireAiHaptic, useAiBuilder } from '../../components/coach/ai-builder/useAiBuilder';
 import type { AiBuilderRef } from '../../api/aiBuilderApi';
 import { appliedToast, NEW_WORKOUT_NAME, NEW_WORKOUT_PROMPT, NEW_WORKOUT_SAVE_FAILED, NEW_WORKOUT_SAVING } from '../../components/coach/ai-builder/aiBuilderCopy';
+import { unitField, unitOf, type ExerciseUnit } from '../../utils/workout/exerciseUnit';
 
 /** S-MWB-3: the undo / redo barrier phases (see the screen body). */
 type HistoryOutcome = 'applied' | 'elsewhere';
@@ -170,6 +171,11 @@ export interface DraftExerciseRow {
   display_name: string;
   sets: number;
   reps_or_duration_seconds: number;
+  /**
+   * TIMED-SETS-M: "reps" or "seconds" when the server sent one or the coach
+   * chose one; undefined reads Reps and is sent as no unit.
+   */
+  unit?: ExerciseUnit;
   rest_seconds: number | null;
   weight_lbs: number | null;
   superset_group_id: string | null;
@@ -215,6 +221,10 @@ export function buildSetExercisesPayload(
       order: idx + 1,
       sets: r.sets,
       reps_or_duration_seconds: r.reps_or_duration_seconds,
+      // TIMED-SETS-M: the PUT is a full replace, so a row the server counts in
+      // seconds must say so or it would come back as reps. A row with no known
+      // unit sends none (the byte-identical legacy row).
+      ...unitField(r.unit),
       rest_seconds: r.rest_seconds ?? undefined,
       notes: r.notes ?? undefined,
     }));
@@ -224,6 +234,7 @@ export function buildSetExercisesPayload(
     order: idx + 1,
     sets: r.sets,
     reps_or_duration_seconds: r.reps_or_duration_seconds,
+    ...unitField(r.unit),
     weight_lbs: r.weight_lbs ?? undefined,
     rest_seconds: r.rest_seconds ?? undefined,
     superset_group_id: r.superset_group_id ?? undefined,
@@ -342,6 +353,7 @@ export default function CoachWorkoutBuilderScreen() {
       display_name: e.exercise_external_id,
       sets: e.sets,
       reps_or_duration_seconds: e.reps_or_duration_seconds,
+      ...unitField(e.unit),
       rest_seconds: e.rest_seconds,
       weight_lbs: e.weight_lbs,
       superset_group_id: e.superset_group_id,
@@ -491,6 +503,7 @@ export default function CoachWorkoutBuilderScreen() {
         exerciseExternalId: r.exercise_external_id,
         sets: r.sets,
         repsOrDurationSeconds: r.reps_or_duration_seconds,
+        ...unitField(r.unit),
         restSeconds: r.rest_seconds,
         weightLbs: r.weight_lbs,
         supersetGroupId: r.superset_group_id,
@@ -844,6 +857,7 @@ export default function CoachWorkoutBuilderScreen() {
         exerciseExternalId: e.exercise_external_id,
         sets: e.sets,
         repsOrDurationSeconds: e.reps_or_duration_seconds,
+        ...unitField(e.unit),
         restSeconds: e.rest_seconds,
         weightLbs: e.weight_lbs,
         supersetGroupId: e.superset_group_id,
@@ -983,6 +997,7 @@ export default function CoachWorkoutBuilderScreen() {
           display_name: e.exercise_external_id,
           sets: e.sets,
           reps_or_duration_seconds: e.reps_or_duration_seconds,
+          ...unitField(e.unit),
           rest_seconds: e.rest_seconds,
           weight_lbs: e.weight_lbs,
           superset_group_id: e.superset_group_id,
@@ -1359,6 +1374,7 @@ export default function CoachWorkoutBuilderScreen() {
           display_name: e.exercise_external_id,
           sets: e.sets,
           reps_or_duration_seconds: e.reps_or_duration_seconds,
+          ...unitField(e.unit),
           rest_seconds: e.rest_seconds,
           weight_lbs: e.weight_lbs,
           superset_group_id: e.superset_group_id,
@@ -1548,7 +1564,7 @@ export default function CoachWorkoutBuilderScreen() {
       setName(meta.name);
       setType(meta.type);
       setRows(plan.exercises.map((e) => ({ clientId: clientIdForServerRow(e.id), row_id: e.id, exercise_external_id: e.exercise_external_id, display_name: e.exercise_external_id,
-        sets: e.sets, reps_or_duration_seconds: e.reps_or_duration_seconds, rest_seconds: e.rest_seconds, weight_lbs: e.weight_lbs, superset_group_id: e.superset_group_id, notes: e.notes })));
+        sets: e.sets, reps_or_duration_seconds: e.reps_or_duration_seconds, ...unitField(e.unit), rest_seconds: e.rest_seconds, weight_lbs: e.weight_lbs, superset_group_id: e.superset_group_id, notes: e.notes })));
     },
     [autosave, refetchPlan, buildServerWorkingCopy, runReplayRefetch, setUndoStack, setRedoStack, clientIdForServerRow],
   );
@@ -1861,6 +1877,28 @@ export default function CoachWorkoutBuilderScreen() {
                   </HapticPressable>
                 </View>
               </View>
+              {/* TIMED-SETS-M: K3 Style C row sheet, "Count by" Reps | Seconds (K3-C-19, K3-S-40, K3-S-41). */}
+              <View style={styles.countByRow}>
+                <Text style={[typography.caption, styles.countByLabel, { color: sc.textMuted }]}>Count by</Text>
+                {(['reps', 'seconds'] as const).map((u) => {
+                  const on = unitOf(row) === u;
+                  return (
+                    <HapticPressable
+                      key={u}
+                      testID={`row-${idx}-count-${u}`}
+                      accessibilityRole="button"
+                      accessibilityState={{ disabled: editorLocked, selected: on }}
+                      disabled={editorLocked}
+                      onPress={() => updateRow(idx, { unit: u })}
+                      style={[styles.typeChip, { borderColor: on ? sc.accentText : sc.border }, on && styles.typeSelected]}
+                    >
+                      <Text style={[typography.body, { color: on ? sc.accentText : sc.textPrimary }]}>
+                        {u === 'reps' ? 'Reps' : 'Seconds'}
+                      </Text>
+                    </HapticPressable>
+                  );
+                })}
+              </View>
               <View style={styles.rowInputs}>
                 <NumberField
                   label="Sets"
@@ -1874,7 +1912,7 @@ export default function CoachWorkoutBuilderScreen() {
                   sc={sc}
                 />
                 <NumberField
-                  label="Reps / sec"
+                  label={unitOf(row) === 'seconds' ? 'Seconds' : 'Reps'}
                   editable={!editorLocked}
                   value={row.reps_or_duration_seconds}
                   onChange={(v) => updateRow(idx, { reps_or_duration_seconds: v })}
@@ -2063,6 +2101,8 @@ function makeStyles(sc: SemanticTokens) {
       borderRadius: radius.button, alignItems: 'center', justifyContent: 'center',
     },
     rowInputs: { flexDirection: 'row', gap: spacing.sm },
+    countByRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
+    countByLabel: { fontSize: 13 },
     searchResults: { marginTop: spacing.sm },
     searchHit: {
       flexDirection: 'row',

@@ -371,3 +371,19 @@ describe('the builder row: Count by Reps | Seconds', () => {
     expect(view.getAllByLabelText('Reps')).toHaveLength(2);
   });
 });
+
+describe('Adjust for client copies the unit', () => {
+  it('a timed row stays timed in the client copy; a row without a unit sends none', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { workoutBuilderApi } = require('../api/workoutBuilderApi') as typeof import('../api/workoutBuilderApi');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { copyWorkoutForClient } = require('../components/coach/ai-entry/AdjustForClient') as typeof import('../components/coach/ai-entry/AdjustForClient');
+    jest.spyOn(workoutBuilderApi, 'getPlan').mockResolvedValue({ data: EXISTING_PLAN } as never);
+    jest.spyOn(workoutBuilderApi, 'createPlan').mockResolvedValue({ data: { id: 'copy-1' } } as never);
+    const put = jest.spyOn(workoutBuilderApi, 'setExercises').mockResolvedValue({ data: {} } as never);
+    await copyWorkoutForClient('plan-1', 'Jordan');
+    const rows = put.mock.calls[0][1] as Array<Record<string, unknown>>;
+    expect(rows.map((r) => [r.exercise_external_id, r.unit])).toEqual([['bench', undefined], ['plank', 'seconds']]);
+    expect('unit' in rows[0]).toBe(false);
+  });
+});

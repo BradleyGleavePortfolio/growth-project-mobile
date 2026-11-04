@@ -13,6 +13,7 @@
  * shape so backend-side Prisma row leakage does not pin the UI.
  */
 
+import type { ExerciseUnit } from '../utils/workout/exerciseUnit';
 import api from '../services/api';
 
 // ─── Enums + DTOs (mirror backend) ───────────────────────────────────────────
@@ -37,8 +38,10 @@ export interface UpsertExerciseRowInput {
   /** 1-indexed order within the plan. Must be unique per plan. */
   order: number;
   sets: number;
-  /** Rep count OR duration in seconds, by convention. */
+  /** Rep count OR duration in seconds, as `unit` says. */
   reps_or_duration_seconds: number;
+  /** TIMED-SETS-M: sent only when known; the server keeps a row's unit otherwise. */
+  unit?: ExerciseUnit;
   weight_lbs?: number;
   rest_seconds?: number;
   /** Exercises sharing a group id are performed back-to-back. */
@@ -70,6 +73,8 @@ export interface WorkoutPlanExercise {
   order: number;
   sets: number;
   reps_or_duration_seconds: number;
+  /** TIMED-SETS-BE (b#1211): "reps" or "seconds"; absent on an older read means reps. */
+  unit?: ExerciseUnit;
   weight_lbs: number | null;
   rest_seconds: number | null;
   superset_group_id: string | null;

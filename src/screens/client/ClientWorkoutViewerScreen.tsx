@@ -30,6 +30,7 @@ import { useTheme } from '../../theme/ThemeProvider';
 import type { SemanticTokens } from '../../theme/tokens';
 import { formatPlanType } from '../../utils/workout/formatPlanType';
 import { assignmentPrescription } from '../../utils/workout/assignmentPrescription';
+import { isTimedRow } from '../../utils/workout/exerciseUnit';
 import { assignmentDay, dayStart } from '../../utils/workout/workoutDay';
 
 export default function ClientWorkoutViewerScreen() {
@@ -190,7 +191,7 @@ function AssignmentCard({
             {names[exercise.exercise_external_id] || `Exercise ${index + 1}`}
           </Text>
           <Text style={[typography.bodySmall, { color: sc.textMuted, fontVariant: ['tabular-nums'] }]}>
-            {exercise.sets} sets × {exercise.reps_or_duration_seconds} reps / sec
+            {exercise.sets} sets × {exercise.reps_or_duration_seconds} {isTimedRow(exercise) ? 'sec' : 'reps / sec'}
             {exercise.weight_lbs !== null ? ` · ${exercise.weight_lbs} lb prescribed` : ''}
           </Text>
         </View>
