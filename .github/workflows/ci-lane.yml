@@ -1,0 +1,57 @@
+name: All switches on
+
+# ALL-ON-CI-M (owner 10-26, "EVERY AND ALL FEATURES WILL BE AND MSUT BE FLIPPED
+# ON FOR V1 LAUNCH"): the phone suite and tsc also run with every phone switch
+# on, so a clash between two features that are off in the production build
+# fails in the PR that causes it, not at the ALL-ON gate. It changes no switch
+# default and no build. Not a required check; it may be red by design.
+
+on:
+  push:
+    branches: ["ci/171-LS-925-RV-ALLON-*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: all-switches-on-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  all-switches-on:
+    name: All switches on (not required)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.13
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Find every phone switch and turn it on
+        id: find
+        # Prints the list, the count and how it compares with V1_PRS_LEFT's 70.
+        run: node .github/all-switches-on/switches.js find
+
+      # switchesOn.setup.js turns on the two layers env cannot reach (build
+      # metadata and the server switches); the normal suite never loads it.
+      - name: Prove the switches read on
+        run: npx jest --ci --testMatch '<rootDir>/.github/all-switches-on/*.check.js' --setupFilesAfterEnv '<rootDir>/jest.setup.js' '<rootDir>/.github/all-switches-on/switchesOn.setup.js'
+
+      - name: Typecheck
+        if: ${{ !cancelled() && steps.find.outcome == 'success' }}
+        run: npx tsc --noEmit
+
+      - name: Test (full suite, every switch on)
+        if: ${{ !cancelled() && steps.find.outcome == 'success' }}
+        run: npm test --if-present -- --ci --passWithNoTests --json --outputFile="$RUNNER_TEMP/all-switches-on-jest.json" --setupFilesAfterEnv '<rootDir>/jest.setup.js' '<rootDir>/.github/all-switches-on/switchesOn.setup.js'
+
+      - name: List every failing test
+        if: ${{ !cancelled() && steps.find.outcome == 'success' }}
+        run: node .github/all-switches-on/switches.js report "$RUNNER_TEMP/all-switches-on-jest.json"
