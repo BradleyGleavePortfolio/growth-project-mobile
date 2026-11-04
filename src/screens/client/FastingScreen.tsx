@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   Alert,
   RefreshControl,
-  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -21,7 +20,8 @@ import QuietBar from '../../ui/progress/QuietBar';
 import { scheduleFastEndAlert, cancelFastEndAlert } from '../../utils/fastingAlert';
 import { bucketDateLocal } from '../../utils/date';
 import { useTheme } from '../../theme/ThemeProvider';
-import { typography, type SemanticTokens } from '../../theme/tokens';
+import { layout, radius, spacing, typography, type SemanticTokens } from '../../theme/tokens';
+import { MastLine, mast, PaperPage, PlanMasthead, planStyleC } from './mealplan/planStyleC';
 
 type Protocol = { label: string; hours: number };
 
@@ -310,25 +310,37 @@ export default function FastingScreen() {
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.bgPrimary }}>
-        <ActivityIndicator size="large" color={colors.accent} />
+      <View style={styles.container}>
+        <PlanMasthead title="Fasting" />
+        <PaperPage bg={colors.bgPrimary}>
+          <View style={styles.skeleton} accessible accessibilityRole="progressbar" testID="fasting-loading">
+            <View style={[styles.bone, { width: '70%' }]} />
+            <View style={[styles.bone, styles.boneTall]} />
+            <View style={[styles.bone, { width: '45%' }]} />
+          </View>
+        </PaperPage>
       </View>
     );
   }
 
   if (loadError) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.bgPrimary, padding: 24 }}>
-        <Text style={[typography.body, { color: colors.textPrimary, marginBottom: 16, textAlign: 'center' }]}>
-          Fasting history did not load.
-        </Text>
-        <TouchableOpacity
-          style={{ backgroundColor: colors.accent, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 4 }}
-          onPress={() => void loadAll()}
-          accessibilityRole="button"
-        >
-          <Text style={[typography.bodyMd, { color: colors.textOnAccent }]}>Try again</Text>
-        </TouchableOpacity>
+      <View style={styles.container}>
+        <PlanMasthead title="Fasting" />
+        <PaperPage bg={colors.bgPrimary}>
+          <View style={[planStyleC.card, styles.card]} accessibilityRole="alert" accessibilityLiveRegion="polite">
+            <Text style={[typography.body, { color: colors.textPrimary, marginBottom: 16 }]}>
+              Fasting history did not load.
+            </Text>
+            <TouchableOpacity
+              style={[planStyleC.primary, { backgroundColor: colors.accent }]}
+              onPress={() => void loadAll()}
+              accessibilityRole="button"
+            >
+              <Text style={[typography.bodyMd, { color: colors.textOnAccent }]}>Try again</Text>
+            </TouchableOpacity>
+          </View>
+        </PaperPage>
       </View>
     );
   }
@@ -356,11 +368,29 @@ export default function FastingScreen() {
         />
       }
     >
-      <View style={styles.header}>
-        <Text style={styles.title} accessibilityRole="header">Fasting</Text>
-        {run && <Text style={styles.runText}>{run}</Text>}
-      </View>
+      <PlanMasthead title="Fasting" titleTestID="fasting-title">
+        {run && <MastLine muted style={styles.runText}>{run}</MastLine>}
+        {/* Timer: one serif hero number, no ring */}
+        <View style={styles.timerContainer} accessible testID="fasting-timer">
+          <Text style={styles.overline}>
+            {activeFast ? `${activeFast.targetHours}-hour fast` : 'Fasting window'}
+          </Text>
+          {activeFast ? (
+            <>
+              <Text style={styles.timerValue}>{formatDuration(elapsed)}</Text>
+              <Text style={styles.timerSub}>
+                {remainingMs > 0
+                  ? `${formatDuration(remainingMs)} remaining`
+                  : 'Target reached'}
+              </Text>
+            </>
+          ) : (
+            <Text style={styles.timerValue}>{selectedProtocol}h</Text>
+          )}
+        </View>
+      </PlanMasthead>
 
+      <PaperPage bg={colors.bgPrimary}>
       {/* Protocol Selector */}
       {!activeFast && (
         <View style={styles.protocolRow}>
@@ -384,25 +414,6 @@ export default function FastingScreen() {
           ))}
         </View>
       )}
-
-      {/* Timer: one serif hero number, no ring */}
-      <View style={styles.timerContainer}>
-        <Text style={styles.overline}>
-          {activeFast ? `${activeFast.targetHours}-hour fast` : 'Fasting window'}
-        </Text>
-        {activeFast ? (
-          <>
-            <Text style={styles.timerValue}>{formatDuration(elapsed)}</Text>
-            <Text style={styles.timerSub}>
-              {remainingMs > 0
-                ? `${formatDuration(remainingMs)} remaining`
-                : 'Target reached'}
-            </Text>
-          </>
-        ) : (
-          <Text style={styles.timerValue}>{selectedProtocol}h</Text>
-        )}
-      </View>
 
       {/* Start / End Button */}
       <View style={styles.actionRow}>
@@ -437,7 +448,7 @@ export default function FastingScreen() {
 
       {/* Active fast info */}
       {activeFast && (
-        <View style={styles.activeCard}>
+        <View style={[planStyleC.card, styles.card, styles.activeCard]}>
           <View style={styles.activeRow}>
             <Text style={styles.activeLabel}>Started</Text>
             <Text style={styles.activeValue}>
@@ -464,7 +475,7 @@ export default function FastingScreen() {
       {/* Stats: shown once a fast has ended; the labels say which fasts each covers */}
       {history.length > 0 && (
       <FadeInView delay={100}>
-      <View style={styles.statsRow}>
+      <View style={[planStyleC.card, styles.card, styles.statsRow]}>
         <View style={styles.statCard}>
           <Text style={styles.statLabel}>Completed</Text>
           <Text testID="fasting-completed-count" style={styles.statValue}>{stats.totalCompleted}</Text>
@@ -514,6 +525,7 @@ export default function FastingScreen() {
           <Text style={styles.historyTarget}>Each fast you end is saved here.</Text>
         </View>
       )}
+      </PaperPage>
     </ScrollView>
   );
 }
@@ -525,28 +537,23 @@ const makeStyles = (colors: SemanticTokens) =>
     backgroundColor: colors.bgPrimary,
   },
   content: {
-    paddingBottom: 100,
+    flexGrow: 1,
+    paddingBottom: 52,
   },
-  header: {
-    gap: 4,
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    marginBottom: 24,
+  card: {
+    backgroundColor: colors.bgSurface,
+    borderColor: colors.border,
   },
-  title: {
-    ...typography.h1,
-    color: colors.textPrimary,
-  },
+  skeleton: { gap: spacing.md },
+  bone: { height: 14, borderRadius: radius.control, backgroundColor: colors.border },
+  boneTall: { height: layout.buttonHeight, borderRadius: radius.button, width: '100%' },
   runText: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
     fontVariant: ['tabular-nums'],
-    color: colors.textMuted,
+    marginTop: 4,
   },
   protocolRow: {
     flexDirection: 'row',
-    paddingHorizontal: 24,
-    gap: 8,
+    gap: 6,
     marginBottom: 24,
   },
   protocolBtn: {
@@ -554,12 +561,14 @@ const makeStyles = (colors: SemanticTokens) =>
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    borderRadius: radius.chip,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    backgroundColor: colors.bgSurface,
   },
   protocolBtnActive: {
-    borderBottomWidth: 2,
-    borderBottomColor: colors.textPrimary,
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
   protocolText: {
     fontFamily: 'Inter_400Regular',
@@ -569,49 +578,37 @@ const makeStyles = (colors: SemanticTokens) =>
   },
   protocolTextActive: {
     fontFamily: 'Inter_500Medium',
-    color: colors.textPrimary,
+    color: colors.textOnAccent,
   },
   timerContainer: {
-    alignItems: 'center',
-    paddingVertical: 16,
-    marginBottom: 24,
+    paddingTop: 20,
   },
   overline: {
     ...typography.eyebrow,
-    color: colors.textMuted,
+    color: mast.muted,
     marginBottom: 8,
   },
   timerValue: {
     ...typography.display,
     fontVariant: ['tabular-nums'],
-    color: colors.textPrimary,
+    color: mast.ink,
   },
   timerSub: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
+    ...typography.bodySmall,
     fontVariant: ['tabular-nums'],
-    color: colors.textMuted,
+    color: mast.ink,
     marginTop: 4,
   },
   actionRow: {
-    paddingHorizontal: 24,
     marginBottom: 24,
   },
   startBtn: {
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
+    ...planStyleC.primary,
     backgroundColor: colors.accent,
-    borderRadius: 4, // radius.lg
-    paddingVertical: 16,
   },
   endBtn: {
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
+    ...planStyleC.primary,
     backgroundColor: colors.accent,
-    borderRadius: 4, // radius.lg
-    paddingVertical: 16,
   },
   btnDisabled: {
     opacity: 0.6,
@@ -621,10 +618,6 @@ const makeStyles = (colors: SemanticTokens) =>
     color: colors.textOnAccent,
   },
   activeCard: {
-    marginHorizontal: 24,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-    paddingTop: 16,
     gap: 12,
     marginBottom: 24,
   },
@@ -645,7 +638,7 @@ const makeStyles = (colors: SemanticTokens) =>
     color: colors.textPrimary,
   },
   statsRow: {
-    paddingHorizontal: 24,
+    paddingVertical: 4,
     marginBottom: 24,
   },
   statCard: {
@@ -669,7 +662,6 @@ const makeStyles = (colors: SemanticTokens) =>
     color: colors.textMuted,
   },
   section: {
-    paddingHorizontal: 24,
     marginBottom: 24,
   },
   sectionTitle: {
@@ -687,12 +679,12 @@ const makeStyles = (colors: SemanticTokens) =>
     borderBottomColor: colors.border,
   },
   historyLeft: {
+    flex: 1,
+    minWidth: 0,
     gap: 2,
   },
   historyDate: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 15,
-    fontWeight: '500',
+    ...typography.h3,
     color: colors.textPrimary,
   },
   historyTarget: {

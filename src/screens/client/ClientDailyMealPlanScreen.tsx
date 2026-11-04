@@ -40,6 +40,8 @@ import {
   StyleSheet,
   Text,
   View,
+  type StyleProp,
+  type TextStyle,
 } from 'react-native';
 import { useRoute, type RouteProp } from '@react-navigation/native';
 import {
@@ -52,9 +54,10 @@ import { useMealPlanToday } from '../../hooks/useMealTemplates';
 import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import HapticPressable from '../../components/HapticPressable';
 import LogPlannedMealButton, { plannedMealFromSlot } from '../../components/mealplan/LogPlannedMealButton';
-import { radius, spacing, typography } from '../../theme/tokens';
+import { spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { SemanticTokens } from '../../theme/tokens';
+import { MastLine, mast, PaperPage, PlanMasthead, planStyleC, TimelineRow, useCoachItalic } from './mealplan/planStyleC';
 
 // Route params: optional ISO date string (YYYY-MM-DD). Falls back to
 // today (useMealPlanToday's default) when omitted, matching the legacy
@@ -92,6 +95,13 @@ export default function ClientDailyMealPlanScreen() {
     return assignmentId ? all.filter((a) => a.id === assignmentId) : all;
   }, [data, assignmentId]);
 
+  const italic = useCoachItalic();
+  const loaded = !isLoading && !isError;
+  // One plan (the usual day): its name and day total sit on the masthead, as
+  // the C2 coach's note does. Several plans keep each name and total with its meals.
+  const single = loaded && shown.length === 1 ? shown[0] : null;
+  const singleTotal = single ? formatDayTotal(single.daily_meal_plan.slots) : null;
+
   return (
     <ScrollView
       style={styles.screen}
@@ -105,38 +115,48 @@ export default function ClientDailyMealPlanScreen() {
         />
       }
     >
-      <Text style={[typography.eyebrow, { color: sc.textMuted }]}>{dateParam ?? 'MEAL PLAN'}</Text>
-      <Text style={[typography.h1, { color: sc.textPrimary }]}>
-        {dateParam || assignmentId ? 'Meal plan' : "Today's meals"}
-      </Text>
+      <PlanMasthead eyebrow={dateParam ?? 'MEAL PLAN'} title={dateParam || assignmentId ? 'Meal plan' : "Today's meals"}
+        testID="daily-meal-plan-masthead">
+        {single ? (
+          <>
+            <Text style={[styles.mastPlan, italic]}>{single.daily_meal_plan.name}</Text>
+            {singleTotal ? <MastLine testID="daily-meal-plan-total" style={styles.tabular}>{singleTotal}</MastLine> : null}
+          </>
+        ) : null}
+      </PlanMasthead>
 
-      {isLoading ? (
-        <SkeletonScreen count={3} />
-      ) : isError ? (
-        <View style={styles.card} accessibilityLiveRegion="polite">
-          <Text style={[typography.body, { color: sc.textMuted }]}>
-            Could not load this meal plan. Pull to retry.
-          </Text>
-          <HapticPressable onPress={onRefresh} disabled={isRefetching} accessibilityRole="button"
-            accessibilityLabel="Try again" style={styles.retry}>
-            <Text style={[typography.bodySmall, { color: sc.textOnAccent }]}>Try again</Text>
-          </HapticPressable>
-        </View>
-      ) : shown.length === 0 && assignmentId ? (
-        <UnavailableState styles={styles} sc={sc} />
-      ) : shown.length === 0 ? (
-        <EmptyState styles={styles} sc={sc} dateOverride={dateParam} />
-      ) : (
-        shown.map((a) => <PlanSection key={a.id} assignment={a} sc={sc} styles={styles} />)
-      )}
+      <PaperPage bg={sc.bgPrimary}>
+        {isLoading ? (
+          <SkeletonScreen count={3} />
+        ) : isError ? (
+          <View style={[planStyleC.card, styles.cardFill, styles.state]} accessibilityLiveRegion="polite" accessibilityRole="alert">
+            <Text style={[typography.body, { color: sc.textPrimary }]}>
+              Could not load this meal plan. Pull to retry.
+            </Text>
+            <HapticPressable onPress={onRefresh} disabled={isRefetching} accessibilityRole="button"
+              accessibilityLabel="Try again" style={[planStyleC.primary, { backgroundColor: sc.accent }]}>
+              <Text style={[planStyleC.primaryLabel, { color: sc.textOnAccent }]}>Try again</Text>
+            </HapticPressable>
+          </View>
+        ) : shown.length === 0 && assignmentId ? (
+          <UnavailableState styles={styles} sc={sc} />
+        ) : shown.length === 0 ? (
+          <EmptyState styles={styles} sc={sc} dateOverride={dateParam} />
+        ) : (
+          shown.map((a) => <PlanSection key={a.id} assignment={a} sc={sc} styles={styles} italic={italic} onMasthead={a === single} />)
+        )}
+      </PaperPage>
     </ScrollView>
   );
 }
 
-function PlanSection({ assignment, sc, styles }: {
+function PlanSection({ assignment, sc, styles, italic, onMasthead }: {
   assignment: DailyMealPlanAssignmentWithPlan;
   sc: SemanticTokens;
   styles: Styles;
+  italic: StyleProp<TextStyle>;
+  /** The name and day total already show on the masthead. */
+  onMasthead: boolean;
 }) {
   const plan = assignment.daily_meal_plan;
   const byLabel = new Map<SlotLabel, DailyMealPlanSlot[]>();
@@ -144,24 +164,27 @@ function PlanSection({ assignment, sc, styles }: {
     const label = slot.slot_label as SlotLabel;
     byLabel.set(label, [...(byLabel.get(label) ?? []), slot]);
   }
-  const dayTotal = formatDayTotal(plan.slots);
+  const dayTotal = onMasthead ? null : formatDayTotal(plan.slots);
+  const labels = SLOT_LABELS.filter((l) => byLabel.has(l));
   return (
-    <>
-      <Text style={[typography.h2, { color: sc.textPrimary }]}>{plan.name}</Text>
+    <View style={styles.plan}>
+      {!onMasthead ? <Text style={[typography.h2, { color: sc.textPrimary }]}>{plan.name}</Text> : null}
       {dayTotal ? (
         <Text testID="daily-meal-plan-total"
-          style={[typography.bodySmall, { color: sc.textMuted, fontVariant: ['tabular-nums'] }]}>
+          style={[typography.bodySmall, styles.tabular, { color: sc.textMuted }]}>
           {dayTotal}
         </Text>
       ) : null}
       {plan.notes ? (
-        <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{plan.notes}</Text>
+        <Text style={[planStyleC.name, italic, styles.notes, { color: sc.textPrimary }]}>{plan.notes}</Text>
       ) : null}
-      {SLOT_LABELS.filter((l) => byLabel.has(l)).map((label) => (
-        <SlotGroup key={label} label={label} sc={sc} styles={styles}
-          slots={(byLabel.get(label) ?? []).sort((a, b) => a.order - b.order)} />
-      ))}
-    </>
+      <View style={styles.timeline}>
+        {labels.map((label, i) => (
+          <SlotGroup key={label} label={label} sc={sc} styles={styles} last={i === labels.length - 1}
+            slots={(byLabel.get(label) ?? []).sort((a, b) => a.order - b.order)} />
+        ))}
+      </View>
+    </View>
   );
 }
 
@@ -170,23 +193,25 @@ function SlotGroup({
   slots,
   sc,
   styles,
+  last,
 }: {
   label: SlotLabel;
   slots: DailyMealPlanSlot[];
   sc: SemanticTokens;
   styles: Styles;
+  last: boolean;
 }) {
   return (
-    <View style={styles.card}>
-      <Text style={[typography.eyebrow, { color: sc.textMuted }]}>
+    <TimelineRow line={sc.border} dot={sc.textMuted} bg={sc.bgPrimary} last={last} style={styles.stop}>
+      <Text style={[planStyleC.eyebrow, { color: sc.textMuted }]} accessibilityRole="header">
         {formatSlotLabel(label)}
       </Text>
       {slots.map((s) => (
-        <View key={s.id} style={styles.slotRow}>
-          <Text style={[typography.bodyMd, { color: sc.textPrimary }]}>
+        <View key={s.id} style={[planStyleC.card, styles.cardFill, styles.slotRow]}>
+          <Text style={[planStyleC.name, { color: sc.textPrimary }]}>
             {s.meal_template.name}
           </Text>
-          <Text style={[typography.bodySmall, { color: sc.textMuted, fontVariant: ['tabular-nums'] }]}>
+          <Text style={[planStyleC.meta, styles.tabular, { color: sc.textMuted }]}>
             {s.meal_template.calories_kcal} kcal • P {s.meal_template.protein_g}g • C{' '}
             {s.meal_template.carbs_g}g • F {s.meal_template.fats_g}g
           </Text>
@@ -198,14 +223,14 @@ function SlotGroup({
           <LogPlannedMealButton meal={plannedMealFromSlot(s)} slot={s.slot_label} planSlotId={s.id} />
         </View>
       ))}
-    </View>
+    </TimelineRow>
   );
 }
 
 function UnavailableState({ styles, sc }: { styles: Styles; sc: SemanticTokens }) {
   return (
-    <View style={styles.card} testID="meal-plan-ended">
-      <Text style={[typography.h4, { color: sc.textPrimary }]}>This plan is not available for this day</Text>
+    <View style={[planStyleC.card, styles.cardFill, styles.state]} testID="meal-plan-ended">
+      <Text style={[typography.h3, { color: sc.textPrimary }]}>This plan is not available for this day</Text>
       <Text style={[typography.body, { color: sc.textMuted }]}>
         {'This assignment is not in the active meal plans for the selected day.'}
       </Text>
@@ -223,8 +248,8 @@ function EmptyState({
   dateOverride?: string;
 }) {
   return (
-    <View style={styles.card}>
-      <Text style={[typography.h4, { color: sc.textPrimary }]}>
+    <View style={[planStyleC.card, styles.cardFill, styles.state]}>
+      <Text style={[typography.h3, { color: sc.textPrimary }]}>
         {dateOverride ? 'No plan for this day' : 'No plan for today'}
       </Text>
       <Text style={[typography.body, { color: sc.textMuted }]}>
@@ -275,16 +300,15 @@ type Styles = ReturnType<typeof makeStyles>;
 function makeStyles(sc: SemanticTokens) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: sc.bgPrimary },
-    content: { padding: spacing.lg, paddingBottom: spacing['3xl'], gap: spacing.lg },
-    card: {
-      paddingVertical: spacing.lg,
-      gap: spacing.sm,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderColor: sc.border,
-    },
-    slotRow: { gap: spacing.xs, paddingVertical: spacing.md,
-      borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: sc.border },
-    retry: { minHeight: 44, paddingHorizontal: spacing.lg, alignSelf: 'flex-start',
-      justifyContent: 'center', borderRadius: radius.button, backgroundColor: sc.accent },
+    content: { flexGrow: 1 },
+    mastPlan: { ...typography.h2, color: mast.ink, marginTop: spacing.md },
+    tabular: { fontVariant: ['tabular-nums'] },
+    cardFill: { backgroundColor: sc.bgSurface, borderColor: sc.border },
+    state: { gap: spacing.md },
+    plan: { gap: spacing.sm, marginBottom: spacing.xl },
+    notes: { marginBottom: spacing.sm },
+    timeline: { marginTop: spacing.sm },
+    stop: { paddingBottom: spacing.xl },
+    slotRow: { gap: spacing.xs, marginTop: spacing.md },
   });
 }
