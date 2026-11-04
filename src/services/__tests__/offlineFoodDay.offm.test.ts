@@ -110,6 +110,7 @@ describe('OFFLINE-FOOD-M: a food saved offline counts in its day at once', () =>
 
   it('sync replaces it with the server entry, counted once', async () => {
     await saveOatsOffline();
+    expect(oatsRows().map((r) => r.offline)).toEqual(['waiting']);
     await syncFoodLogQueue();
     expect(mockServer.entries.filter((e) => e.food_item_id === 'food-oats')).toHaveLength(1);
     expect(oatsRows()).toHaveLength(1);
@@ -120,12 +121,14 @@ describe('OFFLINE-FOOD-M: a food saved offline counts in its day at once', () =>
 
   it('the save reached the server but the answer was lost: counted once, then the resend stores nothing new', async () => {
     await saveOatsOffline();
+    expect(oatsRows().map((r) => r.offline)).toEqual(['waiting']);
     mockServer.loseAnswer = true;
     await syncFoodLogQueue();
     // The server holds it; the phone still queues it. A read of the day joins the two on the key.
     expect(await getQueueLength()).toBe(1);
     await useClientStore.getState().loadDayData('member-1', DAY);
     expect(oatsRows()).toHaveLength(1);
+    expect(oatsRows()[0].offline).toBeUndefined();
     expect(day().dailyTotals.calories).toBe(220);
     mockServer.loseAnswer = false;
     await syncFoodLogQueue();
