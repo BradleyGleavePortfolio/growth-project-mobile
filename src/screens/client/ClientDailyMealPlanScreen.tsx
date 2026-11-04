@@ -125,7 +125,7 @@ export default function ClientDailyMealPlanScreen() {
         ) : null}
       </PlanMasthead>
 
-      <PaperPage bg={sc.bgPrimary}>
+      <PaperPage bg={sc.bgSurface}>
         {isLoading ? (
           <SkeletonScreen count={3} />
         ) : isError ? (
@@ -202,13 +202,13 @@ function SlotGroup({
   last: boolean;
 }) {
   return (
-    <TimelineRow line={sc.border} dot={sc.textMuted} bg={sc.bgPrimary} last={last} style={styles.stop}>
+    <TimelineRow line={sc.border} dot={sc.textMuted} bg={sc.bgSurface} last={last} style={styles.stop}>
       <Text style={[planStyleC.eyebrow, { color: sc.textMuted }]} accessibilityRole="header">
         {formatSlotLabel(label)}
       </Text>
       {slots.map((s) => (
-        <View key={s.id} style={[planStyleC.card, styles.cardFill, styles.slotRow]}>
-          <Text style={[planStyleC.name, { color: sc.textPrimary }]}>
+        <View key={s.id} style={styles.slotRow}>
+          <Text style={[styles.mealName, { color: sc.textPrimary }]}>
             {s.meal_template.name}
           </Text>
           <Text style={[planStyleC.meta, styles.tabular, { color: sc.textMuted }]}>
@@ -303,12 +303,14 @@ function makeStyles(sc: SemanticTokens) {
     content: { flexGrow: 1 },
     mastPlan: { ...typography.h2, color: mast.ink, marginTop: spacing.md },
     tabular: { fontVariant: ['tabular-nums'] },
-    cardFill: { backgroundColor: sc.bgSurface, borderColor: sc.border },
+    cardFill: { backgroundColor: sc.bgPrimary, borderColor: sc.border },
     state: { gap: spacing.md },
     plan: { gap: spacing.sm, marginBottom: spacing.xl },
     notes: { marginBottom: spacing.sm },
     timeline: { marginTop: spacing.sm },
     stop: { paddingBottom: spacing.xl },
-    slotRow: { gap: spacing.xs, marginTop: spacing.md },
+    slotRow: { gap: spacing.xs, marginTop: spacing.xs },
+    // Meal names at the frame's size: Cormorant 24 (C2 Style C, "Greek yoghurt, oats and berries").
+    mealName: { ...typography.h2 },
   });
 }

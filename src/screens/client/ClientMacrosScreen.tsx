@@ -96,7 +96,7 @@ export default function ClientMacrosScreen() {
         ) : null}
       </PlanMasthead>
 
-      <PaperPage bg={sc.bgPrimary}>
+      <PaperPage bg={sc.bgSurface}>
         {isLoading ? (
           <View style={styles.skeleton} accessible accessibilityRole="progressbar" testID="macros-loading">
             <Text style={[typography.body, { color: sc.textMuted }]}>
@@ -249,7 +249,7 @@ function makeStyles(sc: SemanticTokens) {
     content: { flexGrow: 1 },
     kcal: { ...typography.display, color: mast.ink, fontVariant: ['tabular-nums'], marginTop: spacing.sm },
     kcalUnit: { marginTop: 0 },
-    cardFill: { backgroundColor: sc.bgSurface, borderColor: sc.border },
+    cardFill: { backgroundColor: sc.bgPrimary, borderColor: sc.border },
     stack: { gap: spacing.xl },
     macroGrid: { gap: spacing.lg },
     note: { paddingTop: spacing.xs },

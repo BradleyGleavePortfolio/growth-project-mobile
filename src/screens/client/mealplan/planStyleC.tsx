@@ -8,21 +8,22 @@
  * Masthead colours are the same in light and dark (theme README, Style C v2),
  * so they come from lightTokens and never from a second palette. These parts
  * hold no words of their own: every string comes from the screen, as on main.
- * Gold stays off these screens (theme README: gold marks a personal best only),
- * so the masthead rule is the leaf mark the C1 masthead already uses.
+ * The masthead ground is the frame's forest (surface.forestBand, #2C4A36) and
+ * its foot is the frame's 1 pt gold rule (gold.500, a non-text accent; C2
+ * index colour note), the same two values the Food day masthead uses.
  */
 import React from 'react';
 import { StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
-import { layout, lightTokens, radius, spacing, typography } from '../../../theme/tokens';
+import { gold, layout, lightTokens, radius, spacing, typography } from '../../../theme/tokens';
 
 /** Masthead roles (identical in both schemes). */
 export const mast = {
-  ground: lightTokens.surface.masthead,
+  ground: lightTokens.surface.forestBand,
   band: lightTokens.surface.forestBand,
   line: lightTokens.surface.forestBandLine,
   ink: lightTokens.textOnAccent,
   muted: lightTokens.textOnMastheadMuted,
-  leaf: lightTokens.data.leaf,
+  rule: gold[500],
 } as const;
 
 /**
@@ -138,7 +139,7 @@ const s = StyleSheet.create({
   title: { ...typography.h1, color: mast.ink },
   line: { ...typography.bodySmall, color: mast.ink, marginTop: spacing.sm },
   lineMuted: { color: mast.muted },
-  rule: { height: 2, width: 40, backgroundColor: mast.leaf, borderRadius: 1, marginTop: spacing.lg },
+  rule: { height: 1, alignSelf: 'stretch', backgroundColor: mast.rule, marginTop: spacing.lg },
   italic: { fontFamily: 'CormorantGaramond_400Regular_Italic', fontWeight: '400' },
   paper: {
     marginTop: -radius.sheet,

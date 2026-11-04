@@ -312,7 +312,7 @@ export default function FastingScreen() {
     return (
       <View style={styles.container}>
         <PlanMasthead title="Fasting" />
-        <PaperPage bg={colors.bgPrimary}>
+        <PaperPage bg={colors.bgSurface}>
           <View style={styles.skeleton} accessible accessibilityRole="progressbar" testID="fasting-loading">
             <View style={[styles.bone, { width: '70%' }]} />
             <View style={[styles.bone, styles.boneTall]} />
@@ -327,7 +327,7 @@ export default function FastingScreen() {
     return (
       <View style={styles.container}>
         <PlanMasthead title="Fasting" />
-        <PaperPage bg={colors.bgPrimary}>
+        <PaperPage bg={colors.bgSurface}>
           <View style={[planStyleC.card, styles.card]} accessibilityRole="alert" accessibilityLiveRegion="polite">
             <Text style={[typography.body, { color: colors.textPrimary, marginBottom: 16 }]}>
               Fasting history did not load.
@@ -390,7 +390,7 @@ export default function FastingScreen() {
         </View>
       </PlanMasthead>
 
-      <PaperPage bg={colors.bgPrimary}>
+      <PaperPage bg={colors.bgSurface}>
       {/* Protocol Selector */}
       {!activeFast && (
         <View style={styles.protocolRow}>
@@ -541,7 +541,7 @@ const makeStyles = (colors: SemanticTokens) =>
     paddingBottom: 52,
   },
   card: {
-    backgroundColor: colors.bgSurface,
+    backgroundColor: colors.bgPrimary,
     borderColor: colors.border,
   },
   skeleton: { gap: spacing.md },
@@ -564,7 +564,7 @@ const makeStyles = (colors: SemanticTokens) =>
     borderRadius: radius.chip,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    backgroundColor: colors.bgSurface,
+    backgroundColor: colors.bgPrimary,
   },
   protocolBtnActive: {
     backgroundColor: colors.accent,
@@ -638,7 +638,8 @@ const makeStyles = (colors: SemanticTokens) =>
     color: colors.textPrimary,
   },
   statsRow: {
-    paddingVertical: 4,
+    paddingTop: 4,
+    paddingBottom: spacing.md,
     marginBottom: 24,
   },
   statCard: {
