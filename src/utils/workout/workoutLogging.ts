@@ -143,6 +143,28 @@ type CoachSessionRow = {
   exercises?: CoachSessionExercise[];
 };
 
+type OrderedWorkout = { id?: unknown; date?: unknown; created_at?: unknown };
+const textOf = (v: unknown) => (typeof v === 'string' ? v : '');
+
+/**
+ * COACH-DAY-ORDER-M: the coach's one order for a client's workouts, newest first,
+ * the order the server gives its timeline slice (b#1213): the day the workout
+ * counts on (workoutDay: its own date, else the local day it was saved), then
+ * the save time, then id. A sorted copy; the rows are not changed.
+ */
+export function newestWorkoutsFirst<T extends OrderedWorkout>(rows: readonly T[]): T[] {
+  const keyed = rows.map((row) => ({
+    row,
+    day: workoutDay({ date: textOf(row.date), created_at: textOf(row.created_at) }),
+    // The save moment only breaks ties inside one day; it never picks the day.
+    saved: Date.parse(textOf(row.created_at)) || 0,
+    id: textOf(row.id),
+  }));
+  const desc = (a: string, b: string) => (a < b ? 1 : a > b ? -1 : 0);
+  keyed.sort((a, b) => desc(a.day, b.day) || b.saved - a.saved || desc(a.id, b.id));
+  return keyed.map((k) => k.row);
+}
+
 /**
  * Map the coach client-detail `recent_workouts` rows (WorkoutSession with
  * exercises: workout_name, created_at, duration_minutes, weight_per_set,
@@ -152,7 +174,8 @@ type CoachSessionRow = {
  * 0 lbs.
  */
 export function mapCoachWorkoutSessions(rows: unknown) {
-  const list = Array.isArray(rows) ? (rows as CoachSessionRow[]) : [];
+  // The summary sends its newest saves first; the coach reads newest day first.
+  const list = newestWorkoutsFirst(Array.isArray(rows) ? (rows as CoachSessionRow[]) : []);
   return list.map((s) => {
     const finishedAt = s.completed_at || s.created_at || s.date || '';
     const finishedMs = new Date(finishedAt).getTime();

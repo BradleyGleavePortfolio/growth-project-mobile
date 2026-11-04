@@ -7,6 +7,7 @@ import type { MacroTarget } from '../../api/macrosApi';
 import type { ClientProfile } from '../../types';
 import { bucketDateLocal } from '../date';
 import { assignmentDay, instantDay, workoutDay } from '../workout/workoutDay';
+import { newestWorkoutsFirst } from '../workout/workoutLogging';
 import { dayWord } from './clientLookup';
 import { rosterActivityLine, type RosterClient } from './clientRoster';
 import { resolveCoachTargets } from './foodReview';
@@ -92,7 +93,8 @@ export function peekSlices(
   // A no-break space keeps each number with its unit when the line wraps ("96 g", never "96" / "g").
   const foodText = rows(day.entries).length > 0 ? `${grouped(kcal)}${of}\u00a0kcal, protein ${grouped(num(day.total_protein_g) ?? 0)}\u00a0g` : NOTHING;
 
-  const session = rows(s.recent_workouts)[0];
+  // The newest day, not the newest save (the summary sends newest saves first).
+  const session = newestWorkoutsFirst(rows(s.recent_workouts))[0];
   // The day the client recorded, not the day it reached the server (utils/workout/workoutDay).
   const sessionDay = session ? workoutDay({ date: text(session.date), created_at: text(session.completed_at) ?? text(session.created_at) }) || null : null;
   const name = session ? text(session.workout_name) ?? text(session.name) ?? 'Workout' : null;
