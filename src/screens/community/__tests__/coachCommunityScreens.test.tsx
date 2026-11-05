@@ -1572,9 +1572,17 @@ describe('FX4-868 round 4 — offline from the phone, the caught-up page, whole 
       isRefetching: false,
       refetch: jest.fn(),
     };
-    const { getByText } = await render(<CoachCommunityInboxScreen />);
-    expect(getByText(LONG).props.numberOfLines).toBeUndefined();
-    expect(getByText('Post text').props.numberOfLines).toBe(2);
+    // FIX-938: a message row opens (and clamps) with the space chat on; this states it off.
+    const flags = jest.requireMock('../../../config/featureFlags').featureFlags;
+    const was = flags.communitySpaceChat;
+    flags.communitySpaceChat = false;
+    try {
+      const { getByText } = await render(<CoachCommunityInboxScreen />);
+      expect(getByText(LONG).props.numberOfLines).toBeUndefined();
+      expect(getByText('Post text').props.numberOfLines).toBe(2);
+    } finally {
+      flags.communitySpaceChat = was;
+    }
   });
 
   it('a photo row shows its caption, or "Photo" with none, and can be acknowledged', async () => {

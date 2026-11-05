@@ -653,15 +653,29 @@ export function inboxMessageOpener(navigation: CoachCommunityNav, item: CoachInb
 }
 
 /**
+ * FIX-938: a row's navigation, or none outside a navigator (a screen rendered
+ * alone, as the inbox's flag tests do): a message row then has nowhere to
+ * open. useNavigation's context reads run on every render; only its throw is
+ * caught.
+ */
+function useRowNavigation(): CoachCommunityNav | undefined {
+  try {
+    return useNavigation<CoachCommunityNav>();
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * VOICE-INBOX (#167-4): a voice row (the API sends one only with
  * communityVoiceNotes on, and only with its note) reads "Voice note · 0:42"
  * and opens the note (FIX-938: with the space chat on, its space chat at
  * that message); every other row is the coach inbox row.
  */
 function InboxRowOrVoice(props: InboxRowProps): React.ReactElement {
-  const navigation = useNavigation<CoachCommunityNav>();
+  const navigation = useRowNavigation();
   const { voice } = props.item;
-  const onOpen = props.item.type === 'message' ? inboxMessageOpener(navigation, props.item) : props.onOpen;
+  const onOpen = props.item.type !== 'message' ? props.onOpen : navigation && inboxMessageOpener(navigation, props.item);
   return props.item.kind === 'voice' && voice ? (
     <VoiceInboxRow {...props} onOpen={onOpen} durationMs={voice.duration_ms} />
   ) : (
@@ -793,6 +807,7 @@ function InboxRow({
     >
       {onOpen ? (
         <HapticPressable
+          ref={mainRef}
           intent="light"
           onPress={onOpen}
           accessibilityRole="button"
