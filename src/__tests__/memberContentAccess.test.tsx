@@ -608,7 +608,10 @@ function modInfo(file: string, text: string): ModInfo {
 /** mute: false reads a via row's parts as they are (the stale check: does the via file still draw them?). */
 /** byName: false drops the signs (COMPOSER_CALLS, LIST_CALLS, an API object's name) and byPlace: false the file-name
  * rule (MEMBER_PLACE), so a check can ask what the scan finds by the reads and sends alone (FR-911R3, LO-911R3 B2). */
-type ScanCtx = { files: Map<string, string>; memo: Map<string, Kinds>; busy: Set<string>; mute?: boolean; byName?: boolean; byPlace?: boolean };
+/** scope (FIX-911R4, LO-911R4 B1): where the scan is now, for muted(): the file and the kinds whose via parts read as
+ * empty here (a via file's own root, an export its via row stops, or a local those reach); anywhere else, none. */
+type MuteScope = { file: string; kinds: Kind[] };
+type ScanCtx = { files: Map<string, string>; memo: Map<string, Kinds>; busy: Set<string>; mute?: boolean; byName?: boolean; byPlace?: boolean; scope?: MuteScope };
 const inPlace = (ctx: ScanCtx, mod: string) => ctx.byPlace !== false && MEMBER_PLACE.test(mod);
 /** FR-911R3 (LS-911R3 B2): code the bundler resolves is read here too (a .js / .jsx module, a platform file), so the
  * fail-closed rule for a module the scan cannot read is left to what is really not there. */
@@ -719,18 +722,25 @@ function declKinds(ctx: ScanCtx, o: Origin): Kinds {
   // FR-911R3 (LS-911R3 B2): a name re-exported from code the scan cannot read (export { Feed } from './Unread') holds anything
   if (unreadCode(o)) return { composer: true, list: true };
   if (!o.mod || o.mod.startsWith('pkg:')) return NONE();
-  const key = `${o.mod}:${o.name}`;
   if (notContent(o)) return NONE();
+  // FR-911R2 (LO-911R2 B1): a row stops only the exports it proves, never a whole file; a KNOWN GAP row stops nothing
+  const stops = (exports?: string[]) => stoppedLocals(ctx, o.mod as string, exports).has(o.name.split('.')[0]);
+  // FIX-911R4 (LO-911R4 B1): a via row's parts read as empty only in the exports the row stops (and the locals they
+  // reach, so a local reached from the via file's root or a stopped export keeps the scope it was reached from); any
+  // other export of a via file carries its parts' kinds on to its callers
+  const prev = ctx.scope;
+  const scope: MuteScope = { file: o.mod, kinds: (['composer', 'list'] as Kind[]).filter((kind) => (prev?.file === o.mod && prev.kinds.includes(kind)) ||
+    REGISTRY.some((s) => s.file === o.mod && s.kind === kind && s.proof.by === 'via' && stops(s.exports))) };
+  const key = `${o.mod}:${o.name}${scope.kinds.length ? `|muted:${scope.kinds.join(',')}` : ''}`;
   const memo = ctx.memo.get(key);
   if (memo) return memo;
   if (ctx.busy.has(key)) return NONE();
   const node = infoOf(ctx, o.mod).decls.get(o.name);
   if (!node) return NONE();
   ctx.busy.add(key);
-  const k = nodeKinds(ctx, o.mod, node);
-  ctx.busy.delete(key);
-  // FR-911R2 (LO-911R2 B1): a row stops only the exports it proves, never a whole file; a KNOWN GAP row stops nothing
-  const stops = (exports?: string[]) => stoppedLocals(ctx, o.mod as string, exports).has(o.name.split('.')[0]);
+  ctx.scope = scope;
+  let k: Kinds;
+  try { k = nodeKinds(ctx, o.mod, node); } finally { ctx.scope = prev; ctx.busy.delete(key); }
   for (const kind of ['composer', 'list'] as Kind[]) {
     // FR-911R3: nor does a via row: what its file holds through its parts is read as empty there (muted), the rest goes on
     if (REGISTRY.some((s) => s.file === o.mod && s.kind === kind && !['host', 'gap', 'via'].includes(s.proof.by) && stops(s.exports))) k[kind] = false;
@@ -809,7 +819,9 @@ function byVerb(verb: string | null, unreadVerb: boolean): Kinds {
  */
 function muted(ctx: ScanCtx, mod: string, target: string | null, k: Kinds): Kinds {
   if (ctx.mute === false || !target) return k;
-  for (const kind of ['composer', 'list'] as Kind[]) if (k[kind] && viaParts(mod, kind).includes(target)) k[kind] = false;
+  // FIX-911R4 (LO-911R4 B1): only where the scope mutes this kind (the via file's root, an export its row stops)
+  const here = (kind: Kind) => ctx.scope?.file === mod && ctx.scope.kinds.includes(kind);
+  for (const kind of ['composer', 'list'] as Kind[]) if (k[kind] && here(kind) && viaParts(mod, kind).includes(target)) k[kind] = false;
   return k;
 }
 const viaParts = (file: string, kind: Kind): string[] =>
@@ -1053,7 +1065,10 @@ function scanCtx(extra: Record<string, string> = {}, opts: { mute?: boolean; byN
 /** What one file holds, read against src/ as it is (`text` stands in for the file, which need not exist). */
 function classify(file: string, text: string, ctx: ScanCtx = scanCtx({ [file]: text })): Kinds {
   if (ctx.files.get(file) !== text) ctx.files.set(file, text);
-  return nodeKinds(ctx, file, infoOf(ctx, file).sf);
+  // FIX-911R4 (LO-911R4 B1): the file's own root is where its via rows' parts read as empty
+  const prev = ctx.scope;
+  ctx.scope = { file, kinds: ['composer', 'list'] };
+  try { return nodeKinds(ctx, file, infoOf(ctx, file).sf); } finally { ctx.scope = prev; }
 }
 function scan(ctx: ScanCtx = scanCtx()): { composer: string[]; list: string[] } {
   const out = { composer: [] as string[], list: [] as string[] };
@@ -1077,19 +1092,16 @@ it('LS-911 B2: NotificationCenter must use live proof, not the obsolete pre-898 
 });
 
 describe('LS-911 B1: source discovery must recognize member content independent of call spelling', () => {
+  // FIX-911R4 (LO-911R4 C2): the fixtures are a scanCtx overlay, never files written under src/ (other suites walk src/
+  // in parallel workers and can list a file this case has already removed)
   function checkSource(kind: Kind, source: string, shared = false) {
-    const dir = fs.mkdtempSync(path.join(SRC, 'screens', 'LS911Inventory-'));
-    const file = path.join(dir, 'Fixture.tsx');
-    try {
-      fs.writeFileSync(file, source);
-      if (shared) {
-        fs.writeFileSync(path.join(dir, 'SharedReply.tsx'), "export { ComposerInput as MemberReply } from '../../components/community';");
-      }
-      expect(registered(rel(file), kind)).toBe(false);
-      expect(scan()[kind]).toContain(rel(file));
-    } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
+    const dir = 'screens/LS911Inventory-fixture';
+    const file = `${dir}/Fixture.tsx`;
+    const overlay: Record<string, string> = { [file]: source };
+    if (shared) overlay[`${dir}/SharedReply.tsx`] = "export { ComposerInput as MemberReply } from '../../components/community';";
+    expect(fs.existsSync(path.join(SRC, file))).toBe(false);
+    expect(registered(file, kind)).toBe(false);
+    expect(scan(scanCtx(overlay))[kind]).toContain(file);
   }
 
   it.each([
