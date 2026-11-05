@@ -59,7 +59,6 @@ jest.mock('../../../navigation/coachLanding', () => ({ coachLandingTab: () => 'C
 
 import ClientLookupScreen from '../lookup/ClientLookupScreen';
 import { useCoachStore } from '../../../store/coachStore';
-import { featureFlags } from '../../../config/featureFlags';
 
 const navigate = jest.fn();
 const nav = {
@@ -73,7 +72,6 @@ beforeEach(() => {
   mockCache.clear();
   mockBlockedIds = ['blocked-c1'];
   useCoachStore.getState().reset();
-  featureFlags.coachTabsV2 = false;
   mockGetClients.mockResolvedValue({
     data: [{
       id: 'blocked-c1', name: 'Jordan Reyes', role: 'student',
