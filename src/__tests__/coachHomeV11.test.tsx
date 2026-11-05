@@ -542,3 +542,15 @@ describe('Needs you in the client-wins style (NEEDS-YOU-M, GOAL planning/MOCKUP3
     expect([mockSources.pathChangeDrafts.mock.calls.length, v.queryByText(/Workout change/)]).toEqual([0, null]);
   });
 });
+
+describe('B-TEST LO-934 B2 (Opus lens, m#934 @ 98258c2b): Roman never says nothing waits while the workout-change read failed', () => {
+  it("a failed workout-change read with no other drafts does not say 'Nothing to approve right now.'", async () => {
+    mockFlags.clientPathCopilot = true;
+    mockDrafts.mockReturnValue({ data: { drafts: [] }, refetch: jest.fn() });
+    mockSources.pathChangeDrafts.mockRejectedValue(new Error('timeout'));
+    const v = await renderHome();
+    await waitFor(() => expect(mockSources.pathChangeDrafts).toHaveBeenCalled());
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(v.queryByText('Nothing to approve right now.')).toBeNull();
+  });
+});
