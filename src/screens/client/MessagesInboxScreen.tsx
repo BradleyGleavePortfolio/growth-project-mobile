@@ -239,7 +239,7 @@ export default function MessagesInboxScreen({ navigation }: { navigation: Naviga
                 <View style={[s.ringed, { borderColor: palette.stone }]}><RomanAvatar crop="neutral" size={52} /></View>
                 <View style={s.who}>
                   <Text style={[s.over, { color: sc.textMuted }]}>Your assistant</Text>
-                  <Text style={[s.title, { color: sc.textPrimary }]}>{ROMAN_LOCK_TITLE}</Text>
+                  <Text style={[s.title, s.lockTitle, { color: sc.textPrimary }]}>{ROMAN_LOCK_TITLE}</Text>
                 </View>
               </View>
               <Text style={[s.body, { color: sc.textPrimary }]}>{ROMAN_LOCK_BODY}</Text>
@@ -345,6 +345,8 @@ const s = StyleSheet.create({
   over: { ...typography.eyebrow, lineHeight: 16 },
   heroTitle: { ...typography.h1 },
   title: { ...typography.h2 },
+  // B_coachless: "Roman works with a coach" on one line at 390 pt, as drawn (tracking 0 here, was 0.5).
+  lockTitle: { letterSpacing: 0 },
   mono: { width: 48, height: 48, borderRadius: radius.chip, alignItems: 'center', justifyContent: 'center' },
   monoText: { ...typography.h2 },
   ringed: { borderWidth: 2, borderRadius: radius.chip, padding: 2 },
