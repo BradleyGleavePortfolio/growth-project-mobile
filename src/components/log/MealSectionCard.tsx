@@ -61,6 +61,14 @@ export default function MealSectionCard({
           : log.quantity > 1
             ? `×${log.quantity}`
             : '';
+        // OFFLINE-FOOD-M: a food saved offline, marked with the line the C2 Style C offline frame draws
+        // under it (C2-S-15 + C2-S-16) or, refused by the server, its error title (C2-S-18). It is not
+        // on the server, so Remove is its one action: a tap opens it too (no dead tap), long-press as
+        // on every row.
+        const offlineMark = log.offline === 'refused'
+          ? "Couldn't log food"
+          : log.offline ? `Saved offline. ${log.foodName} will sync when you reconnect.` : null;
+        const edit = onEditPress && !offlineMark ? onEditPress : undefined;
         return (
           <HapticPressable
             key={log.id}
@@ -69,12 +77,12 @@ export default function MealSectionCard({
             // F-2: tap = edit (when wired by parent), long-press = delete.
             // Falling back to delete-on-long-press preserves the legacy
             // gesture so existing users do not lose the path they know.
-            onPress={onEditPress ? () => onEditPress(log) : undefined}
+            onPress={edit ? () => edit(log) : offlineMark ? () => onDeletePress(log) : undefined}
             onLongPress={() => onDeletePress(log)}
             accessibilityLabel={
-              onEditPress
+              edit
                 ? `${log.foodName}, ${qtyLabel || 'one serving'}. Tap to edit, long-press to delete.`
-                : `${log.foodName}, ${qtyLabel || 'one serving'}. Long-press to delete.`
+                : `${log.foodName}, ${qtyLabel || 'one serving'}. ${offlineMark ? `${log.offline === 'refused' ? offlineMark : 'Saved offline'}. ` : ''}Long-press to delete.`
             }
           >
             <View style={styles.foodItemLeft}>
@@ -87,8 +95,14 @@ export default function MealSectionCard({
               <Text style={styles.foodMacros}>
                 {foodMacroLine(log, macroMode)}
               </Text>
+              {offlineMark ? (
+                <Text style={styles.foodMacros} testID={`food-offline-${log.id}`}>
+                  {offlineMark}
+                </Text>
+              ) : null}
             </View>
-            <Text style={styles.foodCals}>{Math.round(log.calories)}</Text>
+            {/* A refused food counts in nothing, so it shows no number. */}
+            {log.offline === 'refused' ? null : <Text style={styles.foodCals}>{Math.round(log.calories)}</Text>}
           </HapticPressable>
         );
       })}

@@ -1,5 +1,6 @@
 import { foodApi, logApi } from '../../services/api';
 import { enqueue as enqueueFoodLog } from '../../services/foodLogQueue';
+import { shownFor } from './queuedDay';
 import { MealType } from '../../types';
 import { planLink, type PlanLink } from './planLink';
 import { SearchResult } from './types';
@@ -106,6 +107,8 @@ export async function submitSearchLogOffline(args: SearchLogArgs) {
     kind: 'search',
     foodItemId: created ? undefined : food.id,
     food: created,
+    // OFFLINE-FOOD-M: what the day shows for this food until the server's entry replaces it.
+    shown: shownFor(food),
     log,
   }, key));
 }
