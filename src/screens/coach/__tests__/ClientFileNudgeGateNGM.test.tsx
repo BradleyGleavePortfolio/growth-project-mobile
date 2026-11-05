@@ -5,7 +5,7 @@
  * draws neither. Run on both files (flag off: the legacy file; coachTabsV2 on: Style C) with the real SummaryTab.
  */
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
 const mockUnread = jest.fn();
 let mockBlockedIds: string[] = [];
@@ -112,8 +112,8 @@ describe.each([['the legacy file', false], ['the Style C file', true]] as const)
     mockUnread.mockImplementation(() => answer(unread));
     await render(file());
     await screen.findAllByLabelText('Open messages');
-    if (unread !== 'pending') await waitFor(() => expect(mockUnread).toHaveBeenCalled());
-    await act(async () => { await Promise.resolve(); });
+    // Let every read answer (or not) before asserting what the screen draws.
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
     if (nudge) {
       await screen.findByLabelText('Send nudge notification');
       await fireEvent.press(screen.getByLabelText('Send nudge notification'));

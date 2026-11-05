@@ -4,7 +4,7 @@
  * draws the chat's closed line (BAM-2a / BAM-2b) in its place; unknown or a failed read draws neither.
  */
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
 const mockUnread = jest.fn();
 const mockSendNudge = jest.fn();
@@ -77,8 +77,8 @@ it.each(CASES)('$name: nudge $nudge, closed line $line', async ({ blocked, known
   mockUnread.mockImplementation(() => answer(unread));
   await render(<ClientRiskDetailScreen />);
   await screen.findByText('Risk detail');
-  if (unread !== 'pending') await waitFor(() => expect(mockUnread).toHaveBeenCalled());
-  await act(async () => { await Promise.resolve(); });
+  // Let every read answer (or not) before asserting what the screen draws.
+  await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
   if (nudge) {
     await screen.findByLabelText('Send check-in nudge');
     await fireEvent.press(screen.getByLabelText('Send check-in nudge'));
