@@ -81,6 +81,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_MEAL_PLANS_V2: process.env.EXPO_PUBLIC_FF_MEAL_PLANS_V2,
   EXPO_PUBLIC_FF_MWB_AUTOSAVE: process.env.EXPO_PUBLIC_FF_MWB_AUTOSAVE,
   EXPO_PUBLIC_FF_MWB_PROGRAMS: process.env.EXPO_PUBLIC_FF_MWB_PROGRAMS,
+  EXPO_PUBLIC_FF_OFFLINE_FOOD_IN_DAY: process.env.EXPO_PUBLIC_FF_OFFLINE_FOOD_IN_DAY,
   EXPO_PUBLIC_FF_PRIVATE_COMMUNITY_HUB: process.env.EXPO_PUBLIC_FF_PRIVATE_COMMUNITY_HUB,
   EXPO_PUBLIC_FF_ROMAN_BODYWEIGHT_POLISH: process.env.EXPO_PUBLIC_FF_ROMAN_BODYWEIGHT_POLISH,
   EXPO_PUBLIC_FF_ROMAN_CHAT: process.env.EXPO_PUBLIC_FF_ROMAN_CHAT,
@@ -482,6 +483,15 @@ export const featureFlags = {
   //
   // env: EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST
   foodPlanChecklist: readFlag('EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST', false),
+
+  /**
+   * OFFLINE-FOOD-M (owner #191-E3): a food saved offline shows in the day, marked "Saved offline",
+   * and counts in the totals at once; the pending note says so (W1, waiting on the owner's words).
+   * Default off; off, the day and the note are today's (C2-S-17).
+   *
+   * env: EXPO_PUBLIC_FF_OFFLINE_FOOD_IN_DAY
+   */
+  offlineFoodInDay: readFlag('EXPO_PUBLIC_FF_OFFLINE_FOOD_IN_DAY', false),
   // UI-1 (owner 10-09, V1_1_UI_SPEC; v1 since owner 10-17 "home-v1"): the rings
   // and tiles client Home. Default off and set by no eas.json profile until the
   // owner switches it on in its own PR; off renders today's Home unchanged.

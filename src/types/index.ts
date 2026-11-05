@@ -89,6 +89,12 @@ export interface FoodLog {
   // itself (GET /log/daily), so they survive a relaunch, a sign-in and a cleared cache.
   planSlotId?: string;
   fillsUsualMeal?: boolean;
+  // OFFLINE-FOOD-M: the save's key (client_uuid) as the server stored it; a food saved offline shows
+  // under that same key until the server's entry replaces it.
+  clientUuid?: string;
+  // OFFLINE-FOOD-M: set only on a food saved offline and still on this phone: 'waiting' to send, or
+  // 'refused' by the server (shown, not counted).
+  offline?: 'waiting' | 'refused';
 }
 
 export interface WeightLog {
