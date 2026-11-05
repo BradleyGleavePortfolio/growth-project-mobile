@@ -40,20 +40,23 @@ export function fitTitle(name: string, room: number, fontScale: number, letterSp
 }
 
 /**
- * The unit tabs in one row. As drawn when they fit (64 pt tabs, 12 pt padding, 8 pt apart); else they sit edge to
- * edge as 44 pt targets with 8 pt between labels, the labels as large as the row allows (never under 12 pt); a
- * window narrower than any phone wraps the row so every tab still shows.
+ * The unit tabs in one row. As drawn when they fit (64 pt tabs, 12 pt padding, 8 pt apart); else they spread across
+ * the row as 44 pt targets, at least 0.6 em (never under 8 pt) between labels, the labels as large as the row allows
+ * and never under 12 pt (iOS draws its own segmented control at 13 pt); a window narrower than any phone wraps the
+ * row so every tab still shows.
  */
 export function fitUnitTabs(units: readonly string[], room: number, fontScale: number) {
   const own = 16 * (fontScale > 0 ? fontScale : 1);
   const em = (u: string) => UNIT_EM[u] ?? u.length * 0.65;
-  const row = (size: number, pad: number, min: number, gap: number) =>
-    units.reduce((sum, u) => sum + Math.max(min, em(u) * size + 2 * pad), 0) + gap * Math.max(0, units.length - 1);
+  const pad = (size: number) => Math.max(4, 0.3 * size);
+  const row = (size: number, p: number, min: number, gap: number) =>
+    units.reduce((sum, u) => sum + Math.max(min, em(u) * size + 2 * p), 0) + gap * Math.max(0, units.length - 1);
   // Label widths are exact here (six known words), so the row keeps only 1 pt for rounding.
   const fits = (width: number) => width <= room - 1;
-  if (fits(row(own, 12, 64, 8))) return { fontSize: own, padding: 12, minWidth: 64, gap: 8, wrap: false };
+  if (fits(row(own, 12, 64, 8))) return { fontSize: own, padding: 12, minWidth: 64, gap: 8, spread: false, wrap: false };
   let size = own;
-  while (size > 12 && !fits(row(size, 4, layout.touchMin, 0))) size -= 0.25;
-  const wrap = !fits(row(size, 4, layout.touchMin, 0));
-  return { fontSize: wrap ? own : size, padding: 4, minWidth: layout.touchMin, gap: 0, wrap };
+  while (size > 12 && !fits(row(size, pad(size), layout.touchMin, 0))) size = Math.max(12, size - 0.25);
+  const wrap = !fits(row(size, pad(size), layout.touchMin, 0));
+  const fontSize = wrap ? own : size;
+  return { fontSize, padding: pad(fontSize), minWidth: layout.touchMin, gap: 0, spread: !wrap, wrap };
 }

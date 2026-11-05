@@ -3,12 +3,16 @@
 // ScrollView with no scroll bar, 64 pt minimum each plus an 8 pt gap (6 x 64 + 5 x 8 = 424 pt), wider
 // than the sheet's content at every phone width (320 pt - 2 x 24 pt gutter = 272 pt; 430 pt = 382 pt),
 // so tsp (and at 320-390 pt tbsp, at 320 pt part of "cup") is off the edge with nothing to say it is there.
+// PORTION-WRAP-M: the window is now mocked to a 320 pt phone at 130% text, where the one-row tabs must still fit.
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { render, screen } from '@testing-library/react-native';
 import { QuantityPickerContent } from '../log/QuantityPickerModal';
 import { layout } from '../../theme';
 import type { SearchResult } from '../../utils/log/types';
+
+const mockWindow = { width: 320, height: 568, scale: 2, fontScale: 1.3 };
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({ __esModule: true, default: () => mockWindow }));
 
 const flat = (s: unknown) => (StyleSheet.flatten(s as any) ?? {}) as Record<string, any>;
 
