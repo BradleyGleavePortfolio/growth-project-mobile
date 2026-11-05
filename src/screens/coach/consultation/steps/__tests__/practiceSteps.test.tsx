@@ -29,7 +29,17 @@ import CoachConsultationFlow from '../../CoachConsultationFlow';
 import { STEP_COMPONENTS } from '../../registry';
 
 it('the default registry carries K5-K8', () => {
-  expect(Object.keys(STEP_COMPONENTS)).toEqual(['K0', 'K1', 'K2', 'K3', 'K4', 'K5', 'K6', 'K7', 'K8']);
+  // Pins EXPO_PUBLIC_FF_COACH_AI_CREDITS off: this test checks the shipped registry (practiceSteps.ts:3 adds KC when on).
+  const saved = process.env.EXPO_PUBLIC_FF_COACH_AI_CREDITS;
+  delete process.env.EXPO_PUBLIC_FF_COACH_AI_CREDITS;
+  try {
+    jest.isolateModules(() => {
+      const shipped = (require('../../registry') as { STEP_COMPONENTS: typeof STEP_COMPONENTS }).STEP_COMPONENTS;
+      expect(Object.keys(shipped)).toEqual(['K0', 'K1', 'K2', 'K3', 'K4', 'K5', 'K6', 'K7', 'K8']);
+    });
+  } finally {
+    if (saved !== undefined) process.env.EXPO_PUBLIC_FF_COACH_AI_CREDITS = saved;
+  }
 });
 import { draftKey } from '../../../../../lib/coachConsultation/draft';
 import type { CoachConsultApi } from '../../../../../lib/coachConsultation/api';

@@ -16,6 +16,10 @@ import { COACHLESS_COPY, SCREENS, screenById } from '../../../lib/consultation/d
 import { defaultMeasureUnit, fillCopy, type CopyContext } from '../../../lib/consultation/engine';
 import { P8_COPY, REVEAL_COPY } from '../../../lib/consultation/copy';
 import type { Answers, ScreenDef } from '../../../lib/consultation/types';
+import { featureFlags } from '../../../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_CONSULT_TILES_V2 off: this file is the classic question rows and quiet tabs (consultTilesV2.test covers the tiles).
+jest.replaceProperty(featureFlags, 'consultTilesV2', false);
 
 jest.mock('../../../hooks/useReducedMotion', () => ({ useReducedMotion: () => true }));
 jest.mock('@expo-google-fonts/cormorant-garamond', () => ({

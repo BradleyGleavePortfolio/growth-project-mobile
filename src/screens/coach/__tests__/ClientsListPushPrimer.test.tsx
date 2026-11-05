@@ -56,6 +56,13 @@ jest.mock('../../../ui/empty-states', () => ({
 
 import ClientsListScreen from '../ClientsListScreen';
 import { pushPrimerDismissedKey } from '../../../components/home/PushPermissionCard';
+import { featureFlags } from '../../../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_COACH_TABS_V2 off: the push ask sits on Clients only while Clients is the landing (ClientsListScreen.tsx:279).
+jest.replaceProperty(featureFlags, 'coachTabsV2', false);
+
+// Pins EXPO_PUBLIC_FF_COACH_CLIENT_LOOKUP off: this file is the classic Clients roster (ClientsListScreen.tsx:60 swaps in the lookup).
+jest.replaceProperty(featureFlags, 'coachClientLookup', false);
 
 type Nav = React.ComponentProps<typeof ClientsListScreen>['navigation'];
 async function mount() {

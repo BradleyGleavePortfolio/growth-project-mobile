@@ -112,6 +112,8 @@ jest.mock("@react-navigation/native", () => {
       replace: mockReplace,
       goBack: jest.fn(),
       canGoBack: () => true,
+      // EXPO_PUBLIC_FF_COACH_TABS_V2: MoneyBack.tsx:28 reads the stack index (a pushed screen).
+      getState: () => ({ index: 1, routes: [] }),
       getParent: () => ({ navigate: mockParentNavigate }),
     }),
     useIsFocused: () => true,
@@ -172,6 +174,10 @@ import MoneyChargeScreen from "../MoneyChargeScreen";
 import MoneyRedirect from "../MoneyRedirect";
 import MoneyHomeCard from "../../../../components/coach/money/MoneyHomeCard";
 import { authEvents } from "../../../../utils/authEvents";
+import { featureFlags } from "../../../../config/featureFlags";
+
+// Pins EXPO_PUBLIC_FF_COACH_TABS_V2 off: Message client opens the chat over Clients here (coachInbox.ts:18 sends it to Messages when on).
+jest.replaceProperty(featureFlags, "coachTabsV2", false);
 
 function httpError(status: number, data?: Record<string, unknown>) {
   return Object.assign(new Error(`HTTP ${status}`), {

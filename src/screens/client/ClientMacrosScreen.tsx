@@ -23,6 +23,8 @@ import {
   StyleSheet,
   Text,
   View,
+  type StyleProp,
+  type TextStyle,
 } from 'react-native';
 import type { MacroTarget } from '../../api/macrosApi';
 import { useCurrentMacrosForSelf } from '../../hooks/useMacros';
@@ -32,7 +34,7 @@ import {
   type MacroDisplayMode,
 } from '../../macros/macroDisplay';
 import { reportMacroDisplay, useMacroDisplayMode } from '../../macros/macroDisplayStore';
-import { typography, spacing } from '../../theme/tokens';
+import { radius, typography, spacing } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { SemanticTokens } from '../../theme/tokens';
 import { useQuery } from '@tanstack/react-query';
@@ -40,6 +42,7 @@ import api from '../../services/api';
 import { useTodayLog } from '../../hooks/useApi';
 import { getTodayString } from '../../utils/date';
 import QuietBar from '../../ui/progress/QuietBar';
+import { MastLine, mast, MastTile, PaperPage, PlanMasthead, planStyleC, useCoachItalic } from './mealplan/planStyleC';
 
 export default function ClientMacrosScreen() {
   const { semanticColors: sc } = useTheme();
@@ -66,6 +69,10 @@ export default function ClientMacrosScreen() {
     void daily.refetch();
   }, [refetch, daily.refetch]);
 
+  const coachName = data && data.coach_id === coach.data?.id ? coach.data?.name.trim().split(/\s+/)[0] : undefined;
+  const eaten = { calories: consumed('total_calories'), protein: consumed('total_protein_g'), carbs: consumed('total_carbs_g'), fat: consumed('total_fat_g'), fiber: null };
+  const italic = useCoachItalic();
+
   return (
     <ScrollView
       style={styles.screen}
@@ -74,39 +81,75 @@ export default function ClientMacrosScreen() {
         <RefreshControl
           refreshing={isRefetching || daily.isRefetching}
           onRefresh={onRefresh}
-          tintColor={sc.accent}
+          // Forest pull-down above the masthead: the light ink (LO-927R2 B1).
+          tintColor={mast.ink}
         />
       }
     >
-      <Text style={[typography.h2, { color: sc.textPrimary }]}>
-        Your daily targets
-      </Text>
+      <PlanMasthead title="Your daily targets" testID="macros-masthead"
+        eyebrow={!isLoading && !isError && data ? (coachName ? `Set by ${coachName}` : 'Your target') : null}>
+        {!isLoading && !isError && data ? (
+          <>
+            {/* K5 Style C: the day's number large in the serif with its unit beside it. */}
+            <View accessible testID="macros-day-target">
+              <View style={styles.kcalRow}>
+                <Text style={styles.kcal}>{data.calories_kcal}</Text>
+                <MastLine muted style={styles.kcalUnit}>kcal per day</MastLine>
+              </View>
+              {eaten.calories != null ? <MastLine>{`${Math.round(eaten.calories)} kcal eaten today`}</MastLine> : null}
+            </View>
+            {/* K5 Style C: one outlined tile per macro target on the forest. */}
+            <View style={styles.tiles} testID="macros-tiles">
+              {targetCells(mode).filter((k) => k !== 'fiber').map((k) => (
+                <MastTile key={k} label={CELL_LABEL[k]} testID={`macros-tile-${k}`}
+                  value={targetValue(data, k) === null ? '—' : `${targetValue(data, k)}g`} />
+              ))}
+            </View>
+          </>
+        ) : null}
+      </PlanMasthead>
 
-      {isLoading ? (
-        <Text style={[typography.body, { color: sc.textMuted }]}>
-          Loading daily targets...
-        </Text>
-      ) : isError ? (
-        <Text style={[typography.body, { color: sc.textMuted }]}>
-          Could not load your targets right now. Pull to retry.
-        </Text>
-      ) : data ? (
-        <>
-          <TargetCard target={data} mode={mode} styles={styles} sc={sc}
-            coachName={data.coach_id === coach.data?.id ? coach.data?.name.trim().split(/\s+/)[0] : undefined}
-            eaten={{ calories: consumed('total_calories'), protein: consumed('total_protein_g'), carbs: consumed('total_carbs_g'), fat: consumed('total_fat_g'), fiber: null }} />
-          {daily.isError ? <Text style={[typography.bodySmall, { color: sc.textMuted }]}>Today's food totals did not load. Pull to retry.</Text>
-            : daily.isLoading ? <Text style={[typography.bodySmall, { color: sc.textMuted }]}>Loading today's food totals...</Text> : null}
-        </>
-      ) : (
-        <EmptyState styles={styles} sc={sc} />
-      )}
+      <PaperPage bg={sc.bgSurface}>
+        {isLoading ? (
+          <View style={styles.skeleton} accessible accessibilityRole="progressbar" testID="macros-loading">
+            <Text style={[typography.body, { color: sc.textMuted }]}>
+              Loading daily targets...
+            </Text>
+            <View style={[styles.bone, { backgroundColor: sc.border }]} />
+            <View style={[styles.bone, styles.boneShort, { backgroundColor: sc.border }]} />
+          </View>
+        ) : isError ? (
+          <View style={[planStyleC.card, styles.cardFill]} accessibilityRole="alert" accessibilityLiveRegion="polite">
+            <Text style={[typography.body, { color: sc.textPrimary }]}>
+              Could not load your targets right now. Pull to retry.
+            </Text>
+          </View>
+        ) : data ? (
+          <>
+            <TargetCard target={data} mode={mode} styles={styles} sc={sc} coachName={coachName} eaten={eaten} italic={italic} />
+            {daily.isError ? <Text style={[typography.bodySmall, styles.after, { color: sc.textMuted }]} accessibilityLiveRegion="polite">Today's food totals did not load. Pull to retry.</Text>
+              : daily.isLoading ? <Text style={[typography.bodySmall, styles.after, { color: sc.textMuted }]}>Loading today's food totals...</Text> : null}
+          </>
+        ) : (
+          <EmptyState styles={styles} sc={sc} />
+        )}
+      </PaperPage>
     </ScrollView>
   );
 }
 
 const CELL_LABEL = { protein: 'Protein', carbs: 'Carbs', fat: 'Fats', fiber: 'Fiber' } as const;
 
+function targetValue(target: MacroTarget, k: keyof typeof CELL_LABEL): number | null {
+  const v = { protein: target.protein_g, carbs: target.carbs_g, fat: target.fats_g, fiber: target.fiber_g }[k];
+  return typeof v === 'number' ? v : null;
+}
+
+/**
+ * Under the masthead (K5 Style C cards on the paper): the macro lines in one
+ * card, full width so the eaten / target line fits; the coach's note in the
+ * sage note card; then the date it took effect.
+ */
 function TargetCard({
   target,
   mode = 'full',
@@ -114,6 +157,7 @@ function TargetCard({
   sc,
   coachName,
   eaten,
+  italic,
 }: {
   target: MacroTarget;
   mode?: MacroDisplayMode;
@@ -121,6 +165,7 @@ function TargetCard({
   sc: SemanticTokens;
   coachName?: string;
   eaten: Record<'calories' | 'protein' | 'carbs' | 'fat' | 'fiber', number | null>;
+  italic: StyleProp<TextStyle>;
 }) {
   const values = {
     protein: target.protein_g,
@@ -130,46 +175,27 @@ function TargetCard({
   };
   const effective = formatDate(target.effective_from);
   return (
-    <View style={styles.card}>
-      <Text style={[typography.eyebrow, { color: sc.textMuted }]}>{coachName ? `Set by ${coachName}` : 'Your target'}</Text>
-      <View>
-        <Text style={[typography.display, { color: sc.textPrimary, fontVariant: ['tabular-nums'] }]}>
-          {target.calories_kcal}
-        </Text>
-        <Text style={[typography.bodySmall, { color: sc.textMuted }]}>
-          kcal per day
-        </Text>
-        {eaten.calories != null ? <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{`${Math.round(eaten.calories)} kcal eaten today`}</Text> : null}
-      </View>
-
-      <View style={styles.hairline} />
-
-      <View style={styles.macroGrid}>
+    <View style={styles.stack}>
+      <View style={[planStyleC.card, styles.cardFill, styles.macroGrid]} testID="macros-cells">
         {targetCells(mode).map((k) => (
           <MacroCell key={k} label={CELL_LABEL[k]} value={values[k]} current={eaten[k]} sc={sc} />
         ))}
+        {mode === 'simple' ? (
+          <Text
+            style={[typography.bodySmall, { color: sc.textMuted }]}
+            testID="macros-simple-note"
+          >
+            Only calories and protein are shown in this view.
+          </Text>
+        ) : null}
       </View>
 
-      {mode === 'simple' ? (
-        <Text
-          style={[typography.bodySmall, { color: sc.textMuted }]}
-          testID="macros-simple-note"
-        >
-          Only calories and protein are shown in this view.
-        </Text>
-      ) : null}
-
       {target.notes ? (
-        <View>
-          <Text
-            style={[
-              typography.eyebrow,
-              { color: sc.textMuted, marginBottom: spacing.xs },
-            ]}
-          >
+        <View style={[styles.note, { backgroundColor: sc.surface.sage }]} testID="macros-note">
+          <Text style={[planStyleC.eyebrow, { color: sc.accentText, marginBottom: spacing.sm }]}>
             {coachName ? 'Note from your coach' : 'Target note'}
           </Text>
-          <Text style={[typography.body, { color: sc.textPrimary }]}>
+          <Text style={[planStyleC.name, italic, { color: sc.textPrimary }]}>
             {target.notes}
           </Text>
         </View>
@@ -215,7 +241,7 @@ function MacroCell({
 
 function EmptyState({ styles, sc }: { styles: Styles; sc: SemanticTokens }) {
   return (
-    <View style={styles.card}>
+    <View style={[planStyleC.card, styles.cardFill, styles.empty]}>
       <Text style={[typography.h3, { color: sc.textPrimary }]}>
         No targets yet
       </Text>
@@ -242,17 +268,21 @@ type Styles = ReturnType<typeof makeStyles>;
 function makeStyles(sc: SemanticTokens) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: sc.bgPrimary },
-    content: { padding: spacing.lg, gap: spacing.lg },
-    card: {
-      paddingVertical: spacing.lg,
-      gap: spacing.lg,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderColor: sc.border,
-    },
-    hairline: {
-      height: StyleSheet.hairlineWidth,
-      backgroundColor: sc.border,
-    },
+    content: { flexGrow: 1 },
+    // K5 Style C: the number at 60 pt in the display serif, the unit on its baseline (wraps under at large text).
+    kcalRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: spacing.md, marginTop: spacing.md },
+    // Lining figures, as K5 sets its number (Cormorant's default figures are old-style).
+    kcal: { ...typography.display, fontSize: 60, lineHeight: 72, letterSpacing: 0, color: mast.ink, fontVariant: ['lining-nums', 'tabular-nums'] },
+    kcalUnit: { ...typography.body, marginTop: 0 },
+    tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.lg },
+    cardFill: { backgroundColor: sc.bgPrimary, borderColor: sc.border },
+    stack: { gap: spacing.xl },
     macroGrid: { gap: spacing.lg },
+    note: { borderRadius: radius.card, padding: spacing.lg },
+    empty: { gap: spacing.sm },
+    after: { marginTop: spacing.lg },
+    skeleton: { gap: spacing.md },
+    bone: { height: 14, borderRadius: radius.control, width: '80%' },
+    boneShort: { width: '50%' },
   });
 }

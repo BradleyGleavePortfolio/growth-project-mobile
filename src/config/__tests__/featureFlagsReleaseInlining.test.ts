@@ -42,6 +42,10 @@ function withEnv<T>(env: Env, fn: () => T): T {
   }
 }
 
+/** Every EXPO_PUBLIC_* the runner set, unset (the all-off build). */
+const unsetPublicEnv = (): Env =>
+  Object.fromEntries(Object.keys(process.env).filter((k) => k.startsWith('EXPO_PUBLIC_')).map((k) => [k, undefined]));
+
 function transformRelease(source: string, filename: string, env: Env): string {
   return withEnv(env, () => {
     const out = transformSync(source, {
@@ -241,7 +245,8 @@ describe('feature-flag readers survive release inlining', () => {
     });
 
     it('all-off env leaves every hard-false flag OFF (no accidental enablement)', () => {
-      const flags = build({});
+      // Pins EXPO_PUBLIC_FF_EXTENSION_IMPORT, EXPO_PUBLIC_FF_IMPORT_REVIEW, EXPO_PUBLIC_FEATURE_BLOODWORK and EXPO_PUBLIC_FF_ROMAN_CHAT off: this test is the all-off build.
+      const flags = build(unsetPublicEnv());
       for (const k of ['extensionImport', 'importReview', 'bloodwork', 'romanChat']) {
         expect({ [k]: flags[k] }).toEqual({ [k]: false });
       }
@@ -268,7 +273,8 @@ describe('feature-flag readers survive release inlining', () => {
       };
 
     it('missing → master OFF in release, capabilities OFF, badge ON (defaults preserved)', () => {
-      const f = build({});
+      // Pins every EXPO_PUBLIC_FF_AI_* capability switch off: this test is the build with them missing.
+      const f = build(unsetPublicEnv());
       expect(f.aiGatewayEnabled).toBe(false);
       expect(Object.values(f.capabilities).every((v) => v === false)).toBe(true);
       expect(f.showSourceBadge).toBe(true);

@@ -12,7 +12,8 @@ jest.mock('../../../services/api', () => ({
   },
 }));
 jest.mock('../../../theme/ThemeProvider', () => ({
-  useTheme: () => ({ colors: new Proxy({}, { get: () => '#000000' }) }),
+  // EXPO_PUBLIC_FF_FIRST_RUN_V2: the Style B auth screens sit in the shared Screen, which reads semanticColors.
+  useTheme: () => ({ colors: new Proxy({}, { get: () => '#000000' }), semanticColors: new Proxy({}, { get: () => '#000000' }) }),
 }));
 
 import ForgotPasswordScreen from '../ForgotPasswordScreen';
