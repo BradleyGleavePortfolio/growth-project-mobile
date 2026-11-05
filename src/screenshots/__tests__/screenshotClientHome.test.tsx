@@ -100,36 +100,40 @@ class Catch extends React.Component<{ children: React.ReactNode; onError: (e: Er
 }
 
 const prevMode = process.env.EXPO_PUBLIC_SCREENSHOT_MODE;
-let uninstall: () => void = () => undefined;
+const realAdapter = api.defaults.adapter;
 beforeAll(() => {
   process.env.EXPO_PUBLIC_SCREENSHOT_MODE = '1';
-  uninstall = installAxiosMockAdapter();
+  installAxiosMockAdapter();
+  expect(api.defaults.adapter).not.toBe(realAdapter);
 });
 afterAll(() => {
-  uninstall();
+  api.defaults.adapter = realAdapter;
   if (prevMode === undefined) delete process.env.EXPO_PUBLIC_SCREENSHOT_MODE;
   else process.env.EXPO_PUBLIC_SCREENSHOT_MODE = prevMode;
 });
 
+let client: QueryClient | undefined;
+afterEach(() => client?.clear());
+
 async function renderHome() {
   const thrown: Error[] = [];
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
-  render(
+  client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+  await render(
     <QueryClientProvider client={client}>
       <Catch onError={(e) => thrown.push(e)}><HomeScreen /></Catch>
     </QueryClientProvider>,
   );
-  return { thrown, client };
+  return { thrown };
 }
 
 describe('client Home in screenshot mode', () => {
   it('the rings Home renders the DEMO_HABITS rows through the real /habits read and does not throw', async () => {
     mockRings = true;
-    const { thrown, client } = await renderHome();
+    const { thrown } = await renderHome();
     // The habits tile names the demo habits once /habits and /habits/logs answer from the fixtures.
     expect(await screen.findByText(/Hydrate/, {}, { timeout: 4000 })).toBeTruthy();
     expect(thrown).toEqual([]);
-    expect(client.getQueryData(['habits', 'list'])).toEqual(DEMO_HABITS);
+    expect(client?.getQueryData(['habits', 'list'])).toEqual(DEMO_HABITS);
     expect(screen.queryByText(/undefined/)).toBeNull();
   });
 
@@ -176,8 +180,8 @@ describe('DEMO_ fixtures match the phone API types', () => {
 
   it('the Roman fixtures parse with the strict wire schemas the Roman API uses', () => {
     expect(RomanSessionSchema.safeParse(DEMO_ROMAN_SESSION).success).toBe(true);
-    const page = RomanWireMessagePageSchema.safeParse({ messages: DEMO_ROMAN_MESSAGES, next_cursor: null });
-    expect(page.success).toBe(true);
+    const page = RomanWireMessagePageSchema.safeParse({ messages: DEMO_ROMAN_MESSAGES, nextCursor: null });
+    expect(page.success ? [] : page.error.issues).toEqual([]);
   });
 
   it('every DEMO_WEIGHT_HISTORY row parses as a WeightLog', () => {
