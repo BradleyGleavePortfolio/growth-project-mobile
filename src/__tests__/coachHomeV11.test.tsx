@@ -506,7 +506,7 @@ describe('Needs you in the client-wins style (NEEDS-YOU-M, GOAL planning/MOCKUP3
     expect(label(v, 'home-needs')).toBe('Needs you, 2. Maya Ortiz, Last logged 8 days ago, and 1 more. Attention 1, Routine 1');
     expect(v.queryByTestId('home-needs-ring')).toBeNull();
   });
-  it('folds an open safety alert in: gold edge and ring, the client named with Safety alert, every open alert counted once', async () => {
+  it('folds an open safety alert in: gold edge and ring, the client named with Safety alert, every open alert counted once; Home to the alert, tap 1 of 2', async () => {
     mockSources.actionQueue.mockResolvedValue([queued('a2', 'risk_red', 'Hana Kim'), queued('a1', 'roman_crisis_reply', 'Avery Cole'), queued('a3', 'risk_red', 'Old One', '2026-11-01T00:00:00Z')]);
     const v = await renderHome();
     await waitFor(() => expect(label(v, 'home-needs')).toBe('Needs you, 4. Avery Cole, Safety alert, and 3 more. Attention 3, Routine 1'));

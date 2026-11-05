@@ -222,7 +222,7 @@ describe('UI-4 Needs you (under 15 clients)', () => {
     await act(async () => onTabBlur?.());
     expect(setParams).toHaveBeenCalledWith({ view: undefined });
   });
-  it('pins an open safety alert first in Attention in gold; it opens the safety alert, another alert opens Actions (NEEDS-YOU-M)', async () => {
+  it('pins an open safety alert first in Attention in gold; it opens the safety alert (Home to the alert, tap 2 of 2), another alert opens Actions (NEEDS-YOU-M)', async () => {
     const alert = (alert_id: string, alert_type: string, client_id: string, client_name: string, message: string, dismissed_at: string | null = null) => ({
       alert_id, alert_type, client_id, client_name, message, created_at: new Date().toISOString(), sent_at: new Date(Date.now() - 2 * 3_600_000).toISOString(), dismissed_at, quote: null,
     });
