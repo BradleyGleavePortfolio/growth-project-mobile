@@ -1052,23 +1052,37 @@ describe('List states + interactions — loading, refresh, navigation', () => {
     expect(getByTestId('coach-community-cohorts-loading')).toBeTruthy();
   });
 
-  it('Cohorts row tap navigates to the cohort detail with its id and name', async () => {
-    mockState.cohorts = {
-      data: [cohort()],
-      isLoading: false,
-      isError: false,
-      isRefetching: false,
-      refetch: jest.fn(),
-    };
-    const { getByTestId } = await render(<CoachCommunityCohortsScreen />);
-    await fireEvent.press(
-      getByTestId('coach-community-cohort-row-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
-    );
-    expect(mockNavigate).toHaveBeenCalledWith('CoachCommunityCohortDetail', {
-      cohortId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-      cohortName: 'Spring block',
-    });
-  });
+  // UNIT-MERGE-UP: the row tap follows communitySpaceChat (m#871). Both values are set here, so the
+  // normal suite and the "All switches on" job check the same two routes.
+  const cohortRowId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+  it.each([
+    [false, 'CoachCommunityCohortDetail', { cohortId: cohortRowId, cohortName: 'Spring block' }],
+    [true, 'CommunitySpaceChat', { cohortId: cohortRowId }],
+  ])(
+    'Cohorts row tap with communitySpaceChat %s navigates to %s with the cohort',
+    async (on, route, params) => {
+      const flags = jest.requireMock('../../../config/featureFlags').featureFlags;
+      const was = flags.communitySpaceChat;
+      flags.communitySpaceChat = on;
+      try {
+        mockState.cohorts = {
+          data: [cohort()],
+          isLoading: false,
+          isError: false,
+          isRefetching: false,
+          refetch: jest.fn(),
+        };
+        const { getByTestId } = await render(<CoachCommunityCohortsScreen />);
+        await fireEvent.press(
+          getByTestId('coach-community-cohort-row-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
+        );
+        expect(mockNavigate).toHaveBeenCalledTimes(1);
+        expect(mockNavigate).toHaveBeenCalledWith(route, params);
+      } finally {
+        flags.communitySpaceChat = was;
+      }
+    },
+  );
 
   it('Cohorts cancel closes the create modal without a mutation', async () => {
     const { getByTestId, queryByTestId } = await render(<CoachCommunityCohortsScreen />);
