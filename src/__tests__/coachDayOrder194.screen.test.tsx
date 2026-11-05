@@ -15,8 +15,6 @@ import api from '../services/api';
 import { useClientDetailData } from '../screens/coach/client-detail/useClientDetailData';
 import { TimelineTab } from '../screens/coach/client-detail/TimelineTab';
 import { mapCoachWorkoutSessions } from '../utils/workout/workoutLogging';
-import { peekSlices } from '../utils/coach/clientPeek';
-import type { RosterClient } from '../utils/coach/clientRoster';
 import { testColors } from '../screens/client/wearables/recoveryTestColors';
 
 jest.mock('axios', () => {
@@ -153,9 +151,6 @@ describe('recent_workouts read in one stable order: day, then save time, then id
     expect(mapCoachWorkoutSessions(recent).find((s) => s.id === 'undated')?.day).toBe('2026-11-02');
   });
 
-  it("the peek's last workout is the newest day, not the newest save", () => {
-    const client = { id: 'client-test', name: 'Test client', status: 'active' } as unknown as RosterClient;
-    const s = { ...summary, recent_workouts: [recent[0], recent[2], recent[4]] };
-    expect(peekSlices(client, s, [], 'coach-test', null, new Date()).workouts.text).toBe('Workout b on Monday');
-  });
+  // CLIENT-FILE-DAYS-M: the peek no longer names the last workout; its Workouts row is the client file's week
+  // (screens/coach/__tests__/ClientPeekWeek196.test.tsx).
 });

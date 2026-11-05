@@ -36,11 +36,19 @@ import { assignmentDay } from '../../utils/workout/workoutDay';
 import { buildPlanDay, buildUsualDay, dayWord, joinNames, loggedOn, nextSlot, type DaySlot, type PastDay } from '../../utils/log/foodDay';
 import { buildTimeline, clockOf, dayLeft, logMinutes, minutesOf, type TimelineItem } from '../../utils/log/foodTimeline';
 import type { PlanLink } from '../../utils/log/planLink';
+import { countsInDay } from '../../utils/log/queuedDay';
 
 const n = (v: number) => Math.round(v).toLocaleString('en-US');
 // UI-3c board: each plan's own dot, newest plan first (gold, then forest; a third plan takes the dark gold).
 const DOTS = [gold[300], palette.cream, gold[700]].map((backgroundColor) => ({ backgroundColor }));
 const dotOf = (i = 0) => DOTS[i % DOTS.length];
+// OFFLINE-FOOD-M (LS-931 B2): a food saved offline reads as waiting in the plan day too, with the words
+// the C2 Style C offline frame draws under its meal (C2-S-15 + C2-S-16; several foods: the plural
+// approved #196-E11); a refused one with the app's error title (C2-S-18). Shown, never as synced.
+const offlineLine = (waiting: FoodLog[]) => (waiting.length === 1
+  ? `Saved offline. ${waiting[0].foodName} will sync when you reconnect.`
+  : `Saved offline. ${waiting.length} foods will sync when you reconnect.`);
+const REFUSED = "Couldn't log food";
 const longDay = (date: string) =>
   new Date(`${date}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }).replace(',', '');
 const nowMinutes = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
@@ -101,15 +109,19 @@ function ForestBand() {
   return navigation ? <ForestBandOwner /> : null;
 }
 
-/** The timeline mark: filled forest once eaten (fills in 200 ms; Reduce Motion: at once). */
-function Mark({ done, reduced, style, fill }: { done: boolean; reduced: boolean; style: object; fill: object }) {
+/**
+ * The timeline mark: filled forest once eaten (fills in 200 ms; Reduce Motion: at once). While a food in it
+ * waits to sync it is C_offline's dashed ring (main's OFFLINE-FOOD-M mark), never filled as synced.
+ */
+function Mark({ done, waiting = false, reduced, style, fill, testID }:
+  { done: boolean; waiting?: boolean; reduced: boolean; style: object; fill: object; testID?: string }) {
   const v = useRef(new Animated.Value(done ? 1 : 0)).current;
   useEffect(() => {
     if (reduced) { v.setValue(done ? 1 : 0); return; }
     Animated.timing(v, { toValue: done ? 1 : 0, duration: 200, useNativeDriver: true }).start();
   }, [done, reduced, v]);
   return (
-    <View style={style}>
+    <View style={[style, waiting && MARK_WAITING]} testID={testID}>
       <Animated.View style={[fill, { opacity: v, transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }] }]} />
     </View>
   );
@@ -169,18 +181,23 @@ export default function FoodDayView(p: FoodDayViewProps) {
     },
   });
   // Each food carries the plan or usual meal it was logged for (FOODLINK), so the day is rebuilt from the server's log.
+  // A food the server refused ticks off no meal and counts in nothing; it shows with the extras, marked.
+  const counted = useMemo(() => p.foodLogs.filter(countsInDay), [p.foodLogs]);
+  const refused = useMemo(() => p.foodLogs.filter((l) => !countsInDay(l)), [p.foodLogs]);
   const day = useMemo(() => {
-    if (plans.length > 0) return buildPlanDay(plans, p.foodLogs);
+    if (plans.length > 0) return buildPlanDay(plans, counted);
     if (!usualDay) return null;
-    const usual = past.data ? buildUsualDay(past.data, p.foodLogs) : null;
+    const usual = past.data ? buildUsualDay(past.data, counted) : null;
     return usual && usual.slots.length > 0 ? usual : null;
-  }, [plans, usualDay, past.data, p.foodLogs]);
+  }, [plans, usualDay, past.data, counted]);
   const workout = useMemo(() => {
     const row = (workouts.data ?? []).find((w) => assignmentDay(w) === p.selectedDate && !(w as { skipped_at?: string | null }).skipped_at);
     const name = row ? (row.snapshot?.plan_name ?? row.workout_plan?.name ?? '').trim() : '';
     return row && name ? { name, time: row.scheduled_time ?? null } : null;
   }, [workouts.data, p.selectedDate]);
-  const items = useMemo(() => (day ? buildTimeline({ day, nowMin, workout }) : []), [day, nowMin, workout]);
+  // A refused food sits with the extras at its time, marked (main's OFFLINE-FOOD-M rule).
+  const items = useMemo(() => (day ? buildTimeline({ day: refused.length ? { ...day, extras: [...day.extras, ...refused] } : day, nowMin, workout }) : []),
+    [day, refused, nowMin, workout]);
 
   // Section 5: after "Ate it as planned" the now line eases to its new place in 300 ms (Reduce Motion: at once).
   const doneCount = day ? day.slots.filter((x) => x.logs.length > 0).length + day.extras.length : 0;
@@ -232,8 +249,8 @@ export default function FoodDayView(p: FoodDayViewProps) {
 
   if (!day) {
     // C_first (coachless, or coached with no plan, and no usual meal yet): no coach, no Roman.
-    const logsOf = (t: MealType) => p.foodLogs.filter((l) => l.mealType === t);
-    const others = p.foodLogs.filter((l) => !FIRST_MEALS.some((m) => m.type === l.mealType));
+    const logsOf = (t: MealType) => counted.filter((l) => l.mealType === t);
+    const others = [...counted.filter((l) => !FIRST_MEALS.some((m) => m.type === l.mealType)), ...refused];
     return (
       <View testID="food-day">
         <View style={[s.mast, { paddingTop: top }]} testID="food-day-masthead">
@@ -251,26 +268,29 @@ export default function FoodDayView(p: FoodDayViewProps) {
             <Ionicons name="create-outline" size={22} color={sc.accentText} />
             <Text style={s.toolText}>Enter manually</Text>
           </HapticPressable>
-          <HapticPressable intent="light" disableAnimation onPress={() => p.onSomethingElse(nextFirst(p.foodLogs))} style={s.search}
+          <HapticPressable intent="light" disableAnimation onPress={() => p.onSomethingElse(nextFirst(counted))} style={s.search}
             accessibilityRole="search" accessibilityLabel="Search foods..." testID="food-day-first-search">
             <Ionicons name="search-outline" size={22} color={sc.textMuted} />
             <Text style={s.searchText}>Search foods...</Text>
           </HapticPressable>
           <View style={s.timeline}>
-            {nowMin != null ? nowRow(s, nowMin, () => p.onSomethingElse(nextFirst(p.foodLogs))) : null}
+            {nowMin != null ? nowRow(s, nowMin, () => p.onSomethingElse(nextFirst(counted))) : null}
             {FIRST_MEALS.map((m) => {
               const mine = logsOf(m.type);
+              const waiting = mine.filter((l) => l.offline === 'waiting');
               return (
                 <HapticPressable key={m.type} intent="light" disableAnimation testID={`food-day-first-${m.type}`}
                   onPress={() => (mine.length === 1 ? p.onEditFood(mine[0]) : p.onSomethingElse(m.type))}
-                  accessibilityRole="button" accessibilityLabel={mine.length ? `${m.label}. ${joinNames(mine.map((l) => l.foodName))}` : `${m.label}. Nothing yet`}
+                  accessibilityRole="button" accessibilityLabel={mine.length ? `${m.label}. ${joinNames(mine.map((l) => l.foodName))}${waiting.length ? `. ${offlineLine(waiting)}` : ''}` : `${m.label}. Nothing yet`}
                   style={s.row}>
                   <Text style={s.time}>{mine.length && logMinutes(mine[0]) != null ? clockOf(logMinutes(mine[0]) as number) : ''}</Text>
-                  <View style={s.rail}><View style={s.line} /><Mark done={mine.length > 0} reduced={reduced} style={s.mark} fill={s.markFill} /></View>
+                  <View style={s.rail}><View style={s.line} /><Mark done={mine.length > 0 && waiting.length === 0} waiting={waiting.length > 0} reduced={reduced}
+                    style={s.mark} fill={s.markFill} testID={waiting.length ? `food-day-waiting-${m.type}` : undefined} /></View>
                   <View style={s.body}>
                     <Text style={s.eyebrow}>{m.label.toUpperCase()}</Text>
                     {mine.length ? <Text style={s.sansName}>{joinNames(mine.map((l) => l.foodName))}</Text>
                       : <Text style={s.nothing}>Nothing yet</Text>}
+                    {waiting.length ? <Text style={s.meta}>{offlineLine(waiting)}</Text> : null}
                   </View>
                 </HapticPressable>
               );
@@ -312,7 +332,8 @@ export default function FoodDayView(p: FoodDayViewProps) {
 
   const slotRow = (x: DaySlot, min: number | null) => {
     const isDone = x.logs.length > 0;
-    const sub = isDone ? x.status : x.usual ? loggedOn(x.usual.days, yesterday)
+    const waiting = x.logs.filter((l) => l.offline === 'waiting');
+    const sub = isDone ? (waiting.length > 0 ? offlineLine(waiting) : x.status) : x.usual ? loggedOn(x.usual.days, yesterday)
       : x.label === 'Pre-workout' && workoutLine ? workoutLine : null;
     const name = !isDone && x.usual ? `Your usual: ${x.name}` : x.name;
     const kcal = isDone ? x.logs.reduce((t, l) => t + l.calories, 0) : x.kcal;
@@ -324,7 +345,8 @@ export default function FoodDayView(p: FoodDayViewProps) {
           accessibilityLabel={`${min != null ? `${clockOf(min)}. ` : ''}${x.label}. ${name}.${sub ? ` ${sub}.` : ''} ${n(kcal)} kcal${x.plan ? `. From ${x.plan}.` : ''}`}
           style={s.row} testID={`food-day-slot-${x.key}`}>
           <Text style={s.time}>{min != null ? clockOf(min) : ''}</Text>
-          <View style={s.rail}><View style={s.line} /><Mark done={isDone} reduced={reduced} style={s.mark} fill={s.markFill} /></View>
+          <View style={s.rail}><View style={s.line} /><Mark done={isDone && waiting.length === 0} waiting={waiting.length > 0} reduced={reduced} style={s.mark} fill={s.markFill}
+              testID={waiting.length > 0 ? `food-day-waiting-${x.key}` : undefined} /></View>
           <View style={s.body}>
             {head(x.label, kcal)}
             <Text style={s.serifName}>{name}</Text>
@@ -334,7 +356,7 @@ export default function FoodDayView(p: FoodDayViewProps) {
         </HapticPressable>
         {expanded ? x.logs.map((l) => (
           <HapticPressable key={l.id} intent="light" disableAnimation onPress={() => p.onEditFood(l)} style={s.food}
-            accessibilityRole="button" accessibilityLabel={`${l.foodName}, ${n(l.calories)} kcal`}>
+            accessibilityRole="button" accessibilityLabel={`${l.foodName}, ${n(l.calories)} kcal${l.offline ? '. Saved offline' : ''}`}>
             <View style={s.rail}><View style={s.line} /></View>
             <Text style={[s.small, s.grow]} numberOfLines={1}>{l.foodName}</Text>
             <Text style={s.smallMuted}>{n(l.calories)}</Text>
@@ -482,18 +504,23 @@ function nowRow(s: Styles, min: number, onAdd: () => void) {
 
 function extraRow(s: Styles, l: FoodLog, reduced: boolean, onEdit: (l: FoodLog) => void, plan = true) {
   const min = logMinutes(l);
+  // Main's OFFLINE-FOOD-M marks: a waiting food carries the offline line in place of its meal; a refused one
+  // says so and shows no number (it counts in nothing).
+  const mark = l.offline === 'refused' ? REFUSED : l.offline === 'waiting' ? offlineLine([l]) : null;
   return (
-    <HapticPressable key={l.id} intent="light" disableAnimation onPress={() => onEdit(l)} style={s.row} testID={`food-day-extra-${l.id}`}
-      accessibilityRole="button" accessibilityLabel={`${l.foodName}, logged to ${l.mealType}, ${n(l.calories)} kcal`}>
+    <HapticPressable key={l.id} intent="light" disableAnimation onPress={() => onEdit(l)} style={s.row}
+      testID={mark ? `food-day-offline-${l.id}` : `food-day-extra-${l.id}`} accessibilityRole="button"
+      accessibilityLabel={l.offline === 'refused' ? `${l.foodName}. ${REFUSED}`
+        : `${l.foodName}, logged to ${l.mealType}, ${n(l.calories)} kcal${mark ? '. Saved offline' : ''}`}>
       <Text style={s.time}>{min != null ? clockOf(min) : ''}</Text>
-      <View style={s.rail}><View style={s.line} /><Mark done={false} reduced={reduced} style={s.mark} fill={s.markFill} /></View>
+      <View style={s.rail}><View style={s.line} /><Mark done={false} waiting={!!mark} reduced={reduced} style={s.mark} fill={s.markFill} /></View>
       <View style={s.body}>
         <Text style={s.eyebrowRow}>
           <Text style={s.eyebrow}>{plan ? 'EXTRAS, NOT IN THE PLAN' : 'EXTRAS'}</Text>
-          <Text style={s.kcal}>{` ${n(l.calories)} KCAL`}</Text>
+          {l.offline === 'refused' ? null : <Text style={s.kcal}>{` ${n(l.calories)} KCAL`}</Text>}
         </Text>
         <Text style={s.sansName}>{l.foodName}</Text>
-        <Text style={s.meta}>{`Logged to ${l.mealType}`}</Text>
+        <Text style={s.meta}>{mark ?? `Logged to ${l.mealType}`}</Text>
       </View>
     </HapticPressable>
   );
@@ -529,6 +556,7 @@ function DaySkeleton({ s, top }: { s: Styles; top: number }) {
 
 const MARK = 16;
 const RAIL = 24;
+const MARK_WAITING = { borderStyle: 'dashed' as const };
 const makeStyles = (sc: SemanticTokens, gutter: number, wideCard = false) => StyleSheet.create({
   grow: { flex: 1, minWidth: 0 },
   // Masthead (section 3: deep forest, Cormorant-led, gold rule); it runs edge to edge under the page gutters.

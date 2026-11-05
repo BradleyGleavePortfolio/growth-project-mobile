@@ -95,7 +95,6 @@ const SAVES_AND_READS: Array<[file: string, what: string, uses: RegExp]> = [
   ['src/utils/workout/workoutLogging.ts', "coach view: each session's recorded day", /day: workoutDay\(s\)/],
   ['src/screens/coach/client-detail/WorkoutsTab.tsx', 'coach workouts tab: week count, trend, day labels', /s\.day \|\| instantDay\(/],
   ['src/screens/coach/client-detail/useClientDetailData.ts', 'coach client detail: weekly workouts', /workoutDay\(/],
-  ['src/utils/coach/clientPeek.ts', 'coach peek: last workout and next assignment', /assignmentDay\(/],
 ];
 
 const RULE_IMPORT = /from ['"](?:\.{1,2}\/)+(?:[\w-]+\/)*workoutDay['"]/;
@@ -299,7 +298,6 @@ const LISTED_LINES: Record<string, Array<[snippet: string, why: string]>> = {
   'src/utils/workout/workoutLogging.ts': [['const finishedAt = s.completed_at || s.created_at || s.date', "the session's sort instant; its day is workoutDay(s)"], ['Date.parse(textOf(row.created_at))', 'the save moment, a tie-break inside the day workoutDay picked']],
   'src/screens/coach/client-detail/WorkoutsTab.tsx': [['{ date: dayOfSession(s), weight }', 'dayOfSession reads s.day or instantDay (listed above)'], ['a.date.localeCompare(b.date)', 'points dated by dayOfSession'], ['dayText(p.date)', 'points dated by dayOfSession'], ['dayText(points[0].date)', 'points dated by dayOfSession'], ['dayText(points[points.length - 1].date)', 'points dated by dayOfSession']],
   'src/screens/coach/client-detail/useClientDetailData.ts': [['if (s.created_at && instantDay(s.created_at) === day) return s.created_at;', 'recordedAt: the stored instant when it falls on workoutDay(s)'], ["?? s.created_at ?? s.date ?? ''", 'recordedAt: fallback instant after the start of workoutDay(s)'], ['date: today,', 'a food row dated today'], ['bucketDateLocal(new Date(w.date))', 'a weight log sent as a timestamp, not a workout'], ["date: typeof w.date === 'string' ? w.date.slice(0, 10)", 'a weight log day'], ['(meal.date || meal.logged_at', 'a meal day'], ["date: dateStr + 'T", 'a timeline event instant'], ["(w.date || '').slice(0, 10)", 'a weight log day'], ['date: recordedAt(s)', 'recordedAt returns workoutDay'], ["date: String(c.date || '').slice(0, 10)", 'a check-in day'], ["add(String(c.date || '').slice(0, 10)", 'a check-in day, its timeline place']],
-  'src/utils/coach/clientPeek.ts': [['localDay(latest.date, false)', 'a check-in day'], ['localDay(weight.date, false)', 'a weight log day']],
 };
 
 

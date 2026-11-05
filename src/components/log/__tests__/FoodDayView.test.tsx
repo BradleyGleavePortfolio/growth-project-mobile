@@ -280,8 +280,11 @@ it('builds the usual day for a client with no coach, ready to repeat', async () 
   expect(props.onRepeat).toHaveBeenCalledWith(expect.objectContaining({
     mealType: 'snack',
     usual: expect.objectContaining({ meal: expect.objectContaining({ date: addDays(today, -1), entries: [
-      { foodItemId: 'apple', name: 'Apple, medium', calories: 95, quantityMultiplier: 1, originalQuantity: 1, originalUnit: 'medium' },
-      { foodItemId: 'pb', name: 'Peanut butter', calories: 95, quantityMultiplier: 1, originalQuantity: 1, originalUnit: 'tbsp' },
+      // LS-931 B3: each entry also carries what the day shows when it is repeated offline.
+      { foodItemId: 'apple', name: 'Apple, medium', calories: 95, quantityMultiplier: 1, originalQuantity: 1, originalUnit: 'medium',
+        shown: { name: 'Apple, medium', calories: 95, protein_g: 4, carbs_g: 20, fat_g: 8 } },
+      { foodItemId: 'pb', name: 'Peanut butter', calories: 95, quantityMultiplier: 1, originalQuantity: 1, originalUnit: 'tbsp',
+        shown: { name: 'Peanut butter', calories: 95, protein_g: 4, carbs_g: 20, fat_g: 8 } },
     ] }) }),
   }));
   await fireEvent.press(screen.getByTestId('food-day-something-else'));

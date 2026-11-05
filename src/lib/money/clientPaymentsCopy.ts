@@ -51,6 +51,8 @@ export function planStateLine(p: ClientPlan, name: string): string {
       return "The billing state could not be read just now. Pull down to refresh.";
     case "running":
       if (p.status === "past_due" || p.status === "unpaid") {
+        // HELD-RENEWAL-M2: a renewal held on the coach's own Stripe account is not a failed payment (m#920 W1 words).
+        if (p.waitingOn === "coach_account") return "Waiting on your Stripe account.";
         return "The latest payment did not go through, so billing cannot be paused. Cancel plan ends the plan now.";
       }
       if (p.status === "trialing") return until ? `In a free trial until ${until}.` : "In a free trial.";
