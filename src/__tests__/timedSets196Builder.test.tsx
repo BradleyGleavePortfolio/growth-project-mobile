@@ -415,3 +415,35 @@ describe('Adjust for client copies the unit', () => {
     expect('unit' in rows[0]).toBe(false);
   });
 });
+
+// ─── LS-928 B5: the K3 Style C row treatment ────────────────────────────────
+
+describe('LS-928 B5: the row reads as K3 C_row: a forest band and a sage stepper card', () => {
+  it('each row has its band and stepper card; minus and plus move the number by its step', async () => {
+    setFlag(false);
+    const Screen = loadScreen();
+    const view = await render(<Screen />);
+    await waitFor(() => expect(view.getByTestId('row-1-count-seconds')).toBeTruthy());
+    expect(view.getByTestId('row-0-header')).toBeTruthy();
+    const plank = within(view.getByTestId('row-1-steppers'));
+    const bench = within(view.getByTestId('row-0-steppers'));
+    // The plank counts in seconds and moves 5 at a time; rest moves 15.
+    expect(plank.getByLabelText('Seconds').props.value).toBe('60');
+    await fireEvent.press(plank.getByLabelText('Increase seconds'));
+    expect(plank.getByLabelText('Seconds').props.value).toBe('65');
+    await fireEvent.press(plank.getByLabelText('Decrease rest'));
+    expect(plank.getByLabelText('Rest (s)').props.value).toBe('15');
+    // The bench counts reps one at a time; sets never go below 1.
+    await fireEvent.press(bench.getByLabelText('Increase reps'));
+    expect(bench.getByLabelText('Reps').props.value).toBe('11');
+    await fireEvent.press(bench.getByLabelText('Decrease sets'));
+    await fireEvent.press(bench.getByLabelText('Decrease sets'));
+    await fireEvent.press(bench.getByLabelText('Decrease sets'));
+    expect(bench.getByLabelText('Sets').props.value).toBe('1');
+    expect(bench.getByLabelText('Decrease sets').props.accessibilityState).toMatchObject({ disabled: true });
+    // Typing still works.
+    await fireEvent.changeText(bench.getByLabelText('Sets'), '5');
+    expect(bench.getByLabelText('Sets').props.value).toBe('5');
+    await act(async () => {});
+  });
+});

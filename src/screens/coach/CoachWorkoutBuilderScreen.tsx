@@ -1820,17 +1820,17 @@ export default function CoachWorkoutBuilderScreen() {
           rows.map((row, idx) => (
             <View
               key={`${row.exercise_external_id}-${idx}`}
-              style={[styles.rowCard, { borderColor: sc.border }]}
+              style={[styles.rowCard, { borderColor: sc.surface.sageLine, backgroundColor: sc.bgSurface }]}
             >
-              <View style={styles.rowHeader}>
+              {/* LS-928 B5: the K3 Style C row (C_row) treatment: the exercise on a
+                  deep-forest band in the serif, its controls in near-white on it. */}
+              <View testID={`row-${idx}-header`} style={[styles.rowHeader, { backgroundColor: sc.surface.masthead }]}>
                 <View style={styles.rowIdentity}>
-                  {/* Reorder marker, not a drag target: the arrows below move rows. */}
-                  <Ionicons name="reorder-three-outline" size={20} color={sc.textMuted} accessible={false} />
                   <CoachExerciseName
                     id={row.exercise_external_id}
                     fallback={row.display_name}
                     prefix={`${idx + 1}. `}
-                    style={[typography.bodyMd, { color: sc.textPrimary, flex: 1 }]}
+                    style={[typography.h2, styles.rowName, { color: sc.textOnAccent }]}
                   />
                 </View>
                 <View style={styles.rowControls}>
@@ -1842,7 +1842,7 @@ export default function CoachWorkoutBuilderScreen() {
                     disabled={editorLocked || idx === 0}
                     style={[styles.controlBtn, (editorLocked || idx === 0) && styles.historyButtonDisabled]}
                   >
-                    <Ionicons name="chevron-up-outline" size={20} color={sc.textPrimary} />
+                    <Ionicons name="chevron-up-outline" size={20} color={sc.textOnAccent} />
                   </HapticPressable>
                   <HapticPressable
                     accessibilityRole="button"
@@ -1852,7 +1852,7 @@ export default function CoachWorkoutBuilderScreen() {
                     disabled={editorLocked || idx === rows.length - 1}
                     style={[styles.controlBtn, (editorLocked || idx === rows.length - 1) && styles.historyButtonDisabled]}
                   >
-                    <Ionicons name="chevron-down-outline" size={20} color={sc.textPrimary} />
+                    <Ionicons name="chevron-down-outline" size={20} color={sc.textOnAccent} />
                   </HapticPressable>
                   <HapticPressable
                     accessibilityRole="button"
@@ -1863,7 +1863,7 @@ export default function CoachWorkoutBuilderScreen() {
                     onPress={() => setsInputRefs.current.get(row.clientId)?.focus()}
                     style={[styles.controlBtn, editorLocked && styles.historyButtonDisabled]}
                   >
-                    <Ionicons name="create-outline" size={20} color={sc.textPrimary} />
+                    <Ionicons name="create-outline" size={20} color={sc.textOnAccent} />
                   </HapticPressable>
                   <HapticPressable
                     accessibilityRole="button"
@@ -1873,10 +1873,11 @@ export default function CoachWorkoutBuilderScreen() {
                     onPress={() => removeRow(idx)}
                     style={[styles.controlBtn, editorLocked && styles.historyButtonDisabled]}
                   >
-                    <Ionicons name="trash-outline" size={20} color={sc.textMuted} />
+                    <Ionicons name="trash-outline" size={20} color={sc.textOnAccent} />
                   </HapticPressable>
                 </View>
               </View>
+              <View style={styles.rowBody}>
               {/* TIMED-SETS-M: K3 Style C row sheet, "Count by" Reps | Seconds (K3-C-19, K3-S-40, K3-S-41). */}
               <View style={styles.countByRow}>
                 <Text style={[typography.bodyMd, styles.countByLabel, { color: sc.textPrimary }]}>Count by</Text>
@@ -1904,36 +1905,44 @@ export default function CoachWorkoutBuilderScreen() {
                 })}
                 </View>
               </View>
-              <View style={styles.rowInputs}>
-                <NumberField
+              {/* LS-928 B5: the sage stepper card (C_row): one line per number, its
+                  label at the start and minus, the number, plus at the end. */}
+              <View testID={`row-${idx}-steppers`} style={[styles.stepperCard, { backgroundColor: sc.surface.sage, borderColor: sc.surface.sageLine }]}>
+                <StepperField
                   label="Sets"
+                  spoken="sets"
                   inputRef={(input) => {
                     if (input) setsInputRefs.current.set(row.clientId, input);
                     else setsInputRefs.current.delete(row.clientId);
                   }}
                   editable={!editorLocked}
                   value={row.sets}
+                  step={1}
+                  min={1}
                   onChange={(v) => updateRow(idx, { sets: v })}
-                  flex={0.75}
                   sc={sc}
                 />
-                <NumberField
+                <StepperField
                   label={unitOf(row) === 'seconds' ? 'Seconds' : 'Reps'}
-                  // "Seconds" is one long word: this column takes a little of
-                  // Sets' room so it never breaks mid-word at 320 wide, large text.
-                  flex={1.25}
+                  spoken={unitOf(row) === 'seconds' ? 'seconds' : 'reps'}
                   editable={!editorLocked}
                   value={row.reps_or_duration_seconds}
+                  step={unitOf(row) === 'seconds' ? 5 : 1}
                   onChange={(v) => updateRow(idx, { reps_or_duration_seconds: v })}
                   sc={sc}
+                  divider
                 />
-                <NumberField
+                <StepperField
                   label="Rest (s)"
+                  spoken="rest"
                   editable={!editorLocked}
                   value={row.rest_seconds ?? 0}
+                  step={15}
                   onChange={(v) => updateRow(idx, { rest_seconds: v })}
                   sc={sc}
+                  divider
                 />
+              </View>
               </View>
             </View>
           ))
@@ -2006,42 +2015,73 @@ export default function CoachWorkoutBuilderScreen() {
   );
 }
 
-function NumberField(props: {
+/**
+ * LS-928 B5: one line of the K3 Style C row's sage stepper card. The number
+ * stays typeable (the same field as before); minus and plus move it by `step`
+ * and never below `min` or past 9999 (the field's four digits).
+ */
+function StepperField(props: {
   label: string;
+  spoken: string;
   value: number;
   onChange: (n: number) => void;
   sc: SemanticTokens;
+  step: number;
+  min?: number;
   editable?: boolean;
+  divider?: boolean;
   inputRef?: (input: TextInput | null) => void;
-  flex?: number;
 }) {
-  const { label, value, onChange, sc, editable = true, inputRef, flex = 1 } = props;
+  const { label, spoken, value, onChange, sc, step, min = 0, editable = true, divider, inputRef } = props;
+  const clamp = (n: number) => Math.min(9999, Math.max(min, n));
+  const canDown = editable && value > min;
+  const canUp = editable && value < 9999;
+  const button = (dir: -1 | 1, enabled: boolean) => (
+    <HapticPressable
+      intent="light"
+      accessibilityRole="button"
+      accessibilityLabel={`${dir < 0 ? 'Decrease' : 'Increase'} ${spoken}`}
+      accessibilityState={{ disabled: !enabled }}
+      disabled={!enabled}
+      onPress={() => onChange(clamp(value + dir * step))}
+      style={[stepperStyles.button, { borderColor: sc.textPrimary, backgroundColor: sc.bgSurface }, !enabled && { opacity: 0.4 }]}
+    >
+      <Ionicons name={dir < 0 ? 'remove-outline' : 'add-outline'} size={22} color={sc.textPrimary} />
+    </HapticPressable>
+  );
   return (
-    <View style={{ flex }}>
-      <Text style={[typography.caption, { color: sc.textMuted, fontSize: 13 }]}>{label}</Text>
-      <TextInput
-        ref={inputRef}
-        accessibilityLabel={label}
-        value={String(value)}
-        editable={editable}
-        onChangeText={(t) => {
-          const parsed = parseInt(t.replace(/[^0-9]/g, ''), 10);
-          onChange(Number.isFinite(parsed) ? parsed : 0);
-        }}
-        keyboardType="number-pad"
-        style={[typography.body, {
-          borderBottomWidth: StyleSheet.hairlineWidth,
-          borderColor: sc.border,
-          minHeight: 44,
-          paddingVertical: spacing.xs,
-          color: sc.textPrimary,
-          fontVariant: ['tabular-nums'],
-        }]}
-        maxLength={4}
-      />
+    <View style={[stepperStyles.line, divider && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: sc.surface.sageLine }]}>
+      <Text style={[typography.body, stepperStyles.label, { color: sc.textPrimary }]}>{label}</Text>
+      <View style={stepperStyles.group}>
+        {button(-1, canDown)}
+        <TextInput
+          ref={inputRef}
+          accessibilityLabel={label}
+          value={String(value)}
+          editable={editable}
+          onChangeText={(t) => {
+            const parsed = parseInt(t.replace(/[^0-9]/g, ''), 10);
+            onChange(Number.isFinite(parsed) ? parsed : 0);
+          }}
+          keyboardType="number-pad"
+          style={[typography.h4, stepperStyles.value, { color: sc.textPrimary }]}
+          maxLength={4}
+        />
+        {button(1, canUp)}
+      </View>
     </View>
   );
 }
+
+const stepperStyles = StyleSheet.create({
+  // The minus-number-plus group moves under its label as one group when they
+  // do not fit on one line (320 wide, large text).
+  line: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', columnGap: spacing.sm, rowGap: spacing.xs, paddingVertical: spacing.sm },
+  label: { flexGrow: 1, flexShrink: 1 },
+  group: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginStart: 'auto' },
+  button: { width: 44, height: 44, borderRadius: radius.chip, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  value: { minWidth: 64, minHeight: 44, textAlign: 'center', fontFamily: 'Inter_600SemiBold', fontVariant: ['tabular-nums'], paddingVertical: 0 },
+});
 
 function makeStyles(sc: SemanticTokens) {
   return StyleSheet.create({
@@ -2097,19 +2137,25 @@ function makeStyles(sc: SemanticTokens) {
     rowCard: {
       borderWidth: StyleSheet.hairlineWidth,
       borderRadius: radius.card,
-      padding: spacing.lg,
       marginBottom: spacing.md,
+      overflow: 'hidden',
     },
+    // LS-928 B5 (K3 C_row): the deep-forest band carrying the exercise.
     rowHeader: {
       gap: spacing.sm,
-      marginBottom: spacing.sm,
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.md,
+      paddingBottom: spacing.md,
     },
     rowIdentity: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
+    rowName: { flex: 1 },
     rowControls: { flexDirection: 'row', gap: spacing.sm, justifyContent: 'flex-end' },
     controlBtn: {
-      minHeight: 44, minWidth: 44, borderWidth: StyleSheet.hairlineWidth, borderColor: sc.border,
+      minHeight: 44, minWidth: 44, borderWidth: StyleSheet.hairlineWidth, borderColor: sc.surface.forestBandLine,
       borderRadius: radius.button, alignItems: 'center', justifyContent: 'center',
     },
+    rowBody: { padding: spacing.lg },
+    stepperCard: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.card, paddingHorizontal: spacing.lg, paddingVertical: spacing.xs },
     rowInputs: { flexDirection: 'row', gap: spacing.sm },
     // K3 C row (BEAUTY-928, as drawn): "Count by" at the start in the row's
     // label type, and one joined Reps | Seconds control at the end: a forest
