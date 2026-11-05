@@ -8,7 +8,7 @@
  * The screen mocks are copied from coachWorkoutBuilderAutosave.test.tsx.
  */
 import React from 'react';
-import { render, waitFor, fireEvent, act } from '@testing-library/react-native';
+import { render, waitFor, fireEvent, act, within } from '@testing-library/react-native';
 import { buildSetExercisesPayload, type DraftExerciseRow } from '../screens/coach/CoachWorkoutBuilderScreen';
 import { diffWorkingCopy, type WorkoutBuilderWorkingCopy } from '../screens/coach/workoutBuilderAutosaveDiff';
 
@@ -369,6 +369,34 @@ describe('the builder row: Count by Reps | Seconds', () => {
     expect(body.ops).toEqual([expect.objectContaining({ op: 'upsert_exercise', row_id: UID_E })]);
     expect(body.ops[0].payload).toMatchObject({ exercise_external_id: 'plank', unit: 'reps' });
     expect(view.getAllByLabelText('Reps')).toHaveLength(2);
+  });
+
+  it('BEAUTY-928, as drawn (K3 C_row): one joined control, the chosen half filled forest with near-white type; a tap moves the fill', async () => {
+    setFlag(false);
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { StyleSheet } = require('react-native') as typeof import('react-native');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { lightTokens } = require('../theme/tokens') as typeof import('../theme/tokens');
+    const Screen = loadScreen();
+    const view = await render(<Screen />);
+    await waitFor(() => expect(view.getByTestId('row-1-count-seconds')).toBeTruthy());
+    const fill = (id: string) => StyleSheet.flatten(view.getByTestId(id).props.style)?.backgroundColor;
+    const ink = (id: string, word: string) => StyleSheet.flatten(within(view.getByTestId(id)).getByText(word).props.style)?.color;
+    const group = StyleSheet.flatten(view.getByTestId('row-1-count-by').props.style);
+    expect(group).toMatchObject({ flexDirection: 'row', borderWidth: 1.5, borderRadius: 12, borderColor: lightTokens.accent });
+    expect(fill('row-1-count-seconds')).toBe(lightTokens.accent);
+    expect(fill('row-1-count-reps')).toBeUndefined();
+    expect(ink('row-1-count-seconds', 'Seconds')).toBe(lightTokens.textOnAccent);
+    expect(ink('row-1-count-reps', 'Reps')).toBe(lightTokens.textPrimary);
+    for (const id of ['row-1-count-reps', 'row-1-count-seconds']) {
+      expect(StyleSheet.flatten(view.getByTestId(id).props.style).minHeight).toBeGreaterThanOrEqual(44);
+    }
+    await act(async () => {
+      await fireEvent.press(view.getByTestId('row-1-count-reps'));
+    });
+    expect(fill('row-1-count-reps')).toBe(lightTokens.accent);
+    expect(fill('row-1-count-seconds')).toBeUndefined();
+    expect(ink('row-1-count-reps', 'Reps')).toBe(lightTokens.textOnAccent);
   });
 });
 

@@ -1879,9 +1879,12 @@ export default function CoachWorkoutBuilderScreen() {
               </View>
               {/* TIMED-SETS-M: K3 Style C row sheet, "Count by" Reps | Seconds (K3-C-19, K3-S-40, K3-S-41). */}
               <View style={styles.countByRow}>
-                <Text style={[typography.caption, styles.countByLabel, { color: sc.textMuted }]}>Count by</Text>
-                <View style={styles.countChips}>
-                {(['reps', 'seconds'] as const).map((u) => {
+                <Text style={[typography.bodyMd, styles.countByLabel, { color: sc.textPrimary }]}>Count by</Text>
+                <View
+                  testID={`row-${idx}-count-by`}
+                  style={[styles.countSegments, { borderColor: sc.accent }, editorLocked && styles.historyButtonDisabled]}
+                >
+                {(['reps', 'seconds'] as const).map((u, i) => {
                   const on = unitOf(row) === u;
                   return (
                     <HapticPressable
@@ -1891,9 +1894,9 @@ export default function CoachWorkoutBuilderScreen() {
                       accessibilityState={{ disabled: editorLocked, selected: on }}
                       disabled={editorLocked}
                       onPress={() => updateRow(idx, { unit: u })}
-                      style={[styles.countChip, { borderColor: on ? sc.accentText : sc.border }, on && styles.typeSelected]}
+                      style={[styles.countSegment, i === 0 ? styles.countSegmentFirst : styles.countSegmentLast, on && { backgroundColor: sc.accent }]}
                     >
-                      <Text style={[typography.body, { color: on ? sc.accentText : sc.textPrimary }]}>
+                      <Text style={[typography.bodyMd, styles.countSegmentText, { color: on ? sc.textOnAccent : sc.textPrimary }]}>
                         {u === 'reps' ? 'Reps' : 'Seconds'}
                       </Text>
                     </HapticPressable>
@@ -2108,21 +2111,20 @@ function makeStyles(sc: SemanticTokens) {
       borderRadius: radius.button, alignItems: 'center', justifyContent: 'center',
     },
     rowInputs: { flexDirection: 'row', gap: spacing.sm },
-    // K3 C row: "Count by" at the start, the two choices at the end. Selection
-    // follows this screen's pill rule (outline), as the type choices do.
-    // The two choices move under the label as one group when they do not fit
-    // (320 wide, large text).
-    countByRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginBottom: spacing.sm },
-    countByLabel: { flexGrow: 1, fontSize: 13 },
-    countChips: { flexDirection: 'row', gap: spacing.sm },
-    countChip: {
-      minHeight: 44,
-      paddingHorizontal: spacing.md,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderRadius: radius.chip,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
+    // K3 C row (BEAUTY-928, as drawn): "Count by" at the start in the row's
+    // label type, and one joined Reps | Seconds control at the end: a forest
+    // outline with radius 12 (radius.input, segmented controls), the chosen
+    // half filled forest with near-white type. It is a selection, not a
+    // second filled button. The control moves under the label as one group
+    // when they do not fit (320 wide, large text).
+    countByRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginBottom: spacing.md },
+    countByLabel: { flexGrow: 1 },
+    countSegments: { flexDirection: 'row', borderWidth: 1.5, borderRadius: radius.input },
+    countSegment: { minHeight: 44, paddingHorizontal: spacing.lg, alignItems: 'center', justifyContent: 'center' },
+    // Inner corners follow the outline (12 less the 1.5 border).
+    countSegmentFirst: { borderTopLeftRadius: radius.input - 1.5, borderBottomLeftRadius: radius.input - 1.5 },
+    countSegmentLast: { borderTopRightRadius: radius.input - 1.5, borderBottomRightRadius: radius.input - 1.5 },
+    countSegmentText: { fontFamily: 'Inter_600SemiBold' },
     searchResults: { marginTop: spacing.sm },
     searchHit: {
       flexDirection: 'row',
