@@ -11,9 +11,24 @@
  * Loading and could-not-load come from src/ui (QuietLoading, QuietError with Try again); Show more asks for the next 50.
  * No coach controls here: the coach's space page has them. Look: the safety sheet's (white, radius.sheet top corners,
  * grab), 44 pt targets, small grey text in graphite (owner #168-13).
+ * W897-CLOSE (agent 185, owner "#181-W2 - option 1"): a visible Close leads the header, where C6CHAT-S-V2 puts it (c07's
+ * Back, the X of v1/k07/p3, in forest): the community sheets' X (ChallengeProgressSheet) under the word the sheet already
+ * speaks, "Close" (C6-S-137). It closes as the scrim and Android Back do (onClose) and is the first thing VoiceOver reads,
+ * the sheet staying modal for it, so a screen reader user always has a way out.
+ * FR-912 (agent 185; m#912 LS-912 B1/B2, LO-912 B1/N3): the X stays level with the name's first line at every text size
+ * (the line grows with the system text size, the 44 pt Close does not, so the name's top inset shrinks by half the growth,
+ * and past 183% the Close drops instead); the scrim keeps the sighted tap but is hidden from VoiceOver and TalkBack, so
+ * the sheet speaks one Close.
+ * FR-912R2 (agent 186; m#912 LO-912R2 B1): the inset follows the name's first line as the phone draws it (onTextLayout),
+ * not 24 x fontScale: from Android 14 large text grows non-linearly (at 130% a 24 pt line is drawn 26.4 pt, not 31.2), so
+ * the formula stays only as the first frame's guess, before the first layout.
  */
 import React from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import {
+  ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions,
+  type NativeSyntheticEvent, type TextLayoutEventData,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { QuietOverline } from '../../../ui';
 import { QuietError, QuietLoading, loadFailureMessage } from '../../../ui/states/QuietStates';
@@ -48,19 +63,36 @@ const shown = (err: unknown, offline: boolean) => (offline || (err instanceof Co
 
 export default function SpaceInfoSheet(p: SpaceInfoSheetProps): React.ReactElement {
   const insets = useSafeAreaInsets();
-  const { height } = useWindowDimensions();
+  const { height, fontScale } = useWindowDimensions();
   const purpose = p.description?.trim();
+  // The name's first line as drawn (Android 14+ scales text non-linearly); until the first layout, the linear guess.
+  const [drawnLine, setDrawnLine] = React.useState<number | null>(null);
+  const onTitleLayout = (e: NativeSyntheticEvent<TextLayoutEventData>) => {
+    const h = e.nativeEvent.lines[0]?.height;
+    if (h && h > 0) setDrawnLine((was) => (was != null && Math.abs(was - h) < 0.5 ? was : h));
+  };
+  // The gap from the 44 pt Close's centre down to the centre of the name's first line; negative once that line passes 44 pt.
+  const level = CLOSE / 2 - (drawnLine ?? TITLE_LINE * (fontScale || 1)) / 2;
   return (
     <Modal transparent visible animationType="slide" statusBarTranslucent onRequestClose={p.onClose}>
       <View style={s.scrim}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={p.onClose} accessibilityRole="button" accessibilityLabel="Close" testID="space-info-scrim" />
+        {/* A tap outside closes it; not an accessibility element (one Close for VoiceOver and TalkBack: the header's). */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={p.onClose} accessible={false} importantForAccessibility="no" testID="space-info-scrim" />
         <View style={[s.sheet, { maxHeight: height * 0.85, paddingBottom: insets.bottom + spacing.xl }]} accessibilityViewIsModal onAccessibilityEscape={p.onClose} testID="space-info-sheet">
           <View style={s.grab} />
-          <View style={s.titleRow} accessible accessibilityRole="header">
-            <HashGlyph color={SMALL_GREY} />
-            <Text style={s.title} numberOfLines={2}>{p.name}</Text>
+          <View style={s.head}>
+            <HapticPressable intent="light" onPress={p.onClose} accessibilityRole="button" accessibilityLabel="Close" testID="space-info-close"
+              style={({ pressed }) => [s.close, level < 0 ? { marginTop: -level } : null, pressed ? s.pressed : null]}>
+              <Ionicons name="close" size={22} color={fp.forest} />
+            </HapticPressable>
+            <View style={[s.headText, { paddingTop: Math.max(0, level) }]}>
+              <View style={s.titleRow} accessible accessibilityRole="header">
+                <HashGlyph color={SMALL_GREY} />
+                <Text style={s.title} numberOfLines={2} onTextLayout={onTitleLayout}>{p.name}</Text>
+              </View>
+              <Text style={s.sub}>{p.members}</Text>
+            </View>
           </View>
-          <Text style={s.sub}>{p.members}</Text>
           <ScrollView style={s.scroll} contentContainerStyle={s.body} showsVerticalScrollIndicator={false} testID="space-info-scroll">
             {purpose ? <Text style={s.purpose} testID="space-info-purpose">{purpose}</Text> : null}
             {p.people === 'failed' ? (
@@ -145,12 +177,22 @@ function Person({ m, you }: { m: SpaceMember; you: boolean }): React.ReactElemen
   );
 }
 
+/** The Close's square and the name's line height at 100% (s.close, s.title). */
+const CLOSE = 44;
+const TITLE_LINE = 24;
+
 const s = StyleSheet.create({
   scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: withAlpha(colors.ink, 0.4) },
   sheet: { backgroundColor: neutral[0], borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, paddingHorizontal: 20, paddingTop: 8, gap: 2 },
   grab: { width: 36, height: 5, borderRadius: 3, alignSelf: 'center', marginBottom: 10, backgroundColor: fp.sageLine },
+  // The Close leads the header (C6CHAT-S-V2): a 44 pt square, its X on the content edge; the name's first line is centred
+  // level with the X by the top inset worked out from the drawn line (`level`: 10 pt at 100%; at 130%, 6.4 pt on iOS and
+  // 8.8 pt on Android 14+).
+  head: { flexDirection: 'row', alignItems: 'flex-start' },
+  close: { width: CLOSE, height: CLOSE, alignItems: 'flex-start', justifyContent: 'center' },
+  headText: { flex: 1, minWidth: 0 },
   titleRow: { flexDirection: 'row', alignItems: 'center' },
-  title: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 19, lineHeight: 24, color: fp.ink, flexShrink: 1 },
+  title: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 19, lineHeight: TITLE_LINE, color: fp.ink, flexShrink: 1 },
   sub: { fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18, color: SMALL_GREY },
   scroll: { flexGrow: 0, marginTop: spacing.md },
   body: { gap: spacing.md, paddingBottom: spacing.xs },
