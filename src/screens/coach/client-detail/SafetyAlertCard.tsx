@@ -5,6 +5,8 @@
  * opens their chat (the screen says where); Dismiss is the Actions queue's own route, so it clears there too.
  * A soft haptic on Message; success or error when the server answers Dismiss; none on arrival. Kept out of
  * analytics capture (`ph-no-capture`), as on the alert screen and in Actions.
+ * SAFETY-GOLD-M (owner #197-E3): the card wears safety gold (src/theme/safetyGold.ts): #FFF8EC fill, deep gold
+ * #6B4F1A edge and shield; the Message button stays forest.
  */
 import React, { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -14,6 +16,7 @@ import { SAFETY_ALERT_SUMMARY } from '../CoachSafetyAlertScreen';
 import type { SafetyAlertType } from '../../../services/commandCenterApi';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { radius, typography } from '../../../theme/tokens';
+import { safetyGold } from '../../../theme/safetyGold';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 
 export interface OpenSafetyAlert { alert_id: string; alert_type: SafetyAlertType; created_at: string }
@@ -51,9 +54,9 @@ export function SafetyAlertCard({ alert, first, clientName, onMessage, onDismiss
   };
   return (
     <FadeInView duration={300}>
-      <View ph-no-capture style={[s.card, { backgroundColor: sc.bgSurface, borderColor: sc.border }]} testID="file-safety-alert">
+      <View ph-no-capture style={[s.card, { backgroundColor: safetyGold.card, borderColor: safetyGold.edge }]} testID="file-safety-alert">
         <View style={s.row}>
-          <Ionicons name="shield-outline" size={22} color={sc.accentText} />
+          <Ionicons name="shield-outline" size={22} color={safetyGold.text} />
           <Text maxFontSizeMultiplier={CAP} style={[typography.body, s.flex, { color: sc.textPrimary }]}>{line}</Text>
         </View>
         <View style={s.actions}>
