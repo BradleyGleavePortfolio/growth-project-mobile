@@ -23,7 +23,10 @@ import { useClientStore } from '../../store/clientStore';
 import { enqueue } from '../foodLogQueue';
 import { notifyPendingFoodLogs } from '../foodLogSync';
 
-it('a queue read started by the old account cannot populate the second account after reset', async () => {
+// LS-931 B4 is deferred to v1.1 by the owner (#193-E4; #196-D12: "v1.1", #196-E14): one client signing out and
+// another signing in on the same phone. Kept as a known failure, so it turns red (to flip back to `it`) the day
+// the v1.1 fix lands.
+it.failing('a queue read started by the old account cannot populate the second account after reset', async () => {
   await AsyncStorage.clear();
   useClientStore.getState().reset();
   const day = '2026-11-04';
