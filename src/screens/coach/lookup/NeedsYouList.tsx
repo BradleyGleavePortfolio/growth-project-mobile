@@ -120,6 +120,7 @@ export default function NeedsYouList(p: NeedsYouListProps) {
     const act = r.reason.action;
     return (
       <View key={r.client.id} style={[s.row, k > 0 && s.rowLine]}>
+        <View style={s.grow}>{/* HapticPressable's own wrapper takes no flex */}
         <HapticPressable
           intent="light" style={s.rowMain} onPress={() => p.onOpenClient(r.client)} accessibilityRole="button"
           accessibilityLabel={[name, r.reason.text, r.also].filter(Boolean).join(', ')} testID={`needs-row-${r.client.id}`}
@@ -131,6 +132,7 @@ export default function NeedsYouList(p: NeedsYouListProps) {
             {r.also ? <View style={s.tag}><Text style={s.tagText}>{r.also}</Text></View> : null}
           </View>
         </HapticPressable>
+        </View>
         {act ? (
           <HapticPressable
             intent="light" style={s.act} onPress={() => p.onAction(r.client, act)} accessibilityRole="button"
@@ -185,6 +187,7 @@ export default function NeedsYouList(p: NeedsYouListProps) {
   const half = (key: Side, label: string, n: number) => {
     const on = side === key;
     return (
+      <View key={key} style={s.grow}>
       <HapticPressable
         intent="light" style={[s.half2, on && s.halfOn]} onPress={() => setChosen(key)} accessibilityRole="tab"
         accessibilityState={{ selected: on }} accessibilityLabel={`${label}, ${n} ${n === 1 ? 'item' : 'items'}${key === 'attention' && safetyOpen ? ', safety alert open' : ''}`}
@@ -193,6 +196,7 @@ export default function NeedsYouList(p: NeedsYouListProps) {
         {key === 'attention' && safetyOpen ? <Ionicons name="shield-outline" size={16} color={on ? safetyGold.text : forestPop.gold} /> : null}
         <Text style={[s.halfText, on && s.halfTextOn]} numberOfLines={1} maxFontSizeMultiplier={1.3}>{`${label} ${n}`}</Text>
       </HapticPressable>
+      </View>
     );
   };
 
@@ -241,7 +245,7 @@ const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.bone },
   mast: { backgroundColor: forestPop.deep, paddingHorizontal: layout.gutter, paddingBottom: 16, borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet },
   topRow: { flexDirection: 'row', alignItems: 'center', minHeight: 44 },
-  back: { width: 44, height: 44, marginLeft: -10, alignItems: 'center', justifyContent: 'center' },
+  back: { minWidth: 44, minHeight: 44, marginLeft: -10, alignItems: 'center', justifyContent: 'center' },
   eyebrow: { ...EYEBROW, color: forestPop.onDeepMuted },
   title: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 34, lineHeight: 42, color: styleA.onDeep, marginTop: 4 },
   sub: { ...typography.bodySmall, color: forestPop.onDeepMuted, marginTop: 2 },

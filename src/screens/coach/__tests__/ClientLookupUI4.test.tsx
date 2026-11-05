@@ -269,14 +269,15 @@ describe('UI-4 Needs you (under 15 clients)', () => {
     await mount(UNDER_15);
     expect(screen.queryByTestId('lookup-risk')).toBeNull();
   });
-  it('Invite, At risk and Archived are 44 pt targets with no hitSlop; so is every Needs you control, and names wrap to two lines (LO-690-695 C3, C4)', async () => {
+  it('Invite, At risk and Archived are 44 pt targets with no hitSlop (LO-690-695 C3)', async () => {
     await mount(UNDER_15);
     for (const id of ['lookup-invite', 'lookup-risk', 'lookup-share-code', 'lookup-archived-link']) {
       const el = screen.getByTestId(id);
       expect(StyleSheet.flatten(el.props.style).minHeight).toBeGreaterThanOrEqual(44);
       expect(el.props.hitSlop ?? null).toBeNull();
     }
-    screen.unmount();
+  });
+  it('every Needs you control is a 44 pt target with no hitSlop, and names wrap to two lines (LO-690-695 C3, C4)', async () => {
     await mount(UNDER_15, {}, undefined, { params: { view: 'needs' } });
     await fireEvent.press(screen.getByTestId('needs-switch-routine'));
     for (const id of ['needs-back', 'needs-switch-attention', 'needs-switch-routine', 'needs-act-c1', 'needs-row-c1']) {

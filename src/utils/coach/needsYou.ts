@@ -65,6 +65,8 @@ export function needsYouAreas(
         : { client, reason });
     } else if (reason.action === 'reply') routine.push({ client, reason });
   }
+  // GOAL N1: Gone quiet reads longest quiet first (8, 6, then 4 days); the sort is stable for equal days.
+  quiet.sort((a, b) => (a.client.activity?.lastActiveOn ?? '').localeCompare(b.client.activity?.lastActiveOn ?? ''));
   const attention = safety.length + others.length + quiet.length + fresh.length;
   return { safety, alerts: others, quiet, fresh, routine, attention, routineCount: routine.length, total: attention + routine.length };
 }
