@@ -76,11 +76,18 @@ describe('C_peek rows (PEEK-K1-M)', () => {
       expect(within(row).getByText(label)).toBeTruthy(); // the label first, the value after it
       expect(row.props.children[0].props.children).toBe(label);
       expect(value(key).props.children).toBe(text);
-      expect(value(key).props.numberOfLines).toBe(1); // no second line
+      // One line at every drawn size (renders); a short value may wrap on a 320 pt phone at 130%, never lose words.
+      expect(value(key).props.numberOfLines).toBe(2);
       expect(StyleSheet.flatten(value(key).props.style).textAlign).toBe('right');
     }
     expect(screen.queryAllByText(/^icon:(clipboard|restaurant|barbell|scale)/)).toHaveLength(0);
     expect(screen.getByText('Review')).toBeTruthy();
+  });
+
+  it('with none waiting, the latest check-in (free text) keeps to one line', async () => {
+    await mount(client('Jordan', 0));
+    expect(value('checkins').props.children).toBe('Today: energy 3 of 5, knee tight');
+    expect(value('checkins').props.numberOfLines).toBe(1);
   });
 
   it('the "Logged today" line is gone (C_peek draws it at no state)', async () => {
