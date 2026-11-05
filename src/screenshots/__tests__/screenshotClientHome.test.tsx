@@ -10,7 +10,7 @@
  * The second block checks every DEMO_ fixture against the type the phone reads it with.
  */
 import React from 'react';
-import { render, screen } from '@testing-library/react-native';
+import { render, screen, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import api from '../../services/api';
 import { installAxiosMockAdapter } from '../mockAdapter';
@@ -132,6 +132,7 @@ describe('client Home in screenshot mode', () => {
     const { thrown } = await renderHome();
     // The habits tile names the demo habits once /habits and /habits/logs answer from the fixtures.
     expect(await screen.findByText(/Hydrate/, {}, { timeout: 4000 })).toBeTruthy();
+    await waitFor(() => expect(client?.isFetching()).toBe(0), { timeout: 4000 });
     expect(thrown).toEqual([]);
     expect(client?.getQueryData(['habits', 'list'])).toEqual(DEMO_HABITS);
     expect(screen.queryByText(/undefined/)).toBeNull();
@@ -140,7 +141,9 @@ describe('client Home in screenshot mode', () => {
   it('the flag-off Home renders with the fixtures and does not throw', async () => {
     mockRings = false;
     const { thrown } = await renderHome();
-    await screen.findByText(new RegExp(DEMO_USER.firstName as string), {}, { timeout: 4000 });
+    expect(await screen.findByTestId('home-scroll', {}, { timeout: 4000 })).toBeTruthy();
+    // Every fixture read Home makes has answered before the throw check.
+    await waitFor(() => expect(client?.isFetching()).toBe(0), { timeout: 4000 });
     expect(thrown).toEqual([]);
   });
 });
