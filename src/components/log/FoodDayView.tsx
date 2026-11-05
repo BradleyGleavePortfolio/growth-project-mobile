@@ -132,7 +132,7 @@ export default function FoodDayView(p: FoodDayViewProps) {
   const { fontScale, width } = useWindowDimensions();
   // The time gutter grows with the text size so "12:35 pm" never wraps at 130 percent.
   const scale = Math.min(Math.max(fontScale, 1), 1.6);
-  const gutter = Math.round(62 * scale);
+  const gutter = Math.round(56 * scale);
   // On a narrow phone or at large text the up-next card takes the page's width under the gutter, so its
   // button keeps two lines at most ("Repeat yesterday's breakfast" at 320 wide, 130 percent).
   const wideCard = width - 2 * layout.gutter - gutter - RAIL - 8 < 215 * scale;
@@ -257,7 +257,7 @@ export default function FoodDayView(p: FoodDayViewProps) {
           <ForestBand />
           {dateRow}
           <Text style={s.title} accessibilityRole="header">Log what you eat today</Text>
-          <Text style={s.mastLine}>{leftLine ?? 'No target'}</Text>
+          <Text style={[s.mastLine, s.mastGap]}>{leftLine ?? 'No target'}</Text>
           <View style={s.rule} />
         </View>
         <View style={s.paper} testID="food-day-page">
@@ -493,7 +493,7 @@ function nowRow(s: Styles, min: number, onAdd: () => void) {
   return (
     <View key="now" style={s.nowRow} testID="food-day-now">
       <Text style={[s.time, s.nowTime]}>{clockOf(min)}</Text>
-      <View style={s.rail}><View style={s.line} /><View style={s.nowDot} /></View>
+      <View style={[s.rail, s.nowRail]}><View style={s.line} /><View style={s.nowDot} /></View>
       <View style={s.nowRule} />
       <Pressable onPress={onAdd} accessibilityRole="button" accessibilityLabel={`Add food at ${clockOf(min)}`} testID="food-day-add" style={s.nowAdd}>
         <Text style={s.linkText}>Add</Text>
@@ -554,28 +554,29 @@ function DaySkeleton({ s, top }: { s: Styles; top: number }) {
   );
 }
 
-const MARK = 16;
-const RAIL = 24;
-const MARK_WAITING = { borderStyle: 'dashed' as const };
+const MARK = 14;
+const RAIL = 26;
+const MARK_WAITING = { borderStyle: 'dashed' as const, borderColor: palette.charcoal };
 const makeStyles = (sc: SemanticTokens, gutter: number, wideCard = false) => StyleSheet.create({
   grow: { flex: 1, minWidth: 0 },
   // Masthead (section 3: deep forest, Cormorant-led, gold rule); it runs edge to edge under the page gutters.
-  mast: { marginHorizontal: -layout.gutter, paddingHorizontal: layout.gutter, paddingBottom: 24 + 16, backgroundColor: palette.forest },
+  mast: { marginHorizontal: -layout.gutter, paddingHorizontal: layout.gutter, paddingBottom: 18 + 4, backgroundColor: palette.forest },
   dateRow: { flexDirection: 'row', alignItems: 'center', marginHorizontal: -10, minHeight: layout.touchMin },
   chevron: { width: layout.touchMin, height: layout.touchMin, alignItems: 'center', justifyContent: 'center' },
   dateLabel: { flex: 1, minHeight: layout.touchMin, alignItems: 'center', justifyContent: 'center' },
-  dateText: { ...typography.eyebrow, fontSize: 12, lineHeight: 17, letterSpacing: 1.6, color: sc.textOnMastheadMuted, textAlign: 'center' },
-  title: { ...typography.h1, color: sc.textOnAccent, marginTop: 14 },
-  note: { ...typography.h3, fontFamily: typography.h2.fontFamily, fontStyle: 'italic', color: sc.textOnMastheadMuted, marginTop: 6 },
+  dateText: { ...typography.eyebrow, fontFamily: 'Inter_600SemiBold', fontWeight: '600', lineHeight: 13, letterSpacing: 1.98, color: sc.textOnMastheadMuted, textAlign: 'center' },
+  title: { ...typography.h1, fontFamily: 'CormorantGaramond_500Medium', fontWeight: '500', letterSpacing: -0.2, color: sc.textOnAccent, marginTop: 6 },
+  note: { ...typography.h3, fontFamily: typography.h2.fontFamily, fontWeight: '400', fontSize: 19, lineHeight: 25, letterSpacing: 0, fontStyle: 'italic', color: sc.textOnMastheadMuted, marginTop: 6 },
   italic: { fontFamily: 'CormorantGaramond_400Regular_Italic', fontStyle: 'normal' },
   mastMuted: { ...typography.bodySmall, color: sc.textOnMastheadMuted },
-  mastLine: { ...typography.bodyMd, fontSize: 17, lineHeight: 24, color: sc.textOnAccent, flexShrink: 1, minWidth: 0 },
-  progress: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginTop: 14 },
+  mastLine: { ...typography.bodyMd, fontSize: 15, lineHeight: 21, letterSpacing: 0, color: sc.textOnAccent, flexShrink: 1, minWidth: 0 },
+  mastGap: { marginTop: 10 },
+  progress: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginTop: 10 },
   progressStack: { flexDirection: 'column', alignItems: 'flex-start', gap: 10 },
-  segs: { flexDirection: 'row', gap: 6, flexShrink: 0 },
+  segs: { flexDirection: 'row', gap: 4, flexShrink: 0 },
   seg: { width: 18, height: 4, borderRadius: radius.chip, backgroundColor: sc.data.plannedOnDark },
   segDone: { backgroundColor: gold[300] },
-  rule: { height: 1, backgroundColor: gold[500], marginTop: 16 },
+  rule: { height: 1, backgroundColor: gold[300], opacity: 0.8, marginTop: 12 },
   planRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginTop: 10 },
   planDot: { marginTop: 7 },
   dot: { width: 8, height: 8, borderRadius: radius.chip },
@@ -583,51 +584,52 @@ const makeStyles = (sc: SemanticTokens, gutter: number, wideCard = false) => Sty
     paddingLeft: 8, paddingRight: 10, paddingVertical: 1, borderRadius: radius.chip, backgroundColor: palette.cream },
   tagText: { ...typography.caption, letterSpacing: 0, color: sc.textPrimary, flexShrink: 1 },
   // The paper page (radius 24) over the masthead's foot.
-  paper: { marginHorizontal: -layout.gutter, marginTop: -24, paddingHorizontal: layout.gutter, paddingTop: 22, paddingBottom: 8,
-    backgroundColor: sc.bgSurface, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, minHeight: 360 },
+  paper: { marginHorizontal: -layout.gutter, marginTop: -18, paddingHorizontal: layout.gutter, paddingTop: 16, paddingBottom: 8,
+    backgroundColor: sc.bgPrimary, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, minHeight: 360 },
   lead: { ...typography.bodySmall, fontSize: 15, color: sc.textMuted, marginBottom: 16 },
-  timeline: { marginTop: 4 },
-  row: { flexDirection: 'row', alignItems: 'stretch', paddingBottom: 22 },
-  time: { ...typography.bodySmall, fontSize: 13, lineHeight: 20, width: gutter, textAlign: 'right', color: sc.textMuted, paddingTop: 1, fontVariant: ['tabular-nums'] },
+  timeline: { marginTop: 0 },
+  row: { flexDirection: 'row', alignItems: 'stretch', paddingTop: 6, paddingBottom: 12, minHeight: 56 },
+  time: { ...typography.bodyMd, fontSize: 12, lineHeight: 16, letterSpacing: 0, width: gutter, textAlign: 'right', color: sc.textMuted, paddingTop: 4 },
   rail: { width: RAIL, marginLeft: 8, alignItems: 'flex-start' },
-  line: { position: 'absolute', left: 0, top: 0, bottom: -22, borderLeftWidth: 1, borderStyle: 'dotted', borderColor: sc.textMuted },
-  mark: { width: MARK, height: MARK, borderRadius: MARK / 2, marginTop: 2, marginLeft: -1, borderWidth: 1.5, borderColor: sc.textMuted,
-    backgroundColor: sc.bgSurface, overflow: 'hidden' },
+  line: { position: 'absolute', left: 0, top: -6, bottom: -12, borderLeftWidth: 1.5, borderStyle: 'dotted', borderColor: palette.stone },
+  mark: { width: MARK, height: MARK, borderRadius: MARK / 2, marginTop: 4, marginLeft: 1, borderWidth: 1.5, borderColor: sc.textMuted,
+    backgroundColor: sc.bgPrimary, overflow: 'hidden' },
   markFill: { position: 'absolute', left: -2, top: -2, right: -2, bottom: -2, borderRadius: MARK, backgroundColor: palette.forest },
-  halo: { width: MARK + 10, height: MARK + 10, borderRadius: (MARK + 10) / 2, marginTop: -3, marginLeft: -6, alignItems: 'center',
+  halo: { width: MARK + 8, height: MARK + 8, borderRadius: (MARK + 8) / 2, marginTop: 0, marginLeft: -3, alignItems: 'center',
     justifyContent: 'center', backgroundColor: sc.surface.sage },
-  ring: { width: MARK, height: MARK, borderRadius: MARK / 2, borderWidth: 2.5, borderColor: palette.forest, backgroundColor: sc.bgSurface },
-  workoutMark: { width: MARK, height: MARK, borderRadius: radius.control - 2, marginTop: 2, marginLeft: -1, backgroundColor: gold[300] },
+  ring: { width: MARK, height: MARK, borderRadius: MARK / 2, borderWidth: 2, borderColor: palette.forest, backgroundColor: sc.bgPrimary },
+  workoutMark: { width: MARK, height: MARK, borderRadius: 3, marginTop: 4, marginLeft: 1, backgroundColor: gold[300] },
   body: { flex: 1, minWidth: 0 },
   eyebrowRow: { flexShrink: 1 },
-  eyebrow: { ...typography.eyebrow, fontSize: 12, lineHeight: 18, letterSpacing: 1.2, color: sc.textMuted },
-  kcal: { ...typography.bodyMd, fontSize: 13, lineHeight: 18, letterSpacing: 0.6, color: sc.textPrimary, fontVariant: ['tabular-nums'] },
-  serifName: { ...typography.h2, fontSize: 22, lineHeight: 28, color: sc.textPrimary, marginTop: 2 },
-  sansName: { ...typography.bodyMd, fontSize: 17, lineHeight: 24, color: sc.textPrimary, marginTop: 2 },
-  nothing: { ...typography.body, fontSize: 17, lineHeight: 24, color: sc.textMuted, marginTop: 2 },
-  meta: { ...typography.bodySmall, fontSize: 15, color: sc.textMuted, marginTop: 4 },
-  food: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: layout.touchMin, paddingLeft: gutter, marginTop: -14, marginBottom: 8 },
+  eyebrow: { ...typography.eyebrow, fontFamily: 'Inter_600SemiBold', fontWeight: '600', lineHeight: 14, letterSpacing: 1.3, color: sc.textMuted },
+  kcal: { ...typography.bodyMd, fontSize: 13, lineHeight: 18, letterSpacing: 0, color: palette.charcoal, fontVariant: ['tabular-nums'] },
+  serifName: { ...typography.h3, fontSize: 21, lineHeight: 27, letterSpacing: 0, color: sc.textPrimary, marginTop: 1 },
+  sansName: { ...typography.bodyMd, fontSize: 17, lineHeight: 22, letterSpacing: 0, color: sc.textPrimary, marginTop: 1 },
+  nothing: { ...typography.body, fontSize: 17, lineHeight: 22, letterSpacing: 0, color: sc.textMuted, marginTop: 1 },
+  meta: { ...typography.bodySmall, fontSize: 13, lineHeight: 18, color: sc.textMuted, marginTop: 2 },
+  food: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: layout.touchMin, paddingLeft: gutter, marginTop: -6, marginBottom: 6 },
   small: { ...typography.bodySmall, color: sc.textPrimary },
   smallMuted: { ...typography.bodySmall, color: sc.textMuted, fontVariant: ['tabular-nums'] },
-  card: { marginTop: 12, padding: 16, borderRadius: radius.card, backgroundColor: palette.cream, gap: 6,
+  card: { marginTop: 6, paddingTop: 12, paddingHorizontal: 14, paddingBottom: 6, borderRadius: 16, backgroundColor: palette.cream, gap: 4,
     marginLeft: wideCard ? -(gutter + RAIL + 8) : 0 },
-  cardText: { ...typography.body, color: sc.textPrimary },
-  cardMeta: { ...typography.bodySmall, fontSize: 15, color: sc.textMuted },
-  cardPrimary: { marginTop: 10, paddingHorizontal: 12 },
+  cardText: { ...typography.bodySmall, lineHeight: 22, color: palette.charcoal },
+  cardMeta: { ...typography.bodySmall, fontSize: 13, lineHeight: 18, color: sc.textMuted },
+  cardPrimary: { marginTop: 6, paddingHorizontal: 12 },
   link: { minHeight: layout.touchMin, alignItems: 'center', justifyContent: 'center', alignSelf: 'center', paddingHorizontal: 8 },
   linkText: { ...typography.bodyMd, color: sc.accentText, textDecorationLine: 'underline' },
   addEnd: { alignSelf: 'flex-end' },
-  nowRow: { flexDirection: 'row', alignItems: 'center', minHeight: layout.touchMin, marginTop: -12, marginBottom: 10 },
-  nowTime: { ...typography.bodyMd, fontSize: 13, color: sc.accentText, paddingTop: 0 },
-  nowDot: { position: 'absolute', left: -4, top: -4, width: 9, height: 9, borderRadius: 5, backgroundColor: gold[300] },
-  nowRule: { flex: 1, height: 2, marginLeft: -RAIL, backgroundColor: gold[300] },
+  nowRow: { flexDirection: 'row', alignItems: 'center', minHeight: layout.touchMin, marginTop: -4, marginBottom: 6 },
+  nowTime: { ...typography.bodyMd, fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 12, lineHeight: 16, letterSpacing: 0, color: sc.accentText, paddingTop: 0 },
+  nowRail: { alignSelf: 'stretch' },
+  nowDot: { position: 'absolute', left: -2, top: '50%', marginTop: -3.25, width: 8, height: 8, borderRadius: 4, backgroundColor: gold[300] },
+  nowRule: { flex: 1, height: 1.5, marginLeft: -RAIL, backgroundColor: gold[300] },
   nowAdd: { minHeight: layout.touchMin, minWidth: layout.touchMin, alignItems: 'flex-end', justifyContent: 'center', paddingLeft: 12 },
   // C_first's one tool and the search field (Photo of a meal and Scan a barcode are v1.1, owner #192-E2).
   tool: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingHorizontal: 16, borderRadius: radius.card,
     borderWidth: 1, borderColor: palette.forest },
   toolText: { ...typography.bodyMd, fontSize: 17, color: sc.accentText },
-  search: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, marginTop: 12, marginBottom: 20,
-    borderBottomWidth: 1, borderColor: sc.textPrimary },
+  search: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 50, marginTop: 12, marginBottom: 20,
+    borderBottomWidth: 1.5, borderColor: sc.textPrimary },
   searchText: { ...typography.body, fontSize: 17, color: sc.textMuted },
   water: { marginTop: 8 },
   quiet: { marginTop: 20, gap: 6 },

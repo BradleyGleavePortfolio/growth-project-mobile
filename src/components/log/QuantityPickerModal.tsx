@@ -270,10 +270,10 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     marginTop: 12,
     fontVariant: ['lining-nums', 'tabular-nums'],
   },
-  // C_portion: the after-this-plate line sits under the summary in ink, one size up from the meta.
+  // C_portion: the after-this-plate line sits under the summary in ink, at the summary's size (C_portion draws both lines as one meta size).
   afterPlate: {
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: 15,
+    lineHeight: 22,
     color: sc.textPrimary,
     marginTop: 4,
     fontVariant: ['lining-nums', 'tabular-nums'],
