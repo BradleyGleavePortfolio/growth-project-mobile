@@ -13,7 +13,7 @@ Zustand v5 stores. Used sparingly — most data flows through React Query. The s
 
 | File | What it does |
 | --- | --- |
-| `clientStore.ts` | Day selection, food logs, daily totals, water ounces and saved water entries, profile macros. Action surface: `setSelectedDate`, `loadDayData`, `loadProfile`, `logFood`, `logWater`, `removeFoodLogLocally`, `removeWaterEntry`, `reset`. Successful water adds retain the returned entry id; removal waits for server success before dropping the entry and recomputing ounces from the remaining saved ml. Day changes and sign-out reset the entry list. |
+| `clientStore.ts` | Day selection, food logs, daily totals, water ounces and saved water entries, profile macros. Action surface: `setSelectedDate`, `loadDayData`, `refreshShownDay` (the one refresh after a save, edit, delete, repeat or sync; reads the day again only while it is on screen and never selects a day), `loadProfile`, `logFood`, `logWater`, `removeFoodLogLocally`, `removeWaterEntry`, `reset`. Successful water adds retain the returned entry id; removal waits for server success before dropping the entry and recomputing ounces from the remaining saved ml. Day changes and sign-out reset the entry list. |
 | `coachStore.ts` | Clients list, search query, status filter (`all` / `active` / `archived`). Action surface: `loadClients`, `setSearchQuery`, `setFilterStatus`, `getFilteredClients`, `reset`. |
 
 > Removed in the nutrition P0 cleanup: `fastingStore.ts` (Zustand store

@@ -19,12 +19,6 @@
  */
 import { generateIdempotencyKey } from './idempotency';
 
-const defaultBucketFormatter = new Intl.DateTimeFormat('en-CA', {
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-});
-
 const bucketFormatterCache = new Map<string, Intl.DateTimeFormat>();
 function bucketFormatterFor(timeZone: string): Intl.DateTimeFormat {
   let f = bucketFormatterCache.get(timeZone);
@@ -40,8 +34,15 @@ function bucketFormatterFor(timeZone: string): Intl.DateTimeFormat {
   return f;
 }
 
+/**
+ * FR-916 F4: with no zone given, the phone's zone is read at each call, not once at startup, so a phone
+ * moved to another time zone while the app is open buckets "today" in the new zone.
+ */
 export function bucketDateLocal(date: Date = new Date(), timeZone?: string): string {
-  const fmt = timeZone ? bucketFormatterFor(timeZone) : defaultBucketFormatter;
+  const zone = timeZone || new Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const fmt = zone
+    ? bucketFormatterFor(zone)
+    : new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' });
   return fmt.format(date);
 }
 

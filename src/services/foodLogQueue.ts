@@ -4,9 +4,9 @@
 //   - Only food-log writes go through this queue. Water logs, weight logs, and
 //     habit logs are NOT queued. They can follow in a later round.
 //   - Queue lives in AsyncStorage under a single JSON array key; no SQLite
-//     dependency. Entries are idempotent-ish (backend creates a new row per
-//     enqueue) — users who re-open the app after a crash may see a duplicate.
-//     Acceptable for v1; a client-side dedupe key can come later.
+//     dependency. Each entry is sent with its id as `client_uuid`, and the
+//     server answers a resend of a key it holds with that same entry, so a
+//     replay after a crash or a lost answer never makes a second row.
 //
 // AsyncStorage schema:
 //   Key:   `pending_food_logs_${userId}`  (or `pending_food_logs_anonymous`)
@@ -35,8 +35,23 @@ const ANONYMOUS_QUEUE_KEY = 'pending_food_logs_anonymous';
 const getQueueKey = (userId?: string): string =>
   userId ? `pending_food_logs_${userId}` : ANONYMOUS_QUEUE_KEY;
 
+/**
+ * OFFLINE-FOOD-M: what the day shows for a queued food until the server's entry replaces it: its
+ * name and its macros for one unit of `quantity_multiplier` (the server food item's own basis, so
+ * shown = value x multiplier, as the server counts it). Items queued by older builds have none; a
+ * `food` block serves instead, and a food with neither stays out of the day (the note counts it).
+ */
+export interface QueuedFoodShown {
+  name: string;
+  calories: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+}
+
 export interface PendingSearchLog {
   kind: 'search';
+  shown?: QueuedFoodShown;
   // If the food already exists in the backend, pass its id. Otherwise pass the
   // `food` block and the flush will create it first.
   foodItemId?: string;
@@ -73,6 +88,7 @@ export interface PendingSearchLog {
 
 export interface PendingManualLog {
   kind: 'manual';
+  shown?: QueuedFoodShown;
   food: PendingSearchLog['food'];
   log: PendingSearchLog['log'];
 }
@@ -131,38 +147,78 @@ export class FoodLogQueueOwnerChangedError extends Error {
   }
 }
 
-/** Write the queue for `owner` only if `owner` is still the signed-in identity. */
-async function writeQueueFenced(
+/** Write `key` (a list of `owner`) only if `owner` is still the signed-in identity. */
+async function writeFenced(
   owner: string | undefined,
+  key: string,
   queue: PendingFoodLog[],
 ): Promise<void> {
   if (currentOwnerId() !== owner) throw new FoodLogQueueOwnerChangedError();
-  await writeQueueForKey(getQueueKey(owner), queue);
+  await writeQueueForKey(key, queue);
 }
 
 // Queue changes run one at a time, each on the latest stored queue, so a food
 // logged while a send is in flight is never overwritten by an older copy.
 let lastChange: Promise<unknown> = Promise.resolve();
 
-/** Apply `change` to the stored queue of `owner` (fenced) and return the result. */
-function changeQueue(owner: string | undefined, change: (q: PendingFoodLog[]) => PendingFoodLog[]) {
+/** Apply `change` to the stored list under `key` of `owner` (fenced) and return the result. */
+function changeList<T extends PendingFoodLog>(owner: string | undefined, key: string, change: (q: T[]) => T[]) {
   const run = lastChange.then(async () => {
-    const next = change(await readQueueForKey(getQueueKey(owner)));
-    await writeQueueFenced(owner, next);
+    const next = change((await readQueueForKey(key)) as T[]);
+    await writeFenced(owner, key, next);
     return next;
   });
   lastChange = run.catch(() => undefined);
   return run;
 }
 
+function changeQueue(owner: string | undefined, change: (q: PendingFoodLog[]) => PendingFoodLog[]) {
+  return changeList(owner, getQueueKey(owner), change);
+}
+
+// ─── Sent, not yet read back (FIX-931R2, LS-931R2B B1) ────────────────────
+//
+// A queued food the server accepted leaves the queue, but the day on screen
+// still needs it until a read of its day comes back holding it: with the
+// signal gone again, a restart or a revisit of that day must not lose it. It
+// is kept here, per account (signed-out ids are erased with the queue's,
+// authActions PER_USER_KEY_PREFIXES), and dropped by the first good read of
+// its day (settleSent). Bounded: the newest SENT_KEEP only.
+
+export const SENT_KEY_PREFIX = 'sent_food_logs_';
+const SENT_KEEP = 50;
+const getSentKey = (userId: string): string => `${SENT_KEY_PREFIX}${userId}`;
+
+/** A queued food the server accepted at `sentAt`, shown until a read of its day holds it. */
+export type SentFoodLog = PendingFoodLog & { sentAt: number };
+
+/** The signed-in owner's sent foods no read of their day has reached yet. */
+export async function readSent(): Promise<SentFoodLog[]> {
+  const owner = currentOwnerId();
+  return owner ? ((await readQueueForKey(getSentKey(owner))) as SentFoodLog[]) : [];
+}
+
+/**
+ * A read of `date` reached the server: its sent foods are settled, except one that read cannot
+ * have held (`keep`: sent after the read began, and not in it). Returns what stays.
+ */
+export async function settleSent(date: string, keep: (item: SentFoodLog) => boolean): Promise<SentFoodLog[]> {
+  const owner = currentOwnerId();
+  if (!owner) return [];
+  return changeList<SentFoodLog>(owner, getSentKey(owner), (sent) =>
+    sent.filter((s) => s && s.log && (s.log.date !== date || keep(s))));
+}
+
 export async function enqueue(
   entry: PendingSearchLog | PendingManualLog,
+  // FOOD-1-M R3: the save's client key when an online try already sent one (utils/log/saveKey).
+  id: string = `pfl_${randomUUID()}`,
 ): Promise<void> {
   const item: PendingFoodLog = {
     ...entry,
     // Crypto UUID instead of Math.random so two parallel enqueues on a fast
     // device can never collide and produce duplicate idempotency keys (R19).
-    id: `pfl_${randomUUID()}`,
+    id,
     createdAt: Date.now(),
   };
   await changeQueue(currentOwnerId(), (queue) => [...queue, item]);
@@ -175,6 +231,23 @@ export async function enqueue(
 export async function getQueueLength(opts: { includeParked?: boolean } = {}): Promise<number> {
   const queue = await readQueueForKey(getQueueKey(currentOwnerId()));
   return (opts.includeParked ? queue : waiting(queue)).length;
+}
+
+/** OFFLINE-FOOD-M: every food on this phone for the signed-in owner, waiting and refused (parkedAt). */
+export async function readQueue(): Promise<PendingFoodLog[]> {
+  return readQueueForKey(getQueueKey(currentOwnerId()));
+}
+
+/**
+ * OFFLINE-FOOD-M: the member removes a food saved offline (waiting or refused) from this phone, the
+ * same Remove they use on any food in the day. A send already in flight may still land; the server's
+ * entry then shows on the next read, under the same key, once.
+ */
+export async function dropQueued(id: string): Promise<void> {
+  const owner = currentOwnerId();
+  await changeQueue(owner, (queue) => queue.filter((q) => q.id !== id));
+  // A food already sent but not read back yet is held as sent: Remove takes it off this phone too.
+  if (owner) await changeList<SentFoodLog>(owner, getSentKey(owner), (sent) => sent.filter((q) => q.id !== id));
 }
 
 export async function clearQueue(): Promise<void> {
@@ -250,6 +323,25 @@ export async function flush(): Promise<{ flushed: number; remaining: number; par
     return true;
   };
 
+  /** Keep an accepted item as sent (fenced). False when the owner changed: the flush stops. */
+  const keepSent = async (item: PendingFoodLog): Promise<boolean> => {
+    if (!userId) return true;
+    try {
+      const sent: SentFoodLog = { ...item, sentAt: Date.now() };
+      await changeList<SentFoodLog>(userId, getSentKey(userId), (list) =>
+        [...list.filter((x) => x.id !== item.id), sent].slice(-SENT_KEEP));
+    } catch (err) {
+      if (err instanceof FoodLogQueueOwnerChangedError) {
+        logger.warn('FoodLogQueue', 'flush stopped: queue owner changed');
+        stopped = true;
+        return false;
+      }
+      // A storage failure here never costs the send: the item still leaves the queue.
+      logger.warn('FoodLogQueue', 'keeping a sent food failed', err);
+    }
+    return true;
+  };
+
   for (const item of [...queue]) {
     if (stopped) break;
     if (item.parkedAt) continue;
@@ -285,6 +377,10 @@ export async function flush(): Promise<{ flushed: number; remaining: number; par
       // The server accepted the item. If the owner changed before the local
       // write-back, the item stays queued for its owner (idempotent by
       // `client_uuid` on retry) rather than touching another account's key.
+      // FIX-931R2 (B1): it is kept as sent first, so it is on this phone at every
+      // moment until a read of its day holds it (both copies share one id; the day
+      // shows it once).
+      if (!(await keepSent(item))) break;
       if (await commit((q) => q.filter((x) => x.id !== item.id))) flushed++;
     } catch (err) {
       if (!isRetryLater(err)) {

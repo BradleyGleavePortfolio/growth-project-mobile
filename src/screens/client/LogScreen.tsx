@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  AppState,
   RefreshControl,
   Modal,
   TextInput,
@@ -36,9 +37,12 @@ import { SearchResult, MEAL_SECTIONS, unitOptionsFor } from '../../utils/log/typ
 import { quantityMultiplier, parseQuantityInput } from '../../utils/log/macros';
 import { initialEditPortion, editUnitsFor, editPortionMultiplier } from '../../utils/log/editPortion';
 import { mapFoodItem, type RawFoodItem } from '../../utils/log/mapFoodItem';
-import { matchLoggedFoods, mergeWithLoggedMatches, repeatPastMeal } from '../../utils/log/quickLog';
+import { matchLoggedFoods, mergeWithLoggedMatches, queuePastMeal, repeatPastMeal } from '../../utils/log/quickLog';
+import { dropQueued } from '../../services/foodLogQueue';
+import { countsInDay } from '../../utils/log/queuedDay';
 import type { PlanLink } from '../../utils/log/planLink';
 import { addDays, getTodayString } from '../../utils/date';
+import { dayForNewLog } from '../../utils/logDay';
 import {
   submitSearchLogOffline,
   submitSearchLogOnline,
@@ -69,6 +73,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
 
   const {
     selectedDate,
+    selectedOn,
     foodLogs,
     dailyTotals,
     waterOz,
@@ -78,9 +83,11 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
     loadError,
     setSelectedDate,
     loadDayData,
+    refreshShownDay,
     logWater,
     removeWaterEntry,
     removeFoodLogLocally,
+    queuedFoods,
   } = useClientStore();
 
   const { recentFoods, frequentFoods, lastMeals, browseUnavailable, loadBrowseFoods } = useFoodBrowse(
@@ -157,6 +164,25 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
     }
   }, [currentUser?.id]);
 
+  // FOOD-1-M R2: the day a new log goes to (utils/logDay). A Food tab left on today past midnight
+  // moves to the new today, when the app comes back and again at the tap, before it takes the log.
+  const takeLogDay = () => {
+    const day = dayForNewLog({ selectedDate, selectedOn });
+    if (day !== selectedDate && currentUser) {
+      setSavedMessage(null);
+      void loadDayData(currentUser.id, day);
+    }
+    return day;
+  };
+  const takeLogDayRef = useRef(takeLogDay);
+  takeLogDayRef.current = takeLogDay;
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') takeLogDayRef.current();
+    });
+    return () => sub.remove();
+  }, []);
+
   const handleDateChange = (date: string) => {
     setSavedMessage(null);
     setSelectedDate(date);
@@ -217,6 +243,13 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     if (query.length < 2) {
       setSearching(false);
+      return;
+    }
+    // OFFLINE-FOOD-M: no signal, no search: say so at once (the same words as a failed search) and
+    // keep the matches from the foods kept on this phone.
+    if (!online) {
+      setSearching(false);
+      setSearchError('Search unavailable. Check your connection.');
       return;
     }
     setSearching(true);
@@ -296,9 +329,10 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
       return;
     }
     const multiplier = quantityMultiplier(selectedFood, qty, selectedUnit);
+    const day = takeLogDay();
     const args = {
       food: selectedFood,
-      date: selectedDate,
+      date: day,
       mealType: activeMealType,
       multiplier,
       originalQuantity: qty,
@@ -329,7 +363,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
 
     try {
       await submitSearchLogOnline(args);
-      await loadDayData(currentUser.id, selectedDate);
+      await refreshShownDay(currentUser.id, day);
       // Phase 11 / Track 3: success haptic on food logged
       HapticService.success();
       // Psych Report #4: Analytics — meal_logged (search flow)
@@ -355,7 +389,8 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
       Alert.alert('Missing info', 'Enter at least a food name and calories.');
       return;
     }
-    const args = { ...manualFields, date: selectedDate, mealType: activeMealType, link: sheetLink };
+    const day = takeLogDay();
+    const args = { ...manualFields, date: day, mealType: activeMealType, link: sheetLink };
     setFoodSaving(true);
 
     if (!online) {
@@ -375,7 +410,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
 
     try {
       await submitManualLogOnline(args);
-      await loadDayData(currentUser.id, selectedDate);
+      await refreshShownDay(currentUser.id, day);
       // Phase 11 / Track 3: success haptic on manual food logged
       HapticService.success();
       // Psych Report #4: Analytics — meal_logged (manual flow)
@@ -396,7 +431,8 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
   const mealLabel = (type: MealType) => MEAL_SECTIONS.find((s) => s.type === type)?.label ?? 'Meal';
   // Offered only while this meal is still empty on the selected day, so a
   // second open of Add Food cannot add the same meal twice by accident.
-  const repeatMeal = foodLogs.some((f) => f.mealType === activeMealType)
+  // FIX-931R2 (LS-931R2B B3): a refused food (shown, in no total) leaves the meal empty for Repeat.
+  const repeatMeal = foodLogs.some((f) => f.mealType === activeMealType && countsInDay(f))
     ? null
     : lastMeals[activeMealType] ?? null;
   const repeatMealDay = repeatMeal
@@ -413,18 +449,38 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
   // (UI-3) repeats its usual meal through the same path.
   const repeatMealTo = async (meal: PastMeal | null, mealType: MealType, link?: PlanLink) => {
     if (!currentUser || !meal || foodSaving) return;
+    const target = mealLabel(mealType);
+    const day = takeLogDay();
+    // OFFLINE-FOOD-M: no signal: each food goes to the offline queue with its own key.
     if (!online) {
-      Alert.alert(
-        'Connection needed',
-        'Repeating a past meal needs a connection. Search for a food or enter it manually to save it offline.',
-      );
+      setFoodSaving(true);
+      let queued = 0;
+      try {
+        queued = await queuePastMeal(meal, day, mealType, link);
+        HapticService.success();
+        setModalVisible(false);
+        Alert.alert(
+          'Saved offline',
+          `${queued === 1 ? meal.entries[0].name : `${queued} foods`} will sync when you reconnect.`,
+        );
+        onSaved?.();
+      } catch (err) {
+        console.error('LogScreen: repeat enqueue failed', err);
+        HapticService.error();
+        Alert.alert(
+          queued > 0 ? 'Some foods were not added' : "Couldn't repeat this meal",
+          `${queued} of ${meal.entries.length} foods added to ${target}. Not added: ${meal.entries.slice(queued).map((e) => e.name).join(', ')}. Check the connection, then add ${meal.entries.length - queued === 1 ? 'it' : 'them'} from Recent.`,
+        );
+      } finally {
+        void notifyPendingFoodLogs();
+        setFoodSaving(false);
+      }
       return;
     }
-    const target = mealLabel(mealType);
     setFoodSaving(true);
     try {
-      const { added, failedNames } = await repeatPastMeal(meal, selectedDate, mealType, link);
-      await loadDayData(currentUser.id, selectedDate);
+      const { added, failedNames } = await repeatPastMeal(meal, day, mealType, link);
+      await refreshShownDay(currentUser.id, day);
       if (failedNames.length === 0) {
         HapticService.success();
         track(AnalyticsEvents.MEAL_LOGGED, { meal_type: mealType, source: 'repeat_meal' });
@@ -448,9 +504,10 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
   const logPlanned = async (slot: DaySlot) => {
     if (!currentUser || foodSaving) return;
     const v = (x: number) => String(Math.round(x * 10) / 10);
+    const day = takeLogDay();
     const args = {
       foodName: slot.name, calories: v(slot.kcal), protein: v(slot.protein), carbs: v(slot.carbs), fat: v(slot.fat),
-      quantity: '1', unit: 'serving', date: selectedDate, mealType: slot.mealType, link: { planSlotId: slot.key },
+      quantity: '1', unit: 'serving', date: day, mealType: slot.mealType, link: { planSlotId: slot.key },
     };
     setFoodSaving(true);
     try {
@@ -462,7 +519,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
         return;
       }
       await submitManualLogOnline(args);
-      await loadDayData(currentUser.id, selectedDate);
+      await refreshShownDay(currentUser.id, day);
       HapticService.success();
       track(AnalyticsEvents.MEAL_LOGGED, { meal_type: slot.mealType, source: 'meal_plan' });
       setSavedMessage(`${slot.name} added to ${mealLabel(slot.mealType)}.`);
@@ -481,6 +538,11 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
   // falling back to the multiplier when the row is a legacy one without
   // the original_* columns persisted.
   const handleEditFood = (log: FoodLog) => {
+    // OFFLINE-FOOD-M: a food saved offline is not on the server yet; its one action is Remove.
+    if (log.offline) {
+      handleDeleteFood(log);
+      return;
+    }
     setEditLog(log);
     const portion = initialEditPortion(log);
     setEditQty(String(portion.quantity));
@@ -514,7 +576,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
       setEditLog(null);
       setEditQty('');
       setEditUnit('');
-      await loadDayData(currentUser.id, selectedDate);
+      await refreshShownDay(currentUser.id, selectedDate);
     } catch (err) {
       console.error('LogScreen: handleEditSave failed', err);
       Alert.alert(
@@ -535,6 +597,13 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
         style: 'destructive',
         onPress: async () => {
           setEditLog(null);
+          // OFFLINE-FOOD-M: a food saved offline (waiting or refused) leaves this phone's queue.
+          if (log.offline) {
+            removeFoodLogLocally(log.id);
+            await dropQueued(log.id).catch((err) => console.error('LogScreen: drop queued food failed', err));
+            void notifyPendingFoodLogs();
+            return;
+          }
           // The row and the day's totals update at once; the reload below
           // brings the entry back if the server did not delete it.
           removeFoodLogLocally(log.id);
@@ -544,7 +613,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
             console.error('LogScreen: handleDeleteFood failed', err);
             Alert.alert("Couldn't remove food", errorMessage(err, `${log.foodName} is still in the log. Check the connection and try again.`));
           }
-          loadDayData(currentUser.id, selectedDate);
+          refreshShownDay(currentUser.id, selectedDate);
         },
       },
     ]);
@@ -580,8 +649,16 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
   const getMealLogs = (mealType: MealType) =>
     foodLogs.filter((f) => f.mealType === mealType);
 
+  // OFFLINE-FOOD-M: a food the server refused shows, marked, and is in no total.
   const getMealCalories = (mealType: MealType) =>
-    getMealLogs(mealType).reduce((sum, f) => sum + f.calories, 0);
+    getMealLogs(mealType).filter(countsInDay).reduce((sum, f) => sum + f.calories, 0);
+  // OFFLINE-FOOD-M: waiting foods already in this day's list and totals, and the rest (another day,
+  // a day not read yet, or a food queued by an older build with no name kept).
+  const queuedIds = new Set((queuedFoods ?? []).filter((q) => !q.parkedAt).map((q) => q.id));
+  const pendingInDay = featureFlags.offlineFoodInDay
+    ? foodLogs.filter((f) => f.offline === 'waiting' && queuedIds.has(f.id)).length
+    : 0;
+  const pendingElsewhere = Math.max(0, pendingFoods - pendingInDay);
 
   const remaining = macroTargets ? macroTargets.calories - dailyTotals.calories : null;
   const showDayLoading = !hasLoadedDay && (isLoading || !loadError);
@@ -591,7 +668,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
     setRefreshing(true);
     // Pull-to-refresh also sends foods saved offline (never rejects).
     if (online) await syncFoodLogQueue();
-    await loadDayData(currentUser.id, selectedDate);
+    await refreshShownDay(currentUser.id, selectedDate);
     setRefreshing(false);
   }, [currentUser?.id, selectedDate, online]);
 
@@ -606,11 +683,18 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
 
   const notesNode = (
     <>
-      {pendingFoods > 0 ? (
+      {pendingElsewhere > 0 ? (
         <Text style={styles.note} accessibilityLiveRegion="polite" testID="log-offline-pending">
-          {pendingFoods === 1
+          {pendingElsewhere === 1
             ? `1 food saved offline is not in this log or its totals yet. ${online ? 'Pull down to sync it now.' : 'It syncs when the connection returns.'}`
-            : `${pendingFoods} foods saved offline are not in this log or its totals yet. ${online ? 'Pull down to sync them now.' : 'They sync when the connection returns.'}`}
+            : `${pendingElsewhere} foods saved offline are not in this log or its totals yet. ${online ? 'Pull down to sync them now.' : 'They sync when the connection returns.'}`}
+        </Text>
+      ) : pendingInDay > 0 ? (
+        // OFFLINE-FOOD-M W1 (proposed words, behind featureFlags.offlineFoodInDay; waits on the owner).
+        <Text style={styles.note} accessibilityLiveRegion="polite" testID="log-offline-pending-in-day">
+          {pendingInDay === 1
+            ? `1 food saved offline is in this log and its totals. ${online ? 'Pull down to sync it now.' : 'It syncs when the connection returns.'}`
+            : `${pendingInDay} foods saved offline are in this log and its totals. ${online ? 'Pull down to sync them now.' : 'They sync when the connection returns.'}`}
         </Text>
       ) : null}
       {savedMessage ? (
@@ -763,6 +847,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
         saving={foodSaving}
         portionPicker={quantityModalVisible ? (
           <QuantityPickerContent
+            mealLabel={MEAL_SECTIONS.find((s) => s.type === activeMealType)?.label}
             selectedFood={selectedFood}
             quantityInput={quantityInput}
             selectedUnit={selectedUnit}
@@ -780,7 +865,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
 
       {/* F-2: edit-log sheet. Inline so it works on iOS + Android without
           relying on Alert.prompt (iOS-only). Saves through the existing
-          logApi.updateEntry endpoint and triggers loadDayData on success. */}
+          logApi.updateEntry endpoint and triggers refreshShownDay on success. */}
       <Modal
         visible={!!editLog}
         animationType="fade"

@@ -19,6 +19,7 @@
 
 import { NOTIFICATIONS_MOCK_ENABLED } from '../config/featureFlags';
 import api from './api';
+import { logger } from '../utils/logger';
 
 let _lastKnownUnreadCount = 0;
 
@@ -53,6 +54,16 @@ export interface AppNotification {
   actionParams?: Record<string, string>;
   /** Validated by the shared incoming-link receiver when tapped. */
   deepLink?: string;
+  /** Only on the backend's first_payment row (B-LSNOTIFY3-2); see decodeFirstPayment. */
+  firstPayment?: FirstPaymentEvent;
+}
+
+/** The coach's first payment, in major units (49 for $49.00) and an upper-case ISO 4217 code. */
+export interface FirstPaymentEvent {
+  readonly amount: number;
+  readonly currency: string;
+  /** The paying client's user id. The row carries no name. */
+  readonly clientId: string;
 }
 
 export interface NotificationPage {
@@ -322,6 +333,30 @@ export function inboxScreenForKind(kind: string): string | undefined {
 const CLIENT_MOVED_KIND = 'coach_client_moved';
 const CLIENT_MOVED_FALLBACK = 'A client has moved to another coach.';
 
+/**
+ * B-LSNOTIFY3-2: the backend's first_payment row (growth-project-backend
+ * src/notifications/emitters/first-payment.emitter.ts) carries
+ * payload { amount, currency, clientId } with amount as Stripe sends it: an
+ * integer in the currency's minor units (4900 is $49.00, 500 is 500 yen,
+ * 12345 is 12.345 dinar). Stripe still sends ISK and UGX with two decimals.
+ */
+const FIRST_PAYMENT_KIND = 'first_payment';
+const ZERO_DECIMAL = new Set(['BIF', 'CLP', 'DJF', 'GNF', 'JPY', 'KMF', 'KRW', 'MGA', 'PYG', 'RWF', 'VND', 'VUV', 'XAF', 'XOF', 'XPF']);
+const THREE_DECIMAL = new Set(['BHD', 'JOD', 'KWD', 'OMR', 'TND']);
+
+/** The first_payment payload in major units; null (no celebration) when any field is off. */
+export function decodeFirstPayment(raw: unknown): FirstPaymentEvent | null {
+  const p = asRecord(raw);
+  if (!p) return null;
+  const { amount, currency, clientId } = p;
+  if (typeof amount !== 'number' || !Number.isSafeInteger(amount) || amount <= 0) return null;
+  if (typeof currency !== 'string' || !/^[A-Za-z]{3}$/.test(currency)) return null;
+  if (typeof clientId !== 'string' || !clientId.trim() || clientId.length > 200) return null;
+  const code = currency.toUpperCase();
+  const digits = ZERO_DECIMAL.has(code) ? 0 : THREE_DECIMAL.has(code) ? 3 : 2;
+  return { amount: amount / 10 ** digits, currency: code, clientId: clientId.trim() };
+}
+
 /** Backend row or AppNotification -> AppNotification; null when unusable. */
 export function normalizeNotification(raw: unknown): AppNotification | null {
   const r = asRecord(raw);
@@ -360,6 +395,11 @@ export function normalizeNotification(raw: unknown): AppNotification | null {
       ? stringParams({ purchaseId: payload.client_purchase_id })
       : undefined);
   const deepLink = r.deepLink ?? r.deep_link ?? payload.deepLink ?? payload.deep_link;
+  const firstPayment = rawKind === FIRST_PAYMENT_KIND ? decodeFirstPayment(payload) : null;
+  if (rawKind === FIRST_PAYMENT_KIND && !firstPayment) {
+    // Fail closed (no celebration), but say why (Law #36).
+    logger.warn('ed3', 'first-payment row payload malformed; no celebration', { notificationId: r.id });
+  }
   return {
     id: r.id,
     kind: appKindFor(rawKind),
@@ -370,6 +410,7 @@ export function normalizeNotification(raw: unknown): AppNotification | null {
     ...(actionScreen ? { actionScreen } : {}),
     ...(actionParams ? { actionParams } : {}),
     ...(typeof deepLink === 'string' ? { deepLink } : {}),
+    ...(firstPayment ? { firstPayment } : {}),
   };
 }
 

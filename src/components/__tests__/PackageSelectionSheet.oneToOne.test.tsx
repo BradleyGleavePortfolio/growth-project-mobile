@@ -2,11 +2,13 @@
  * #161-5 op 1: on iPhone the unsolicited sheet sells only 1:1 coaching. It
  * lists the client's own coach's packages (the ClientPackages list, every one
  * 1:1 coaching) and nothing else, under the ClientPackages label
- * oneToOneCoachingLabel(). Android is unchanged: no label, no extra read.
+ * oneToOneCoachingLabel(). FR-1TO1R2 (LS/LO B1, 184-W6 op 1): Android too. 1TO1-FU-M (#186-P4 op 1):
+ * when only the coach's name fails to load the sheet shows no error; it keeps the existing
+ * "1:1 coaching with your coach" line and the client can still choose a plan.
  */
 import React from 'react';
 import { Platform } from 'react-native';
-import { render, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 jest.mock('../../theme/ThemeProvider', () => {
   const t = jest.requireActual('../../theme/tokens');
@@ -52,19 +54,25 @@ it('iOS: the sheet lists only 1:1 packages, under the 1:1 coaching label', async
   expect(mockGet.mock.calls.map(([url]) => url).sort()).toEqual(['/v1/clients/me/coach', '/v1/clients/me/coach/packages']);
 });
 
-it('iOS: the coach name read fails, the label still says 1:1 coaching', async () => {
-  setOS('ios');
+it.each(['ios', 'android'])('%s: only the coach name read fails: no error, the your-coach line, the plan can be chosen', async (os) => {
+  setOS(os);
   mockCoach = async () => { throw new Error('network'); };
   const r = await mount();
   await waitFor(() => expect(r.getByTestId('package-sheet-one-to-one')).toBeTruthy());
   expect(r.getByTestId('package-sheet-one-to-one').props.children).toBe('1:1 coaching with your coach');
   expect(r.getAllByRole('radio')).toHaveLength(2);
+  await fireEvent.press(r.getByTestId('package-card-p-1'));
+  expect(r.getByTestId('select-plan-btn').props.accessibilityState.disabled).toBe(false);
+  expect(r.queryByText(/could not load/)).toBeNull();
+  expect(r.queryByTestId('package-sheet-coach-retry')).toBeNull();
+  expect(r.queryByTestId('package-sheet-error')).toBeNull();
 });
 
-it('Android: unchanged, no label and no coach read', async () => {
+it('Android: the same label and the same coach read as iOS (FR-1TO1R2)', async () => {
   setOS('android');
   const r = await mount();
-  await waitFor(() => expect(r.getAllByRole('radio')).toHaveLength(2));
-  expect(r.queryByTestId('package-sheet-one-to-one')).toBeNull();
-  expect(mockGet.mock.calls.map(([url]) => url)).toEqual(['/v1/clients/me/coach/packages']);
+  await waitFor(() => expect(r.getByTestId('package-sheet-one-to-one')).toBeTruthy());
+  expect(r.getByTestId('package-sheet-one-to-one').props.children).toBe('1:1 coaching with Avery Stone');
+  expect(r.getAllByRole('radio')).toHaveLength(2);
+  expect(mockGet.mock.calls.map(([url]) => url).sort()).toEqual(['/v1/clients/me/coach', '/v1/clients/me/coach/packages']);
 });

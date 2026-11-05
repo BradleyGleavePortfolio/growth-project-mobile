@@ -126,7 +126,25 @@ function buildTheme(
 const noop = () => {};
 const defaultTheme = buildTheme('free', lightTokens, 'light', 'system', noop);
 
-const ThemeContext = createContext<Theme>(defaultTheme);
+export const ThemeContext = createContext<Theme>(defaultTheme);
+
+/**
+ * A page drawn light by design (the K2 coach pages: bone, cream, forest) wraps
+ * its screen in this, so every themed part inside it (pills, cards, empty and
+ * error states, modals) takes the light tokens in every phone setting: never a
+ * dark part on a light page. Light already: the same theme object passes through.
+ */
+export function LightTheme({ children }: { children: ReactNode }): React.ReactElement {
+  const theme = useContext(ThemeContext);
+  const light = useMemo(
+    () =>
+      theme.colorScheme === 'light'
+        ? theme
+        : buildTheme(theme.tier, lightTokens, 'light', theme.appearanceOverride, theme.setAppearanceOverride),
+    [theme],
+  );
+  return <ThemeContext.Provider value={light}>{children}</ThemeContext.Provider>;
+}
 
 // ─── ThemeProvider ─────────────────────────────────────────────────────────────
 interface ThemeProviderProps {

@@ -10,7 +10,7 @@ const CLOSED_CODES = new Set([
   'messaging.blocked', // edit / pin / react with a block on either side
   'community.dm.blocked_by_you', // a DM to someone I blocked
   'community.dm.blocked_by_them', // a DM with someone who blocked me (#169-5, b#1145)
-  'community.dm.not_found', // a DM with someone who blocked me or left (the block is never disclosed)
+  'community.dm.not_found', // a DM with a member who is not there (left, banned, never joined)
   'community.workspace.no_access', // banned, or no longer a member
   'community.cohort.no_access',
   'community.post.not_found', // the Hall or a post the viewer can no longer open (a ban reads as not found)

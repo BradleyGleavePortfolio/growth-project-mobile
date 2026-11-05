@@ -38,11 +38,11 @@ describe('repeatPastMeal', () => {
     expect(logFood).toHaveBeenCalledTimes(2);
     expect(logFood).toHaveBeenCalledWith({
       date: '2026-10-06', meal_type: 'breakfast', food_item_id: 'food-oats',
-      quantity_multiplier: 0.6, original_quantity: 60, original_unit: 'g',
+      quantity_multiplier: 0.6, original_quantity: 60, original_unit: 'g', client_uuid: expect.stringMatching(/^pfl_/),
     });
     expect(logFood).toHaveBeenCalledWith({
       date: '2026-10-06', meal_type: 'breakfast', food_item_id: 'food-banana',
-      quantity_multiplier: 1.18, original_quantity: 1, original_unit: 'serving',
+      quantity_multiplier: 1.18, original_quantity: 1, original_unit: 'serving', client_uuid: expect.stringMatching(/^pfl_/),
     });
   });
 

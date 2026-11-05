@@ -3,8 +3,9 @@
  * React / navigation / storage imports so they are cheap to test.
  */
 import { randomUuid } from '../idempotency';
-import { routineExerciseId } from './exerciseId';
+import { libraryExerciseId, routineExerciseId } from './exerciseId';
 import { toServerMuscleGroup } from './muscleGroup';
+import { instantDay, workoutDay } from './workoutDay';
 import type { RoutineExercise, SessionExercise } from '../../screens/client/active-workout/types';
 
 // PATCH /assignments/:id/complete validates `idempotency_key` with
@@ -17,10 +18,9 @@ export function assignmentIdempotencyKey(current: string): string {
   return UUID_RE.test(current) ? current : randomUuid();
 }
 
-/** The client's own calendar day, YYYY-MM-DD (server column is @db.Date). */
+/** The client's own calendar day, YYYY-MM-DD (server column is @db.Date): the shared day helper. */
 export function localCalendarDate(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return instantDay(d);
 }
 
 export interface RoutineBuilderExercise {
@@ -31,6 +31,8 @@ export interface RoutineBuilderExercise {
   restSec: number;
   /** Server MuscleGroup value (POST /routines requires one per exercise). */
   muscleGroup: string;
+  /** The library item's id (catalog uuid), or none: saved as catalog_exercise_id. */
+  catalogExerciseId?: string | null;
 }
 
 /**
@@ -43,14 +45,20 @@ export interface RoutineBuilderExercise {
 export function buildRoutinePayload(name: string, exercises: RoutineBuilderExercise[]) {
   return {
     name: name.trim(),
-    exercises: exercises.map((e, i) => ({
-      exercise_name: e.exerciseName,
-      muscle_group: toServerMuscleGroup(e.muscleGroup),
-      default_sets: Math.max(1, Math.round(e.sets || 0)),
-      default_reps: Math.max(1, Math.round(e.reps || 0)),
-      default_rest_seconds: Math.max(0, Math.round(e.restSec || 0)),
-      order_index: i,
-    })),
+    exercises: exercises.map((e, i) => {
+      // PUT replaces every row, so each kept exercise sends its library id
+      // again; an exercise with none sends no field (the server stores null).
+      const catalogId = libraryExerciseId(e.catalogExerciseId);
+      return {
+        exercise_name: e.exerciseName,
+        muscle_group: toServerMuscleGroup(e.muscleGroup),
+        default_sets: Math.max(1, Math.round(e.sets || 0)),
+        default_reps: Math.max(1, Math.round(e.reps || 0)),
+        default_rest_seconds: Math.max(0, Math.round(e.restSec || 0)),
+        order_index: i,
+        ...(catalogId ? { catalog_exercise_id: catalogId } : {}),
+      };
+    }),
   };
 }
 
@@ -65,6 +73,8 @@ export interface ApiRoutine {
     default_sets: number;
     default_reps: number;
     default_rest_seconds?: number;
+    /** Library item's id; null or absent on a row saved without one. */
+    catalog_exercise_id?: string | null;
   }>;
   is_template?: boolean;
 }
@@ -78,6 +88,7 @@ export function routineToBuilderExercises(routine: Pick<ApiRoutine, 'exercises'>
     reps: e.default_reps || 10,
     restSec: e.default_rest_seconds ?? 60,
     muscleGroup: toServerMuscleGroup(e.muscle_group),
+    catalogExerciseId: libraryExerciseId(e.catalog_exercise_id),
   }));
 }
 
@@ -88,7 +99,9 @@ export function routineToBuilderExercises(routine: Pick<ApiRoutine, 'exercises'>
  */
 export function routineToSessionExercises(routine: ApiRoutine) {
   return (routine.exercises || []).map((e) => ({
-    exerciseId: routineExerciseId(routine.id, e.exercise_name),
+    // The library id opens Watch video and instructions by id, whatever the
+    // name; with none, the routine-scoped fallback (catalogKey uses the slug).
+    exerciseId: libraryExerciseId(e.catalog_exercise_id) ?? routineExerciseId(routine.id, e.exercise_name),
     exerciseName: e.exercise_name,
     sets: e.default_sets || 3,
     reps: e.default_reps || 10,
@@ -131,7 +144,7 @@ type CoachSessionExercise = {
   sets_data?: unknown[];
   notes?: string | null;
 };
-type CoachSessionRow = {
+export type CoachSessionRow = {
   id: string;
   workout_name?: string;
   name?: string;
@@ -143,6 +156,28 @@ type CoachSessionRow = {
   exercises?: CoachSessionExercise[];
 };
 
+type OrderedWorkout = { id?: unknown; date?: unknown; created_at?: unknown };
+const textOf = (v: unknown) => (typeof v === 'string' ? v : '');
+
+/**
+ * COACH-DAY-ORDER-M: the coach's one order for a client's workouts, newest first,
+ * the order the server gives its timeline slice (b#1213): the day the workout
+ * counts on (workoutDay: its own date, else the local day it was saved), then
+ * the save time, then id. A sorted copy; the rows are not changed.
+ */
+export function newestWorkoutsFirst<T extends OrderedWorkout>(rows: readonly T[]): T[] {
+  const keyed = rows.map((row) => ({
+    row,
+    day: workoutDay({ date: textOf(row.date), created_at: textOf(row.created_at) }),
+    // The save moment only breaks ties inside one day; it never picks the day.
+    saved: Date.parse(textOf(row.created_at)) || 0,
+    id: textOf(row.id),
+  }));
+  const desc = (a: string, b: string) => (a < b ? 1 : a > b ? -1 : 0);
+  keyed.sort((a, b) => desc(a.day, b.day) || b.saved - a.saved || desc(a.id, b.id));
+  return keyed.map((k) => k.row);
+}
+
 /**
  * Map the coach client-detail `recent_workouts` rows (WorkoutSession with
  * exercises: workout_name, created_at, duration_minutes, weight_per_set,
@@ -152,7 +187,8 @@ type CoachSessionRow = {
  * 0 lbs.
  */
 export function mapCoachWorkoutSessions(rows: unknown) {
-  const list = Array.isArray(rows) ? (rows as CoachSessionRow[]) : [];
+  // The summary sends its newest saves first; the coach reads newest day first.
+  const list = newestWorkoutsFirst(Array.isArray(rows) ? (rows as CoachSessionRow[]) : []);
   return list.map((s) => {
     const finishedAt = s.completed_at || s.created_at || s.date || '';
     const finishedMs = new Date(finishedAt).getTime();
@@ -166,6 +202,8 @@ export function mapCoachWorkoutSessions(rows: unknown) {
       routineName: s.workout_name || s.name || s.notes || 'Workout',
       startTime,
       endTime: finishedAt,
+      // The day the client recorded, not the day the server received it.
+      day: workoutDay(s),
       completed: true,
       // FU-WORKLOG2-126: the coach card shows the client's own note and the
       // real duration (no "0 min" when the duration was not recorded).
@@ -269,6 +307,8 @@ export function routineSessionExercises(exercisesJson: string): SessionExercise[
         // each set at it so the client only edits what changed.
         weight: re.weightLbs && re.weightLbs > 0 ? re.weightLbs : 0,
         completed: false,
+        // A coach's 0 lb is a value: Done never fills it with the last weight.
+        ...(re.weightLbs === 0 ? { prescribedZero: true } : {}),
       })),
       restSec: re.restSec,
       workoutPlanExerciseId: re.workoutPlanExerciseId,

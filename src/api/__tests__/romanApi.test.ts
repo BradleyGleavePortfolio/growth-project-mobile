@@ -33,6 +33,10 @@ import {
   ROMAN_MESSAGES_MAX_LIMIT,
   type RomanSession,
 } from '../romanApi';
+import { featureFlags } from '../../config/featureFlags';
+
+const pins: { restore: () => void }[] = [];
+afterEach(() => pins.splice(0).forEach((p) => p.restore()));
 
 jest.mock('../../services/api', () => ({
   __esModule: true,
@@ -113,6 +117,8 @@ describe('romanApi — REST endpoints (URL + method pinning)', () => {
   });
 
   it('listMessages GETs /roman/sessions/:id/messages and clamps limit to the backend ceiling', async () => {
+    // Pins EXPO_PUBLIC_FF_CRISIS_ACTIONS off: this test pins the bare request (the safety headers ride on it when on).
+    pins.push(jest.replaceProperty(featureFlags, 'crisisActions', false));
     api.get.mockResolvedValueOnce({ data: { messages: [validWireMessage], nextCursor: null } });
     const page = await listMessages(SESSION_ID, { limit: 9999 });
     expect(api.get).toHaveBeenCalledWith(
@@ -133,6 +139,8 @@ describe('romanApi — REST endpoints (URL + method pinning)', () => {
   });
 
   it('listMessages forwards a cursor when supplied', async () => {
+    // Pins EXPO_PUBLIC_FF_CRISIS_ACTIONS off: this test pins the bare request (the safety headers ride on it when on).
+    pins.push(jest.replaceProperty(featureFlags, 'crisisActions', false));
     api.get.mockResolvedValueOnce({ data: { messages: [], nextCursor: 'abc' } });
     await listMessages(SESSION_ID, { cursor: 'cur-1', limit: 10 });
     expect(api.get).toHaveBeenCalledWith(

@@ -11,6 +11,8 @@ import NetInfo from '@react-native-community/netinfo';
 import VoiceNotesSection from '../VoiceNotesSection';
 import { resetVoiceOutbox } from '../../../hooks/useVoiceOutbox';
 import { markVoiceNoteReported, resetReportedVoiceNotes } from '../VoiceReportedFold';
+import { authEvents } from '../../../utils/authEvents';
+import { HapticService } from '../../../ui/haptics/haptics.service';
 
 jest.mock('../../../config/featureFlags', () => ({
   featureFlags: { communityVoiceNotes: true },
@@ -85,6 +87,8 @@ jest.mock('@react-navigation/native', () => ({
 const mockListFeed = jest.fn();
 const mockRemove = jest.fn();
 const mockIssue = jest.fn();
+const mockUploadBytes = jest.fn();
+const mockCreate = jest.fn();
 jest.mock('../../../api/communityVoiceApi', () => {
   const actual = jest.requireActual('../../../api/communityVoiceApi');
   return {
@@ -93,9 +97,13 @@ jest.mock('../../../api/communityVoiceApi', () => {
       listFeed: (...a: unknown[]) => mockListFeed(...a),
       remove: (...a: unknown[]) => mockRemove(...a),
       issueUploadUrl: (...a: unknown[]) => mockIssue(...a),
+      uploadBytes: (...a: unknown[]) => mockUploadBytes(...a),
+      create: (...a: unknown[]) => mockCreate(...a),
     },
   };
 });
+// The signed-in member's token on the phone: a queued note goes out only under it (BF-2).
+const secure = jest.requireMock('expo-secure-store') as { __store: Map<string, string> };
 const mockReport = jest.fn();
 const mockBlock = jest.fn();
 jest.mock('../../../api/communitySafetyApi', () => {
@@ -150,6 +158,9 @@ beforeEach(() => {
   });
   mockRemove.mockReset().mockResolvedValue({ id: 'vn-mine', deleted: true });
   mockIssue.mockReset().mockRejectedValue(new Error('upload target unavailable'));
+  mockUploadBytes.mockReset().mockResolvedValue(undefined);
+  mockCreate.mockReset();
+  secure.__store.set('supabase_token', 'token-me');
   mockReport.mockReset().mockResolvedValue(undefined);
   mockBlock.mockReset().mockResolvedValue(undefined);
   alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
@@ -544,4 +555,48 @@ it('a sending note shows the ··· held until the attempt ends', async () => {
   expect(menu).toBeDisabled();
   await fireEvent.press(menu);
   expect(alertSpy).not.toHaveBeenCalledWith('Delete this voice note?', undefined, expect.any(Array));
+});
+
+// BF-2 (VF-848B): a Hall send that a sign-out overtakes stops there. Nothing more of the recording goes up,
+// and no Not sent row or error buzz is left for a note of the account that left.
+it('a sign-out during a Hall send stops it: nothing more is uploaded and no Not sent row is left', async () => {
+  let answer: (t: unknown) => void = () => undefined;
+  mockIssue.mockImplementation(() => new Promise((r) => {
+    answer = r;
+  }));
+  const realFetch = global.fetch;
+  global.fetch = jest.fn(async () => ({ arrayBuffer: async () => new ArrayBuffer(8) })) as unknown as typeof fetch;
+  const buzz = jest.spyOn(HapticService, 'error');
+  try {
+    const { findByTestId, getByTestId, queryByText } = await renderSection();
+    await findByTestId('vn-note-vn-other');
+    await act(async () => {
+      fireEvent.press(getByTestId('vn-record'));
+    });
+    await act(async () => {
+      fireEvent.press(getByTestId('sheet-send'));
+    });
+    await waitFor(() => expect(mockIssue).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      secure.__store.delete('supabase_token');
+      authEvents.emit('logout');
+    });
+    await act(async () => {
+      answer({
+        upload_url: 'https://storage.example.test/put/k-1',
+        storage_key: 'u-me/k-1.m4a',
+        expires_at: '2026-10-28T10:10:00.000Z',
+        expires_in_seconds: 600,
+        bucket: 'community-voice',
+      });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(mockUploadBytes).not.toHaveBeenCalled();
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(queryByText('Not sent')).toBeNull();
+    expect(buzz).not.toHaveBeenCalled();
+  } finally {
+    global.fetch = realFetch;
+    buzz.mockRestore();
+  }
 });

@@ -53,6 +53,15 @@ jest.mock('../../../api/communityApi', () => ({
   },
 }));
 
+// REMOVED-BY-M3: the post page and its replies come through the opt-in reads; same wire stubs.
+jest.mock('../../../api/communityRemovedRows', () => ({
+  ...jest.requireActual('../../../api/communityRemovedRows'),
+  removedRowsApi: {
+    getPost: (...a: unknown[]) => mockApi.getPost(...a),
+    listComments: (...a: unknown[]) => mockApi.listComments(...a),
+  },
+}));
+
 import { COMMUNITY_REACTION_EMOJI } from '../../../api/communityApi';
 import CommunityThreadScreen from '../CommunityThreadScreen';
 
@@ -275,5 +284,92 @@ describe('CommunityThreadScreen closed (BLOCK-ALL-M)', () => {
     await waitFor(() => expect(view.getByTestId('community-thread-closed')).toBeTruthy());
     expect(view.queryByTestId('community-thread-composer-field')).toBeNull();
     expect(alertSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('REMOVED-BY-M3: a post or reply a coach removed (backend #1176 contract sections 3, 4, 6)', () => {
+  const BY = (user_id: string) => ({ role: 'coach', user_id, name: 'Maya' });
+  const removedPost = (by: string, over: Record<string, unknown> = {}) => prodPost({
+    title: null, body: null, deleted: true, reactions: [], author_name: 'Sam',
+    removed_at: ago(HOUR), removed_by: BY(by), ...over,
+  });
+  const reply = (id: string, over: Record<string, unknown> = {}) => ({
+    id, post_id: POST, author_user_id: OTHER, author_name: 'Sam', body: 'Great set', created_at: ago(HOUR), ...over,
+  });
+  const REPLY_A = '55555555-5555-5555-5555-555555555555';
+  const REPLY_B = '66666666-6666-6666-6666-666666666666';
+
+  async function renderRemoved() {
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false, gcTime: Infinity } },
+    });
+    const view = await render(<QueryClientProvider client={qc}><CommunityThreadScreen /></QueryClientProvider>);
+    await waitFor(() => expect(view.getByTestId('community-thread-post-removed')).toBeTruthy());
+    return view;
+  }
+
+  it.each([
+    ['someone else', OTHER, 'Removed by Coach Maya'],
+    ['the coach who removed it', ME, 'You removed this post'],
+  ])('shows %s one line, with no title, words, reactions, menu, empty prompt or reply box', async (_who, by, line) => {
+    mockApi.getPost.mockResolvedValue(removedPost(by));
+    const view = await renderRemoved();
+    expect(view.getByText(line)).toBeTruthy();
+    expect(view.getByTestId('community-thread-header').props.children).toBe('Post');
+    expect(view.getByTestId('community-thread-post-meta').props.children).toMatch(/^Sam · /);
+    expect(view.queryByText('Hello')).toBeNull();
+    expect(view.queryByText('World')).toBeNull();
+    expect(view.queryByTestId('community-thread-post-safety')).toBeNull();
+    expect(view.queryByTestId(`reaction-${E0}`)).toBeNull();
+    expect(view.queryByTestId('community-thread-empty')).toBeNull();
+    expect(view.queryByTestId('community-thread-empty-action')).toBeNull();
+    expect(view.queryByTestId('community-thread-composer-field')).toBeNull();
+    expect(view.queryByTestId('community-thread-closed')).toBeNull();
+  });
+
+  it('tells the author "Your coach removed your post" with the Community safety link', async () => {
+    mockApi.getPost.mockResolvedValue(removedPost(COACH, { author_user_id: ME }));
+    const view = await renderRemoved();
+    expect(view.getByText('Your coach removed your post')).toBeTruthy();
+    await fireEvent.press(view.getByTestId('community-thread-post-removed-safety'));
+    expect(mockNavigate).toHaveBeenCalledWith('CommunitySafety');
+  });
+
+  it('shows a removed reply as one line under its author/time, with no words and no menu; live replies unchanged', async () => {
+    mockApi.listComments.mockResolvedValue([
+      reply(REPLY_A),
+      reply(REPLY_B, { body: null, reactions: [], removed_at: ago(HOUR), removed_by: BY(COACH) }),
+    ]);
+    const view = await renderThread();
+    await waitFor(() => expect(view.getByTestId(`comment-removed-${REPLY_B}`)).toBeTruthy());
+    expect(view.getByText('Removed by Coach Maya')).toBeTruthy();
+    expect(view.getByTestId(`comment-meta-${REPLY_B}`).props.children).toMatch(/^Sam · /);
+    expect(view.queryByTestId(`comment-safety-${REPLY_B}`)).toBeNull();
+    expect(view.getByText('Great set')).toBeTruthy();
+    expect(view.getByTestId(`comment-safety-${REPLY_A}`)).toBeTruthy();
+    expect(view.getByTestId('community-thread-composer-field')).toBeTruthy();
+  });
+
+  it('tells the coach who removed a reply "You removed this comment"', async () => {
+    mockApi.listComments.mockResolvedValue([reply(REPLY_B, { body: null, removed_at: ago(HOUR), removed_by: BY(ME) })]);
+    const view = await renderThread();
+    await waitFor(() => expect(view.getByText('You removed this comment')).toBeTruthy());
+  });
+
+  it('tells a reply\'s author "Your coach removed your comment"', async () => {
+    mockApi.listComments.mockResolvedValue([
+      reply(REPLY_B, { author_user_id: ME, body: null, removed_at: ago(HOUR), removed_by: BY(COACH) }),
+    ]);
+    const view = await renderThread();
+    await waitFor(() => expect(view.getByText('Your coach removed your comment')).toBeTruthy());
+  });
+
+  it('an older server (no removed keys) draws the post and reply as today', async () => {
+    mockApi.listComments.mockResolvedValue([reply(REPLY_A)]);
+    const view = await renderThread();
+    await waitFor(() => expect(view.getByText('Great set')).toBeTruthy());
+    expect(view.queryByTestId('community-thread-post-removed')).toBeNull();
+    expect(view.queryByTestId(`comment-removed-${REPLY_A}`)).toBeNull();
+    expect(view.getByTestId('community-thread-post-safety')).toBeTruthy();
   });
 });

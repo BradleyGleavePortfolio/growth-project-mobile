@@ -5,6 +5,8 @@
  *   POST  /client/copilot/suggestions/:id/send  hand one suggestion to the client's coach
  *   GET   /ai/gateway/drafts?order=oldest       the coach's waiting drafts, oldest sent first (Copilot rows filtered here)
  *   PATCH /ai/gateway/drafts/:id                Approve, Edit (one field on the live plan) or Decline with a one-line note
+ *   GET   /client/copilot/questions             past Copilot questions, 20 a page (backend #1129)
+ *   GET   /roman/sessions/:id/messages          with x-roman-copilot: 1, one past answer and its facts (backend #1129)
  *
  * Every read is parsed strictly. A server without these routes reads as "nothing new", never as an error
  * (capability check or truthful fallback): 404 on the client read, the old bare array on the coach read.
@@ -101,6 +103,13 @@ export function parseWeek(v: unknown): CopilotWeek | null {
   };
 }
 
+export type QuestionOutcome = SuggestionStatus | null;
+export interface PastQuestion { question: string | null; askedAt: string; sessionId: string; messageId: string; outcome: QuestionOutcome }
+export interface PastQuestionsPage { items: PastQuestion[]; total: number; since: string | null; nextCursor: string | null }
+
+/** One past answer, read back from its chat. */
+export interface PastAnswer { text: string; reply: CopilotReply | null }
+
 /** Status, machine code and server words of a failed call (axios shape), for the screens' own lines. */
 export function copilotErrorOf(err: unknown): { status: number | null; code: string | null; message: string | null } {
   const res = rec(err) && rec(err.response) ? err.response : null;
@@ -111,6 +120,8 @@ export function copilotErrorOf(err: unknown): { status: number | null; code: str
 
 export const COPILOT_PATHS = {
   recent: '/client/copilot',
+  questions: '/client/copilot/questions',
+  messages: (sessionId: string) => `/roman/sessions/${encodeURIComponent(sessionId)}/messages`,
   send: (id: string) => `/client/copilot/suggestions/${encodeURIComponent(id)}/send`,
   drafts: '/ai/gateway/drafts',
   decide: (id: string) => `/ai/gateway/drafts/${encodeURIComponent(id)}`,
@@ -132,6 +143,32 @@ export const copilotApi = {
       if (copilotErrorOf(err).status === 404) return null;
       throw err;
     }
+  },
+
+  /** null: an older server (404). Items the phone cannot draw are left out. */
+  async questions(cursor?: string): Promise<PastQuestionsPage | null> {
+    try {
+      const res = await api.get<unknown>(COPILOT_PATHS.questions, { params: cursor ? { cursor } : {} });
+      const b: Record<string, unknown> = rec(res.data) ? res.data : {};
+      const items = (Array.isArray(b.items) ? b.items : []).flatMap((q: unknown): PastQuestion[] =>
+        rec(q) && iso(q.asked_at) && str(q.session_id) && str(q.message_id)
+          ? [{ question: str(q.question) ? q.question : null, askedAt: q.asked_at, sessionId: q.session_id, messageId: q.message_id,
+               outcome: STATUSES.includes(q.outcome as SuggestionStatus) ? (q.outcome as SuggestionStatus) : null }]
+          : [],
+      );
+      return { items, total: count(b.total) ? b.total : items.length, since: iso(b.since) ? b.since : null, nextCursor: str(b.next_cursor) ? b.next_cursor : null };
+    } catch (err) {
+      if (copilotErrorOf(err).status === 404) return null;
+      throw err;
+    }
+  },
+
+  /** Roman's reply `messageId` in its chat, with the facts (the Copilot opt-in header). null: the reply is gone. */
+  async answer(sessionId: string, messageId: string): Promise<PastAnswer | null> {
+    const res = await api.get<unknown>(COPILOT_PATHS.messages(sessionId), { params: { limit: 100 }, headers: { 'x-roman-copilot': '1' } });
+    const list = rec(res.data) && Array.isArray(res.data.messages) ? res.data.messages : [];
+    const m = list.find((x: unknown) => rec(x) && x.id === messageId);
+    return rec(m) && typeof m.content === 'string' ? { text: m.content, reply: parseReply(m.copilot) } : null;
   },
 
   async send(id: string): Promise<CopilotSuggestion> {

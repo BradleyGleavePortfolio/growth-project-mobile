@@ -1,0 +1,22 @@
+name: Route contract
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  route-contract:
+    name: Phone routes exist on backend main
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.13
+          cache: npm
+      - run: npm ci
+      - name: Test route extraction and comparison
+        run: npx jest scripts/__tests__/routeContract.test.js --ci --runInBand
+      - name: List every phone route and check the backend snapshot
+        run: node scripts/route-contract/check.js

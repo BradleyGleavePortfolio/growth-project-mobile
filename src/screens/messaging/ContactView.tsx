@@ -23,7 +23,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation, RouteProp, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import { useBlockedUsersStore } from '../../store/blockedUsersStore';
+import { useBlockedUsersStore, blockListOwner, ownsBlockList } from '../../store/blockedUsersStore';
+import { queryClient } from '../../services/queryClient';
+import {
+  coachCommunityKeys,
+  dropAuthorFromCoachInbox,
+} from '../../hooks/useCoachCommunity';
 import { messagesModerationApi } from '../../api/messagesApi';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { HapticService } from '../../ui/haptics/haptics.service';
@@ -80,9 +85,14 @@ export default function ContactView(): React.ReactElement {
           style: 'destructive',
           onPress: async () => {
             setBlocking(true);
+            const owner = blockListOwner(); // LS-914 B1
             try {
               await messagesModerationApi.block(contactId);
-              await blockStore.block({ id: contactId, displayName, role });
+              // An answer after sign-out or an account switch belongs to the earlier account: write nothing here.
+              if (!ownsBlockList(owner)) return;
+              await blockStore.block({ id: contactId, displayName, role }, owner);
+              // Owner rule: a blocked person's rows leave the coach inbox now.
+              dropAuthorFromCoachInbox(queryClient, contactId);
               HapticService.heavyImpact();
               track('dm_user_blocked', { contact_id: contactId, role });
               navigation.goBack();
@@ -108,9 +118,13 @@ export default function ContactView(): React.ReactElement {
         text: 'Unblock',
         onPress: async () => {
           setBlocking(true);
+          const owner = blockListOwner();
           try {
             await messagesModerationApi.unblock(contactId);
-            await blockStore.unblock(contactId);
+            if (!ownsBlockList(owner)) return;
+            await blockStore.unblock(contactId, owner);
+            // Their rows come back on the next inbox fetch.
+            void queryClient.invalidateQueries({ queryKey: coachCommunityKeys.all });
             track('dm_user_unblocked', { contact_id: contactId, role });
           } catch {
             Alert.alert(

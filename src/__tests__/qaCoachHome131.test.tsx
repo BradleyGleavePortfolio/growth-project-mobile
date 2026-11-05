@@ -15,7 +15,8 @@ import { fireEvent, render, waitFor, within } from '@testing-library/react-nativ
 const mockNavigate = jest.fn();
 jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'),
-  useNavigation: () => ({ navigate: mockNavigate }),
+  // EXPO_PUBLIC_FF_COACH_TABS_V2: TeamManagementScreen.tsx:109 asks canGoBack.
+  useNavigation: () => ({ navigate: mockNavigate, canGoBack: () => false }),
 }));
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 47, bottom: 0, left: 0, right: 0 }),
@@ -79,6 +80,10 @@ import WinStreaksScreen from '../screens/coach/command-center/WinStreaksScreen';
 import InboxScreen from '../screens/coach/command-center/InboxScreen';
 import ActionQueueScreen from '../screens/coach/command-center/ActionQueueScreen';
 import TeamManagementScreen from '../screens/coach/TeamManagementScreen';
+import { featureFlags } from '../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_COACH_HOME_V11 off: this file is the Home with its top tab row (V11 drops the row, spec #688).
+jest.replaceProperty(featureFlags, 'coachHomeV11', false);
 
 const api = mockApi;
 const flat = (node: { props: { style?: unknown } }): TextStyle =>

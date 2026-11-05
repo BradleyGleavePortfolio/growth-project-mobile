@@ -125,6 +125,8 @@ describe('buildUsualDay', () => {
     expect(b.usual?.days).toEqual(['2026-10-08', '2026-10-06']);
     expect(b.usual?.meal.entries[0]).toEqual({
       foodItemId: 'oats', name: 'Rolled oats', calories: 120, quantityMultiplier: 0.6, originalQuantity: 60, originalUnit: 'g',
+      // LS-931 B3: what the day shows for it when it is repeated offline (per unit, as the search sheet's Repeat).
+      shown: expect.objectContaining({ name: 'Rolled oats', calories: 200 }),
     });
     expect(b.foods).toEqual([{ name: 'Rolled oats', portion: '60 g' }, { name: 'Milk', portion: '200 g' }]);
     expect(b.kcal).toBe(520);

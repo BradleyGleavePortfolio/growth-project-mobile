@@ -87,6 +87,10 @@ import CoachPackageEditScreen from '../screens/coach/payments/CoachPackageEditSc
 import type { CoachPackage } from '../api/packagesApi';
 import { fromBackend, toBackendUpdate } from '../api/packagesApi';
 import { SAVE_BEFORE_PUBLISH } from '../screens/coach/payments/CoachPackageEditScreen';
+import { featureFlags } from '../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_COACH_TABS_V2 off: Open Money goes to Money inside Settings here, the five-tab layout (with six tabs Money is its own tab).
+jest.replaceProperty(featureFlags, 'coachTabsV2', false);
 
 function pkg(overrides: Partial<CoachPackage> = {}): CoachPackage {
   return {
@@ -187,6 +191,21 @@ describe('CoachPackageEditScreen — preview as buyer', () => {
     );
     // The disabled CTA exists in preview; no functional pay path.
     expect(getByLabelText('Checkout disabled in preview')).toBeTruthy();
+  });
+});
+
+// STORE-1TO1 (owner #183-S1): every package includes 1:1 coaching with its coach.
+describe('CoachPackageEditScreen — STORE-1TO1 1:1 coaching line', () => {
+  it('says every package includes 1:1 coaching with the coach, and the buyer preview lists it first', async () => {
+    const props = makeProps(pkg({ subscriberCount: 0 }));
+    const { getByTestId, getByLabelText, findByTestId } = await render(
+      <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
+    );
+    expect(getByTestId('package-one-to-one-note').props.children).toBe(
+      'Every package includes 1:1 coaching with you.',
+    );
+    await fireEvent.press(getByLabelText('Preview as buyer'));
+    expect((await findByTestId('package-detail-one-to-one')).props.children).toMatch(/^1:1 coaching with \S/);
   });
 });
 

@@ -815,3 +815,52 @@ describe('challenge notes closed (BLOCK-ALL-M)', () => {
     expect(screen.queryByTestId('community-challenge-action-error')).toBeNull();
   });
 });
+
+describe('REMOVED-BY-M3: a challenge comment a coach removed (backend #1176 contract section 5)', () => {
+  const removed = (over: Partial<CommunityChallengeComment> = {}): CommunityChallengeComment => ({
+    id: 'cm-2',
+    challenge_id: 'ch-1',
+    author_user_id: 'other-1',
+    body: null,
+    created_at: '2026-03-05T00:00:00Z',
+    removed_at: '2026-03-05T01:00:00Z',
+    removed_by: { role: 'coach', user_id: 'coach-1', name: 'Maya' },
+    ...over,
+  });
+  const live: CommunityChallengeComment = {
+    id: 'cm-1',
+    challenge_id: 'ch-1',
+    author_user_id: 'other-1',
+    body: 'Keep going, you have got this.',
+    created_at: '2026-03-05T00:00:00Z',
+  };
+
+  beforeEach(() => {
+    api.getChallenge.mockResolvedValue({ challenge: challenge(), participation: participation() });
+  });
+
+  it('reads Removed by Coach {name} in its place with no words and no menu; the live comment is unchanged', async () => {
+    api.listComments.mockResolvedValue({ comments: [live, removed()], next_cursor: null });
+    await renderScreen();
+    expect(await screen.findByTestId('community-challenge-comment-cm-2-removed')).toBeTruthy();
+    expect(screen.getByText('Removed by Coach Maya')).toBeTruthy();
+    expect(screen.queryByTestId('community-challenge-comment-cm-2-safety')).toBeNull();
+    expect(screen.getByText('Keep going, you have got this.')).toBeTruthy();
+    expect(screen.getByTestId('community-challenge-comment-cm-1-safety')).toBeTruthy();
+  });
+
+  it('tells the coach who removed it "You removed this comment"', async () => {
+    api.listComments.mockResolvedValue({
+      comments: [removed({ removed_by: { role: 'coach', user_id: 'me-1', name: 'Dana' } })],
+      next_cursor: null,
+    });
+    await renderScreen();
+    expect(await screen.findByText('You removed this comment')).toBeTruthy();
+  });
+
+  it('tells its author "Your coach removed your comment"', async () => {
+    api.listComments.mockResolvedValue({ comments: [removed({ author_user_id: 'me-1' })], next_cursor: null });
+    await renderScreen();
+    expect(await screen.findByText('Your coach removed your comment')).toBeTruthy();
+  });
+});

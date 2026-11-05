@@ -25,6 +25,7 @@ import api from '../services/api';
 import type { AxiosResponse } from 'axios';
 import { emitTutorialSignal } from '../tutorial/tutorialEvents';
 import { blockPlaced, blockLifted } from '../lib/blockSync';
+import { blockListOwner } from '../store/blockedUsersStore';
 
 /**
  * The categories the report sheet offers. The backend DTO
@@ -145,15 +146,17 @@ async function report(
 
 async function block(userId: string): Promise<BlockUserResponse> {
   if (!userId) throw new Error('userId required');
+  const owner = blockListOwner(); // LS-914 B1: the answer writes only into the list it was sent from
   await api.post(`/users/${encodeURIComponent(userId)}/block`);
-  blockPlaced(userId); // FX-872: one block cache, every screen and list at once
+  blockPlaced(userId, {}, owner); // FX-872: one block cache, every screen and list at once
   return { ok: true };
 }
 
 async function unblock(userId: string): Promise<BlockUserResponse> {
   if (!userId) throw new Error('userId required');
+  const owner = blockListOwner();
   await api.delete(`/users/${encodeURIComponent(userId)}/block`);
-  blockLifted(userId);
+  blockLifted(userId, owner);
   return { ok: true };
 }
 

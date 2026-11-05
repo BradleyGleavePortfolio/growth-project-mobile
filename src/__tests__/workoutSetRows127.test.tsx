@@ -24,7 +24,8 @@ function Harness({ prior = previous, initial = { weight: 0, reps: 0, completed: 
 }) {
   const [set, update] = useState(initial);
   return <>
-    <SetLogger set={set} setIdx={0} exIdx={0} previous={prior ?? undefined}
+    {/* FR-917R3 (C1 v2): the row under test is the next set to do (fields shown). */}
+    <SetLogger set={set} setIdx={0} exIdx={0} previous={prior ?? undefined} nextUp
       onUpdate={(_ex, _set, field, value) => update((s) => ({ ...s, [field]: value }))}
       onToggleComplete={(ex, idx) => { toggle(ex, idx); update((s) => ({ ...s, completed: !s.completed })); }}
       colors={colors} styles={styles} />
@@ -38,12 +39,12 @@ describe('live workout row ghost values and action parity', () => {
     const view = await render(<Harness toggle={toggle} />);
     expect(view.getByTestId('set-weight-0-0').props).toMatchObject({ value: '', placeholder: '60', placeholderTextColor: sc.textMuted });
     expect(view.getByTestId('set-reps-0-0').props).toMatchObject({ value: '', placeholder: '10' });
-    await fireEvent.press(view.getByRole('checkbox', { name: 'Mark set 1 done' }));
+    await fireEvent.press(view.getByRole('checkbox', { name: /mark set 1 done/i }));
     expect(view.getByTestId('set-weight-0-0').props.value).toBe('60');
     expect(view.getByTestId('set-reps-0-0').props.value).toBe('10');
     expect(view.getByTestId('saved-set').props.children).toBe(JSON.stringify({ weight: 60, reps: 10, completed: true }));
     expect(toggle).toHaveBeenCalledWith(0, 0);
-    await fireEvent.press(view.getByRole('checkbox', { name: 'Mark set 1 done', checked: true }));
+    await fireEvent.press(view.getByRole('checkbox', { name: /mark set 1 done/i, checked: true }));
     expect(view.getByTestId('set-weight-0-0').props.value).toBe('60');
     expect(toggle).toHaveBeenCalledTimes(2);
   });
@@ -110,7 +111,7 @@ describe('live workout row ghost values and action parity', () => {
     const exercise = { exerciseId: 'bench', exerciseName: 'Bench press', sets: [previous], restSec: 90, coachNote: 'Controlled tempo' };
     const update = jest.fn(), complete = jest.fn(), add = jest.fn(), remove = jest.fn();
     const video = jest.fn(), move = jest.fn(), swap = jest.fn(), notes = jest.fn(), rest = jest.fn();
-    const view = await render(<ExerciseCard exercise={exercise} exIdx={1} onUpdateSet={update}
+    const view = await render(<ExerciseCard exercise={exercise} exIdx={1} active onUpdateSet={update}
       onToggleSetComplete={complete} onAddSet={add} onRemoveExercise={remove} onOpenExerciseDetail={video}
       onMove={move} onSwap={swap} onChangeNotes={notes} onChangeRest={rest}
       previous={[previous]} colors={colors} styles={styles} />);

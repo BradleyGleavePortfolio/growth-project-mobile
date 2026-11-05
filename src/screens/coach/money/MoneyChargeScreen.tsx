@@ -22,6 +22,7 @@ import {
 import {
   breakdownRows,
   cadenceLabel,
+  chargeHeld,
   chargeIsProblem,
   chargeStateLabel,
   money,
@@ -125,11 +126,17 @@ export default function MoneyChargeScreen({ navigation, route }: Props) {
   // money, so it never shows "Clients paid" or "check back once it clears".
   // Opus B-349-1: a failed renewal on a plan that has been paid before
   // keeps the earlier payments; only the latest payment failed.
-  const latestFailed = plan && c.state === "failed" && d.settled;
-  const noMoney = latestFailed ? null : noMoneyMovedCopy(c.state);
+  // HELD-RENEWAL-M: TGP holds this renewal until the coach's Stripe account
+  // can take payments (the server's waiting_on). It is not a failed payment:
+  // no failed label, no "No money moved", no Needs attention pointer.
+  const held = chargeHeld(c);
+  const paidBefore = plan && d.settled;
+  const latestFailed = paidBefore && c.state === "failed" && !held;
+  const noMoney = latestFailed || held ? null : noMoneyMovedCopy(c.state);
   // Sol B-349-1: pending means no payment has gone through yet (for example
   // a free trial that has not billed), so there is no paid-money equation.
-  const pending = c.state === "pending";
+  // LO-1202B B1: a plan paid before keeps its totals so far instead.
+  const pending = (c.state === "pending" || held) && !paidBefore;
   const scheduled = `Price, not paid yet: ${money(d.priceCents, c.currency)}`;
 
   return (
@@ -175,12 +182,21 @@ export default function MoneyChargeScreen({ navigation, route }: Props) {
             </Text>
           </View>
         ) : null}
+        {held ? (
+          <View style={styles.card} testID="money-charge-held">
+            <Text style={styles.body}>
+              {paidBefore
+                ? "1 renewal is waiting on your Stripe account. Fix it in Stripe, and TGP tries again. Earlier payments are counted below."
+                : "1 renewal is waiting on your Stripe account. Fix it in Stripe, and TGP tries again."}
+            </Text>
+          </View>
+        ) : null}
         {pending ? (
           <View style={styles.card} testID="money-charge-breakdown">
             <Text style={styles.body} testID="money-charge-unsettled">
-              No payment has gone through for this yet, so nothing has reached
-              your payouts. A free trial is billed when it ends. The fee
-              breakdown appears here after the first payment.
+              {held
+                ? "No payment has gone through for this yet, so nothing has reached your payouts. The fee breakdown appears here after the first payment."
+                : "No payment has gone through for this yet, so nothing has reached your payouts. A free trial is billed when it ends. The fee breakdown appears here after the first payment."}
             </Text>
             <View style={styles.bRow} accessible accessibilityLabel={scheduled}>
               <Text style={styles.bLabel}>Price, not paid yet</Text>

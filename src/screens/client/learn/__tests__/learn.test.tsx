@@ -71,7 +71,14 @@ beforeEach(() => {
 
 describe('Learn', () => {
   it('is off in every build until the owner turns it on', () => {
-    expect(featureFlags.learnHub).toBe(false);
+    // Pins EXPO_PUBLIC_FF_LEARN_HUB off: this test checks the shipped default.
+    const saved = process.env.EXPO_PUBLIC_FF_LEARN_HUB;
+    delete process.env.EXPO_PUBLIC_FF_LEARN_HUB;
+    try {
+      jest.isolateModules(() => expect(jest.requireActual('../../../../config/featureFlags').featureFlags.learnHub).toBe(false));
+    } finally {
+      if (saved !== undefined) process.env.EXPO_PUBLIC_FF_LEARN_HUB = saved;
+    }
   });
 
   it('shows the coach, the guidelines card and the numbered lessons with one next step', async () => {

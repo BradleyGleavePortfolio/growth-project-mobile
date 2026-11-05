@@ -3,6 +3,8 @@ import { MealType } from '../../types';
 import type { PastMeal } from '../../hooks/useFoodBrowse';
 import { SearchResult } from './types';
 import { planLink, type PlanLink } from './planLink';
+import { foodSaveIntent, withSaveKey } from './saveKey';
+import { enqueue as enqueueFoodLog, type QueuedFoodShown } from '../../services/foodLogQueue';
 
 // Words in a search that describe the amount rather than the food
 // ("2 eggs", "150 g chicken"). They are ignored when matching foods the
@@ -61,22 +63,62 @@ export interface RepeatMealResult {
 /** `link`: the plan meal or usual-day meal this repeat fills (FOODLINK), sent on every food. */
 export async function repeatPastMeal(meal: PastMeal, date: string, mealType: MealType, link?: PlanLink): Promise<RepeatMealResult> {
   const settled = await Promise.allSettled(
-    meal.entries.map((e) =>
-      logApi.logFood({
+    meal.entries.map((e) => {
+      const log = {
         date,
         meal_type: mealType,
-        food_item_id: e.foodItemId,
         quantity_multiplier: e.quantityMultiplier,
         original_quantity: e.originalQuantity,
         original_unit: e.originalUnit,
         ...planLink(link),
-      }),
-    ),
+      };
+      // FR-916 F1: each food is its own save, keyed by what it sends (foodSaveIntent), so the same food
+      // sent again after a lost answer, by Repeat or from Recent as the alert says, sends the same key.
+      // The same food twice in this meal is two saves of one intent: each takes its own key (withSaveKey).
+      return withSaveKey(foodSaveIntent(log, e.foodItemId), (key) =>
+        logApi.logFood({ ...log, food_item_id: e.foodItemId, client_uuid: key }));
+    }),
   );
   const failedNames = meal.entries
     .filter((_e, i) => settled[i].status === 'rejected')
     .map((e) => e.name);
   return { added: meal.entries.length - failedNames.length, failedNames };
+}
+
+/**
+ * OFFLINE-FOOD-M: Repeat with no signal. Each food of the meal goes to the offline queue as its own
+ * save with its own key (the same intent and key rule as repeatPastMeal, so a food whose online try
+ * lost its answer keeps that key), with the same portion; the queue sends each once on reconnect.
+ * One at a time, in the meal's order. Returns the number queued; a failed write throws after the
+ * foods before it are queued (the caller says what was saved).
+ */
+/**
+ * LS-931 B3: a meal entry from a producer that kept no `shown` still shows in the day: its name and
+ * its calories per unit (the entry's calories are for its own multiplier). Macros it does not hold
+ * stay unknown rather than invented.
+ */
+function shownOfEntry(e: PastMeal['entries'][number]): QueuedFoodShown {
+  const k = e.quantityMultiplier;
+  const perUnit = Number.isFinite(e.calories) && Number.isFinite(k) && k > 0 ? e.calories / k : null;
+  return { name: e.name, calories: perUnit, protein_g: null, carbs_g: null, fat_g: null };
+}
+
+export async function queuePastMeal(meal: PastMeal, date: string, mealType: MealType, link?: PlanLink): Promise<number> {
+  let queued = 0;
+  for (const e of meal.entries) {
+    const log = {
+      date,
+      meal_type: mealType,
+      quantity_multiplier: e.quantityMultiplier,
+      original_quantity: e.originalQuantity,
+      original_unit: e.originalUnit,
+      ...planLink(link),
+    };
+    await withSaveKey(foodSaveIntent(log, e.foodItemId), (key) =>
+      enqueueFoodLog({ kind: 'search', foodItemId: e.foodItemId, shown: e.shown ?? shownOfEntry(e), log }, key));
+    queued += 1;
+  }
+  return queued;
 }
 
 /** "1 serving", "2 servings", "150 g", "0.5 cup" */

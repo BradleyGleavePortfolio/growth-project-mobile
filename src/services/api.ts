@@ -74,11 +74,13 @@ import { authEvents } from '../utils/authEvents';
 import { isStartupTimeout, withStartupTimeout } from '../lib/startupTimebox';
 import { secureStorage } from './secureStorage';
 import { refreshRealtimeAuth } from './realtime';
+import { noteDeletionState } from './deletionSchedule';
 import { env } from '../config/env';
 import { entitlementEvents } from '../entitlements/entitlementEvents';
 import { withTutorialSignal } from '../tutorial/tutorialEvents';
 import { logger } from '../utils/logger';
 import { generateIdempotencyKey } from '../utils/idempotency';
+import { saveKeys } from './saveKeys';
 import { getTodayString } from '../utils/date';
 import { REQUEST_ID_HEADER, extractRequestId, newRequestId } from '../utils/correlation';
 import {
@@ -382,7 +384,8 @@ async function handleRefreshFailure(startGeneration: number): Promise<void> {
     const signOut = __testSignOut
       ? __testSignOut
       : (await import('./authActions')).signOut;
-    await signOut(undefined, { sessionFence: fence.pass });
+    // FR-898R3: a confirmed deletion also removes the account's kept marks.
+    await signOut(undefined, { sessionFence: fence.pass, accountDeleted: deletionComplete });
   } catch (err) {
     logger.error('API', 'signOut on refresh failure threw', err);
     authEvents.emit('logout');
@@ -607,7 +610,10 @@ type RefreshSessionFn = (args: { refresh_token: string }) => Promise<{
   error: unknown;
 }>;
 let __testRefreshSession: RefreshSessionFn | null = null;
-type SignOutFn = (userId?: string | null, opts?: { sessionFence?: SessionFencePass }) => Promise<void>;
+type SignOutFn = (
+  userId?: string | null,
+  opts?: { sessionFence?: SessionFencePass; accountDeleted?: boolean },
+) => Promise<void>;
 let __testSignOut: SignOutFn | null = null;
 
 export function __setRefreshSessionForTests(fn: RefreshSessionFn | null): void {
@@ -769,8 +775,9 @@ export const logApi = {
     original_quantity?: number;
     original_unit?: string;
     notes?: string;
-    // Idempotency key from the offline queue so a flush retry doesn't create
-    // a duplicate LoggedFoodEntry. Optional — direct (non-queued) logs omit it.
+    // The save's client key (FOOD-1-M R3: the offline queue's entry id, or the online tap's key from
+    // utils/log/saveKey), so a retry upserts instead of creating a second LoggedFoodEntry. It is also
+    // sent as the Idempotency-Key header.
     client_uuid?: string;
     // FOODLINK: the plan meal (DailyMealPlanSlot id) this food was logged for, and the coachless usual
     // day's mark. Sent only through logSubmit's planLink(), i.e. only with featureFlags.foodPlanChecklist on.
@@ -778,7 +785,10 @@ export const logApi = {
     fills_usual_meal?: boolean;
     // Client tutorial: a 2xx food log is the real "first meal" action. The
     // response passes through untouched; a failure emits nothing.
-  }) => withTutorialSignal(api.post('/log/food', data), 'meal_logged'),
+  }) => withTutorialSignal(
+    data.client_uuid ? api.post('/log/food', data, { headers: { 'Idempotency-Key': data.client_uuid } }) : api.post('/log/food', data),
+    'meal_logged',
+  ),
   getDaily: (date: string) =>
     api.get(`/log/daily?date=${date}`),
   updateEntry: (id: string, data: Record<string, unknown>) =>
@@ -818,8 +828,9 @@ export const aiApi = {
 };
 
 export const workoutApi = {
-  create: (data: Record<string, unknown>) =>
-    api.post('/workouts', data),
+  // `config` carries the save's Idempotency-Key (offline/sync/workoutSaveKey.ts).
+  create: (data: Record<string, unknown>, config?: AxiosRequestConfig) =>
+    api.post('/workouts', data, config),
   update: (id: string, data: Record<string, unknown>) =>
     api.put(`/workouts/${encodeURIComponent(id)}`, data),
   getAll: (limit = 10) =>
@@ -849,9 +860,16 @@ export const fastingApi = {
     api.delete(`/fasting/${encodeURIComponent(id)}`),
 };
 
+// WATER-WEIGHT-KEYS-M: a weight save sends its one-time key, and a resend of
+// the same save sends the same key (./saveKeys.ts; backend #1206). Water's key
+// is the client store's (waterApi.log below).
+const weightKeys = saveKeys();
+
 export const weightApi = {
   log: (data: { weight_lbs: number; date?: string; notes?: string }) =>
-    api.post('/weight', data),
+    weightKeys.send(JSON.stringify([data.weight_lbs, data.date ?? null, data.notes ?? null]), (client_uuid) =>
+      api.post('/weight', { ...data, client_uuid }),
+    ),
   getHistory: (days = 30) =>
     api.get(`/weight/history?days=${days}`),
 };
@@ -1079,8 +1097,12 @@ export interface WaterEntry {
 }
 
 export const waterApi = {
-  log: (data: { amount_ml: number; date?: string }) =>
-    api.post<WaterEntry>('/nutrition/water', data),
+  // `key` (FOOD-1-M R3; FR-921R2): the glass's one key, made and kept by the client store (withSaveKey). It goes in
+  // the body as client_uuid, the field the server reads (backend #1206), and the same key in the Idempotency-Key header.
+  log: (data: { amount_ml: number; date?: string }, key?: string) =>
+    key
+      ? api.post<WaterEntry>('/nutrition/water', { ...data, client_uuid: key }, { headers: { 'Idempotency-Key': key } })
+      : api.post<WaterEntry>('/nutrition/water', data),
   getDaily: (date: string) =>
     api.get<{ total_ml: number; logs?: WaterEntry[] }>(`/nutrition/water?date=${date}`),
   getWeekly: (startDate: string) =>
@@ -1406,13 +1428,22 @@ export const deletionApi = {
       '/me/delete-account',
       appleAuthorizationCode ? { apple_authorization_code: appleAuthorizationCode } : {},
       { headers: { [RECENT_AUTH_HEADER]: recentAuthToken } },
-    ),
+    ).then(noteDeletion),
 
   /** Get current deletion state (none | requested | confirmed | deleted). */
   getDeletionStatus: () =>
-    api.get<DeletionStatus>('/me/delete-account/status'),
+    api.get<DeletionStatus>('/me/delete-account/status').then(noteDeletion),
 
   /** Cancel a pending deletion within the grace period. */
   cancelDeletion: () =>
-    api.post<{ message: string }>('/me/delete-account/cancel'),
+    api.post<{ message: string }>('/me/delete-account/cancel').then((res) => {
+      noteDeletionState('none');
+      return res;
+    }),
 };
+
+/** JOINOFFER-DEL: remember for signOut whether this session's deletion is scheduled. */
+function noteDeletion<T extends { data?: { state?: string } | null }>(res: T): T {
+  noteDeletionState(res?.data?.state);
+  return res;
+}

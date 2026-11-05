@@ -29,7 +29,7 @@ jest.mock('../../../../lib/userCache', () => ({
 jest.mock('../../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'c1', name: 'Jordan Reyes' }) }));
 const mockEmit = jest.fn();
 jest.mock('../../../../utils/authEvents', () => ({
-  authEvents: { emit: (...a: unknown[]) => mockEmit(...a), subscribe: jest.fn(() => () => undefined) },
+  authEvents: { emit: (...a: unknown[]) => mockEmit(...a), subscribe: jest.fn(() => () => undefined), on: jest.fn(), off: jest.fn() },
 }));
 const mockSignOut = jest.fn(async (..._a: unknown[]) => undefined);
 jest.mock('../../../../services/authActions', () => ({ signOut: (...a: unknown[]) => mockSignOut(...a) }));

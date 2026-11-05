@@ -48,12 +48,13 @@ export default function HousePackageScreen({ route, navigation }: Props): React.
     return () => cancelAnimationFrame(frame);
   }, [sheet]);
   const terms = planTerms(pkg);
+  const name = houseCoachName(coach); // "Bradley Gleave" here, on the sheet and on H3 (owner W-168-HC)
+  // FR-1TO1 (LO C1): every package includes 1:1 coaching with its coach, first under "What's included".
   const sections = ([
     [CLIENT_PLAN_COPY.billing, [terms.firstCharge, terms.renewal]],
     [HOUSE_PACKAGE_COPY.length, [pkg.weeks ? HOUSE_PACKAGE_COPY.weeks(pkg.weeks) : null]],
-    [CLIENT_PLAN_COPY.included, [pkg.description]],
+    [CLIENT_PLAN_COPY.included, [oneToOneCoachingLabel(name), pkg.description]],
   ] as const).map(([title, lines]) => [title, lines.filter((l): l is string => !!l)] as const).filter(([, lines]) => lines.length > 0);
-  const name = houseCoachName(coach); // "Bradley Gleave" here, on the sheet and on H3 (owner W-168-HC)
   // m#853 FIX R1 B3: only a confirmed payment makes him the coach here; Home re-reads the account (authEvents 'login',
   // as AddCoachCodeScreen does) after the cached coach changes. A slow or pending confirmation waits for the server:
   // it is noted, and Home moves the cached coach once the server names him (planRenewal settleHouseJoin, FIX R2 B1).

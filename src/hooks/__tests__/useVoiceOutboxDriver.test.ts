@@ -34,6 +34,8 @@ async function coldStart(online: boolean): Promise<{ net: Net; authEvents: { emi
   jest.resetModules();
   const AsyncStorage = require('@react-native-async-storage/async-storage').default;
   await AsyncStorage.setItem('tgp.voiceOutbox.v1', JSON.stringify(SAVED));
+  // The signed-in author's token on the phone: a queued note goes out only under it (BF-2).
+  require('expo-secure-store').__store.set('supabase_token', 'token-me');
   const net = require('@react-native-community/netinfo') as Net;
   net.__reset();
   net.__setState({ isConnected: online, isInternetReachable: online });

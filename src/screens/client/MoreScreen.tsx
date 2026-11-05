@@ -13,7 +13,7 @@ import {
 import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
-import { spacing as Spacing, typography, SemanticTokens } from '../../theme/tokens';
+import { spacing as Spacing, typography, SemanticTokens, radius as Radius } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { featureFlags } from '../../config/featureFlags';
@@ -39,6 +39,8 @@ export type MoreItem = {
   isRoman?: boolean;
   // Client tutorial spotlight id for this row (wearables step).
   tutorialTarget?: TutorialTargetId;
+  // Style A's new row (.lrow.new, Sol B-G1): a leaf-tint row with a forest icon tile, for Your path.
+  highlight?: boolean;
 };
 
 /**
@@ -98,9 +100,29 @@ export const PLAN_MORE_ITEMS: MoreItem[] = [
   },
 ];
 
+/**
+ * Path Copilot (style A frame 01, CP-A-01/02): "Your path" leads Your plan wherever the Copilot screen is in the
+ * build (featureFlags.clientPathCopilot, the same flag that registers the route). A client without a coach gets
+ * Roman's lock there, as the Roman row does.
+ */
+/** Style A's new-row colours (GOAL .lrow.new: #EEF4E0 row, #1C3023 tile, #A3C46A icon, #5A5A56 line). */
+export const NEW_ROW = { bg: '#EEF4E0', tile: '#1C3023', icon: '#A3C46A', muted: '#5A5A56' } as const;
+
+export const COPILOT_MORE_ITEM: MoreItem = {
+  icon: 'sparkles-outline',
+  label: 'Your path',
+  description: 'Ask why your plan is set the way it is',
+  section: 'Your plan',
+  target: { type: 'stack', screen: 'Copilot' },
+  a11yHint: 'Opens Your path',
+  highlight: true,
+};
+
 /** TIMELINE (#TIMELINE-DOOR op 1): with the Style C Timeline its door is on Progress, not here (More and You). */
-export const planMoreItems = (): MoreItem[] =>
-  featureFlags.clientTimelineV2 ? PLAN_MORE_ITEMS.filter((i) => i.label !== 'Timeline') : PLAN_MORE_ITEMS;
+export const planMoreItems = (): MoreItem[] => [
+  ...(featureFlags.clientPathCopilot ? [COPILOT_MORE_ITEM] : []),
+  ...(featureFlags.clientTimelineV2 ? PLAN_MORE_ITEMS.filter((i) => i.label !== 'Timeline') : PLAN_MORE_ITEMS),
+];
 
 export const MORE_ITEMS: MoreItem[] = [
   {
@@ -309,23 +331,23 @@ export default function MoreScreen() {
                 <TutorialTargetWrap id={item.tutorialTarget}>
                   <HapticPressable
                     intent="light"
-                    style={styles.item}
+                    style={item.highlight ? [styles.item, styles.itemNew] : styles.item}
                     onPress={() => handlePress(item)}
                     accessible
                     accessibilityRole="button"
                     accessibilityLabel={item.label}
                     accessibilityHint={item.a11yHint}
                   >
-                    <View style={styles.iconWrap}>
+                    <View style={item.highlight ? styles.iconNew : styles.iconWrap} testID={item.highlight ? 'more-row-new-icon' : undefined}>
                       {item.isRoman ? (
                         <RomanAvatar crop="neutral" size={28} testID="client-roman-entry-avatar" />
                       ) : (
-                        <Ionicons name={item.icon} size={22} color={colors.textMuted} />
+                        <Ionicons name={item.icon} size={item.highlight ? 20 : 22} color={item.highlight ? NEW_ROW.icon : colors.textMuted} />
                       )}
                     </View>
                     <View style={styles.textWrap}>
-                      <Text style={styles.itemLabel}>{item.label}</Text>
-                      <Text style={styles.itemDescription}>{item.description}</Text>
+                      <Text style={item.highlight ? styles.labelNew : styles.itemLabel}>{item.label}</Text>
+                      <Text style={item.highlight ? styles.descriptionNew : styles.itemDescription}>{item.description}</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
                   </HapticPressable>
@@ -414,6 +436,39 @@ const makeStyles = (colors: SemanticTokens) =>
   itemDescription: {
     ...typography.bodySmall,
     color: colors.textMuted,
+    marginTop: 2,
+  },
+  // Style A's .lrow.new (Sol B-G1): leaf tint, 62 high, 11/16 in, a 36 forest tile, 16/500 over 13.5 muted.
+  itemNew: {
+    minHeight: 62,
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+    marginVertical: 4,
+    borderRadius: Radius.card,
+    borderBottomWidth: 0,
+    backgroundColor: NEW_ROW.bg,
+  },
+  iconNew: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.button,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+    backgroundColor: NEW_ROW.tile,
+  },
+  labelNew: {
+    fontFamily: 'Inter_500Medium',
+    fontWeight: '500',
+    fontSize: 16,
+    lineHeight: 21,
+    color: colors.textPrimary,
+  },
+  descriptionNew: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13.5,
+    lineHeight: 18,
+    color: NEW_ROW.muted,
     marginTop: 2,
   },
 

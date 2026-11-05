@@ -106,6 +106,7 @@ jest.mock('../../../hooks/useCommunity', () => ({
   useReactToPost: () => ({ mutate: mockMutate, isPending: false }),
   useDeletePost: () => ({ mutateAsync: mockMutate, isPending: false }),
   isOptimisticId: (id: string) => id.startsWith('optimistic:'),
+  useMyCoachName: () => ({ name: null, settled: true }),
 }));
 
 // communityApi (CommunityThreadScreen uses useQuery(getPost) directly via RQ);

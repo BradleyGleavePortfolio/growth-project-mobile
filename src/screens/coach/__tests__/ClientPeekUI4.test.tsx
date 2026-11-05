@@ -8,10 +8,11 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 
 const mockSummary = jest.fn();
 const mockCheckIns = jest.fn();
+const mockWeek = jest.fn();
 let mockFlags: Record<string, boolean> = {};
 let mockTarget: { isSuccess: boolean; data: unknown } = { isSuccess: false, data: null };
 jest.mock('../../../services/api', () => ({
-  coachApi: { getClientSummary: (...a: unknown[]) => mockSummary(...a), getClientCheckIns: (...a: unknown[]) => mockCheckIns(...a) },
+  coachApi: { getClientSummary: (...a: unknown[]) => mockSummary(...a), getClientCheckIns: (...a: unknown[]) => mockCheckIns(...a), getClientWeek: (...a: unknown[]) => mockWeek(...a) },
 }));
 let mockFontScale = 1;
 jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({ __esModule: true, default: () => ({ width: 390, height: 844, scale: 3, fontScale: mockFontScale }) }));
@@ -33,6 +34,7 @@ jest.mock('../../../ui/states/QuietStates', () => ({
 
 import ClientPeekSheet from '../lookup/ClientPeekSheet';
 import { peekSlices } from '../../../utils/coach/clientPeek';
+import { workoutWeek } from '../client-detail/thisWeek';
 import type { RosterClient } from '../../../utils/coach/clientRoster';
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -42,15 +44,16 @@ const client = (logged = true) => ({
   activity: { lastActiveOn: logged ? day(0) : null, checkInsToReview: logged ? 2 : 0 },
 }) as unknown as RosterClient;
 const now = new Date().toISOString();
-const WORKOUT = `Full body A on ${new Date().toLocaleDateString('en-US', { weekday: 'long' })}, 1 of 2`;
-const assignment = (coach: string, done: boolean) => ({ scheduled_for: `${day(0)}T12:00:00`, assigned_by_coach_id: coach, completed_at: done ? now : null });
+// CLIENT-FILE-DAYS-M: the Workouts slice reads the client file's week (ClientPeekWeek196 has its cases).
+const WORKOUT = '1 of 2 done';
+const week = (n: number) => ({ data: { week_start: '2026-11-02', today: '2026-11-02', shared: true, assignments: [
+  { day: '2026-11-02', completed_at: now, skipped_at: null }, { day: '2026-11-04', completed_at: null, skipped_at: null },
+].slice(0, n) } });
 const summary = (empty = false) => ({
   data: {
     client_name: 'Maya Brooks', profile: null,
     today: { entries: empty ? [] : [{ id: 'e1' }], total_calories: 1420, total_protein_g: 96 },
     recent_workouts: empty ? [] : [{ id: 'w1', workout_name: 'Full body A', created_at: now }],
-    // Only this coach's assignments count; an earlier coach's never show.
-    recent_assignments: [assignment('coach-1', true), assignment('coach-1', false), assignment('earlier-coach', true)],
     weight_logs: [],
   },
 });
@@ -59,7 +62,7 @@ const onNudge = jest.fn();
 const onClose = jest.fn();
 
 async function mount(c = client()) {
-  await render(<ClientPeekSheet client={c} coachId="coach-1" onClose={onClose} onOpen={onOpen} onNudge={onNudge} />);
+  await render(<ClientPeekSheet client={c} onClose={onClose} onOpen={onOpen} onNudge={onNudge} />);
   await waitFor(() => expect(screen.queryByText('Loading')).toBeNull());
 }
 
@@ -69,6 +72,7 @@ beforeEach(() => {
   mockFontScale = 1;
   mockTarget = { isSuccess: true, data: { calories_kcal: 1900, protein_g: 140, carbs_g: 200, fats_g: 60 } };
   mockSummary.mockResolvedValue(summary());
+  mockWeek.mockResolvedValue(week(2));
   mockCheckIns.mockResolvedValue({ data: [{ id: 'k1', date: `${day(0)}T00:00:00.000Z`, energy: 2, notes: 'knee tight' }] });
 });
 
@@ -82,6 +86,7 @@ describe('UI-4 peek sheet', () => {
     expect(screen.getByText('Today: energy 2 of 5, knee tight')).toBeTruthy();
     expect(screen.getByText('1,420 of 1,900 kcal, protein 96 g')).toBeTruthy();
     expect(screen.getByText(WORKOUT)).toBeTruthy();
+    expect(mockWeek).toHaveBeenCalledWith('c1');
     expect(screen.getByText('Nothing logged yet')).toBeTruthy();
     expect(screen.queryByText(/Not shared/)).toBeNull();
     expect(screen.queryByText('icon:lock-closed-outline')).toBeNull();
@@ -140,8 +145,10 @@ describe('UI-4 peek sheet', () => {
   it('a client who logged nothing: every slice says so, no status line and no Review', async () => {
     mockSummary.mockResolvedValue(summary(true));
     mockCheckIns.mockResolvedValue({ data: [] });
+    mockWeek.mockResolvedValue(week(0));
     await mount(client(false));
-    expect(screen.getAllByText('Nothing logged yet')).toHaveLength(4);
+    expect(screen.getAllByText('Nothing logged yet')).toHaveLength(3);
+    expect(screen.getByText('Nothing planned this week')).toBeTruthy(); // Workouts reads the file's words (FIX739-W1)
     expect(screen.queryByText(/waiting for you/)).toBeNull();
     expect(screen.queryByTestId('peek-review')).toBeNull();
   });
@@ -149,8 +156,10 @@ describe('UI-4 peek sheet', () => {
   it('slices with nothing in them read "Nothing logged yet", never empty', async () => {
     mockSummary.mockResolvedValue(summary(true));
     mockCheckIns.mockResolvedValue({ data: [] });
+    mockWeek.mockResolvedValue(week(0));
     await mount();
-    expect(screen.getAllByText('Nothing logged yet')).toHaveLength(4);
+    expect(screen.getAllByText('Nothing logged yet')).toHaveLength(3);
+    expect(screen.getByText('Nothing planned this week')).toBeTruthy();
   });
 
   it('a failed load shows the quiet error, and Try again loads it', async () => {
@@ -175,7 +184,7 @@ describe('UI-4 peek sheet', () => {
     mockCheckIns.mockImplementation((id: string) => Promise.resolve({
       data: [id === 'c2' ? { id: 'k2', date: `${day(0)}T00:00:00.000Z`, energy: 4, notes: 'felt strong' } : { id: 'k1', date: `${day(0)}T00:00:00.000Z`, energy: 2, notes: 'knee tight' }],
     }));
-    const sheet = (c: RosterClient | null) => <ClientPeekSheet client={c} coachId="coach-1" onClose={onClose} onOpen={onOpen} onNudge={onNudge} />;
+    const sheet = (c: RosterClient | null) => <ClientPeekSheet client={c} onClose={onClose} onOpen={onOpen} onNudge={onNudge} />;
     const showsOnly = (mine: string[], other: string[]) => {
       for (const t of mine) expect(screen.getByText(t)).toBeTruthy();
       for (const t of other) expect(screen.queryByText(t)).toBeNull();
@@ -219,7 +228,7 @@ describe('UI-4 peek sheet', () => {
 
   it('reads weigh-ins and targets the way the mockup words them', () => {
     const s = summary().data;
-    const slices = peekSlices(client(), { ...s, weight_logs: [{ weight_lbs: 182.44, date: day(0) }] }, [], 'coach-1', null);
+    const slices = peekSlices(client(), { ...s, weight_logs: [{ weight_lbs: 182.44, date: day(0) }] }, [], workoutWeek(week(0).data), null);
     expect(slices.weighIn.text).toBe('Today: 182.4\u00a0lb');
     expect(slices.food.text).toBe('1,420\u00a0kcal, protein 96\u00a0g'); // no target: no "of"; units never wrap apart
     expect(slices.checkIn).toEqual({ text: 'Nothing logged yet', hasOne: false });

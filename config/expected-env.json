@@ -316,6 +316,11 @@
       "default": "off",
       "reason": "Coach Programs library tab (S-MWB); on in clinic and production profiles with backend FEATURE_MWB_TEMPLATES."
     },
+    "EXPO_PUBLIC_FF_OFFLINE_FOOD_IN_DAY": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "OFFLINE-FOOD-M (owner #191-E3): a food saved offline shows in the day and its totals at once, with the W1 pending note; off in every profile (no eas.json line) until the owner approves W1."
+    },
     "EXPO_PUBLIC_FF_PRIVATE_COMMUNITY_HUB": {
       "kind": "flag",
       "default": "on in dev, off in release",

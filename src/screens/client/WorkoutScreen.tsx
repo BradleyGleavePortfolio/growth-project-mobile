@@ -47,6 +47,7 @@ import { EmptyStateNoWorkouts, EmptyStateNoData } from '../../ui/empty-states';
 // so this build hid them from the user entirely.
 import { useMyWorkoutAssignments } from '../../hooks/useWorkoutBuilder';
 import { assignmentPlanName } from '../../utils/workout/assignmentPrescription';
+import { dayStart, instantDay, workoutDay } from '../../utils/workout/workoutDay';
 // Client tutorial (C08): pinned plan explanation card; flag-gated, renders
 // nothing unless featureFlags.clientTutorial and a program exists.
 import PlanExplanationCard from '../../components/tutorial/PlanExplanationCard';
@@ -425,11 +426,12 @@ export default function WorkoutScreen() {
       const allRes = await workoutApi.getAll(50);
       setHistorySessions(Array.isArray(allRes.data) ? allRes.data : []);
       const allSessions: ApiSession[] = (allRes.data || []).filter(
-        (s: ApiSession) => new Date(s.date) >= chartWindowStart,
+        // Each workout on its recorded day (utils/workout/workoutDay), never its UTC instant.
+        (s: ApiSession) => workoutDay(s) > instantDay(chartWindowStart),
       );
       const now = new Date();
       const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      setWeekSessionCount(allSessions.filter((s) => new Date(s.date) >= weekAgo).length);
+      setWeekSessionCount(allSessions.filter((s) => workoutDay(s) > instantDay(weekAgo)).length);
       const weeks: WeeklyVolume[] = [];
       for (let w = CHART_WEEKS - 1; w >= 0; w--) {
         const weekEnd = new Date(now.getTime() - w * 7 * 24 * 60 * 60 * 1000);
@@ -437,8 +439,8 @@ export default function WorkoutScreen() {
         const label = `W${CHART_WEEKS - w}`;
         let vol = 0;
         for (const s of allSessions) {
-          const d = new Date(s.date);
-          if (d >= weekStart && d < weekEnd) {
+          const d = workoutDay(s);
+          if (d > instantDay(weekStart) && d <= instantDay(weekEnd)) {
             for (const ex of (s.exercises || [])) {
               const weights = ex.weight_per_set || [];
               const reps = ex.reps_per_set || [];
@@ -557,16 +559,16 @@ export default function WorkoutScreen() {
   };
 
   const weekSessions = recentSessions.filter((s) => {
-    const d = new Date(s.date);
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    return d >= weekAgo;
+    return workoutDay(s) > instantDay(weekAgo);
   });
 
   const startRoutine = (routine: ApiRoutine) => {
     // Convert API routine exercises to the format ActiveWorkoutScreen expects.
-    // The API routine does not carry catalog ids — synthesize a deterministic
-    // fallback so downstream writes never persist an empty exerciseId (B2).
+    // An exercise saved with a library id (catalog_exercise_id) keeps it as its
+    // id; one without gets a deterministic routine-scoped fallback, so
+    // downstream writes never persist an empty exerciseId (B2).
     const exercisesForSession = routineToSessionExercises(routine);
     navigation.navigate('ActiveWorkout', { routineId: routine.id, routineName: routine.name, exercises: JSON.stringify(exercisesForSession) });
   };
@@ -875,7 +877,7 @@ export default function WorkoutScreen() {
                 <Text style={styles.historyTitle}>{session.workout_name || session.notes || 'Workout'}</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
                   <Text style={styles.historyDate}>
-                    {new Date(session.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}
+                    {dayStart(workoutDay(session))?.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) ?? ''}
                   </Text>
                   <HapticPressable
                     intent="light"
@@ -1019,7 +1021,7 @@ const makeChart = (sc: SemanticTokens) =>
   barLabel: {
     ...chartLabel,
     color: sc.textMuted,
-    height: 14,
+    minHeight: 14,
     textAlign: 'center',
   },
   barTrack: {

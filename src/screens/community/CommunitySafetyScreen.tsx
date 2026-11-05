@@ -204,7 +204,8 @@ export default function CommunitySafetyScreen(): React.ReactElement {
           <Text style={body}>
             Every post, comment and message has a More button. Tap it to report the content (choose
             a reason) or to block the person. Blocking hides their posts, comments, messages and
-            voice notes from you and stops direct messages both ways. They are not told.
+            voice notes from you and stops direct messages both ways. In a direct message they see that you blocked
+            them; nobody else is told.
           </Text>
           <Text style={[body, styles.item]} testID="community-safety-commitment">
             {commitment}

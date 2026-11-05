@@ -45,6 +45,8 @@ import HapticPressable from '../../components/HapticPressable';
 import { SpaceListButton } from '../../components/community/SpaceDrawer';
 import { ScreenTopBar } from '../../ui/layout/Screen';
 import type { CommunityPost } from '../../api/communityApi';
+import VoiceRemovedPlaceholder from '../../components/community/removed/VoiceRemovedPlaceholder';
+import { removedRowLine } from '../../components/community/removed/removedRowLine';
 import type { CommunityNav } from './communityNavTypes';
 import { COMMUNITY_SUPPORT_EMAIL, describeCommunityFailure } from '../../api/communityErrors';
 import { useConversationClosed, useServerAnswered, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
@@ -318,28 +320,41 @@ export default function CommunitySpaceScreen({
               </HapticPressable> : null}
             </>
           }
-          renderItem={({ item }) => (
-            <View style={[styles.postRow, { borderBottomColor: semanticColors.border }]}>
-              <HapticPressable onPress={() => openThread(item)} disabled={isOptimisticId(item.id)}
-                accessibilityRole="button" accessibilityLabel={`Open post ${item.title ?? 'Untitled post'}`}
-                testID={`post-card-${item.id}`} style={styles.postContent}>
-                {item.pinned ? <Ionicons name="pin-outline" size={16} color={semanticColors.textMuted} /> : null}
-                <Text style={[typography.bodyMd, { color: semanticColors.textPrimary }]} numberOfLines={2}>{item.title ?? 'Untitled post'}</Text>
-                {item.body ? <Text style={[typography.bodySmall, { color: semanticColors.textMuted }]} numberOfLines={3}>{item.body.slice(0, 140)}</Text> : null}
-                <Text style={[typography.eyebrow, { color: semanticColors.textMuted }]}>{isOptimisticId(item.id) ? 'Sending…' : item.scope === 'hall' ? 'Hall' : 'Cohort'}</Text>
-              </HapticPressable>
-              {!isOptimisticId(item.id) ? (
-                <SafetyMenu
-                  targetType="post"
-                  targetId={item.id}
-                  authorUserId={item.author_user_id}
-                  viewerUserId={client?.id}
-                  viewerCoachId={client?.coach_id}
-                  testID={`post-safety-${item.id}`}
-                />
-              ) : null}
-            </View>
-          )}
+          renderItem={({ item }) => {
+            // REMOVED-BY-M3: a coach-removed post keeps its place as one quiet line: no title, words, menu or tap.
+            const removedLine = removedRowLine(item, 'post', client?.id);
+            if (removedLine) {
+              return (
+                <View style={[styles.postRow, { borderBottomColor: semanticColors.border }]}>
+                  <View style={styles.postContent} testID={`post-removed-${item.id}`}>
+                    <VoiceRemovedPlaceholder line={removedLine} testID={`post-removed-line-${item.id}`} />
+                  </View>
+                </View>
+              );
+            }
+            return (
+              <View style={[styles.postRow, { borderBottomColor: semanticColors.border }]}>
+                <HapticPressable onPress={() => openThread(item)} disabled={isOptimisticId(item.id)}
+                  accessibilityRole="button" accessibilityLabel={`Open post ${item.title ?? 'Untitled post'}`}
+                  testID={`post-card-${item.id}`} style={styles.postContent}>
+                  {item.pinned ? <Ionicons name="pin-outline" size={16} color={semanticColors.textMuted} /> : null}
+                  <Text style={[typography.bodyMd, { color: semanticColors.textPrimary }]} numberOfLines={2}>{item.title ?? 'Untitled post'}</Text>
+                  {item.body ? <Text style={[typography.bodySmall, { color: semanticColors.textMuted }]} numberOfLines={3}>{item.body.slice(0, 140)}</Text> : null}
+                  <Text style={[typography.eyebrow, { color: semanticColors.textMuted }]}>{isOptimisticId(item.id) ? 'Sending…' : item.scope === 'hall' ? 'Hall' : 'Cohort'}</Text>
+                </HapticPressable>
+                {!isOptimisticId(item.id) ? (
+                  <SafetyMenu
+                    targetType="post"
+                    targetId={item.id}
+                    authorUserId={item.author_user_id}
+                    viewerUserId={client?.id}
+                    viewerCoachId={client?.coach_id}
+                    testID={`post-safety-${item.id}`}
+                  />
+                ) : null}
+              </View>
+            );
+          }}
           contentContainerStyle={styles.list}
           style={{ backgroundColor: semanticColors.bgPrimary }}
         />

@@ -12,6 +12,8 @@ import {
   parseHomeDay, ringSpecs, ringsCaption, winLine, winsHeadline, type HomeWin,
 } from '../screens/coach/home-v11/homeDay';
 import { needsAndSteady } from '../screens/coach/home-v11/useCoachHomeV11';
+import { useBlockedUsersStore } from '../store/blockedUsersStore';
+import { prefsStorage } from '../storage/mmkv';
 
 const [mockNavigate, mockGet, mockPost, mockUnreadCounts, mockApprove, mockReject, mockUnread, mockDrafts] = Array.from({ length: 8 }, () => jest.fn());
 const mockFocus = { current: true };
@@ -173,6 +175,31 @@ describe('coach Home, flag on, with home (b#1123) and on an older server without
     await press(v, 'home-needs');
     expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'ClientsList', params: { view: 'needs' }, pop: true });
     expect([label(v, 'home-row-steady'), label(v, 'home-row-all'), label(v, 'home-row-streaks')]).toEqual(['Steady, 2, 1 logged today', 'All 30 clients, Open Clients', 'Streaks, 9']);
+  });
+  it("leaves a client blocked earlier on this phone out of Needs you on a cold start, as the list does (LO m#866 B2)", async () => {
+    const KEY = 'blocked_user_ids_v1:coach-1';
+    useBlockedUsersStore.setState({ blocked: [], hydrated: false, userId: null }); // app start: nothing read yet
+    await prefsStorage.set(KEY, JSON.stringify([{ id: 'c1', displayName: 'Maya Ortiz', role: 'client', blockedAt: '2026-10-20T10:00:00Z' }]));
+    // The server's list names her too: GET /users/blocks's answer replaces this phone's copy (FX-872).
+    const base = mockGet.getMockImplementation()!;
+    mockGet.mockImplementation((url: string, ...rest: unknown[]) => (url === '/users/blocks'
+      ? Promise.resolve({ data: { blocked: [{ blockedId: 'c1', displayName: 'Maya Ortiz', blockedAt: '2026-10-20T10:00:00Z' }] } }) : base(url, ...rest)));
+    try {
+      const v = await renderHome();
+      // Maya would get Nudge (8 days quiet); blocked, she has no action, so she is steady, as on the Needs you list.
+      await waitFor(() => expect(label(v, 'home-needs')).toBe('Needs you, 1. Ana Ruiz, 2 check-ins to review'));
+      expect(label(v, 'home-row-steady')).toBe('Steady, 3, 1 logged today');
+    } finally {
+      await prefsStorage.delete(KEY);
+      useBlockedUsersStore.setState({ blocked: [], hydrated: false, userId: null });
+    }
+  });
+  it("reads the coach's block list once on a Home mount: the Plan ended list takes the Home's read (LO m#866 C1)", async () => {
+    const blockReads = () => mockGet.mock.calls.filter(([url]) => url === '/users/blocks').length;
+    await renderHome();
+    await waitFor(() => expect(blockReads()).toBeGreaterThan(0));
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(blockReads()).toBe(1);
   });
   it.each([
     ['home-drafts', 'ClientsStack', { screen: 'PendingAiDrafts', initial: false }],
@@ -420,6 +447,9 @@ describe('homeDay, pure', () => {
       { ...client('z', 'Z', 'Gone', null), status: 'archived' },
     ] as never, { b: 2 }, new Date());
     expect([rows.needs.map((r) => r.client.id), rows.needs[0].reason.text, rows.steady]).toEqual([['b'], '2 new messages', { count: 1, loggedToday: 1 }]);
+    // A blocked client's Reply is no action (needsYouReason, the list's rule): steady, not Needs you (LO m#866 B2).
+    const blocked = needsAndSteady([client('b', 'B', 'Two', { lastActiveOn: day(0), checkInsToReview: 0 })] as never, { b: 2 }, new Date(), new Set(['b']));
+    expect([blocked.needs.length, blocked.steady.count]).toEqual([0, 1]);
   });
 });
 

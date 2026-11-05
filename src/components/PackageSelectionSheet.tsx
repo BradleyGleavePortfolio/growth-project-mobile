@@ -42,7 +42,6 @@ import {
   Pressable,
   ScrollView,
   TouchableOpacity,
-  Platform,
 } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
 import type { SemanticTokens, Tokens } from '../theme/tokens';
@@ -54,7 +53,8 @@ import { useEntitlement } from '../entitlements/EntitlementProvider';
 import { usePackagePurchase } from '../hooks/usePackagePurchase';
 import { usePaymentSheetAppearance } from './purchase/usePaymentSheetAppearance';
 import PlanTermsBlock from './purchase/PlanTermsBlock';
-import PurchaseFeedback from './purchase/PurchaseFeedback';
+import PurchaseFeedback, { styleCSuccess } from './purchase/PurchaseFeedback';
+import { PlanActiveBar, usePlanMoment } from './purchase/PlanActiveMoment';
 import { QuietOverline as Overline } from '../ui/sections/QuietSection';
 import { oneToOneCoachingLabel } from '../config/purchaseSurfaces';
 import { HouseJoined } from './renewal/CoachMonogram';
@@ -67,6 +67,18 @@ import {
 } from '../lib/planTerms';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+/** FR-1TO1R2: the coach's name for the 1:1 line, as ClientPackagesScreen reads it; null when the read
+ *  fails or the name is blank. 1TO1-FU-M (#186-P4 op 1): the line then reads "1:1 coaching with your
+ *  coach", with no error, and the plans can still be chosen. */
+async function readCoachName(): Promise<string | null> {
+  try {
+    const name = (await api.get<{ name?: unknown }>('/v1/clients/me/coach'))?.data?.name;
+    return typeof name === 'string' && name.trim() ? name.trim() : null;
+  } catch {
+    return null;
+  }
+}
 
 export type CoachPackage = PurchasablePackage;
 
@@ -222,10 +234,8 @@ export default function PackageSelectionSheet({
     }
     (async () => {
       try {
-        // #161-5: on iOS the list is labelled 1:1 coaching with the coach by name, as on ClientPackages.
-        const coachRead = houseName ?? (Platform.OS === 'ios' && firstLoad
-          ? (async () => (await api.get<{ name?: unknown }>('/v1/clients/me/coach'))?.data?.name)().catch(() => null)
-          : null);
+        // #161-5 / FR-1TO1R2: the list is labelled 1:1 coaching with the coach by name, as on ClientPackages.
+        const coachRead: Promise<string | null> | string | null = houseName ?? (firstLoad ? readCoachName() : null);
         const res = await api.get<{ packages: unknown[] } | unknown[]>(
           houseId ? houseCoachPackagesPath(houseId) : '/v1/clients/me/coach/packages',
         );
@@ -250,7 +260,7 @@ export default function PackageSelectionSheet({
         }
         const name = await coachRead;
         if (cancelled) return;
-        if (typeof name === 'string') setCoachName(name);
+        if (name) setCoachName(name);
         setPackages(list);
         setDescriptions(desc);
         if (firstLoad && initialPackageId && list.some((p) => p.id === initialPackageId)) {
@@ -277,6 +287,10 @@ export default function PackageSelectionSheet({
   const busy = purchase.busy;
   const done = state.phase === 'success' || state.phase === 'confirm_slow' || state.phase === 'confirmed_pending';
   const finish = useCallback(() => onPaymentSuccess(state.phase === 'success'), [onPaymentSuccess, state.phase]);
+  // LS-914R2 B2: the success actions sit in a pinned bar under the sheet's
+  // scroll (C5). The house-coach join keeps its own close.
+  const successShown = houseName ? null : styleCSuccess(purchase);
+  const moment = usePlanMoment(visible && ready ? successShown : null);
   const handleSkip = useCallback(() => {
     if (busy) return; // never close the sheet in the middle of a payment
     if (dismissedKey) {
@@ -323,7 +337,7 @@ export default function PackageSelectionSheet({
           <Text style={styles.heading}>Choose your plan</Text>
           <Text style={styles.subtext}>Start with a plan that fits your goals.</Text>
 
-          {(Platform.OS === 'ios' || houseName) && !loading ? (
+          {!loading ? (
             <Overline testID="package-sheet-one-to-one">{oneToOneCoachingLabel(coachName)}</Overline>
           ) : null}
 
@@ -372,6 +386,7 @@ export default function PackageSelectionSheet({
             onContinue={finish}
             onOpenPlan={openPlan}
             openPlanLabel={onOpenPlan ? undefined : 'Continue to the app'}
+            moment={successShown ? moment : undefined}
           />
 
           {/* CTA */}
@@ -407,6 +422,7 @@ export default function PackageSelectionSheet({
             </TouchableOpacity>
           )}
         </ScrollView>
+        {successShown ? <PlanActiveBar moment={moment} onContinue={finish} /> : null}
       </View>
       )}
     </Modal>

@@ -4,7 +4,8 @@
  * jest.setup.js maps `expo-audio` to this module (virtual, so it works before
  * the shared node_modules carries the package). It mirrors the surface
  * src/services/voiceAudio.ts uses: createAudioPlayer, useAudioRecorder,
- * recording permissions, setAudioModeAsync and RecordingPresets. Plain
+ * recording permissions, setAudioModeAsync, setIsAudioActiveAsync and
+ * RecordingPresets. Plain
  * functions (not jest.fn) so a test's jest.resetAllMocks() cannot wipe the
  * implementation; tests read and drive it through `__mock`.
  *
@@ -20,6 +21,7 @@ const state = {
   players: [],
   recorders: [],
   audioModes: [],
+  sessionActive: [],
   permission: { granted: true, status: 'granted', canAskAgain: true, expires: 'never' },
   requestedPermission: null,
   permissionRequests: 0,
@@ -140,6 +142,20 @@ module.exports = {
   async setAudioModeAsync(mode) {
     state.audioModes.push(mode);
   },
+  /**
+   * Like iOS AudioModule.setIsAudioActive(false): pauses every player and
+   * turns the session off, which stops a running capture too (LS-901 B1).
+   */
+  async setIsAudioActiveAsync(active) {
+    state.sessionActive.push(active);
+    if (active) return;
+    state.players.forEach((p) => {
+      p.playing = false;
+    });
+    state.recorders.forEach((r) => {
+      r.isRecording = false;
+    });
+  },
   RecordingPresets: { HIGH_QUALITY: preset, LOW_QUALITY: preset },
   __mock: {
     state,
@@ -149,6 +165,7 @@ module.exports = {
       state.players = [];
       state.recorders = [];
       state.audioModes = [];
+      state.sessionActive = [];
       state.permission = { granted: true, status: 'granted', canAskAgain: true, expires: 'never' };
       state.requestedPermission = null;
       state.permissionRequests = 0;
