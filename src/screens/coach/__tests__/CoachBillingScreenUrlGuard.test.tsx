@@ -65,6 +65,10 @@ jest.mock('../../../utils/haptics', () => ({
 }));
 
 import CoachBillingScreen from '../CoachBillingScreen';
+import { featureFlags } from '../../../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES off: this file is the billing links; iosNonP2PSurfacesMatrix covers them hidden.
+jest.replaceProperty(featureFlags, 'iosHideNonP2PPurchases', false);
 
 let alertSpy: jest.SpyInstance;
 

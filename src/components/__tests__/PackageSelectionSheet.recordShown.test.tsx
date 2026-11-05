@@ -11,6 +11,10 @@ import React from 'react';
 import { Platform } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { featureFlags } from '../../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_CLIENT_TUTORIAL off: this file is the package prompt with no tour (packagePromptGate.ts:60 adds the tour and consultation ask).
+jest.replaceProperty(featureFlags, 'clientTutorial', false);
 
 jest.mock('../../theme/ThemeProvider', () => {
   const t = jest.requireActual('../../theme/tokens');

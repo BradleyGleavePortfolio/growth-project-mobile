@@ -50,7 +50,14 @@ async function renderQ(id: string, answers: Answers = {}) {
 }
 
 it('ships off, read from its own env key, on exactly the seven matching questions', () => {
-  expect(jest.requireActual('../../../config/featureFlags').featureFlags.consultTilesV2).toBe(false);
+  // Pins EXPO_PUBLIC_FF_CONSULT_TILES_V2 off: this test checks the shipped default.
+  const saved = process.env.EXPO_PUBLIC_FF_CONSULT_TILES_V2;
+  delete process.env.EXPO_PUBLIC_FF_CONSULT_TILES_V2;
+  try {
+    jest.isolateModules(() => expect(jest.requireActual('../../../config/featureFlags').featureFlags.consultTilesV2).toBe(false));
+  } finally {
+    if (saved !== undefined) process.env.EXPO_PUBLIC_FF_CONSULT_TILES_V2 = saved;
+  }
   expect([...TILE_SCREENS]).toEqual(['T1', 'B1', 'B2', 'B3', 'B4', 'N1', 'N2']);
 });
 

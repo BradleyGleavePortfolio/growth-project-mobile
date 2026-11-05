@@ -322,7 +322,8 @@ let mockRouteParams: { purchaseId: string; packageName?: string } = {
   packageName: '1:1 Coaching',
 };
 
-const mockFlagOverrides: { clientBillingV2?: boolean } = {};
+// Pins EXPO_PUBLIC_FF_CLIENT_BILLING_V2 off: the classic receipt is the default here; one test turns it on itself.
+const mockFlagOverrides: { clientBillingV2?: boolean } = { clientBillingV2: false };
 jest.mock('../config/featureFlags', () => {
   const actual = jest.requireActual('../config/featureFlags');
   // A real accessor: an object-spread getter would be read once at mock time.

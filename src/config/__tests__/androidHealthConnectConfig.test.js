@@ -9,8 +9,11 @@ const isHealthPermission = (name) =>
 const pluginNames = (config) =>
   config.plugins.map((plugin) => (Array.isArray(plugin) ? plugin[0] : plugin));
 const originalSwitch = process.env.TGP_ANDROID_HEALTH_CONNECT;
+const originalGooglePay = process.env.EXPO_PUBLIC_GOOGLE_PAY_ENABLED;
 
 afterEach(() => {
+  if (originalGooglePay === undefined) delete process.env.EXPO_PUBLIC_GOOGLE_PAY_ENABLED;
+  else process.env.EXPO_PUBLIC_GOOGLE_PAY_ENABLED = originalGooglePay;
   if (originalSwitch === undefined)
     delete process.env.TGP_ANDROID_HEALTH_CONNECT;
   else process.env.TGP_ANDROID_HEALTH_CONNECT = originalSwitch;
@@ -68,6 +71,8 @@ test('S-WEAR-3 (Opus C-317-5): no Samsung sensor or activity-recognition permiss
 });
 
 test('ON preserves every Android declaration, all plugins and all iOS settings', () => {
+  // Pins EXPO_PUBLIC_GOOGLE_PAY_ENABLED off: on, app.config.js adds the Stripe wallet plugin to the list compared here.
+  delete process.env.EXPO_PUBLIC_GOOGLE_PAY_ENABLED;
   process.env.TGP_ANDROID_HEALTH_CONNECT = '1';
   const result = configure();
   expect(result.android).toEqual({
@@ -80,6 +85,8 @@ test('ON preserves every Android declaration, all plugins and all iOS settings',
 });
 
 test('OFF handles future #317 permissions/plugins, tuples, existing blocks, and is pure/idempotent', () => {
+  // Pins EXPO_PUBLIC_GOOGLE_PAY_ENABLED off: on, app.config.js adds the Stripe wallet plugin to the list compared here.
+  delete process.env.EXPO_PUBLIC_GOOGLE_PAY_ENABLED;
   delete process.env.TGP_ANDROID_HEALTH_CONNECT;
   const input = {
     ...app,

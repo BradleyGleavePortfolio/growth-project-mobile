@@ -28,12 +28,17 @@ jest.mock('../../../services/queryClient', () => ({
 }));
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn(), identify: jest.fn() }));
 jest.mock('../../../theme/ThemeProvider', () => ({
-  useTheme: () => ({ colors: new Proxy({}, { get: () => '#000000' }) }),
+  // EXPO_PUBLIC_FF_FIRST_RUN_V2: the Style B auth screens sit in the shared Screen, which reads semanticColors.
+  useTheme: () => ({ colors: new Proxy({}, { get: () => '#000000' }), semanticColors: new Proxy({}, { get: () => '#000000' }) }),
 }));
 
 import LoginScreen from '../LoginScreen';
 import { __resetSignupPolicyCacheForTests } from '../../../lib/signupPolicy';
 import { PRIVACY_POLICY_URL, TERMS_URL } from '../../../config/env';
+import { featureFlags } from '../../../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_FIRST_RUN_V2 off: this file is the classic auth screens (AuthStyleB.tsx:15 swaps in Style B).
+jest.replaceProperty(featureFlags, 'firstRunV2', false);
 
 const flat = (node: unknown): string =>
   typeof node === 'string'
