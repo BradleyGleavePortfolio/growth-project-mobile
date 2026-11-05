@@ -164,6 +164,28 @@ describe('OFFLINE-FOOD-M: a food saved offline counts in its day at once', () =>
     expect(day().dailyTotals.calories).toBe(220);
   });
 
+  it.each(['restart', 'leave and reopen the day'] as const)(
+    'an accepted send whose refresh fails remains available offline after %s',
+    async (transition) => {
+      await saveOatsOffline();
+      mockServer.readFails = true;
+      await syncFoodLogQueue();
+      // The write succeeded, but no GET has delivered the replacement row.
+      expect(mockServer.entries.filter((e) => e.food_item_id === 'food-oats')).toHaveLength(1);
+      expect(await getQueueLength()).toBe(0);
+      expect(oatsRows()).toHaveLength(1);
+
+      if (transition === 'restart') useClientStore.getState().reset();
+      else useClientStore.getState().setSelectedDate('2026-11-03');
+      await useClientStore.getState().loadDayData('member-1', DAY);
+      // The accepted food should not disappear before the replacement can be read.
+      expect(oatsRows()).toEqual([
+        expect.objectContaining({ foodName: 'Rolled oats', calories: 150 }),
+      ]);
+      expect(day().dailyTotals.calories).toBeGreaterThanOrEqual(150);
+    },
+  );
+
   it('a food the server refuses stays in the day, marked, in no total', async () => {
     await saveOatsOffline();
     mockServer.refuse = true;
