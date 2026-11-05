@@ -60,3 +60,18 @@ it('sign-out removes this member\'s kept add-sheet lists and keeps another accou
   expect(await AsyncStorage.getItem('food_browse_copy_user-A')).toBeNull();
   expect(await AsyncStorage.getItem('food_browse_copy_user-B')).toBe(theirs);
 });
+
+// FIX-931R2 (LS-931R2B B1): foods sent but not read back yet are kept per member; they go at
+// sign-out like the queue, and another account's stay.
+it('sign-out removes this member\'s sent foods not read back yet and keeps another account\'s', async () => {
+  const { SENT_KEY_PREFIX } = jest.requireActual('../foodLogQueue');
+  expect(SENT_KEY_PREFIX).toBe('sent_food_logs_');
+  const theirs = JSON.stringify([{ id: 'b-1', sentAt: 1 }]);
+  await AsyncStorage.setItem('sent_food_logs_user-A', JSON.stringify([{ id: 'a-1', sentAt: 1 }]));
+  await AsyncStorage.setItem('sent_food_logs_user-B', theirs);
+
+  await signOut();
+
+  expect(await AsyncStorage.getItem('sent_food_logs_user-A')).toBeNull();
+  expect(await AsyncStorage.getItem('sent_food_logs_user-B')).toBe(theirs);
+});

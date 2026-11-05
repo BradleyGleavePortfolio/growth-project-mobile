@@ -152,6 +152,8 @@ const PER_USER_KEY_PREFIXES = [
   'macro_targets:', // useMacroTargets — per-user macro cache
   // Offline food queue: another account's unsent foods stay on the phone.
   'pending_food_logs_',
+  // FIX-931R2: foods that queue sent and no read of their day holds yet (foodLogQueue.readSent).
+  'sent_food_logs_', // = foodLogQueue SENT_KEY_PREFIX (authActions.browseCopy.offm test)
   // OFFLINE-FOOD-M: the add sheet's kept Recent, Frequent and Repeat lists (utils/log/browseCache).
   BROWSE_COPY_KEY_PREFIX,
   // Per-coach Roman import-offer answer (UX-01 J0/J1), keyed

@@ -7,7 +7,7 @@ import { mapFoodItem, type RawFoodItem } from '../utils/log/mapFoodItem';
 import { forgetSaveKeys, waterDayShown, withSaveKey } from '../utils/log/saveKey';
 import { dayForNewLog } from '../utils/logDay';
 import { featureFlags } from '../config/featureFlags';
-import { readQueue, type PendingFoodLog } from '../services/foodLogQueue';
+import { readQueue, readSent, settleSent, type PendingFoodLog, type SentFoodLog } from '../services/foodLogQueue';
 import { withQueuedFoods } from '../utils/log/queuedDay';
 
 interface DailyTotals {
@@ -33,8 +33,9 @@ interface ClientStore {
   // `unread`: no read of this day reached the server yet (offline); only the phone's foods show.
   serverDay: { date: string; userId: string; logs: FoodLog[]; totals: DailyTotals; unread?: true } | null;
   queuedFoods: PendingFoodLog[];
-  // Foods the last sync sent, kept in the day until the next good read of it (which holds them).
-  sentFoods: PendingFoodLog[];
+  // Foods a sync sent, kept in their day until a good read of it (which holds them). FIX-931R2: the
+  // phone's copy (foodLogQueue.readSent), every day's, so a restart or a day revisit keeps them.
+  sentFoods: SentFoodLog[];
 
   setSelectedDate: (date: string) => void;
   loadDayData: (userId: string, date?: string) => Promise<void>;
@@ -58,7 +59,7 @@ interface ClientStore {
   removeFoodLogLocally: (entryId: string) => void;
   // OFFLINE-FOOD-M: the phone's queue changed (a food saved offline, sent, refused or removed).
   showQueuedFoods: (queue: PendingFoodLog[]) => void;
-  holdSentFoods: (sent: PendingFoodLog[]) => void;
+  holdSentFoods: (sent: SentFoodLog[]) => void;
   // Security: reset all in-memory state on logout so the next user on the
   // same device doesn't briefly see the previous user's food/water data.
   reset: () => void;
@@ -76,7 +77,7 @@ const initialClientState = {
   loadError: null as string | null,
   serverDay: null as ClientStore['serverDay'],
   queuedFoods: [] as PendingFoodLog[],
-  sentFoods: [] as PendingFoodLog[],
+  sentFoods: [] as SentFoodLog[],
 };
 
 /** The day on screen: the server's read, plus this phone's queued foods of that day when the flag is on. */
@@ -93,6 +94,10 @@ let session = 0;
 // a new one, so a water answer for the day it was sent on never lands on
 // another day the client has opened since.
 let view = 0;
+// FIX-931R2 (LS-931R2B B2): one revision per change of the phone's foods told to the store (a save,
+// a send, a Remove). A day read that began before a change commits the newer foods, never the copy
+// it read when it began.
+let queueRev = 0;
 /** OFFLINE-FOOD-M (LS-931 B1): a day no read has reached yet: nothing from the server, no totals. */
 const unreadDay = (date: string, userId: string) => ({
   date, userId, logs: [] as FoodLog[], totals: { calories: 0, protein: 0, carbs: 0, fat: 0 },
@@ -114,7 +119,6 @@ export const useClientStore = create<ClientStore>((set, get) => ({
     hasLoadedDay: false,
     loadError: null,
     serverDay: null,
-    sentFoods: [],
     };
   }),
 
@@ -128,7 +132,13 @@ export const useClientStore = create<ClientStore>((set, get) => ({
   loadDayData: async (_userId: string, date?: string) => {
     const mine = session;
     const d = date || get().selectedDate;
+    const rev = queueRev;
+    const startedAt = Date.now();
     let queueRead: Promise<PendingFoodLog[]> | null = null;
+    let sentRead: Promise<SentFoodLog[]> | null = null;
+    // The phone's foods to join: the ones read with this day, or the store's newer ones (B2).
+    const latest = (queue: PendingFoodLog[], sent: SentFoodLog[]) =>
+      rev === queueRev ? { queue, sent } : { queue: get().queuedFoods, sent: get().sentFoods };
     try {
       get().setSelectedDate(d);
       set({ isLoading: true, loadError: null });
@@ -139,14 +149,18 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       queueRead = featureFlags.offlineFoodInDay
         ? Promise.resolve().then(() => readQueue()).catch(() => get().queuedFoods)
         : Promise.resolve(get().queuedFoods);
+      sentRead = featureFlags.offlineFoodInDay
+        ? Promise.resolve().then(() => readSent()).catch(() => get().sentFoods)
+        : Promise.resolve(get().sentFoods);
       // Fetch food logs and water in parallel
-      const [foodResponse, waterResponse, queue] = await Promise.all([
+      const [foodResponse, waterResponse, queueAtStart, sentAtStart] = await Promise.all([
         logApi.getDaily(d),
         waterApi.getDaily(d).catch((err: unknown) => {
           logger.error('ClientStore', 'water data load failed', err);
           return null;
         }),
         queueRead,
+        sentRead,
       ]);
       if (mine !== session || get().selectedDate !== d) return;
       const data = foodResponse.data;
@@ -230,11 +244,17 @@ export const useClientStore = create<ClientStore>((set, get) => ({
           fat: data.total_fat_g || 0,
         },
       };
+      // FIX-931R2 (B1): this read settles its day's sent foods, all but one sent after it began that
+      // it does not hold; other days' stay until a read of theirs.
+      const onServer = new Set(logs.map((l) => l.clientUuid).filter((k): k is string => !!k));
+      const keep = (s: SentFoodLog) => s.sentAt >= startedAt && !onServer.has(s.id);
+      const { queue } = latest(queueAtStart, sentAtStart);
+      const sentFoods = latest(queueAtStart, sentAtStart).sent.filter((s) => !s.log || s.log.date !== d || keep(s));
       set({
-        ...shownDay(serverDay, queue),
+        ...shownDay(serverDay, queue, sentFoods),
         serverDay,
         queuedFoods: queue,
-        sentFoods: [],
+        sentFoods,
         waterOz,
         waterEntries: waterResponse ? waterResponse.data.logs || [] : get().waterEntries,
         selectedDate: d,
@@ -247,6 +267,11 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       // LS-921 B1: this day's water read is on screen now, so a glass whose
       // answer was lost shows (or was never stored): the next glass is new.
       if (waterResponse) waterDayShown(d);
+      if (featureFlags.offlineFoodInDay) {
+        await Promise.resolve().then(() => settleSent(d, keep)).catch((err: unknown) => {
+          logger.warn('ClientStore', 'settling sent foods failed', err);
+        });
+      }
     } catch (err) {
       if (mine !== session || get().selectedDate !== d) return;
       // Preserve data only for a refresh of the same selected day.
@@ -260,12 +285,14 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       // already held for this day or, with none, on an empty base marked unread (the day's own
       // numbers stay hidden until a read lands: hasLoadedDay stays false).
       if (!featureFlags.offlineFoodInDay) return;
-      const queue = await (queueRead ?? Promise.resolve(get().queuedFoods)).catch(() => get().queuedFoods);
+      const queueAtStart = await (queueRead ?? Promise.resolve(get().queuedFoods)).catch(() => get().queuedFoods);
+      const sentAtStart = await (sentRead ?? Promise.resolve(get().sentFoods)).catch(() => get().sentFoods);
       if (mine !== session || get().selectedDate !== d) return;
+      const { queue, sent } = latest(queueAtStart, sentAtStart);
       set((state) => {
         const held = state.serverDay && state.serverDay.date === d ? state.serverDay : null;
         const serverDay = held ?? { ...unreadDay(d, _userId), unread: true as const };
-        return { serverDay, queuedFoods: queue, ...shownDay(serverDay, queue, state.sentFoods) };
+        return { serverDay, queuedFoods: queue, sentFoods: sent, ...shownDay(serverDay, queue, sent) };
       });
     }
   },
@@ -321,6 +348,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
               },
             }
           : sd;
+        if (!fromServer) queueRev += 1;
         const queuedFoods = fromServer ? state.queuedFoods : state.queuedFoods.filter((q) => q.id !== entryId);
         const sentFoods = fromServer ? state.sentFoods : state.sentFoods.filter((q) => q.id !== entryId);
         return { serverDay, queuedFoods, sentFoods, ...shownDay(serverDay, queuedFoods, sentFoods) };
@@ -339,14 +367,16 @@ export const useClientStore = create<ClientStore>((set, get) => ({
 
   showQueuedFoods: (queue: PendingFoodLog[]) =>
     set((state) => {
+      queueRev += 1;
       if (!state.serverDay || state.serverDay.date !== state.selectedDate) return { queuedFoods: queue };
       return { queuedFoods: queue, ...shownDay(state.serverDay, queue, state.sentFoods) };
     }),
 
-  holdSentFoods: (sent: PendingFoodLog[]) =>
+  // FIX-931R2: `sent` is the phone's whole sent list (foodLogQueue.readSent); it replaces the held one.
+  holdSentFoods: (sent: SentFoodLog[]) =>
     set((state) => {
-      if (sent.length === 0) return {};
-      const sentFoods = [...state.sentFoods.filter((q) => !sent.some((s) => s.id === q.id)), ...sent];
+      queueRev += 1;
+      const sentFoods = sent;
       if (!state.serverDay || state.serverDay.date !== state.selectedDate) return { sentFoods };
       return { sentFoods, ...shownDay(state.serverDay, state.queuedFoods, sentFoods) };
     }),
