@@ -2,8 +2,11 @@
  * LO-933 (Opus lens, m#933 @ 6a24c889): B-TESTs. Each fails at the reviewed head.
  * B1: with none waiting, only the client's own note may be cut; the app's own words (the day and "energy {n} of 5")
  * must never sit in a one-line Text.
+ * B3: C_peek draws the four row labels in Inter Medium (500) over Regular values (GOAL_C_peek_ios390_100/130); the
+ * head draws them Regular (typography.body), a GOAL difference the body does not list.
  */
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { render, screen, waitFor, within } from '@testing-library/react-native';
 
 const mockSummary = jest.fn();
@@ -64,5 +67,15 @@ describe('LO-933 B1: the Check-ins cut takes only the client note', () => {
     for (const t of appWords) expect(t.props.numberOfLines).not.toBe(1);
     // The note itself is still on screen (cut or not), every word of it.
     expect(within(row).queryAllByText(/Slept well, legs a bit sore after Monday/).length).toBeGreaterThan(0);
+  });
+});
+
+describe('LO-933 B3: the row labels are drawn Medium, as C_peek', () => {
+  it.each(['checkins', 'food', 'workouts', 'weighins'])('the %s label is Inter Medium (500)', async (key) => {
+    mockFontScale = 1;
+    mockWidth = 390;
+    await mount(client(1));
+    const label = screen.getByTestId(`peek-slice-${key}`).props.children[0];
+    expect(StyleSheet.flatten(label.props.style).fontFamily).toBe('Inter_500Medium');
   });
 });
