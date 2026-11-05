@@ -534,3 +534,18 @@ describe('D10-BUILD-CLOSE: Roman history on the list (C3 Style B, B_inbox and B_
     [[], null],
   ])('romanLine %#', (messages, want) => expect(romanLine(messages as never)).toBe(want));
 });
+
+// LO-935 B-TEST (agent 198, Opus lens): opening the Roman room creates today's empty chat (POST /roman/sessions,
+// backend roman.service.ts:293-299, one session per UTC day), which is then the newest in GET /roman/sessions
+// (started_at desc, :397). The card must still quote Roman's latest finished answer from the newest chat that has one.
+describe('LO-935 B1: an empty chat for today does not hide Roman\'s latest answer', () => {
+  it('B1: the newest chat is empty (messageCount 0): the card still quotes the latest finished answer', async () => {
+    const today = { id: 'rs-today', surface: 'client', dayKey: '2026-11-05', messageCount: 0, startedAt: '2026-11-05T09:00:00.000Z', lastActivityAt: '2026-11-05T09:00:00.000Z' };
+    const yesterday = { id: 'rs-yday', surface: 'client', dayKey: '2026-11-04', messageCount: 2, startedAt: '2026-11-04T18:00:00.000Z', lastActivityAt: '2026-11-04T18:02:00.000Z' };
+    mockList.mockResolvedValue({ ok: true, value: { sessions: [today, yesterday], nextCursor: null } });
+    mockRead.mockImplementation(async (_b: unknown, id: string) => ({ ok: true, value: { messages: id === 'rs-yday' ? [said(), asked] : [], nextCursor: null } }));
+    const { u } = await show();
+    await act(async () => { await Promise.resolve(); });
+    await waitFor(() => expect(u.getByTestId('inbox-roman-line').props.children).toBe(ANSWER));
+  });
+});
