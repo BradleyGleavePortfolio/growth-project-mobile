@@ -14,7 +14,7 @@ import { NavigationContext } from '@react-navigation/native';
 import { StatusBar, StyleSheet } from 'react-native';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { StatusBarBand, STATUS_BAR_BONE } from '../../../components/StatusBarBand';
-import { lightTokens } from '../../../theme/tokens';
+import { lightTokens, palette } from '../../../theme/tokens';
 
 const mockApi = {
   getSignupPolicy: jest.fn(),
@@ -82,6 +82,13 @@ const HIDDEN = { includeHiddenElements: true };
 const nav = () => ({ navigate: jest.fn(), replace: jest.fn(), goBack: jest.fn(), canGoBack: jest.fn(() => false) });
 type Nav = ReturnType<typeof nav>;
 const login = (n: Nav) => render(<LoginScreen navigation={n as never} route={{ key: 'l', name: 'Login' } as never} />);
+it('LS-935 B3: Sign in back button has the drawn cream fill and no outline', async () => {
+  const view = await login(nav());
+  expect(StyleSheet.flatten(view.getByTestId('login-back-back').props.style)).toMatchObject({
+    backgroundColor: palette.cream,
+    borderWidth: 0,
+  });
+});
 const create = (n: Nav, params?: { invite_code?: string }) =>
   render(<CreateAccountScreen navigation={n as never} route={params ? { params } : undefined} />);
 let focused = true;
