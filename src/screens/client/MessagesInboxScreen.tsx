@@ -296,9 +296,9 @@ export default function MessagesInboxScreen({ navigation }: { navigation: Naviga
           <>
             <Rise index={1}>
               <Pressable onPress={tap(() => navigation.navigate('MoreTab', { screen: 'RomanChat', initial: false }))} accessibilityRole="button" accessibilityLabel={`Roman, your assistant${left !== null ? `, ${left} left today` : ''}${history.line ? `. ${history.line}` : ''}`} testID="inbox-roman" style={({ pressed }) => [s.card, { backgroundColor: palette.cream }, pressed && s.pressed]}>
-                <View style={s.top}>
+                <View style={[s.top, s.wrapTop]}>
                   <View style={[s.ringed, { borderColor: gold[500] }]}><RomanAvatar crop="neutral" size={52} /></View>
-                  <View style={s.who}>
+                  <View style={[s.who, s.whoMin]}>
                     <Text style={[s.over, { color: sc.textMuted }]}>Your assistant</Text>
                     <Text style={[s.title, { color: sc.textPrimary }]}>Roman</Text>
                   </View>
@@ -352,7 +352,10 @@ const s = StyleSheet.create({
   unread: { minWidth: 40, minHeight: 40, borderWidth: 2, borderRadius: radius.chip, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center' },
   unreadText: { ...typography.h3, fontVariant: ['tabular-nums'] },
   preview: { ...typography.body, fontSize: 17, lineHeight: 26 },
-  left: { alignItems: 'flex-end' },
+  left: { alignItems: 'flex-end', marginLeft: 'auto' },
+  // Large text at 320 pt: "36 left today" moves under the name instead of splitting "Your assistant" mid-word.
+  wrapTop: { flexWrap: 'wrap', rowGap: 4 },
+  whoMin: { minWidth: 128 },
   count: { ...typography.h1, fontVariant: ['tabular-nums'] },
   body: { ...typography.body },
   small: { ...typography.bodySmall },
