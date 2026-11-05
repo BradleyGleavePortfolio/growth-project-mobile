@@ -147,12 +147,12 @@ interface TimelineProps {
 /** One stop on the day's gutter: a hollow dot level with the eyebrow, a line on to the next stop. */
 export function TimelineRow({ line, dot, bg, last, filled, dotTop, children, style, testID }: TimelineProps) {
   return (
-    <View style={[s.tlRow, style]} testID={testID}>
+    <View style={s.tlRow} testID={testID}>
       <View style={s.gutter} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
         {!last ? <View style={[s.tlLine, { backgroundColor: line }, dotTop != null && { top: dotTop + DOT + 3 }]} /> : null}
         <View style={[s.dot, { borderColor: dot, backgroundColor: filled ? dot : bg }, dotTop != null && { marginTop: dotTop }]} />
       </View>
-      <View style={s.tlBody}>{children}</View>
+      <View style={[s.tlBody, style]}>{children}</View>
     </View>
   );
 }
