@@ -112,7 +112,7 @@ export function QuantityPickerContent({
 
         {/* PORTION-WRAP-M: one row of tabs at every phone width and text size (portionFit); wraps only if a window is narrower than any phone. */}
         <View style={[styles.unitTabs, { columnGap: tabs.gap, flexWrap: tabs.wrap ? 'wrap' : 'nowrap',
-          justifyContent: tabs.spread ? 'space-between' : 'flex-start' }]}>
+          justifyContent: tabs.spread ? 'space-between' : 'flex-start', marginHorizontal: -tabs.bleed }]}>
           {units.map((u) => (
             <HapticPressable
               key={u}

@@ -55,8 +55,11 @@ describe.each([320, 360, 375, 390, 430])('FR-916R3 F2: at %i pt', (width) => {
     expect(labels).toEqual(['g', 'oz', 'serving', 'cup', 'tbsp', 'tsp']);
     const room = width - 2 * layout.gutter;
     expect({ sideways, wraps }).toEqual({ sideways: false, wraps: false });
-    const gaps = (flat(row?.props.style).columnGap ?? 0) * (tabs.length - 1);
-    expect(tabs.reduce((n, t, i) => n + tabWidth(t, labels[i]), 0) + gaps).toBeLessThanOrEqual(room);
+    const rowStyle = flat(row?.props.style);
+    const gaps = (rowStyle.columnGap ?? 0) * (tabs.length - 1);
+    const bleed = -(rowStyle.marginHorizontal ?? 0); // the row may borrow up to 8 pt of each gutter, never more
+    expect(bleed).toBeLessThanOrEqual(8);
+    expect(tabs.reduce((n, t, i) => n + tabWidth(t, labels[i]), 0) + gaps).toBeLessThanOrEqual(room + 2 * bleed);
     for (const t of tabs) {
       const st = flat(t.props.style);
       expect(st.width ?? null).toBeNull();

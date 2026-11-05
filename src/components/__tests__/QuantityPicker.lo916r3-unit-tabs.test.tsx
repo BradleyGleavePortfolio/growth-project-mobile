@@ -43,7 +43,7 @@ it('LO-916R3 B1: every unit tab of a volume food fits on a 320 pt phone (none hi
     node = node.parent;
   }
   const minRow = tabs.reduce((n, t) => n + (flat(t.props.style).minWidth ?? 0), 0) + gap * (tabs.length - 1);
-  const room = 320 - 2 * layout.gutter;
+  const room = 320 - 2 * layout.gutter + 16; // PORTION-WRAP-M: six tabs at 320 pt borrow 8 pt of each gutter
   const hidden = !wraps && minRow > room;
   expect({ sideways, wraps, minRow, room, hidden }).toEqual(expect.objectContaining({ hidden: false }));
 });

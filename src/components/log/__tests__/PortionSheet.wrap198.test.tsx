@@ -60,20 +60,22 @@ describe('PORTION-WRAP-M: fitUnitTabs', () => {
   const MASS = ['g', 'oz', 'serving'];
   const ALL = ['g', 'oz', 'serving', 'cup', 'tbsp', 'tsp'];
   it.each([320, 360, 390, 430])('the drawn food (g, oz, serving) keeps the drawn tabs at %i pt and 130%%', (width) => {
-    expect(fitUnitTabs(MASS, sheetRoom(width), 1.3)).toEqual({ fontSize: 16 * 1.3, padding: 12, minWidth: 64, gap: 8, spread: false, wrap: false });
+    expect(fitUnitTabs(MASS, sheetRoom(width), 1.3)).toEqual({ fontSize: 16 * 1.3, padding: 12, minWidth: 64, gap: 8, bleed: 0, spread: false, wrap: false });
   });
   it.each([[360, 1], [390, 1.3], [430, 1.3]])('six tabs keep the full text size where the row has room (%i pt, %f)', (width, scale) => {
     const t = fitUnitTabs(ALL, sheetRoom(width), scale);
-    expect(t).toMatchObject({ fontSize: 16 * scale, minWidth: layout.touchMin, wrap: false, spread: true });
+    expect(t).toMatchObject({ fontSize: 16 * scale, minWidth: layout.touchMin, bleed: 0, wrap: false, spread: true });
   });
-  it('six tabs at 320 pt step their labels down to fit one row, not under 12 pt, still 44 pt targets', () => {
-    for (const scale of [1, 1.3]) {
-      const t = fitUnitTabs(ALL, sheetRoom(320), scale);
-      expect(t.wrap).toBe(false);
-      expect(t.fontSize).toBeGreaterThanOrEqual(12);
-      expect(t.fontSize).toBeLessThan(16);
-      expect(t.minWidth).toBe(layout.touchMin);
-    }
+  it.each([[1, 16], [1.3, 16]])('six tabs at 320 pt and %f text borrow 8 pt of each gutter to stay one row at %i pt or more', (scale, least) => {
+    const t = fitUnitTabs(ALL, sheetRoom(320), scale);
+    expect(t).toMatchObject({ bleed: 8, wrap: false, minWidth: layout.touchMin });
+    expect(t.fontSize).toBeGreaterThanOrEqual(least);
+    expect(t.fontSize).toBeLessThanOrEqual(16 * scale);
+  });
+  it('six tabs at 360 pt and 130% stay inside the gutters (labels over 16 pt there)', () => {
+    const t = fitUnitTabs(ALL, sheetRoom(360), 1.3);
+    expect(t.bleed).toBe(0);
+    expect(t.fontSize).toBeGreaterThan(16);
   });
   it('a window narrower than any phone wraps the row instead, so every tab still shows', () => {
     expect(fitUnitTabs(ALL, sheetRoom(240), 1)).toMatchObject({ wrap: true, fontSize: 16 });
