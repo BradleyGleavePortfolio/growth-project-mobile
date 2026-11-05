@@ -71,7 +71,7 @@ export default function ClientRiskDetailScreen() {
   }, [isAuthorized, load]);
 
   const onNudge = useCallback(async () => {
-    if (nudging || nudgeSent) return;
+    if (nudging || nudgeSent || !nudgeGate.open) return;
     setNudging(true);
     try {
       await coachApi.sendNudge(userId, { title: NUDGE_TITLE, body: NUDGE_BODY });
@@ -84,7 +84,7 @@ export default function ClientRiskDetailScreen() {
     } finally {
       setNudging(false);
     }
-  }, [nudgeSent, nudging, userId]);
+  }, [nudgeGate.open, nudgeSent, nudging, userId]);
 
   if (!isAuthorized) {
     return (
