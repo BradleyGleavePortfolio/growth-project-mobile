@@ -90,6 +90,17 @@ describe('C_peek rows (PEEK-K1-M)', () => {
     expect(value('checkins').props.numberOfLines).toBe(1);
   });
 
+  // PEEK-K1-M2: only the client's own free text is cut; the app's words wrap like every other row (320 pt, 130%).
+  it.each([
+    ['nothing logged', [], 'Nothing logged yet'],
+    ['a check-in without a note', [{ id: 'k2', date: '2026-11-03T00:00:00.000Z', energy: 4, notes: '' }], 'energy 4 of 5'],
+  ])('with none waiting and %s, Check-ins wraps like the other rows, never cut', async (_case, rows, text) => {
+    mockCheckIns.mockResolvedValue({ data: rows });
+    await mount(client('Jordan', 0));
+    expect(value('checkins').props.children).toEqual(expect.stringContaining(text));
+    expect(value('checkins').props.numberOfLines).toBe(2);
+  });
+
   it('the "Logged today" line is gone (C_peek draws it at no state)', async () => {
     await mount();
     expect(screen.queryByText(/Logged today|waiting for you/)).toBeNull();

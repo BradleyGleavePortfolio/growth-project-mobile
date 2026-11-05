@@ -25,11 +25,12 @@ const checkIn = [{ id: 'k1', date: '2026-11-04T00:00:00.000Z', energy: 3, notes:
 
 describe('peekSlices: the values C_peek draws on one line each', () => {
   it.each([
-    ['one waiting', 1, checkIn, { text: '1 to review', hasOne: true }],
-    ['two waiting', 2, checkIn, { text: '2 to review', hasOne: true }],
-    ['waiting, latest not read yet', 1, [], { text: '1 to review', hasOne: true }],
-    ['none waiting: main\'s latest check-in', 0, checkIn, { text: 'Today: energy 3 of 5, Knee a bit tight', hasOne: true }],
-    ['no check-in at all', 0, [], { text: 'Nothing logged yet', hasOne: false }],
+    ['one waiting', 1, checkIn, { text: '1 to review', hasOne: true, note: false }],
+    ['two waiting', 2, checkIn, { text: '2 to review', hasOne: true, note: false }],
+    ['waiting, latest not read yet', 1, [], { text: '1 to review', hasOne: true, note: false }],
+    ['none waiting: main\'s latest check-in', 0, checkIn, { text: 'Today: energy 3 of 5, Knee a bit tight', hasOne: true, note: true }],
+    ['none waiting: a check-in without a note', 0, [{ id: 'k2', date: '2026-11-04', energy: 4, notes: ' ' }], { text: 'Today: energy 4 of 5', hasOne: true, note: false }],
+    ['no check-in at all', 0, [], { text: 'Nothing logged yet', hasOne: false, note: false }],
   ])('Check-ins, %s', (_case, n, rows, want) => {
     expect(peekSlices(client(n as number), summary(), rows, NONE, null, TODAY).checkIn).toEqual(want);
   });
