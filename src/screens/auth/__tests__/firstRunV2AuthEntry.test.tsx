@@ -14,7 +14,7 @@ import { NavigationContext } from '@react-navigation/native';
 import { StatusBar, StyleSheet } from 'react-native';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { StatusBarBand, STATUS_BAR_BONE } from '../../../components/StatusBarBand';
-import { lightTokens, palette } from '../../../theme/tokens';
+import { lightTokens, colors as palette } from '../../../theme/tokens';
 
 const mockApi = {
   getSignupPolicy: jest.fn(),
