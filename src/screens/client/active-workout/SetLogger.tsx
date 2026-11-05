@@ -147,7 +147,10 @@ export function SetLogger({
   // A 320 pt phone cannot fit the next set's fields beside its filled pill
   // (FR-917R3B renders): there the next set is its text row too (dashed, tap
   // to type) and the pill drops its tick, so the row stays on one line.
-  const narrow = useWindowDimensions().width < 360;
+  // BEAUTY-928 (renders at 360 pt, 100% text): a timed row's "sec" makes the
+  // next set's fields about 28 pt wider, so below 390 pt the filled pill
+  // dropped under the numbers. A timed next set is its text row there too.
+  const narrow = useWindowDimensions().width < (timed ? 390 : 360);
   // C1 v2: a set with a plan (the coach's numbers, a typed value or the last
   // workout's set) is done in one tap with "As planned"; the tap fills any
   // blank from the previous set, as the check did. Not on screens without the
