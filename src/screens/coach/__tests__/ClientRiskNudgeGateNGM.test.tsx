@@ -15,7 +15,7 @@ jest.mock('../../../services/api', () => ({ coachApi: {
   sendNudge: (...args: unknown[]) => mockSendNudge(...args),
 } }));
 jest.mock('../../../services/ptmApi', () => ({ ptmApi: { getClientPtm: jest.fn(async () => ({ data: {
-  user: { id: 'client-ngm', name: 'Jordan Reyes', email: 'client@example.test' },
+  user: { id: 'client-ngm', name: 'Jordan Reyes', email: '' },
   current: { id: 'ptm-ngm', computed_at: '2026-11-05T10:00:00Z', risk_score: 0.7, success_score: 0.3, factors: [] },
   history: [],
 } })) } }));
