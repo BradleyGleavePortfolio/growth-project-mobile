@@ -90,7 +90,7 @@ beforeEach(() => {
 
 async function renderHome() {
   const view = await render(<CommandCenterScreen />);
-  await waitFor(() => expect(view.getByTestId('home-tile-active')).toBeTruthy());
+  await waitFor(() => expect(view.queryAllByTestId(/^home-(hero-zero|hero-wins|hero-today|tiles)$/).length).toBeGreaterThan(0)); // the overview is in
   await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
   return view;
 }

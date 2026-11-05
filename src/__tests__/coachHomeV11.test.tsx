@@ -144,7 +144,7 @@ beforeEach(() => {
 
 async function renderHome() {
   const view = await render(<CommandCenterScreen />);
-  await waitFor(() => expect(view.getByTestId('home-tile-active')).toBeTruthy());
+  await waitFor(() => expect(view.queryAllByTestId(/^home-(hero-zero|hero-wins|hero-today|tiles)$/).length).toBeGreaterThan(0)); // the overview is in
   await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
   return view;
 }
@@ -497,7 +497,7 @@ describe('Needs you in the client-wins style (NEEDS-YOU-M, GOAL planning/MOCKUP3
     alert_id, alert_type, client_id: `x-${alert_id}`, client_name, message: `${client_name} crossed into the red risk band (82%).`,
     created_at: '2026-11-04T10:00:00Z', sent_at: '2026-11-04T10:00:00Z', dismissed_at, quote: null,
   });
-  const flat = (n: { props: { style: unknown } }) => StyleSheet.flatten(n.props.style as ViewStyle);
+  const flat = (n: { props: { style?: unknown } }) => StyleSheet.flatten(n.props.style as ViewStyle);
   const order = (v: View) => v.getAllByTestId(/^home-(needs|roman|month)$/).map((n) => n.props.testID as string);
   it('sits first under the masthead, above Roman, with the Attention and Routine split', async () => {
     const v = await renderHome();

@@ -34,4 +34,6 @@ export const coachHomeSources = {
   pathChangeDrafts: () => copilotApi.pathChangeDrafts(),
 };
 
-export type CoachHomeSources = typeof coachHomeSources;
+/** The queue and Path Copilot reads are optional: a Home given no queue counts no alerts, and no workout changes. */
+export type CoachHomeSources = Omit<typeof coachHomeSources, 'actionQueue' | 'pathChangeDrafts'>
+  & Partial<Pick<typeof coachHomeSources, 'actionQueue' | 'pathChangeDrafts'>>;
