@@ -314,10 +314,12 @@ describe('coach Home, flag on, with home (b#1123) and on an older server without
   });
   it("lays the page and Roman's chips on A's mist #F1F4EE, never the app's #F7FAF7 (#196-E15, SoT A1.17)", async () => {
     const v = await renderHome();
-    const bg = (n: { props: { style: unknown } }) => (StyleSheet.flatten(n.props.style as ViewStyle) as ViewStyle).backgroundColor;
+    const bg = (n: { props: Record<string, unknown> } | null | undefined) => (StyleSheet.flatten(n?.props.style as ViewStyle) as ViewStyle).backgroundColor;
     expect(bg(v.getByTestId('coach-home-root'))).toBe('#F1F4EE');
-    const chip = v.getByText('Workouts').parent?.parent; // the chip's own View, around its Text
-    expect(chip && bg(chip as { props: { style: unknown } })).toBe('#F1F4EE');
+    expect(bg(v.getByText('Workouts').parent?.parent)).toBe('#F1F4EE'); // the chip's own View, around its Text
+    // A `.types` / `.af`: three equal draft tiles with a 17 pt count, and 11 pt ring numerals that fit inside the ring.
+    const flat = (n: { props: Record<string, unknown> } | null | undefined) => StyleSheet.flatten(n?.props.style as TextStyle) as TextStyle;
+    expect([flat(v.getByText('Workouts').parent?.parent).flex, flat(v.getByText('Workouts').parent).fontSize, flat(v.getByText('5/9')).fontSize]).toEqual([1, 17, 11]);
   });
   it('re-reads the rings on pull to refresh', async () => {
     const refetch = jest.fn();

@@ -174,7 +174,8 @@ const hs = StyleSheet.create({
   alertsCountOpen: { color: forestPop.error },
   ring: { flex: 1, alignItems: 'center', minHeight: 44, paddingVertical: 2 },
   ringBox: { width: RING, height: RING, alignItems: 'center', justifyContent: 'center' },
-  ringValue: { ...typography.bodySmall, fontFamily: SEMI, color: styleA.figure, position: 'absolute', width: RING - 2 * STROKE, textAlign: 'center' }, // 112/140 shrinks to fit (LO B2)
+  // A `.af`: 11 pt numerals so "22/58" sits inside the ring; 112/140 shrinks to fit (LO B2)
+  ringValue: { fontSize: 11, lineHeight: 13, fontFamily: SEMI, letterSpacing: -0.2, color: styleA.figure, position: 'absolute', width: RING - 2 * STROKE + 2, textAlign: 'center' },
   ringLabel: { ...typography.caption, fontFamily: SEMI, letterSpacing: 0.6, color: forestPop.gold, marginTop: 2 },
   pressed: { opacity: 0.7 },
 });

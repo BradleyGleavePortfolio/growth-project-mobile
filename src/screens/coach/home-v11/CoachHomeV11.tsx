@@ -9,7 +9,7 @@ import React, { useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { forestPop, layout, radius, typography } from '../../../theme/tokens';
+import { colors as tokenColors, forestPop, layout, radius, typography } from '../../../theme/tokens';
 import { useScreenInsets } from '../../../ui';
 import { QuietError, QuietLoading, loadFailureMessage } from '../../../ui/states/QuietStates';
 import RomanAvatar from '../../../components/roman/RomanAvatar';
@@ -232,7 +232,9 @@ export default function CoachHomeV11(p: Props) {
         {chips.length > 0 ? (
           <View style={s.chips}>
             {chips.map(([c, label]) => (
-              <View key={label} style={[s.chip, { backgroundColor: page }]}><Text style={[cs.strong, s.small]}>{c} <Text style={[cs.body, s.small]}>{label}</Text></Text></View>
+              <View key={label} style={[s.chip, { backgroundColor: page }]}>
+                <Text style={[s.chipN, { color: colorScheme === 'dark' ? sc.textPrimary : tokenColors.forest }]}>{c} <Text style={[cs.body, s.chipL]}>{label}</Text></Text>
+              </View>
             ))}
           </View>
         ) : null}
@@ -390,8 +392,11 @@ const s = StyleSheet.create({
   needsBox: { width: 72, height: 72, borderRadius: radius.card, backgroundColor: forestPop.deep, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
   needsNum: { fontFamily: SEMI, fontSize: 30, lineHeight: 36, color: forestPop.leaf },
   romanHead: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
-  chip: { minHeight: 32, borderRadius: radius.button, paddingHorizontal: 10, justifyContent: 'center' },
+  // A `.types`: three equal tiles, the count large and the kind beside it.
+  chips: { flexDirection: 'row', gap: 6, marginTop: 12 },
+  chip: { flex: 1, minWidth: 0, minHeight: 34, borderRadius: radius.button, paddingHorizontal: 8, paddingVertical: 6, justifyContent: 'center' },
+  chipN: { fontFamily: SEMI, fontSize: 17, lineHeight: 22 }, // A `.tyn`: forest, 17
+  chipL: { fontSize: 12.5, lineHeight: 16 },
   approve: { minHeight: 52, marginTop: 12, borderRadius: radius.button, paddingHorizontal: 12, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   approveText: { ...typography.bodyMd, fontSize: 17, lineHeight: 22, flexShrink: 1, textAlign: 'center' },
   approveBadge: { minWidth: 28, height: 28, borderRadius: radius.chip, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: forestPop.leaf },
