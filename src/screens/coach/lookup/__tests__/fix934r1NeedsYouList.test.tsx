@@ -35,6 +35,8 @@ describe('FIX-934R1: verified alerts never wait on the roster (LS-934 B2, list s
   ])('roster %s: the safety row and the other alert stay, the roster state sits under them', async (_k, over, held) => {
     const v = await draw(alertsOnly, over);
     expect([!!v.queryByTestId('needs-safety-s1'), !!v.queryByTestId('needs-alert-o1'), !!v.queryByTestId(held)]).toEqual([true, true, true]);
+    // No count, roster size, search or switch the roster has not verified.
+    expect([v.getByTestId('needs-title').props.children, !!v.queryByTestId('needs-search'), !!v.queryByText(/from your/)]).toEqual(['Needs you', false, false]);
   });
 });
 
