@@ -18,7 +18,7 @@ import type { ActionQueueItem } from '../../../../services/commandCenterApi';
 const person = (id: string, first: string, createdAt: string) =>
   ({ id, firstName: first, lastName: 'Lee', email: `${id}@example.com`, status: 'active', createdAt, activity: { lastActiveOn: '2026-10-28' } }) as unknown as RosterClient;
 const safety = { alert_id: 's1', alert_type: 'roman_crisis_reply', client_id: 'a', client_name: 'Avery Cole', message: 'm', dismissed_at: null, created_at: '2026-11-05T10:00:00Z' } as ActionQueueItem;
-const other = { alert_id: 'o1', alert_type: 'risk_red_transition', client_id: 'h', client_name: 'Hana Kim', message: 'Crossed into the red risk band.', dismissed_at: null, created_at: '2026-11-05T09:00:00Z' } as ActionQueueItem;
+const other = { alert_id: 'o1', alert_type: 'high_churn_risk', client_id: 'h', client_name: 'Hana Kim', message: 'Hana has a high churn risk this week.', dismissed_at: null, created_at: '2026-11-05T09:00:00Z' } as ActionQueueItem;
 const noop = () => undefined;
 const draw = (areas: NeedsAreas, over: Record<string, unknown> = {}) => render(
   <NeedsYouList
