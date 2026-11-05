@@ -109,7 +109,7 @@ export default function NeedsYouList(p: NeedsYouListProps) {
         <View style={s.mid}>
           <Text style={s.name} numberOfLines={2}>{i.client_name}</Text>
           {when ? <Text style={s.when}>{when}</Text> : null}
-          {dotLine(i.message, 'alert')}
+          {dotLine(i.message, 'alert', 0)}
         </View>
         <Ionicons name="chevron-forward" size={20} color={styleA.inkMuted} />
       </HapticPressable>
@@ -120,26 +120,29 @@ export default function NeedsYouList(p: NeedsYouListProps) {
     const act = r.reason.action;
     return (
       <View key={r.client.id} style={[s.row, k > 0 && s.rowLine]}>
-        <View style={s.grow}>{/* HapticPressable's own wrapper takes no flex */}
-        <HapticPressable
-          intent="light" style={s.rowMain} onPress={() => p.onOpenClient(r.client)} accessibilityRole="button"
-          accessibilityLabel={[name, r.reason.text, r.also].filter(Boolean).join(', ')} testID={`needs-row-${r.client.id}`}
-        >
-          {avatar(initialsOf(r.client))}
-          <View style={s.mid}>
-            <Text style={s.name} numberOfLines={2}>{name}</Text>
-            {dotLine(r.reason.text, tone)}
-            {r.also ? <View style={s.tag}><Text style={s.tagText}>{r.also}</Text></View> : null}
-          </View>
-        </HapticPressable>
+        {/* HapticPressable's own wrapper takes no flex, so each side gets a View; under 170 pt the action wraps below. */}
+        <View style={[s.grow, s.rowMainWrap]}>
+          <HapticPressable
+            intent="light" style={s.rowMain} onPress={() => p.onOpenClient(r.client)} accessibilityRole="button"
+            accessibilityLabel={[name, r.reason.text, r.also].filter(Boolean).join(', ')} testID={`needs-row-${r.client.id}`}
+          >
+            {avatar(initialsOf(r.client))}
+            <View style={s.mid}>
+              <Text style={s.name} numberOfLines={2}>{name}</Text>
+              {dotLine(r.reason.text, tone)}
+              {r.also ? <View style={s.tag}><Text style={s.tagText}>{r.also}</Text></View> : null}
+            </View>
+          </HapticPressable>
         </View>
         {act ? (
-          <HapticPressable
-            intent="light" style={s.act} onPress={() => p.onAction(r.client, act)} accessibilityRole="button"
-            accessibilityLabel={`${ACTION_LABEL[act]}, ${name}`} testID={`needs-act-${r.client.id}`}
-          >
-            <Text style={s.actText} maxFontSizeMultiplier={1.3}>{ACTION_LABEL[act]}</Text>
-          </HapticPressable>
+          <View style={s.actWrap}>
+            <HapticPressable
+              intent="light" style={s.act} onPress={() => p.onAction(r.client, act)} accessibilityRole="button"
+              accessibilityLabel={`${ACTION_LABEL[act]}, ${name}`} testID={`needs-act-${r.client.id}`}
+            >
+              <Text style={s.actText} maxFontSizeMultiplier={1.3}>{ACTION_LABEL[act]}</Text>
+            </HapticPressable>
+          </View>
         ) : null}
       </View>
     );
@@ -188,14 +191,14 @@ export default function NeedsYouList(p: NeedsYouListProps) {
     const on = side === key;
     return (
       <View key={key} style={s.grow}>
-      <HapticPressable
-        intent="light" style={[s.half2, on && s.halfOn]} onPress={() => setChosen(key)} accessibilityRole="tab"
-        accessibilityState={{ selected: on }} accessibilityLabel={`${label}, ${n} ${n === 1 ? 'item' : 'items'}${key === 'attention' && safetyOpen ? ', safety alert open' : ''}`}
-        testID={`needs-switch-${key}`}
-      >
-        {key === 'attention' && safetyOpen ? <Ionicons name="shield-outline" size={16} color={on ? safetyGold.text : forestPop.gold} /> : null}
-        <Text style={[s.halfText, on && s.halfTextOn]} numberOfLines={1} maxFontSizeMultiplier={1.3}>{`${label} ${n}`}</Text>
-      </HapticPressable>
+        <HapticPressable
+          intent="light" style={[s.half2, on && s.halfOn]} onPress={() => setChosen(key)} accessibilityRole="tab"
+          accessibilityState={{ selected: on }} accessibilityLabel={`${label}, ${n} ${n === 1 ? 'item' : 'items'}${key === 'attention' && safetyOpen ? ', safety alert open' : ''}`}
+          testID={`needs-switch-${key}`}
+        >
+          {key === 'attention' && safetyOpen ? <Ionicons name="shield-outline" size={16} color={on ? safetyGold.text : forestPop.gold} /> : null}
+          <Text style={[s.halfText, on && s.halfTextOn]} numberOfLines={2} maxFontSizeMultiplier={1.3}>{`${label} ${n}`}</Text>
+        </HapticPressable>
       </View>
     );
   };
@@ -254,7 +257,7 @@ const s = StyleSheet.create({
   switch: { flexDirection: 'row', marginTop: 10, padding: 4, gap: 4, borderRadius: radius.button + 4, backgroundColor: styleA.deep2 },
   half2: { flex: 1, minHeight: 48, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', borderRadius: radius.button, paddingHorizontal: 8 },
   halfOn: { backgroundColor: forestPop.leaf },
-  halfText: { ...typography.bodyMd, fontFamily: SEMI, fontSize: 16, color: styleA.onDeep, flexShrink: 1 },
+  halfText: { ...typography.bodyMd, fontFamily: SEMI, fontSize: 16, color: styleA.onDeep, flexShrink: 1, textAlign: 'center' },
   halfTextOn: { color: forestPop.deep },
   page: { paddingHorizontal: layout.gutter, paddingTop: 6 },
   note: { ...typography.bodySmall, color: styleA.grey, marginTop: 12 },
@@ -268,7 +271,7 @@ const s = StyleSheet.create({
   card: { backgroundColor: styleA.card, borderRadius: radius.card, borderWidth: 1, borderColor: styleA.cardLine, overflow: 'hidden' },
   cardGold: { borderWidth: 2, borderColor: safetyGold.edge, backgroundColor: safetyGold.card },
   first: { marginTop: 14 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 72, paddingVertical: 12, paddingHorizontal: 14 },
+  row: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12, rowGap: 8, minHeight: 72, paddingVertical: 12, paddingHorizontal: 14 },
   rowLine: { borderTopWidth: 1, borderTopColor: styleA.cardLine },
   rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 48 },
   mid: { flex: 1, minWidth: 0 },
@@ -289,4 +292,6 @@ const s = StyleSheet.create({
   emptyTitle: { ...typography.bodyMd, fontFamily: SEMI, fontSize: 17, color: styleA.ink },
   emptyBody: { ...typography.bodySmall, color: styleA.grey, marginTop: 4 },
   grow: { flex: 1 },
+  rowMainWrap: { minWidth: 170 },
+  actWrap: { marginLeft: 'auto' },
 });
