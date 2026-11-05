@@ -60,6 +60,7 @@ import { isWorkoutDoneToday, type WorkoutRowLike } from '../../utils/workout/wor
 import { assignmentPlanName } from '../../utils/workout/assignmentPrescription';
 import CoachErrorState from '../../components/community/coach/CoachErrorState';
 import { featureFlags } from '../../config/featureFlags';
+import { countsInDay } from '../../utils/log/queuedDay';
 // UI-1 rings and tiles layout, behind featureFlags.clientHomeRings (off in every profile).
 import RingsHomeScreen, { type RingsWorkoutReads } from './home/RingsHomeScreen';
 
@@ -160,7 +161,8 @@ export default function HomeScreen() {
   // Derive state
   const mealsLogged = (() => {
     if (!dayReady) return 0;
-    const mealTypes = new Set(foodLogs.map((f) => f.mealType));
+    // FIX-931R2 (LS-931R2B B3): a food the server refused is shown in the day but is no logged meal.
+    const mealTypes = new Set(foodLogs.filter(countsInDay).map((f) => f.mealType));
     return mealTypes.size;
   })();
 

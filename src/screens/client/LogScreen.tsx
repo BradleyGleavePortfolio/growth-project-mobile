@@ -431,7 +431,8 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
   const mealLabel = (type: MealType) => MEAL_SECTIONS.find((s) => s.type === type)?.label ?? 'Meal';
   // Offered only while this meal is still empty on the selected day, so a
   // second open of Add Food cannot add the same meal twice by accident.
-  const repeatMeal = foodLogs.some((f) => f.mealType === activeMealType)
+  // FIX-931R2 (LS-931R2B B3): a refused food (shown, in no total) leaves the meal empty for Repeat.
+  const repeatMeal = foodLogs.some((f) => f.mealType === activeMealType && countsInDay(f))
     ? null
     : lastMeals[activeMealType] ?? null;
   const repeatMealDay = repeatMeal
