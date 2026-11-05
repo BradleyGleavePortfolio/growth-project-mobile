@@ -97,7 +97,7 @@ const CASES: { name: string; blocked: string[]; known?: boolean; unread: Unread;
 
 beforeEach(() => {
   useCoachStore.getState().reset();
-  closedRefusals.clear();
+  closedRefusals.clearAll();
   mockUnread.mockReset();
   mockBlockKnown = true;
 });

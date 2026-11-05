@@ -65,7 +65,7 @@ const CASES: { name: string; blocked: string[]; known?: boolean; unread: Unread;
 ];
 
 beforeEach(() => {
-  closedRefusals.clear();
+  closedRefusals.clearAll();
   mockUnread.mockReset();
   mockSendNudge.mockReset().mockResolvedValue({ data: { ok: true } });
 });
