@@ -133,6 +133,33 @@ describe('useVoiceOutbox', () => {
   });
 });
 
+describe('BPF-1: saved space target', () => {
+  it('an offline target survives a restart and a failed-send retry', async () => {
+    net.__setState({ isConnected: false });
+    const before = await setup();
+    await waitFor(() => expect(before.result.current.online).toBe(false));
+    await act(async () => before.result.current.send(REC, { cohortId: 'co-9' }));
+    await waitFor(() => expect(before.result.current.items[0]?.status).toBe('waiting'));
+    expect(mockPublish).not.toHaveBeenCalled();
+    await before.unmount();
+    resetVoiceOutbox(true);
+    mockPublish.mockRejectedValueOnce(new Error('network'));
+    await act(async () => net.__setState({ isConnected: true }));
+    const after = await setup();
+    await waitFor(() => expect(after.result.current.items[0]?.status).toBe('failed'));
+    await act(async () => after.result.current.retry(after.result.current.items[0].id));
+    await waitFor(() => expect(after.result.current.items).toHaveLength(0));
+    expect(mockPublish).toHaveBeenCalledTimes(2);
+    for (const call of mockPublish.mock.calls) {
+      expect(call[1]).toEqual(expect.objectContaining({
+        uri: 'file:///docs/voice-outbox/r.m4a',
+        cohortId: 'co-9',
+      }));
+    }
+    await after.unmount();
+  });
+});
+
 describe('useVoiceOutbox — upload progress (GOAL 03)', () => {
   it('the sending row carries the upload share, and it is not written to the phone', async () => {
     let report: (f: number) => void = () => undefined;
