@@ -11,6 +11,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../../../components/HapticPressable';
+import {
+  BLOCKED_BY_ME_LINE, CLOSED_LINE, ConversationClosedLine, blockedYouLine, useClosedBy, useConversationClosed,
+} from '../../../components/messaging/ConversationClosed';
 import { useFeatureFlags } from '../../../hooks/useFeatureFlags';
 import { useCurrentMacrosForClient } from '../../../hooks/useMacros';
 import { coachApi } from '../../../services/api';
@@ -29,11 +32,16 @@ export type PeekTarget =
   | { screen: 'chat' }
   | { screen: 'ClientPayments' };
 
+/** The lookup's settled answer for this pair: 'me' (the coach blocked them), 'them' (closed_client_ids: a block the
+ * other way), 'open', or null while it is unread. Only 'open' offers Send nudge. */
+export type PeekPair = 'open' | 'me' | 'them' | null;
+
 type Props = {
   client: RosterClient | null;
   onClose: () => void;
   onOpen: (c: RosterClient, target: PeekTarget) => void;
   onNudge: (c: RosterClient) => void;
+  pair?: PeekPair;
   children?: React.ReactNode;
 };
 
@@ -43,13 +51,19 @@ const LOAD_FAILED = 'Could not load this client. Please try again.';
 const RING = 60; // C_peek draws the ring about 60 pt across at 390 and 360 (the file's own ring is 104)
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {});
 
-export default function ClientPeekSheet({ client, onClose, onOpen, onNudge, children }: Props) {
+export default function ClientPeekSheet({ client, onClose, onOpen, onNudge, pair = null, children }: Props) {
   const theme = useTheme();
   const s = useMemo(() => makeStyles(theme), [theme]);
   const insets = useScreenInsets();
   const payments = useFeatureFlags().flags.coach_payment_actions === true;
   const target = useCurrentMacrosForClient(client?.id);
   const [load, setLoad] = useState<Load | null>(null);
+  // LS-933R2 B1: Send nudge is messaging, so it takes the chat's own gate and line (ClientMessagesScreen.tsx:90-97 and
+  // :489; BLOCK-ALL-M, FX-872, owner b#1141): offered only once the server has answered that this pair is open, and a
+  // block either way (or a send refused closed this session) draws the chat's closed line in its place. Message
+  // stays: the chat it opens shows the same line (owner O03).
+  const gate = useConversationClosed(client?.id, [], pair != null, pair === 'me' || pair === 'them');
+  const by = useClosedBy(client?.id, gate.closed, { pair: true, mine: pair === 'me' });
   // Only the newest read for the open client writes: closing or opening another client drops a late answer.
   const seq = useRef(0);
 
@@ -77,6 +91,10 @@ export default function ClientPeekSheet({ client, onClose, onOpen, onNudge, chil
   if (!client) return null;
   const own = load?.id === client.id ? load : null;
   const first = firstName(client);
+  // The chat's line for this side (BAM-2a, BAM-2b, else BAM-1), passed as its words so it is plain text here: its
+  // Settings link would open Blocked people under this sheet, which stays up over the screens behind it.
+  const name = rosterDisplayName(client).trim();
+  const closedLine = by === 'me' ? BLOCKED_BY_ME_LINE : by === 'them' && name ? blockedYouLine(name) : CLOSED_LINE;
   const slices: PeekSlices | null = own?.state === 'ready'
     ? peekSlices(client, own.summary, own.checkIns, own.week, target.isSuccess ? target.data : null)
     : null;
@@ -99,13 +117,14 @@ export default function ClientPeekSheet({ client, onClose, onOpen, onNudge, chil
   // own words are never cut: on a narrow phone or at large text they wrap, as many lines as they need (LS-933 B1,
   // LO-933 B1). Only the client's own note is cut, to one line under them. The value is one accessible element whose
   // label is every word, the whole note included, so a screen reader reads it once, in full, with Review after it
-  // (LS-933 B2; the row itself is the accessible element only when it has no Review).
+  // (LS-933 B2; the row itself is the accessible element only when it has no Review, and then the value is not one
+  // too, so TalkBack stops once per row, not twice; LO-933R2 C1).
   const slice = (key: string, title: string, v: { text: string; note?: string | null }, action?: React.ReactNode, last = false) => {
     const spoken = v.note ? `${v.text}, ${v.note}` : v.text;
     return (
       <View style={[s.slice, last && s.lastSlice]} accessible={!action} accessibilityLabel={`${title}, ${spoken}`} testID={`peek-slice-${key}`}>
         <Text style={s.sliceTitle} numberOfLines={1}>{title}</Text>
-        <View style={s.value} accessible accessibilityLabel={spoken}>
+        <View style={s.value} accessible={!!action} accessibilityLabel={spoken} testID={`peek-spoken-${key}`}>
           <Text style={s.sliceText} accessibilityLabel={v.note ? spoken : undefined} testID={`peek-value-${key}`}>{v.text}</Text>
           {v.note ? <Text style={s.sliceText} numberOfLines={1} testID={`peek-note-${key}`}>{v.note}</Text> : null}
         </View>
@@ -167,12 +186,15 @@ export default function ClientPeekSheet({ client, onClose, onOpen, onNudge, chil
                   <Text style={s.primaryText}>{`Message ${first}`}</Text>
                 </HapticPressable>
               </View>
-              <View style={s.slotNudge} testID="peek-slot">
-                <HapticPressable intent="light" containerStyle={s.flex} style={s.outline} onPress={() => onNudge(client)} accessibilityRole="button" accessibilityLabel="Send nudge" testID="peek-nudge">
-                  <Text style={s.outlineText}>Send nudge</Text>
-                </HapticPressable>
-              </View>
+              {gate.open ? (
+                <View style={s.slotNudge} testID="peek-slot">
+                  <HapticPressable intent="light" containerStyle={s.flex} style={s.outline} onPress={() => onNudge(client)} accessibilityRole="button" accessibilityLabel="Send nudge" testID="peek-nudge">
+                    <Text style={s.outlineText}>Send nudge</Text>
+                  </HapticPressable>
+                </View>
+              ) : null}
             </View>
+            {gate.closed ? <ConversationClosedLine line={closedLine} style={s.closedLine} testID="peek-closed" /> : null}
             <View style={s.chips}>
               {chips.map(([label, t]) => (t ? (
                 <HapticPressable key={label} intent="light" style={s.chip} onPress={() => open(t)} accessibilityRole="button" accessibilityLabel={label} testID={`peek-chip-${label}`}>
@@ -226,6 +248,7 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     slotMessage: { flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: 0 },
     slotNudge: { flexGrow: 1, flexShrink: 0, flexBasis: 'auto', maxWidth: '50%' },
     flex: { flex: 1 },
+    closedLine: { marginTop: 8, borderRadius: radius.button },
     primary: { flex: 1, minHeight: layout.buttonHeight, borderRadius: radius.button, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 8 },
     primaryText: { ...typography.bodyMd, fontFamily: 'Inter_600SemiBold', fontSize: 15, lineHeight: 20, textAlign: 'center', color: sem.textOnAccent },
     outline: { flex: 1, minHeight: layout.buttonHeight, borderRadius: radius.button, borderWidth: 1, borderColor: colors.primary, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 8 },

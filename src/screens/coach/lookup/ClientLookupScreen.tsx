@@ -38,7 +38,7 @@ import { KeepTail } from '../home-v11/PlanEnded';
 import { RomanMark } from '../home-v11/RomanMark';
 import { needsYouReason, useCoachBlockList } from '../home-v11/blockList';
 import { useLookupNudge } from './useLookupNudge';
-import ClientPeekSheet, { type PeekTarget } from './ClientPeekSheet';
+import ClientPeekSheet, { type PeekPair, type PeekTarget } from './ClientPeekSheet';
 import LookupSideIndex, { LETTERS } from './LookupSideIndex';
 
 // route.params.view 'needs' (for the coach Home's Needs you tile): the Needs you layout at any roster size, only clients with an
@@ -65,6 +65,9 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   const endedSeq = useRef(0);
   const [ask, setAsk] = useState<DraftAsk | null>(null);
   const [unread, setUnread] = useState<UnreadByClient>({});
+  // LS-933R2 B1: the same answer's b#1153 closed_client_ids (a block either way; absent on an older server, read as
+  // MessagesScreen does), for this coach; null until it has answered once. The peek's Send nudge waits for it.
+  const [closedIds, setClosedIds] = useState<{ coach: string; ids: ReadonlySet<string> } | null>(null);
   const [archivedCount, setArchivedCount] = useState<number | null>(null);
   const [recentIds, setRecentIds] = useState<string[]>([]);
   const [peek, setPeek] = useState<RosterClient | null>(null);
@@ -106,7 +109,11 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
     setRecentIds(await readRecentClientIds(coachId));
     const [u, a] = await Promise.allSettled([coachApi.getUnreadCounts(), coachApi.getClients('archived', undefined, ROSTER_PAGE_SIZE), loadEnded()]);
     // A failed unread read keeps the counts already shown. The archived count shows only when one page holds them all.
-    if (u.status === 'fulfilled') setUnread((u.value?.data?.by_client as UnreadByClient) ?? {});
+    if (u.status === 'fulfilled') {
+      setUnread((u.value?.data?.by_client as UnreadByClient) ?? {});
+      const closed: unknown = u.value?.data?.closed_client_ids;
+      setClosedIds({ coach: coachId, ids: new Set(Array.isArray(closed) ? closed.filter((x): x is string => typeof x === 'string') : []) });
+    }
     const rows: unknown = a.status === 'fulfilled' ? a.value?.data : null;
     setArchivedCount(Array.isArray(rows) && rows.length < ROSTER_PAGE_SIZE ? rows.length : null);
   }, [coachId, loadEnded]);
@@ -155,6 +162,11 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   // Owner (b#1141): a blocked pair gets no messaging at all, so no Message, Nudge, Reply or Say hello on any lookup row.
   const blockedIds = useMemo(() => new Set(blockList.blockedIds), [blockList.blockedIds]);
   const canMessage = (c: RosterClient) => !blockedIds.has(c.id);
+  // LS-933R2 B1: the peek's Send nudge is messaging too: 'me' (this coach blocked them, the rows' rule), 'them' (the
+  // server's closed_client_ids, a block either way), 'open', or null while either list is unread.
+  const closedKnown = !!closedIds && closedIds.coach === coachId;
+  const peekPair: PeekPair = !peek || !blockKnown || !closedKnown ? null
+    : !canMessage(peek) ? 'me' : closedIds?.ids.has(peek.id) ? 'them' : 'open';
   const endedPage = useMemo(
     () => (ended && ended.coach === coachId && blockList.known ? withoutBlocked(ended.page, blockList.blockedIds) : null),
     [ended, coachId, blockList.known, blockList.blockedIds],
@@ -431,7 +443,7 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
         letterStyle={s.indexLetter}
       />
       {peek ? null : nudge.modal}
-      <ClientPeekSheet client={peek} onClose={() => setPeek(null)} onOpen={openTarget} onNudge={nudge.open}>
+      <ClientPeekSheet client={peek} onClose={() => setPeek(null)} onOpen={openTarget} onNudge={nudge.open} pair={peekPair}>
         {peek ? nudge.modal : null}
       </ClientPeekSheet>
       <HomeSheet list={null} ask={ask} onCloseList={() => setAsk(null)} onCloseAsk={() => setAsk(null)} onSent={() => void loadSide()} />

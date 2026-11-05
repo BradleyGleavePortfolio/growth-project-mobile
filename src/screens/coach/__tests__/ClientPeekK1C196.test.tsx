@@ -45,7 +45,7 @@ const onOpen = jest.fn();
 const onNudge = jest.fn();
 
 async function mount(c = client()) {
-  await render(<ClientPeekSheet client={c} onClose={jest.fn()} onOpen={onOpen} onNudge={onNudge} />);
+  await render(<ClientPeekSheet client={c} onClose={jest.fn()} onOpen={onOpen} onNudge={onNudge} pair="open" />);
   await waitFor(() => expect(screen.queryByText('Loading')).toBeNull());
 }
 const rowIds = () => screen.getAllByTestId(/^peek-slice-/).map((r) => r.props.testID);
@@ -163,6 +163,24 @@ describe('C_peek chips (PEEK-K1-M)', () => {
     expect(screen.queryByRole('button', { name: 'Meal plan' })).toBeNull();
     await fireEvent.press(chip);
     expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['with a check-in to review', 1],
+    ['with nothing to review', 0],
+  ])('one focus stop for each row\'s words, %s (LO-933R2 C1: Android TalkBack stopped on the row and its value)', async (_case, toReview) => {
+    if (!toReview) mockCheckIns.mockResolvedValue({ data: [] });
+    await mount(client('Jordan', toReview));
+    const review = screen.queryByTestId('peek-review');
+    expect(!!review).toBe(toReview > 0);
+    for (const key of ['checkins', 'food', 'workouts', 'weighins']) {
+      const withAction = key === 'checkins' && !!review;
+      const row = screen.getByTestId(`peek-slice-${key}`);
+      const spoken = screen.getByTestId(`peek-spoken-${key}`);
+      // Exactly one of the row and its value is a stop, and the one that is carries the value's words.
+      expect([!!row.props.accessible, !!spoken.props.accessible]).toEqual([!withAction, withAction]);
+      expect((withAction ? spoken : row).props.accessibilityLabel).toContain(spoken.props.accessibilityLabel);
+    }
   });
 
   it('each chip opens what K1 rule 2 says', async () => {

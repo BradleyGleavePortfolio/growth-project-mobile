@@ -62,7 +62,7 @@ const onNudge = jest.fn();
 const onClose = jest.fn();
 
 async function mount(c = client()) {
-  await render(<ClientPeekSheet client={c} onClose={onClose} onOpen={onOpen} onNudge={onNudge} />);
+  await render(<ClientPeekSheet client={c} onClose={onClose} onOpen={onOpen} onNudge={onNudge} pair="open" />);
   await waitFor(() => expect(screen.queryByText('Loading')).toBeNull());
 }
 
@@ -195,7 +195,7 @@ describe('UI-4 peek sheet', () => {
     mockCheckIns.mockImplementation((id: string) => Promise.resolve({
       data: [id === 'c2' ? { id: 'k2', date: `${day(0)}T00:00:00.000Z`, energy: 4, notes: 'felt strong' } : { id: 'k1', date: `${day(0)}T00:00:00.000Z`, energy: 2, notes: 'knee tight' }],
     }));
-    const sheet = (c: RosterClient | null) => <ClientPeekSheet client={c} onClose={onClose} onOpen={onOpen} onNudge={onNudge} />;
+    const sheet = (c: RosterClient | null) => <ClientPeekSheet client={c} onClose={onClose} onOpen={onOpen} onNudge={onNudge} pair="open" />;
     const showsOnly = (mine: string[], other: string[]) => {
       for (const t of mine) expect(screen.getByText(t)).toBeTruthy();
       for (const t of other) expect(screen.queryByText(t)).toBeNull();
