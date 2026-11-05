@@ -3,9 +3,9 @@
  * (C_peek, owner #196-E8): the mini masthead, four one-line rows (label left, value right), Message and Send
  * nudge side by side, then the chips. Opens from any client row on the lookup. Every button opens today's real
  * screen for it. Payments shows only while the server flag coach_payment_actions is on. `children` (today's
- * nudge form) render inside this Modal so "Send nudge" opens over the sheet and returns to it. MEALPLAN-M
- * removed the client file's Plan tab, so the mockup's Meal plan chip is left out until the owner picks where
- * it opens (K1 rule 2 names a file section that no longer exists).
+ * nudge form) render inside this Modal so "Send nudge" opens over the sheet and returns to it. The drawn Meal plan
+ * chip is kept as drawn but opens nothing for v1 (owner #197-E6: "keep the chip, it doesn't open anywhere more for
+ * v1"; MEALPLAN-M removed the file's Plan tab): it is display only, not a button, and is read as plain text.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -86,23 +86,33 @@ export default function ClientPeekSheet({ client, onClose, onOpen, onNudge, chil
   const muted = { color: sc.textOnMastheadMuted };
   const ring = slices?.workouts.week ?? null;
   const lastDone = ring ? ring.segments.lastIndexOf('done') : -1;
-  const chips: Array<[string, PeekTarget]> = [
+  // C_peek's order. Meal plan has no target: display only (owner #197-E6).
+  const chips: Array<[string, PeekTarget | null]> = [
     ['Food log', { screen: 'ClientDetail', tab: 'logs' }],
+    ['Meal plan', null],
     ['Workouts', { screen: 'ClientDetail', tab: 'workouts' }],
     ...(payments ? [['Payments', { screen: 'ClientPayments' }] as [string, PeekTarget]] : []),
     ['Full profile', { screen: 'ClientDetail' }],
   ];
 
-  // C_peek: one line per row, the label left and the value right (no icon). Every drawn size fits one line; on a
-  // 320 pt phone at 130% a short value ("12 to review", "Nothing planned this week") wraps rather than lose words,
-  // and only the free-text check-in (`lines` 1) is cut, its full words being the row's spoken label.
-  const slice = (key: string, title: string, v: { text: string }, action?: React.ReactNode, last = false, lines = 2) => (
-    <View style={[s.slice, last && s.lastSlice]} accessible={!action} accessibilityLabel={`${title}, ${v.text}`} testID={`peek-slice-${key}`}>
-      <Text style={s.sliceTitle} numberOfLines={1}>{title}</Text>
-      <Text style={s.sliceText} numberOfLines={lines} testID={`peek-value-${key}`}>{v.text}</Text>
-      {action}
-    </View>
-  );
+  // C_peek: one line per row, the label left and the value right (no icon). Every drawn size fits one line. The app's
+  // own words are never cut: on a narrow phone or at large text they wrap, as many lines as they need (LS-933 B1,
+  // LO-933 B1). Only the client's own note is cut, to one line under them. The value is one accessible element whose
+  // label is every word, the whole note included, so a screen reader reads it once, in full, with Review after it
+  // (LS-933 B2; the row itself is the accessible element only when it has no Review).
+  const slice = (key: string, title: string, v: { text: string; note?: string | null }, action?: React.ReactNode, last = false) => {
+    const spoken = v.note ? `${v.text}, ${v.note}` : v.text;
+    return (
+      <View style={[s.slice, last && s.lastSlice]} accessible={!action} accessibilityLabel={`${title}, ${spoken}`} testID={`peek-slice-${key}`}>
+        <Text style={s.sliceTitle} numberOfLines={1}>{title}</Text>
+        <View style={s.value} accessible accessibilityLabel={spoken}>
+          <Text style={s.sliceText} accessibilityLabel={v.note ? spoken : undefined} testID={`peek-value-${key}`}>{v.text}</Text>
+          {v.note ? <Text style={s.sliceText} numberOfLines={1} testID={`peek-note-${key}`}>{v.note}</Text> : null}
+        </View>
+        {action}
+      </View>
+    );
+  };
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose} testID="peek-sheet">
@@ -141,32 +151,37 @@ export default function ClientPeekSheet({ client, onClose, onOpen, onNudge, chil
                   <HapticPressable intent="light" style={s.review} onPress={() => open({ screen: 'ClientDetail', tab: 'timeline' })} accessibilityRole="button" accessibilityLabel="Review" testID="peek-review">
                     <Text style={s.link}>Review</Text>
                   </HapticPressable>
-                ) : undefined, false, slices.checkIn.note ? 1 : 2)}
+                ) : undefined)}
                 {slice('food', 'Food', slices.food)}
                 {slice('workouts', 'Workouts', slices.workouts)}
                 {slice('weighins', 'Weigh-ins', slices.weighIn, undefined, true)}
               </View>
             ) : null}
-            {/* C_peek: Message {first} and Send nudge are one row of equal halves at every size and text size; a long
-                name or 130% text wraps inside its half, never below the other button. */}
+            {/* C_peek: Message {first} and Send nudge share one row, each as wide as its words with the spare width shared
+                (LO-933 B2: "Message Jordan" stays one line at 390 pt and 130%). When the two do not fit, each wraps
+                inside its own button, never below the other. */}
             <View style={s.buttons} testID="peek-buttons">
-              <View style={s.flex} testID="peek-slot">
+              <View style={s.slot} testID="peek-slot">
                 <HapticPressable intent="medium" containerStyle={s.flex} style={s.primary} onPress={() => open({ screen: 'chat' })} accessibilityRole="button" accessibilityLabel={`Message ${first}`} testID="peek-message">
                   <Text style={s.primaryText}>{`Message ${first}`}</Text>
                 </HapticPressable>
               </View>
-              <View style={s.flex} testID="peek-slot">
+              <View style={s.slot} testID="peek-slot">
                 <HapticPressable intent="light" containerStyle={s.flex} style={s.outline} onPress={() => onNudge(client)} accessibilityRole="button" accessibilityLabel="Send nudge" testID="peek-nudge">
                   <Text style={s.outlineText}>Send nudge</Text>
                 </HapticPressable>
               </View>
             </View>
             <View style={s.chips}>
-              {chips.map(([label, t]) => (
+              {chips.map(([label, t]) => (t ? (
                 <HapticPressable key={label} intent="light" style={s.chip} onPress={() => open(t)} accessibilityRole="button" accessibilityLabel={label} testID={`peek-chip-${label}`}>
                   <Text style={s.chipText}>{label}</Text>
                 </HapticPressable>
-              ))}
+              ) : (
+                <View key={label} style={s.chip} accessible accessibilityRole="text" accessibilityLabel={label} testID={`peek-chip-${label}`}>
+                  <Text style={s.chipText}>{label}</Text>
+                </View>
+              )))}
             </View>
           </ScrollView>
         </View>
@@ -193,17 +208,21 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     // spoken label carry the same words at the coach's size.
     ringCount: { ...typography.h3, fontSize: 16, lineHeight: 19 },
     ringDone: { fontSize: 11, lineHeight: 13 },
-    // C_peek rows: a hairline above the first and between rows, none under the last; label left in ink, value right
-    // in muted ink, one line each at 44 pt (Review is a 44 pt target inside the Check-ins row).
-    slices: { marginTop: 8, borderTopWidth: StyleSheet.hairlineWidth, borderColor: sem.border },
-    slice: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: layout.touchMin, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: sem.border },
+    // C_peek rows: a sage hairline (the drawing's #C9D8CD, surface.sageLine; LO-933 C2) above the first and between
+    // rows, none under the last; label left in ink, Medium (LO-933 B3), value right in muted ink Regular, at 44 pt
+    // (Review is a 44 pt target inside the Check-ins row).
+    slices: { marginTop: 8, borderTopWidth: StyleSheet.hairlineWidth, borderColor: sem.surface.sageLine },
+    slice: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: layout.touchMin, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: sem.surface.sageLine },
     lastSlice: { borderBottomWidth: 0 },
-    sliceTitle: { ...typography.body, fontSize: 15, lineHeight: 21, flexShrink: 0, color: colors.textPrimary },
-    sliceText: { ...typography.body, fontSize: 15, lineHeight: 21, flex: 1, minWidth: 0, textAlign: 'right', color: colors.textMuted },
+    sliceTitle: { ...typography.bodyMd, fontSize: 15, lineHeight: 21, flexShrink: 0, color: colors.textPrimary },
+    value: { flex: 1, minWidth: 0 },
+    sliceText: { ...typography.body, fontSize: 15, lineHeight: 21, textAlign: 'right', color: colors.textMuted },
     review: { minHeight: layout.touchMin, minWidth: layout.touchMin, justifyContent: 'center', alignItems: 'flex-end' },
     link: { ...typography.bodyMd, fontSize: 15, lineHeight: 21, color: colors.primary, textDecorationLine: 'underline' },
-    // Two equal halves, 8 pt apart, as tall as the taller one (a wrapped name grows both together).
+    // Two buttons 8 pt apart, each sized to its words plus an equal share of the spare width (C_peek), as tall as the
+    // taller one (a wrapped name grows both together).
     buttons: { flexDirection: 'row', gap: 8, marginTop: 16 },
+    slot: { flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: 0 },
     flex: { flex: 1 },
     primary: { flex: 1, minHeight: layout.buttonHeight, borderRadius: radius.button, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 8 },
     primaryText: { ...typography.bodyMd, fontFamily: 'Inter_600SemiBold', fontSize: 15, lineHeight: 20, textAlign: 'center', color: sem.textOnAccent },
@@ -211,6 +230,6 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     outlineText: { ...typography.bodyMd, fontFamily: 'Inter_600SemiBold', fontSize: 15, lineHeight: 20, textAlign: 'center', color: colors.primary },
     // C_peek chips: each pill is itself the 44 pt target, 8 pt apart both ways.
     chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
-    chip: { minHeight: layout.touchMin, paddingHorizontal: 12, justifyContent: 'center', borderRadius: radius.chip, borderWidth: 1, borderColor: sem.border, backgroundColor: colors.background },
+    chip: { minHeight: layout.touchMin, paddingHorizontal: 12, justifyContent: 'center', borderRadius: radius.chip, borderWidth: 1, borderColor: sem.surface.sageLine, backgroundColor: colors.background },
     chipText: { ...typography.bodySmall, fontFamily: 'Inter_500Medium', lineHeight: 20, color: colors.primary },
   });

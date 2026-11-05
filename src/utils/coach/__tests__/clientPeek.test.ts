@@ -1,6 +1,7 @@
 /**
  * PEEK-K1-M (K1 Style C, C_peek): every value the peek's four rows format, one line each.
- * Check-ins: K1-S-19 "{n} to review" from the roster, else main's latest check-in, else "Nothing logged yet".
+ * Check-ins: K1-S-19 "{n} to review" from the roster, else main's latest check-in, else "Nothing logged yet"; the
+ * client's note is kept apart from the app's words, every line of it (FIX-933, LS-933 B1/B2, LO-933 B1).
  * Food: main's "{n} of {m} kcal" (C_peek draws kcal alone; its "so far today" is a proposal, not built).
  * Workouts: m#926's K1-S-39 "Missed {day}" or K1-S-38 "{n} of {m} done", else "Nothing planned this week".
  * Weigh-ins: main's "{day}: {weight} lb" (K1-S-45 is not built: a gain or no change has no drawn word).
@@ -25,12 +26,14 @@ const checkIn = [{ id: 'k1', date: '2026-11-04T00:00:00.000Z', energy: 3, notes:
 
 describe('peekSlices: the values C_peek draws on one line each', () => {
   it.each([
-    ['one waiting', 1, checkIn, { text: '1 to review', hasOne: true, note: false }],
-    ['two waiting', 2, checkIn, { text: '2 to review', hasOne: true, note: false }],
-    ['waiting, latest not read yet', 1, [], { text: '1 to review', hasOne: true, note: false }],
-    ['none waiting: main\'s latest check-in', 0, checkIn, { text: 'Today: energy 3 of 5, Knee a bit tight', hasOne: true, note: true }],
-    ['none waiting: a check-in without a note', 0, [{ id: 'k2', date: '2026-11-04', energy: 4, notes: ' ' }], { text: 'Today: energy 4 of 5', hasOne: true, note: false }],
-    ['no check-in at all', 0, [], { text: 'Nothing logged yet', hasOne: false, note: false }],
+    ['one waiting', 1, checkIn, { text: '1 to review', hasOne: true, note: null }],
+    ['two waiting', 2, checkIn, { text: '2 to review', hasOne: true, note: null }],
+    ['waiting, latest not read yet', 1, [], { text: '1 to review', hasOne: true, note: null }],
+    ['none waiting: main\'s latest check-in, every line of the note (LF)', 0, checkIn, { text: 'Today: energy 3 of 5', hasOne: true, note: 'Knee a bit tight more' }],
+    ['none waiting: a CRLF note, blank lines dropped', 0, [{ id: 'k3', date: '2026-11-04', energy: 3, notes: 'Knee a bit tight\r\n\r\nmore ' }], { text: 'Today: energy 3 of 5', hasOne: true, note: 'Knee a bit tight more' }],
+    ['none waiting: a note without energy', 0, [{ id: 'k4', date: '2026-11-04', notes: 'Rest day' }], { text: 'Today', hasOne: true, note: 'Rest day' }],
+    ['none waiting: a check-in without a note', 0, [{ id: 'k2', date: '2026-11-04', energy: 4, notes: ' ' }], { text: 'Today: energy 4 of 5', hasOne: true, note: null }],
+    ['no check-in at all', 0, [], { text: 'Nothing logged yet', hasOne: false, note: null }],
   ])('Check-ins, %s', (_case, n, rows, want) => {
     expect(peekSlices(client(n as number), summary(), rows, NONE, null, TODAY).checkIn).toEqual(want);
   });

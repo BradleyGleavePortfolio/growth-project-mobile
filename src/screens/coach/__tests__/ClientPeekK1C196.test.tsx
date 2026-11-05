@@ -1,7 +1,8 @@
 /**
  * PEEK-K1-M (owner #196-E8, K1 Style C, C_peek): the peek's four one-line rows in order (label left, value
  * right, no icons), no "Logged today" line, Message {first} and Send nudge side by side at every size, and the
- * chips in C_peek's order, each opening what K1 index.md rule 2 says (Meal plan has no screen today).
+ * chips in C_peek's order, each opening what K1 index.md rule 2 says. FIX-933: the app's words never cut, only the
+ * client's note; buttons sized to their words (LO-933 B2); Meal plan drawn, display only (owner #197-E6).
  */
 import React from 'react';
 import { StyleSheet } from 'react-native';
@@ -76,18 +77,22 @@ describe('C_peek rows (PEEK-K1-M)', () => {
       expect(within(row).getByText(label)).toBeTruthy(); // the label first, the value after it
       expect(row.props.children[0].props.children).toBe(label);
       expect(value(key).props.children).toBe(text);
-      // One line at every drawn size (renders); a short value may wrap on a 320 pt phone at 130%, never lose words.
-      expect(value(key).props.numberOfLines).toBe(2);
+      // One line at every drawn size (renders); on a 320 pt phone at 130% the app's words wrap, never cut (no cap).
+      expect(value(key).props.numberOfLines).toBeUndefined();
       expect(StyleSheet.flatten(value(key).props.style).textAlign).toBe('right');
     }
     expect(screen.queryAllByText(/^icon:(clipboard|restaurant|barbell|scale)/)).toHaveLength(0);
     expect(screen.getByText('Review')).toBeTruthy();
   });
 
-  it('with none waiting, the latest check-in (free text) keeps to one line', async () => {
+  it('with none waiting, only the client note is cut to one line; the app words wrap; all of it is spoken', async () => {
     await mount(client('Jordan', 0));
-    expect(value('checkins').props.children).toBe('Today: energy 3 of 5, knee tight');
-    expect(value('checkins').props.numberOfLines).toBe(1);
+    expect(value('checkins').props.children).toBe('Today: energy 3 of 5');
+    expect(value('checkins').props.numberOfLines).toBeUndefined();
+    const note = screen.getByTestId('peek-note-checkins');
+    expect(note.props.children).toBe('knee tight');
+    expect(note.props.numberOfLines).toBe(1);
+    expect(value('checkins').props.accessibilityLabel).toBe('Today: energy 3 of 5, knee tight');
   });
 
   // PEEK-K1-M2: only the client's own free text is cut; the app's words wrap like every other row (320 pt, 130%).
@@ -98,7 +103,8 @@ describe('C_peek rows (PEEK-K1-M)', () => {
     mockCheckIns.mockResolvedValue({ data: rows });
     await mount(client('Jordan', 0));
     expect(value('checkins').props.children).toEqual(expect.stringContaining(text));
-    expect(value('checkins').props.numberOfLines).toBe(2);
+    expect(value('checkins').props.numberOfLines).toBeUndefined();
+    expect(screen.queryByTestId('peek-note-checkins')).toBeNull();
   });
 
   it('the "Logged today" line is gone (C_peek draws it at no state)', async () => {
@@ -121,7 +127,7 @@ describe('C_peek buttons (PEEK-K1-M)', () => {
     ['android 360, 100%', 360, 1, 'Jordan'],
     ['android 360, 130%', 360, 1.3, 'Jordan'],
     ['a long first name at 130%', 360, 1.3, 'Maximiliana-Jo'],
-  ])('Message {first} and Send nudge sit side by side, equal halves, at %s', async (_case, width, scale, first) => {
+  ])('Message {first} and Send nudge sit side by side, each sized to its words, at %s', async (_case, width, scale, first) => {
     mockWidth = width as number;
     mockFontScale = scale as number;
     await mount(client(first as string));
@@ -130,7 +136,7 @@ describe('C_peek buttons (PEEK-K1-M)', () => {
     expect(row.flexWrap).toBeUndefined();
     const slots = screen.getAllByTestId('peek-slot');
     expect(slots).toHaveLength(2);
-    for (const slot of slots) expect(StyleSheet.flatten(slot.props.style).flex).toBe(1);
+    for (const slot of slots) expect(StyleSheet.flatten(slot.props.style)).toMatchObject({ flexGrow: 1, flexShrink: 1, flexBasis: 'auto' });
     for (const id of ['peek-message', 'peek-nudge']) expect(StyleSheet.flatten(screen.getByTestId(id).props.style).minHeight).toBeGreaterThanOrEqual(44);
     expect(screen.getByText(`Message ${first}`).props.numberOfLines).toBeUndefined(); // a long name wraps in its half, never cut
   });
@@ -138,14 +144,24 @@ describe('C_peek buttons (PEEK-K1-M)', () => {
 
 describe('C_peek chips (PEEK-K1-M)', () => {
   it.each([
-    ['Payments on', true, ['Food log', 'Workouts', 'Payments', 'Full profile']],
-    ['Payments off', false, ['Food log', 'Workouts', 'Full profile']],
-  ])('%s: the chips in C_peek order (no Meal plan: no screen opens it today), each a 44 pt target', async (_case, on, labels) => {
+    ['Payments on', true, ['Food log', 'Meal plan', 'Workouts', 'Payments', 'Full profile']],
+    ['Payments off', false, ['Food log', 'Meal plan', 'Workouts', 'Full profile']],
+  ])('%s: the chips in C_peek order, Meal plan included, each 44 pt tall', async (_case, on, labels) => {
     mockFlags = { coach_payment_actions: on as boolean };
     await mount();
     expect(screen.getAllByTestId(/^peek-chip-/).map((c) => c.props.testID)).toEqual((labels as string[]).map((l) => `peek-chip-${l}`));
     for (const l of labels as string[]) expect(StyleSheet.flatten(screen.getByTestId(`peek-chip-${l}`).props.style).minHeight).toBeGreaterThanOrEqual(44);
-    expect(screen.queryByTestId('peek-chip-Meal plan')).toBeNull();
+  });
+
+  it('Meal plan is drawn but display only (owner #197-E6): read as plain text, never a button, opens nothing', async () => {
+    await mount();
+    const chip = screen.getByTestId('peek-chip-Meal plan');
+    expect(within(chip).getByText('Meal plan')).toBeTruthy();
+    expect(chip.props.accessibilityRole).toBe('text');
+    expect(chip.props.onPress).toBeUndefined();
+    expect(screen.queryByRole('button', { name: 'Meal plan' })).toBeNull();
+    await fireEvent.press(chip);
+    expect(onOpen).not.toHaveBeenCalled();
   });
 
   it('each chip opens what K1 rule 2 says', async () => {

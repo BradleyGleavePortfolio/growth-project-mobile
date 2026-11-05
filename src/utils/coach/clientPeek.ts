@@ -39,8 +39,11 @@ export function peekJoinedLine(c: RosterClient): string {
 }
 
 export interface PeekSlices {
-  /** `note`: the text carries the client's own free-text note (the one value the sheet cuts to a line). */
-  checkIn: { text: string; hasOne: boolean; note: boolean };
+  /**
+   * `text`: the app's own words, never cut. `note`: the client's own free-text note, every line of it (LF or CRLF)
+   * joined by a space, or null; the sheet may cut only this to one line, and speaks all of it (FIX-933).
+   */
+  checkIn: { text: string; hasOne: boolean; note: string | null };
   food: { text: string };
   /** `week`: the ring's sessions, only when this week has one. */
   workouts: { text: string; week: WorkoutWeek | null };
@@ -60,11 +63,13 @@ export function peekSlices(
   const latest = rows(checkIns)[0];
   const checkDay = latest ? localDay(latest.date, false) : null;
   const energy = latest ? num(latest.energy) : null;
-  const note = latest ? text(latest.notes)?.split('\n')[0] ?? null : null;
-  const parts = [energy != null ? `energy ${energy} of 5` : null, note].filter(Boolean);
-  // C_peek: K1-S-19 "{n} to review" (the roster's count, as on the list row); with none waiting, main's latest check-in.
+  // FIX-933 (LS-933 B2): the whole note, every line, so the sheet can speak all of it; it is never split to line one.
+  const lines = text(latest?.notes)?.split(/\r\n|\r|\n/).map((l) => l.trim()).filter(Boolean) ?? [];
+  const note = lines.length ? lines.join(' ') : null;
+  // C_peek: K1-S-19 "{n} to review" (the roster's count, as on the list row); with none waiting, main's latest check-in,
+  // its app words ("{day}: energy {e} of 5") apart from the client's note (LS-933 B1, LO-933 B1).
   const badge = rosterReviewBadge(c);
-  const checkText = badge ?? (checkDay ? `${dayWord(checkDay, today)}${parts.length ? `: ${parts.join(', ')}` : ''}` : NOTHING);
+  const checkText = badge ?? (checkDay ? `${dayWord(checkDay, today)}${energy != null ? `: energy ${energy} of 5` : ''}` : NOTHING);
 
   const day = obj(s.today);
   const targets = resolveCoachTargets(target ?? null, (s.profile as ClientProfile | null) ?? null);
@@ -84,7 +89,7 @@ export function peekSlices(
   const weighText = lbs != null && weightDay ? `${dayWord(weightDay, today)}: ${Math.round(lbs * 10) / 10}\u00a0lb` : NOTHING;
 
   return {
-    checkIn: { text: checkText, hasOne: !!checkDay || (c.activity?.checkInsToReview ?? 0) > 0, note: !badge && !!checkDay && !!note },
+    checkIn: { text: checkText, hasOne: !!checkDay || (c.activity?.checkInsToReview ?? 0) > 0, note: !badge && checkDay ? note : null },
     food: { text: foodText },
     workouts: { text: workoutText, week: week.total > 0 ? week : null },
     weighIn: { text: weighText },
