@@ -1040,6 +1040,32 @@ describe('Home stat cards route into the matching surfaces', () => {
 });
 
 describe('List states + interactions — loading, refresh, navigation', () => {
+  it('LS938 B2: an enabled text inbox row opens its space chat at the message', async () => {
+    const flags = jest.requireMock('../../../config/featureFlags').featureFlags;
+    const was = flags.communitySpaceChat;
+    flags.communitySpaceChat = true;
+    try {
+      mockState.inbox = {
+        data: { items: [inboxItem()], next_cursor: null },
+        isLoading: false,
+        isError: false,
+        isRefetching: false,
+        refetch: jest.fn(),
+      };
+      const { getByTestId } = await render(<CoachCommunityInboxScreen />);
+      await fireEvent.press(
+        getByTestId('coach-community-inbox-row-11111111-1111-1111-1111-111111111111'),
+      );
+      expect(mockNavigate).toHaveBeenCalledTimes(1);
+      expect(mockNavigate).toHaveBeenCalledWith('CommunitySpaceChat', {
+        cohortId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        messageId: '11111111-1111-1111-1111-111111111111',
+      });
+    } finally {
+      flags.communitySpaceChat = was;
+    }
+  });
+
   it('Inbox shows a loading indicator while fetching', async () => {
     mockState.inbox = { data: undefined, isLoading: true, isError: false };
     const { getByTestId } = await render(<CoachCommunityInboxScreen />);
