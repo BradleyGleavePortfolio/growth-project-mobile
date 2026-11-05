@@ -354,7 +354,7 @@ describe('coach Home, flag on, with home (b#1123) and on an older server without
 });
 
 describe('coach Home at zero clients, at 1,000 and on failures', () => {
-  it('says so at zero clients: no tiles, empty Needs you, Roman waits, no brief, no Clients rows', async () => {
+  it('says so at zero clients: only the earnings tile (HOME3 A render 5), empty Needs you, Roman waits, no brief, no Clients rows', async () => {
     mockGet.mockResolvedValue({ data: { ...overview(0), home: home([], 0, 0) } });
     mockDayRings.mockReturnValue(ringsRead(daily({ reviewed: 0, submitted: 0 }, false, { reviewed: 0, totalConversations: 0 })));
     mockStore.clients = [];
@@ -363,7 +363,8 @@ describe('coach Home at zero clients, at 1,000 and on failures', () => {
     mockSources.nextPayout.mockResolvedValue(null);
     const v = await renderHome();
     expect(v.getByTestId('home-hero-zero')).toBeTruthy();
-    expect(v.queryByTestId('home-tiles')).toBeNull();
+    expect(['home-tile-active', 'home-tile-checkins', 'home-tile-stayed'].map((id) => v.queryByTestId(id))).toEqual([null, null, null]);
+    expect(label(v, 'home-tile-earnings')).toMatch(/^\$0\.00 Earnings · this month · [A-Z][a-z]+ so far$/);
     for (const t of ['Clients who need you show here, most urgent first.', 'Roman drafts replies and workout changes for you once clients join.', 'Your day fills in when your first client joins.', 'Nothing earned yet this month.']) {
       expect(v.getByText(t)).toBeTruthy();
     }

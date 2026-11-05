@@ -148,6 +148,11 @@ export default function CoachHomeV11(p: Props) {
       {checkIns ? <MiniTile value={checkIns} label="check-ins · last 7 days" testID="home-tile-checkins" /> : null}
       {retention ? <MiniTile value={retention} label="stayed · this month" testID="home-tile-stayed" /> : null}
     </View>
+  ) : o && roster === 0 && monthOk ? (
+    // HOME3 A render 5: the zero Home's hero carries this month's earnings in one wide tile.
+    <View style={s.tiles} testID="home-tiles">
+      <MiniTile value={heroAmount(monthOk.totals.netCents, monthOk.currency)} label={`Earnings · this month · ${monthOverline(data.now)}`} testID="home-tile-earnings" />
+    </View>
   ) : null;
 
   const needsTile = (() => {
