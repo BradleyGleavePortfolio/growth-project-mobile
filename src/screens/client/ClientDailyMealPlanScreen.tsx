@@ -51,10 +51,10 @@ import {
   type SlotLabel,
 } from '../../api/mealTemplatesApi';
 import { useMealPlanToday } from '../../hooks/useMealTemplates';
-import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
+import { Skeleton } from '../../ui/skeletons/Skeleton';
 import HapticPressable from '../../components/HapticPressable';
 import LogPlannedMealButton, { plannedMealFromSlot } from '../../components/mealplan/LogPlannedMealButton';
-import { spacing, typography } from '../../theme/tokens';
+import { radius, spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { SemanticTokens } from '../../theme/tokens';
 import { MastLine, mast, MealArt, PaperPage, PlanMasthead, planStyleC, TimelineRow, useCoachItalic } from './mealplan/planStyleC';
@@ -113,7 +113,9 @@ export default function ClientDailyMealPlanScreen() {
           testID="daily-meal-plan-refresh"
           refreshing={isRefetching}
           onRefresh={onRefresh}
-          tintColor={sc.accent}
+          // The pull-down above the masthead is forest (PlanMasthead), so the
+          // iOS spinner takes the light ink, as the other forest pull-downs do (LO-927R2 B1).
+          tintColor={mast.ink}
         />
       }
     >
@@ -132,7 +134,7 @@ export default function ClientDailyMealPlanScreen() {
 
       <PaperPage bg={sc.bgSurface}>
         {isLoading ? (
-          <SkeletonScreen count={3} />
+          <LoadingTimeline sc={sc} styles={styles} />
         ) : isError ? (
           <View style={[planStyleC.card, styles.cardFill, styles.state]} accessibilityLiveRegion="polite" accessibilityRole="alert">
             <Text style={[typography.body, { color: sc.textPrimary }]}>
@@ -238,6 +240,30 @@ function SlotGroup({
   );
 }
 
+/**
+ * C2 C_loading (LS-927R2 B1): four stops on the meal timeline, each a short
+ * eyebrow bar over a longer name bar, on the meal list's own gutter and ring.
+ * The bones are the shared Skeleton primitive (its pulse holds still under
+ * Reduce Motion) and are hidden from readers; the block says main's "Loading".
+ * Local to this screen: the shared SkeletonScreen is unchanged.
+ */
+function LoadingTimeline({ sc, styles }: { sc: SemanticTokens; styles: Styles }) {
+  return (
+    <View testID="daily-meal-plan-loading" accessible accessibilityLabel="Loading">
+      <View style={styles.timeline} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+        {[0, 1, 2, 3].map((i) => (
+          <TimelineRow key={i} line={sc.border} dot={sc.textMuted} bg={sc.bgSurface} last={i === 3} style={styles.stop}>
+            <View style={styles.loadingStop}>
+              <Skeleton width="44%" height={10} borderRadius={radius.pill} />
+              <Skeleton width="100%" height={18} borderRadius={radius.pill} />
+            </View>
+          </TimelineRow>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 function UnavailableState({ styles, sc }: { styles: Styles; sc: SemanticTokens }) {
   return (
     <View style={[planStyleC.card, styles.cardFill, styles.state]} testID="meal-plan-ended">
@@ -326,5 +352,6 @@ function makeStyles(sc: SemanticTokens) {
     mealHead: { flexDirection: 'row', alignItems: 'flex-start' },
     // Meal names at the frame's 21 pt Cormorant (planStyleC.name; LS-927 B2), then the meta and the description.
     mealWords: { flex: 1, minWidth: 0, gap: spacing.xs },
+    loadingStop: { gap: spacing.sm, paddingRight: spacing.xl },
   });
 }

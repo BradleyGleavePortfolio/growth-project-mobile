@@ -313,11 +313,14 @@ export default function FastingScreen() {
       <View style={styles.container}>
         <PlanMasthead title="Fasting" />
         <PaperPage bg={colors.bgSurface}>
-          {/* Loading bones are shapes only, so readers skip them (LO-927 C1: no unnamed progress bar). */}
-          <View style={styles.skeleton} testID="fasting-loading" importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-            <View style={[styles.bone, { width: '70%' }]} />
-            <View style={[styles.bone, styles.boneTall]} />
-            <View style={[styles.bone, { width: '45%' }]} />
+          {/* Loading bones are shapes only, so readers skip them (LO-927 C1: no unnamed progress bar);
+              the block around them says main's "Loading" (LO-927R2 C3). */}
+          <View accessible accessibilityLabel="Loading" testID="fasting-loading-label">
+            <View style={styles.skeleton} testID="fasting-loading" importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+              <View style={[styles.bone, { width: '70%' }]} />
+              <View style={[styles.bone, styles.boneTall]} />
+              <View style={[styles.bone, { width: '45%' }]} />
+            </View>
           </View>
         </PaperPage>
       </View>
@@ -364,7 +367,9 @@ export default function FastingScreen() {
         <RefreshControl
           refreshing={refreshing}
           onRefresh={onRefresh}
-          tintColor={colors.accent}
+          // Forest pull-down above the masthead: the light ink on iOS (LO-927R2 B1);
+          // Android's spinner sits on its own light disc, so it keeps the accent.
+          tintColor={mast.ink}
           colors={[colors.accent]}
         />
       }

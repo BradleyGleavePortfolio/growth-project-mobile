@@ -40,8 +40,10 @@ jest.mock('../../../hooks/useApi', () => ({
   useTodayLog: () => ({ data: { total_calories: 2450, total_protein_g: 190, total_carbs_g: 200, total_fat_g: 90 },
     isError: false, isLoading: false, refetch: jest.fn() }),
 }));
+let mockMacrosLoading = false;
 jest.mock('../../../hooks/useMacros', () => ({
-  useCurrentMacrosForSelf: () => ({ data: mockTarget, isLoading: false, isError: false, refetch: jest.fn(), isRefetching: false }),
+  useCurrentMacrosForSelf: () => ({ data: mockMacrosLoading ? undefined : mockTarget, isLoading: mockMacrosLoading,
+    isError: false, refetch: jest.fn(), isRefetching: false }),
 }));
 jest.mock('../../../macros/macroDisplayStore', () => ({ reportMacroDisplay: jest.fn(), useMacroDisplayMode: () => 'full' }));
 const mockUser = { id: 'u1' };
@@ -77,7 +79,7 @@ const mockTarget = {
 };
 
 type Host = { type: string; props: Record<string, unknown>; children: (Host | string)[] | null };
-function hosts(): Host[] {
+function hosts(root: unknown = screen.toJSON()): Host[] {
   const out: Host[] = [];
   const walk = (n: Host | Host[] | string | null) => {
     if (!n || typeof n === 'string') return;
@@ -85,7 +87,7 @@ function hosts(): Host[] {
     out.push(n);
     (n.children ?? []).forEach(walk);
   };
-  walk(screen.toJSON() as Host | Host[] | null);
+  walk(root as Host | Host[] | null);
   return out;
 }
 function textProblems() {
@@ -176,6 +178,26 @@ it('meal plan: each meal gets one cream tile, hidden from readers, and the note 
   }
   expect(screen.getAllByText('Protein at every meal.')).toHaveLength(1);
   expect(screen.getByTestId('daily-meal-plan-note')).toBeTruthy();
+});
+
+// LO-927R2 C3, class over the three screens (kept above the C1 test, whose mid-test
+// unmount leaves later renders in this file empty): while loading, a reader hears that
+// the screen is loading, in main's words ("Loading", or macros' own sentence).
+it.each([
+  ['meal plan', 'Loading'],
+  ['macros', 'Loading daily targets...'],
+  ['fasting', 'Loading'],
+])('loading: the %s screen tells a reader it is loading (LO-927R2 C3)', async (name, words) => {
+  mockMacrosLoading = name === 'macros';
+  mockDaily.mockReturnValue({ data: undefined, isLoading: true, isError: false, isRefetching: false, refetch: jest.fn() });
+  (fastingApi.getHistory as jest.Mock).mockReturnValue(new Promise(() => undefined));
+  const Screen = name === 'meal plan' ? ClientDailyMealPlanScreen : name === 'macros' ? ClientMacrosScreen : FastingScreen;
+  const view = await render(<Screen />);
+  const spoken = hosts(view.toJSON()).filter((n) => n.props.accessibilityElementsHidden !== true).some((n) =>
+    n.props.accessibilityLabel === words || (n.type === 'Text' && (n.children ?? []).join('') === words));
+  view.unmount();
+  mockMacrosLoading = false;
+  expect(spoken).toBe(true);
 });
 
 it('loading: the plan and fasting bones are shapes only, never an unnamed progress bar (LO-927 C1)', async () => {

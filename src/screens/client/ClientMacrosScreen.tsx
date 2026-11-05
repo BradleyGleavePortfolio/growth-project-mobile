@@ -81,7 +81,8 @@ export default function ClientMacrosScreen() {
         <RefreshControl
           refreshing={isRefetching || daily.isRefetching}
           onRefresh={onRefresh}
-          tintColor={sc.accent}
+          // Forest pull-down above the masthead: the light ink (LO-927R2 B1).
+          tintColor={mast.ink}
         />
       }
     >
