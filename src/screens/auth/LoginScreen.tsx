@@ -517,7 +517,7 @@ export default function LoginScreen({ navigation, route }: Props) {
           {googleEnabled ? (
             <TouchableOpacity style={[f.googleButton, googleLoading && styles.buttonDisabled]} onPress={() => handleGoogleLogin()} disabled={googleLoading}
               accessibilityRole="button" accessibilityLabel="Continue with Google" accessibilityState={{ disabled: googleLoading, busy: googleLoading }}>
-              {googleLoading ? <ActivityIndicator color={colors.textPrimary} /> : <><GoogleMark /><Text style={f.googleButtonText}>Continue with Google</Text></>}
+              {googleLoading ? <ActivityIndicator color={colors.textPrimary} /> : <><GoogleMark /><Text style={[f.googleButtonText, styles.bGoogleText]}>Continue with Google</Text></>}
             </TouchableOpacity>
           ) : null}
         </View>
@@ -902,6 +902,8 @@ const makeStyles = (colors: SemanticTokens) =>
   // C7 Style B (firstRunV2)
   // C7 Style B: the providers sit 16 pt under the title, as drawn (was 24).
   bTitle: { marginTop: Spacing.sm, marginBottom: Spacing.md },
+  // C7 Style B: the provider label is semibold, as drawn.
+  bGoogleText: { fontFamily: 'Inter_600SemiBold', fontWeight: '600' },
   bSignup: { marginTop: 0, flexWrap: 'wrap' },
   bConfirm: { marginTop: Spacing.md, paddingTop: Spacing.md, borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   bEye: { minWidth: layout.touchMin, minHeight: layout.touchMin, alignItems: 'center', justifyContent: 'center' },

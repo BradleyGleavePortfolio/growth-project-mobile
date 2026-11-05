@@ -335,7 +335,8 @@ export default function MessagesInboxScreen({ navigation }: { navigation: Naviga
 const s = StyleSheet.create({
   heading: { marginTop: 8, marginBottom: 16 },
   list: { gap: 12 },
-  card: { borderRadius: radius.card, padding: 20, gap: 12 },
+  // C3 Style B: 18 pt inside every card, as drawn (was 20), so the drawn lines keep their breaks at 390 pt.
+  card: { borderRadius: radius.card, padding: 18, gap: 12 },
   hero: { borderRadius: radius.sheet },
   pressed: { opacity: 0.85 },
   top: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -357,11 +358,12 @@ const s = StyleSheet.create({
   small: { ...typography.bodySmall },
   crisis: { borderLeftWidth: 2, paddingLeft: 12 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 4 },
-  action: { flexGrow: 1, flexBasis: 132, minHeight: 48, borderRadius: radius.button, paddingHorizontal: 12, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
+  action: { flexGrow: 1, flexBasis: 132, minHeight: 48, borderRadius: radius.button, paddingHorizontal: 8, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
   outline: { borderWidth: 1 },
-  actionText: { ...typography.bodyMd, textAlign: 'center' },
+  // Semibold as drawn (B_coachless): "Join a coach" and "Contact support" on one line each at 390 pt.
+  actionText: { ...typography.bodyMd, fontFamily: 'Inter_600SemiBold', fontWeight: '600', textAlign: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', minHeight: layout.rowMinHeight, paddingVertical: 12 },
-  rowCount: { ...typography.h1, fontVariant: ['tabular-nums'] },
+  rowCount: { ...typography.h1, fontVariant: ['tabular-nums'], marginRight: 12 },
   rowText: { ...typography.body, flex: 1 },
   privacy: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: layout.touchMin, paddingHorizontal: 4, justifyContent: 'center' },
 });
