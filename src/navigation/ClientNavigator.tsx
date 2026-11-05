@@ -161,6 +161,7 @@ import { withCommunityTerms } from '../components/community/CommunityTermsGate';
 import TutorialHost from '../components/tutorial/TutorialHost';
 import { useAiWithdrawalDrain } from '../hooks/useAiWithdrawalDrain';
 import { useMessageOutboxDrain } from '../hooks/useMessageOutbox';
+import { useServerCoachRefresh } from '../hooks/useServerCoachRefresh';
 import { setTutorialRoute } from '../tutorial/tutorialStore';
 import { focusedRoutePath, withInitialLeaf, type NavStateLike } from '../tutorial/navigationFocus';
 import type { TutorialNavTarget } from '../tutorial/tutorialSteps';
@@ -750,6 +751,8 @@ export default function ClientNavigator({ onDay1Saved, day1NoteVisible }: Day1Sa
   useAiWithdrawalDrain();
   // C3B-THREAD-R1: Style B messages written offline send from here, thread open or not.
   useMessageOutboxDrain();
+  // FIX-913M (LS-913M B1): a coach joined on the web reaches this account on app open and foreground.
+  useServerCoachRefresh();
   // Latest tab-screen navigation object, captured from screenListeners, so
   // the tutorial overlay (which sits outside the navigator) can offer
   // "Take me there" for screens behind a menu.
