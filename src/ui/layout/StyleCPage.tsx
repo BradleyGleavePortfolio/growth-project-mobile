@@ -58,14 +58,15 @@ export function StyleCPaper({ children, scrolls, style }: { children?: React.Rea
 }
 
 /** The 64 pt picture tile at the left of a row (C_kitchen): the recipe photo, else a warm tile with a line drawing
- *  (the line is a non-text accent, so gold is allowed). Decorative: the row's own label names the recipe. */
+ *  (a non-text accent, so gold is allowed; gold 700 keeps the line at 4:1 on the tile, past the 3:1 for graphics).
+ *  Decorative: the row's own label names the recipe. */
 export function StyleCThumb({ uri, icon = 'restaurant-outline', size = 64 }: { uri?: string; icon?: string; size?: number }) {
   const sc = useTheme().semanticColors;
   return (
     <View testID="stylec-thumb" importantForAccessibility="no-hide-descendants" accessibilityElementsHidden
       style={[s.thumb, { width: size, height: size, backgroundColor: withAlpha(sc.data.trackLight, 0.6) }]}>
       {uri ? <Image source={{ uri }} style={s.thumbImage} resizeMode="cover" accessibilityIgnoresInvertColors />
-        : <Ionicons name={icon as React.ComponentProps<typeof Ionicons>['name']} size={Math.round(size * 0.44)} color={gold[500]} />}
+        : <Ionicons name={icon as React.ComponentProps<typeof Ionicons>['name']} size={Math.round(size * 0.44)} color={gold[700]} />}
     </View>
   );
 }
