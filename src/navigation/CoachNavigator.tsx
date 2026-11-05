@@ -1036,13 +1036,16 @@ export default function CoachNavigator() {
         <Tab.Screen
           name="CommunityStack"
           component={CoachCommunityNavigator}
-          options={{
+          options={({ route }) => ({
             title: 'Community',
             tabBarAccessibilityLabel: 'Community',
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="people-circle-outline" size={size} color={color} />
             ),
-          }}
+            // FIN-871R6 (m#879 Opus B2 / Sol B879-2): the space chat is full screen (GOAL 05b), as on the member side;
+            // the bar steps aside so the composer sits at the bottom edge (EntryTabBar reads the open route's style).
+            ...(getFocusedRouteNameFromRoute(route) === 'CommunitySpaceChat' ? { tabBarStyle: { display: 'none' as const } } : {}),
+          })}
         />
       )}
       <Tab.Screen
