@@ -99,7 +99,7 @@ describe('ClientMacrosScreen display mode', () => {
   it('uses the calorie hero and real consumed totals in three quiet rows, preserving fiber, notes and date', async () => {
     mockData = { ...TARGET, notes: 'Keep meals regular.' };
     await render(<ClientMacrosScreen />);
-    expect(screen.getByText('1789')).toHaveStyle({ fontFamily: typography.display.fontFamily, fontVariant: ['tabular-nums'] });
+    expect(screen.getByText('1789')).toHaveStyle({ fontFamily: typography.display.fontFamily, fontVariant: ['lining-nums', 'tabular-nums'] }); // FIX-927: lining figures, as K5 Style C
     expect(screen.getByText('600 kcal eaten today')).toBeTruthy();
     for (const label of ['Protein', 'Carbs', 'Fats']) expect(screen.getByTestId(`quiet-bar-${label}`)).toBeTruthy();
     expect(screen.getByText('50g eaten / 150g target')).toBeTruthy();
