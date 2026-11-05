@@ -246,7 +246,7 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: lightTokens.data.frameOnDark, paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm, justifyContent: 'center',
   },
-  tileValue: { ...typography.h2, color: mast.ink },
+  tileValue: { ...typography.h2, letterSpacing: 0, color: mast.ink, fontVariant: ['lining-nums'] },
   tileLabel: { ...typography.caption, color: mast.muted },
   art: {
     width: ART, height: ART, borderRadius: radius.input, backgroundColor: gold[100],

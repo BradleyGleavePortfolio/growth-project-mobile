@@ -604,7 +604,7 @@ const makeStyles = (colors: SemanticTokens) =>
     fontSize: 60,
     lineHeight: 72,
     letterSpacing: 0,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ['lining-nums', 'tabular-nums'],
     color: mast.ink,
   },
   timerSub: {

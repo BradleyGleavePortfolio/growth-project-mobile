@@ -270,7 +270,8 @@ function makeStyles(sc: SemanticTokens) {
     content: { flexGrow: 1 },
     // K5 Style C: the number at 60 pt in the display serif, the unit on its baseline (wraps under at large text).
     kcalRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: spacing.md, marginTop: spacing.md },
-    kcal: { ...typography.display, fontSize: 60, lineHeight: 72, letterSpacing: 0, color: mast.ink, fontVariant: ['tabular-nums'] },
+    // Lining figures, as K5 sets its number (Cormorant's default figures are old-style).
+    kcal: { ...typography.display, fontSize: 60, lineHeight: 72, letterSpacing: 0, color: mast.ink, fontVariant: ['lining-nums', 'tabular-nums'] },
     kcalUnit: { ...typography.body, marginTop: 0 },
     tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.lg },
     cardFill: { backgroundColor: sc.bgPrimary, borderColor: sc.border },
