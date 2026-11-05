@@ -93,12 +93,13 @@ export default function ClientPeekSheet({ client, onClose, onOpen, onNudge, chil
     ['Full profile', { screen: 'ClientDetail' }],
   ];
 
-  // C_peek: one line per row, the label left and the value right (no icon, no second line); the full value is
-  // the row's spoken label when a narrow phone at large text cuts the line short.
-  const slice = (key: string, title: string, v: { text: string }, action?: React.ReactNode, last = false) => (
+  // C_peek: one line per row, the label left and the value right (no icon). Every drawn size fits one line; on a
+  // 320 pt phone at 130% a short value ("12 to review", "Nothing planned this week") wraps rather than lose words,
+  // and only the free-text check-in (`lines` 1) is cut, its full words being the row's spoken label.
+  const slice = (key: string, title: string, v: { text: string }, action?: React.ReactNode, last = false, lines = 2) => (
     <View style={[s.slice, last && s.lastSlice]} accessible={!action} accessibilityLabel={`${title}, ${v.text}`} testID={`peek-slice-${key}`}>
       <Text style={s.sliceTitle} numberOfLines={1}>{title}</Text>
-      <Text style={s.sliceText} numberOfLines={1} testID={`peek-value-${key}`}>{v.text}</Text>
+      <Text style={s.sliceText} numberOfLines={lines} testID={`peek-value-${key}`}>{v.text}</Text>
       {action}
     </View>
   );
@@ -140,7 +141,7 @@ export default function ClientPeekSheet({ client, onClose, onOpen, onNudge, chil
                   <HapticPressable intent="light" style={s.review} onPress={() => open({ screen: 'ClientDetail', tab: 'timeline' })} accessibilityRole="button" accessibilityLabel="Review" testID="peek-review">
                     <Text style={s.link}>Review</Text>
                   </HapticPressable>
-                ) : undefined)}
+                ) : undefined, false, (client.activity?.checkInsToReview ?? 0) > 0 ? 2 : 1)}
                 {slice('food', 'Food', slices.food)}
                 {slice('workouts', 'Workouts', slices.workouts)}
                 {slice('weighins', 'Weigh-ins', slices.weighIn, undefined, true)}
@@ -195,7 +196,7 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     // C_peek rows: a hairline above the first and between rows, none under the last; label left in ink, value right
     // in muted ink, one line each at 44 pt (Review is a 44 pt target inside the Check-ins row).
     slices: { marginTop: 8, borderTopWidth: StyleSheet.hairlineWidth, borderColor: sem.border },
-    slice: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: layout.touchMin, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: sem.border },
+    slice: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: layout.touchMin, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: sem.border },
     lastSlice: { borderBottomWidth: 0 },
     sliceTitle: { ...typography.body, fontSize: 15, lineHeight: 21, flexShrink: 0, color: colors.textPrimary },
     sliceText: { ...typography.body, fontSize: 15, lineHeight: 21, flex: 1, minWidth: 0, textAlign: 'right', color: colors.textMuted },
