@@ -63,7 +63,11 @@ describe('which exercise is body-weight', () => {
   });
 
   it('useBodyWeightExercises answers {} and never throws without a query client', async () => {
-    const { result } = await renderHook(() => useBodyWeightExercises(['plank']));
+    // FIX-928: the real renderHook, so the hook is truly bare. The "All switches
+    // on" job's setup wraps render and renderHook in a default QueryClient,
+    // which would make this a with-client test there.
+    const bare = jest.requireActual<typeof import('@testing-library/react-native')>('@testing-library/react-native');
+    const { result } = await bare.renderHook(() => useBodyWeightExercises(['plank']));
     expect(result.current).toEqual({});
     expect(mockGetById).not.toHaveBeenCalled();
   });
