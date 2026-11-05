@@ -24,6 +24,11 @@ jest.mock('../../../storage/mmkv', () => ({
   prefsStorage: { getString: () => undefined, getStringAsync: async (k: string) => mockPrefs.get(k), set: async (k: string, v: string) => void mockPrefs.set(k, v), delete: async (k: string) => void mockPrefs.delete(k) },
 }));
 jest.mock('../../../api/messagesApi', () => ({ messagesModerationApi: { listBlocked: () => mockListBlocked() } }));
+const mockQueue = jest.fn(); // GET .../action-queue: the open alerts the Needs you list groups (NEEDS-YOU-M)
+jest.mock('../../../services/commandCenterApi', () => ({
+  ...jest.requireActual('../../../services/commandCenterApi'),
+  commandCenterApi: { getActionQueue: () => mockQueue() },
+}));
 jest.mock('../../../ui/haptics/haptics.service', () => ({ get HapticService() { return mockHaptic; } }));
 let mockRole: string | undefined = 'coach';
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'coach-1', role: mockRole }) }));
@@ -89,8 +94,9 @@ async function mount(rows: ReturnType<typeof wire>[], unread: Record<string, num
   mockGetClients.mockImplementation(async (status: string, cursor?: string) => (status === 'archived' ? archivedReply(cursor) : { data: rows }));
   mockUnread.mockResolvedValue({ data: { total: 0, by_client: unread } });
   await render(<CoachTeamEntryContext.Provider value><ClientLookupScreen navigation={nav} route={route as never} /></CoachTeamEntryContext.Provider>);
-  await waitFor(() => expect(screen.getByTestId('lookup-count')).toBeTruthy());
+  await waitFor(() => expect(screen.getByTestId(route ? 'needs-list' : 'lookup-count')).toBeTruthy());
   await waitFor(() => expect(screen.queryByText('Loading clients')).toBeNull()); // this phone's block list is read first
+  if (route) await waitFor(() => expect(screen.queryByText('Loading who needs you')).toBeNull());
 }
 
 const UNDER_15 = [wire('c1', 'Maya Brooks', { last: day(0), review: 2 }), wire('c2', 'Theo Grant', { last: day(0), workout: day(0) }), wire('c3', 'Priya Nair', {}, day(-2))];
@@ -101,6 +107,7 @@ const MANY = NAMES.map((n, i) => wire(`m${i}`, n, n === 'Ben Carter' ? { last: d
 beforeEach(() => {
   jest.clearAllMocks(); mockCache.clear(); useCoachStore.getState().reset(); focused = true; mockRole = 'coach'; onTabBlur = undefined;
   mockListBlocked.mockResolvedValue({ blocked: [] });
+  mockQueue.mockResolvedValue({ data: { items: [] } });
 });
 // The store as the app leaves it once this coach's list is read (a block made a moment ago is in it), and the server's
 // list, which names the block too: Block posts it first, and GET /users/blocks's answer replaces this phone's copy (FX-872).
@@ -191,31 +198,59 @@ describe('UI-4 Needs you (under 15 clients)', () => {
     await waitFor(() => expect(screen.getByText('Clients did not refresh. Pull down to try again.')).toBeTruthy());
     expect(screen.queryByText(/archived clients/)).toBeNull();
   });
-  it('view "needs" (the coach Home Needs you tile) shows the Needs you list at 15 or more, only clients with an action', async () => {
+  it('view "needs" (the coach Home Needs you card) shows the Needs you list at 15 or more, only clients with an action (NEEDS-YOU-M)', async () => {
     const rows = [...NAMES.slice(0, 14).map((n, i) => wire(`m${i}`, n, { last: day(-1) })), wire('n1', 'Nina Cole', { last: day(0), review: 1 })];
     await mount(rows, {}, undefined, { params: { view: 'needs' } });
-    expect(screen.queryByTestId('lookup-search')).toBeNull();
-    expect(screen.getByText('One needs you today. Fourteen are steady.')).toBeTruthy();
-    expect(screen.getByTestId('lookup-act-n1')).toBeTruthy();
-    expect(screen.queryByTestId('lookup-row-m0')).toBeNull(); // steady clients stay on the full list
-    // LO-690-695 C1: Everyone leaves the view without leaving the tab.
-    expect(screen.getByLabelText('Everyone, 15')).toBeTruthy();
-    await fireEvent.press(screen.getByTestId('lookup-everyone-link'));
-    expect(setParams).toHaveBeenLastCalledWith({ view: undefined });
+    expect([screen.getByTestId('needs-title').props.children, screen.queryByTestId('lookup-search')]).toEqual(['Needs you, 1', null]);
+    expect(screen.getByText('Alerts and clients from your 15, grouped by what they need')).toBeTruthy();
+    // Attention is empty, so the list opens on Routine (ND-10).
+    expect([screen.getByTestId('needs-switch-routine').props.accessibilityState, !!screen.getByTestId('needs-act-n1')]).toEqual([{ selected: true }, true]);
+    expect(screen.queryByTestId('needs-row-m0')).toBeNull(); // steady clients stay on the full list
+    await fireEvent.press(screen.getByTestId('needs-back'));
+    expect(navigate).toHaveBeenLastCalledWith('CommandCenter');
   });
-  it('view "needs" at 60 clients: the top sentence spells the count and leaves the steady number to Everyone (LO-847 B1)', async () => {
+  it('view "needs" at 60 clients: Needs you, 17, all of them Routine', async () => {
     const rows = Array.from({ length: 60 }, (_, i) => wire(`p${i}`, `Pat ${String.fromCharCode(65 + (i % 26))}${i}`, i < 17 ? { last: day(0), review: 1 } : { last: day(-1) }));
     await mount(rows, {}, undefined, { params: { view: 'needs' } });
-    expect(screen.getByTestId('lookup-sentence').props.children).toBe('Seventeen need you today. Everyone else is steady.');
-    expect(screen.getByLabelText('Everyone, 60')).toBeTruthy();
+    expect([screen.getByTestId('needs-title').props.children, !!screen.getByLabelText('Attention, 0 items'), !!screen.getByLabelText('Routine, 17 items')]).toEqual(['Needs you, 17', true, true]);
+    expect(screen.queryAllByTestId(/^needs-row-/)).toHaveLength(17);
   });
-  it('view "needs" ends when Clients loses the tab, so the tab reopens on the full list; with no one waiting it reads the steady sentence (LO-690-695 C1)', async () => {
+  it('view "needs" ends when Clients loses the tab, so the tab reopens on the full list; with no one waiting it says so', async () => {
     await mount([wire('s1', 'Ava Price', { last: day(0) }), wire('s2', 'Ben Carter', { last: day(-1) })], {}, undefined, { params: { view: 'needs' } });
-    expect(screen.getByText('Two are steady.')).toBeTruthy();
-    expect(screen.queryByTestId('lookup-act-s1')).toBeNull();
-    expect(screen.getByTestId('lookup-everyone-link')).toBeTruthy();
+    expect([!!screen.getByText('Nobody needs you right now.'), screen.queryByTestId('needs-search'), screen.queryByTestId('needs-row-s1')]).toEqual([true, null, null]);
+    expect(screen.getByText('Safety alerts, other alerts and clients who need you show here, most urgent first.')).toBeTruthy();
     await act(async () => onTabBlur?.());
     expect(setParams).toHaveBeenCalledWith({ view: undefined });
+  });
+  it('pins an open safety alert first in Attention in gold; it opens the safety alert, another alert opens Actions (NEEDS-YOU-M)', async () => {
+    const alert = (alert_id: string, alert_type: string, client_id: string, client_name: string, message: string, dismissed_at: string | null = null) => ({
+      alert_id, alert_type, client_id, client_name, message, created_at: new Date().toISOString(), sent_at: new Date(Date.now() - 2 * 3_600_000).toISOString(), dismissed_at, quote: null,
+    });
+    mockQueue.mockResolvedValue({ data: { items: [
+      alert('a2', 'risk_red', 'c2', 'Theo Grant', 'Theo Grant crossed into the red risk band (82%).'),
+      alert('a1', 'roman_crisis_reply', 'c9', 'Avery Cole', 'x'),
+      alert('a3', 'missed_checkins', 'c1', 'Maya Brooks', 'gone', '2026-10-01T00:00:00Z'), // dismissed: not here
+    ] } });
+    await mount(UNDER_15, { c1: 3 }, undefined, { params: { view: 'needs' } });
+    // Attention: Avery's safety alert, Theo's alert and Priya (new); Routine: Maya, whose message leads (ND-9).
+    expect([screen.getByTestId('needs-title').props.children, screen.getByLabelText('Attention, 3 items, safety alert open').props.accessibilityState]).toEqual(['Needs you, 4', { selected: true }]);
+    const ids = screen.getAllByTestId(/^needs-(group|safety|alert|row)-/).map((n) => n.props.testID);
+    expect(ids).toEqual(['needs-group-safety', 'needs-safety-a1', 'needs-group-alerts', 'needs-alert-a2', 'needs-group-new-this-week', 'needs-row-c3']);
+    expect(screen.getByLabelText('Safety alert. Avery Cole. Sent 2 h ago. Roman sent Avery a crisis safety reply. Please check in with them today.')).toBeTruthy();
+    expect(StyleSheet.flatten(screen.getByTestId('needs-card-safety').props.style)).toMatchObject({ borderColor: '#6B4F1A', backgroundColor: '#FFF8EC' });
+    await fireEvent.press(screen.getByTestId('needs-safety-a1'));
+    expect(navigate).toHaveBeenLastCalledWith('CoachSafetyAlert', expect.objectContaining({ alertType: 'roman_crisis_reply', clientId: 'c9', clientName: 'Avery Cole' }));
+    await fireEvent.press(screen.getByTestId('needs-alert-a2'));
+    expect(navigate).toHaveBeenLastCalledWith('CommandCenter', { tab: 'action-queue' });
+    await fireEvent.press(screen.getByTestId('needs-switch-routine'));
+    expect([!!screen.getByText('3 new messages'), !!screen.getByText('Also 2 check-ins to review'), screen.getByTestId('needs-act-c1').props.accessibilityLabel]).toEqual([true, true, 'Reply, Maya Brooks']);
+    await fireEvent.changeText(screen.getByTestId('needs-search'), 'zzz');
+    expect(screen.queryAllByTestId(/^needs-row-/)).toHaveLength(0);
+  });
+  it('says the alerts did not load, and still lists the clients', async () => {
+    mockQueue.mockRejectedValue(new Error('down'));
+    await mount(UNDER_15, {}, undefined, { params: { view: 'needs' } });
+    expect([!!screen.getByText('Alerts did not load. Pull down to try again.'), screen.getByTestId('needs-title').props.children]).toEqual([true, 'Needs you, 2']);
   });
   it('the full list never listens for the tab and shows no Everyone link', async () => {
     await mount(UNDER_15);
@@ -234,9 +269,17 @@ describe('UI-4 Needs you (under 15 clients)', () => {
     await mount(UNDER_15);
     expect(screen.queryByTestId('lookup-risk')).toBeNull();
   });
-  it('Invite, At risk and every Needs you control is a 44 pt target with no hitSlop; names wrap to two lines (LO-690-695 C3, C4)', async () => {
+  it('Invite, At risk and Archived are 44 pt targets with no hitSlop; so is every Needs you control, and names wrap to two lines (LO-690-695 C3, C4)', async () => {
+    await mount(UNDER_15);
+    for (const id of ['lookup-invite', 'lookup-risk', 'lookup-share-code', 'lookup-archived-link']) {
+      const el = screen.getByTestId(id);
+      expect(StyleSheet.flatten(el.props.style).minHeight).toBeGreaterThanOrEqual(44);
+      expect(el.props.hitSlop ?? null).toBeNull();
+    }
+    screen.unmount();
     await mount(UNDER_15, {}, undefined, { params: { view: 'needs' } });
-    for (const id of ['lookup-invite', 'lookup-risk', 'lookup-act-c1', 'lookup-everyone-link', 'lookup-share-code', 'lookup-archived-link']) {
+    await fireEvent.press(screen.getByTestId('needs-switch-routine'));
+    for (const id of ['needs-back', 'needs-switch-attention', 'needs-switch-routine', 'needs-act-c1', 'needs-row-c1']) {
       const el = screen.getByTestId(id);
       expect(StyleSheet.flatten(el.props.style).minHeight).toBeGreaterThanOrEqual(44);
       expect(el.props.hitSlop ?? null).toBeNull();
@@ -352,7 +395,7 @@ describe('UI-4 Search first (15 or more)', () => {
     blockedNow('c3', 'Priya Nair'); // Priya, new this week, would get Say hello
     try {
       await mount(UNDER_15, {}, undefined, { params: { view: 'needs' } });
-      const listed = screen.queryAllByTestId(/^lookup-row-/).length;
+      const listed = screen.queryAllByTestId(/^needs-row-/).length;
       const blockedIds = new Set(useBlockedUsersStore.getState().blocked.map((b) => b.id));
       const tile = needsAndSteady(useCoachStore.getState().clients, {}, new Date(), blockedIds).needs.length;
       expect([listed, tile]).toEqual([1, 1]);

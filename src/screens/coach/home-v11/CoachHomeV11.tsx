@@ -1,15 +1,16 @@
 /**
  * The coach Home (spec #688 6295886580, Style A of planning/MOCKUP3/HOME3), behind featureFlags.coachHomeV11. Hero:
  * date, bell, gear, setup checklist until done, "{n} wins this week" with one win in turn (opens the wins list), tiles,
- * Open alerts, YOUR DAY's three rings (Check-ins, Brief, Review: HOME3 A, #196-E15, from GET /coach/home/daily-rings).
- * Page (#F1F4EE, A's `.mist`): push ask and brief, Roman, one Needs you tile, Business, Clients rows. Only real numbers:
- * a server without b#1123's `home` gets the hero and tiles from the overview.
+ * the day's rings. Page (NEEDS-YOU-M, GOAL planning/MOCKUP3/NEEDS-YOU-R2, owner #197-E5): Needs you first, always above
+ * Roman, with an open safety alert folded in (gold edge, #197-E3) and no Open alerts row; the push ask and brief;
+ * Roman, whose tiles include the workout changes waiting (counted once); Business; Clients rows. Only real numbers: a
+ * server without b#1123's `home` gets the hero and tiles from the overview, and no rings.
  */
 import React, { useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { colors as tokenColors, forestPop, layout, radius, typography } from '../../../theme/tokens';
+import { forestPop, layout, radius, typography } from '../../../theme/tokens';
 import { useScreenInsets } from '../../../ui';
 import { QuietError, QuietLoading, loadFailureMessage } from '../../../ui/states/QuietStates';
 import RomanAvatar from '../../../components/roman/RomanAvatar';
@@ -19,21 +20,25 @@ import { formatCount } from '../../../components/home/rings/homeRings';
 import type { CoachHomeSources } from '../command-center/coachHomeSources';
 import { dateOverline, heroAmount, monthOverline, paceLine, payoutWords, retentionPct } from '../command-center/coachHomeCopy';
 import { hasMonthMoney } from '../command-center/CoachHomeSections';
-import { AlertsRow, DayRing, EYEBROW, LinkRow, MiniTile, SEMI, styleA, useCardStyles } from './HomeParts';
-import { HomeSheet, type DraftAsk, type SheetList } from './DraftSheets';
-import { dayRings, firstWord, pct, ringsCaption, winLine, winsHeadline, type HomeWin, type RingSpec } from './homeDay';
+import { DayRing, EYEBROW, LinkRow, MiniTile, SEMI, styleA, useCardStyles } from './HomeParts';
+import { HomeSheet, reachOutAsk, type DraftAsk, type SheetList } from './DraftSheets';
+import { firstWord, pct, ringSpecs, ringsCaption, winLine, winsHeadline, type HomeWin } from './homeDay';
 import { useCoachHomeV11 } from './useCoachHomeV11';
 import { WinTurn, useWinFade, useWinTurn } from './WinTurn';
 import { usePlanEnded } from './planEndedData';
+import { needsLead } from '../../../utils/coach/needsYou';
+import { featureFlags } from '../../../config/featureFlags';
+import { safetyGold } from '../../../theme/safetyGold';
 import { PlanEndedHomeRow, PlanEndedList } from './PlanEnded';
+
+/** Reach-outs: the ring's goal is at most five of the at-risk set (b#1123), so the sheet offers its five most urgent. */
+const REACH_ROWS = 5;
 
 type Go = () => void;
 interface Props {
-  onOpenNeedsYou: Go; onOpenClients: Go; onOpenStreaks: Go; onOpenAlerts: Go; onOpenMoney: Go; onOpenDrafts: Go; onOpenNotifications: Go; onOpenSettings: Go;
+  onOpenNeedsYou: Go; onOpenClients: Go; onOpenStreaks: Go; onOpenMoney: Go; onOpenDrafts: Go; onOpenNotifications: Go; onOpenSettings: Go;
   /** Only when Roman's coach chat is on. */
   onAskRoman?: Go;
-  /** The Brief ring opens today's brief (only with coachBrief) and the Review ring the Messages inbox. */
-  onOpenBrief?: Go; onOpenMessages?: Go;
   /** The setup checklist (CoachHomeCards 'setup'), on the hero until setup is done. */
   setup?: React.ReactNode;
   /** The push ask and brief (CoachHomeCards 'below'); `zero`: no clients, so no brief (#161-16, ruling 6296068749). */
@@ -41,22 +46,16 @@ interface Props {
   sources?: CoachHomeSources;
 }
 
-/** The rings while they are on their way: the three-arc router's names, no number. */
-const RINGS_PENDING: RingSpec[] = [
-  { key: 'check_ins', label: 'Check-ins', done: 0, of: 0 }, { key: 'brief', label: 'Brief', done: 0, of: 0 }, { key: 'review', label: 'Review', done: 0, of: 0 },
-];
-
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export default function CoachHomeV11(p: Props) {
-  const { colors, semanticColors: sc, colorScheme } = useTheme();
-  const page = colorScheme === 'dark' ? sc.bgPrimary : styleA.page; // A's page; a dark scheme keeps the theme's
+  const { colors, semanticColors: sc } = useTheme();
   const cs = useCardStyles();
   const { top, bottom } = useScreenInsets();
   const bigText = useWindowDimensions().fontScale > 1.15; // no win line, Approve over the kinds: on the first screen (LS B2)
-  const { data, blockList, reload, retryMonth, retryRoster, retryDrafts, retryRings, focused } = useCoachHomeV11(p.sources);
+  const { data, blockList, reload, retryMonth, retryRoster, retryDrafts, focused } = useCoachHomeV11(p.sources, undefined, featureFlags.clientPathCopilot);
   const [ask, setAsk] = useState<DraftAsk | null>(null);
-  const [list, setList] = useState<'wins' | null>(null);
+  const [list, setList] = useState<'wins' | 'reach' | null>(null);
   const planEnded = usePlanEnded(blockList);
   const [ended, setEnded] = useState(false); // the plan-ended list, over the Home
   const o = data.overview;
@@ -74,22 +73,25 @@ export default function CoachHomeV11(p: Props) {
     <Text style={s.onDeepMuted}>{(home?.wins.count ?? 0) === 0 ? 'Wins show here as your clients hit them.' : 'Pull down to see them.'}</Text>
   ));
   const bell = data.unreadNotifications;
-  const rings = data.rings.day ? dayRings(data.rings.day) : null;
+  const rings = home?.rings ? ringSpecs(home.rings) : null;
   const retention = retentionPct(data.ltv);
   const checkIns = o ? pct(o.check_in_rate_7day) : null;
   const monthOk = data.month.kind === 'ok' ? data.month.summary : null;
 
   const askWin = (w: HomeWin) => setAsk({ clientName: w.client_name, about: `A congratulations for ${firstWord(w.client_name)}: ${winLine(w)}.`, request: w.draft });
   const winLabel = (w: HomeWin) => `${winLine(w)}. Ask Roman to congratulate ${firstWord(w.client_name)}`;
+  const reach = (data.reachOuts ?? []).slice(0, REACH_ROWS);
+  const reached = new Set(home?.rings?.reach_outs.contacted_ids ?? []); // REACHED-TODAY: an older server marks none
   const sheetList: SheetList | null = list === 'wins'
     ? { title: 'Wins this week', rows: items.map((w) => ({ id: w.id, title: winLine(w), label: winLabel(w), onPick: () => askWin(w) })) }
-    : null;
+    : list === 'reach'
+      ? { title: 'Reach-outs', rows: reach.map((r) => {
+        const mark = reached.has(r.user_id) ? 'Reached out today' : undefined;
+        const title = `Reach out to ${r.display_name}?`;
+        return { id: r.user_id, title, line: r.top_factor, mark, label: mark ? `${title} ${mark}` : title, onPick: () => setAsk(reachOutAsk(r)) };
+      }) }
+      : null;
   const tap = (go: () => void) => () => { void HapticService.softImpact(); go(); };
-  const ringGo: Record<RingSpec['key'], Go | undefined> = {
-    check_ins: tap(p.onOpenClients),
-    brief: p.onOpenBrief ? tap(p.onOpenBrief) : undefined,
-    review: p.onOpenMessages ? tap(p.onOpenMessages) : undefined,
-  };
 
   const hero = (() => {
     if (!o && data.overviewFailed) {
@@ -148,27 +150,26 @@ export default function CoachHomeV11(p: Props) {
       {checkIns ? <MiniTile value={checkIns} label="check-ins · last 7 days" testID="home-tile-checkins" /> : null}
       {retention ? <MiniTile value={retention} label="stayed · this month" testID="home-tile-stayed" /> : null}
     </View>
-  ) : o && roster === 0 && monthOk ? (
-    // HOME3 A render 5: the zero Home's hero carries this month's earnings in one wide tile.
-    <View style={s.tiles} testID="home-tiles">
-      <MiniTile value={heroAmount(monthOk.totals.netCents, monthOk.currency)} label={`Earnings · this month · ${monthOverline(data.now)}`} testID="home-tile-earnings" />
-    </View>
   ) : null;
 
   const needsTile = (() => {
-    const n = data.needs.length;
+    const a = data.areas;
+    const n = a.total;
+    const gold = a.safety.length > 0; // an open safety alert folds in here: gold edge and ring, its row first (#197-E5)
     const box = (value: string | null) => (
-      <View style={s.needsBox}>
-        {value === null ? <Ionicons name="people-outline" size={30} color={forestPop.leaf} /> : <Text style={s.needsNum} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>}
+      <View style={gold ? s.needsRing : null} testID={gold ? 'home-needs-ring' : undefined}>
+        <View style={s.needsBox}>
+          {value === null ? <Ionicons name="people-outline" size={30} color={forestPop.leaf} /> : <Text style={s.needsNum} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>}
+        </View>
       </View>
     );
     if (data.rosterState === 'error') {
       return <View style={cs.card}><QuietError layout="inline" message="Who needs you could not load." onRetry={retryRoster} testID="home-needs-error" /></View>;
     }
-    if (data.rosterState === 'loading') {
+    if (data.rosterState === 'loading' || data.alertsState === 'loading') {
       return <View style={cs.card}><QuietLoading label="Loading who needs you" rows={1} testID="home-needs-loading" /></View>;
     }
-    if (o && roster === 0) {
+    if (o && roster === 0 && !gold) {
       return (
         <View style={[cs.card, s.needs]} testID="home-needs">
           {box('0')}
@@ -176,20 +177,39 @@ export default function CoachHomeV11(p: Props) {
         </View>
       );
     }
-    const lead = data.needs[0];
-    const leadName = lead ? rosterDisplayName(lead.client) : '';
+    const lead = needsLead(a);
     const off = data.rosterState === 'off';
-    const label = off ? 'Needs you. Open the list' : n === 0 ? 'Needs you, 0. Nobody needs you right now' : `Needs you, ${n}. ${leadName}, ${lead.reason.text}${n > 1 ? `, and ${n - 1} more` : ''}`;
+    const leadName = !lead ? '' : lead.kind === 'client' ? rosterDisplayName(lead.row.client) : lead.name;
+    const leadText = !lead ? '' : lead.kind === 'safety' ? 'Safety alert' : lead.kind === 'alert' ? lead.text : lead.row.reason.text;
+    const more = n > 1 ? `, and ${n - 1} more` : '';
+    const split = `Attention ${a.attention}, Routine ${a.routineCount}`;
+    const label = off && !gold ? 'Needs you. Open the list' : n === 0 ? 'Needs you, 0. Nobody needs you right now'
+      : `Needs you, ${n}. ${leadName}, ${leadText.replace(/\.$/, '')}${more}. ${split}`;
     return (
-      <Pressable style={({ pressed }) => [cs.card, s.needs, pressed && s.pressed]} onPress={tap(p.onOpenNeedsYou)} accessibilityRole="button" accessibilityLabel={label} testID="home-needs">
-        {box(off ? null : String(n))}
+      <Pressable
+        style={({ pressed }) => [cs.card, s.needs, gold && s.needsGold, pressed && s.pressed]} onPress={tap(p.onOpenNeedsYou)}
+        accessibilityRole="button" accessibilityLabel={label} testID="home-needs"
+      >
+        {box(off && !gold ? null : String(n))}
         <View style={s.grow}>
-          <Text style={cs.title}>{off ? 'Needs you' : `Needs you, ${n}`}</Text>
-          {off ? <Text style={cs.body}>Open the list</Text> : n === 0 ? <Text style={cs.body}>Nobody needs you right now.</Text> : (
-            <Text style={[cs.body, s.small]}>
-              <Text style={s.bold}>{leadName}</Text>{` · ${lead.reason.text}`}{n > 1 ? <Text style={s.bold}>{`  +${n - 1} more`}</Text> : null}
+          <Text style={cs.title}>{off && !gold ? 'Needs you' : `Needs you, ${n}`}</Text>
+          {off && !gold ? <Text style={cs.body}>Open the list</Text> : n === 0 || !lead ? <Text style={cs.body}>Nobody needs you right now.</Text> : (
+            <Text style={[cs.body, s.small]} testID="home-needs-lead">
+              <Text style={s.bold}>{leadName}</Text>{' · '}
+              {lead.kind === 'safety' ? (
+                <Text style={[s.bold, { color: safetyGold.text }]} testID="home-needs-safety">
+                  <Ionicons name="shield-outline" size={14} color={safetyGold.text} />{' Safety alert'}
+                </Text>
+              ) : leadText}
+              {n > 1 ? <Text style={s.bold}>{`  +${n - 1} more`}</Text> : null}
             </Text>
           )}
+          {n > 0 && !(off && !gold) ? (
+            <Text style={[cs.body, s.small, s.split]} testID="home-needs-split">
+              {'Attention '}<Text style={s.bold}>{a.attention}</Text>{'    Routine '}<Text style={s.bold}>{a.routineCount}</Text>
+            </Text>
+          ) : null}
+          {data.alertsState === 'error' ? <Text style={[cs.muted, s.small]} testID="home-needs-alerts-error">Alerts did not load. Pull down to try again.</Text> : null}
         </View>
         <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
       </Pressable>
@@ -199,7 +219,10 @@ export default function CoachHomeV11(p: Props) {
   const roman = (() => {
     const n = data.draftsWaiting;
     const k = data.draftKinds;
-    const chips = ([[k.workouts, 'Workout', 'Workouts'], [k.mealPlans, 'Meal plan', 'Meal plans'], [k.nudges, 'Nudge', 'Nudges']] as const)
+    const chips = ([
+      [k.workouts, 'Workout', 'Workouts'], [k.mealPlans, 'Meal plan', 'Meal plans'], [k.nudges, 'Nudge', 'Nudges'],
+      [k.workoutChanges, 'Workout change', 'Workout changes'], // #197-E5: the approvals clients asked for, tiles here
+    ] as const)
       .filter(([c]) => c > 0).map(([c, one, many]) => [c, c === 1 ? one : many] as const);
     const approve = n > 0 ? (
       <Pressable
@@ -237,9 +260,7 @@ export default function CoachHomeV11(p: Props) {
         {chips.length > 0 ? (
           <View style={s.chips}>
             {chips.map(([c, label]) => (
-              <View key={label} style={[s.chip, { backgroundColor: page }]}>
-                <Text style={[s.chipN, { color: colorScheme === 'dark' ? sc.textPrimary : tokenColors.forest }]}>{c} <Text style={[cs.body, s.chipL]}>{label}</Text></Text>
-              </View>
+              <View key={label} style={[s.chip, { backgroundColor: sc.bgPrimary }]}><Text style={[cs.strong, s.small]}>{c} <Text style={[cs.body, s.small]}>{label}</Text></Text></View>
             ))}
           </View>
         ) : null}
@@ -292,7 +313,7 @@ export default function CoachHomeV11(p: Props) {
   ) : null;
 
   return (
-    <View style={[s.fill, { backgroundColor: page }]} testID="coach-home-root">
+    <View style={[s.fill, { backgroundColor: sc.bgPrimary }]}>
       <ScrollView
         style={s.fill} contentContainerStyle={{ paddingBottom: 32 + bottom }} testID="coach-home-v11"
         importantForAccessibility={ended ? 'no-hide-descendants' : 'auto'} // TalkBack stays in the list over it (LO C1)
@@ -316,34 +337,16 @@ export default function CoachHomeV11(p: Props) {
           {p.setup}
           {hero}
           {tiles}
-          {o ? <AlertsRow count={o.open_alerts} onPress={tap(p.onOpenAlerts)} /> : null}
-          {o && data.rings.state !== 'off' ? (
+          {o && rings ? (
             <View testID="home-rings">
               <Text style={s.dayLabel} accessibilityRole="header">YOUR DAY</Text>
-              {rings ? (
-                <>
-                  <View style={s.rings}>
-                    {/* A taps a ring only with clients (A `.arcs.plain` at zero); each opens where its work is. */}
-                    {rings.map((r) => <DayRing key={r.key} ring={r} onPress={roster > 0 ? ringGo[r.key] : undefined} />)}
-                  </View>
-                  <Text style={s.onDeepMuted}>{ringsCaption(rings, roster)}</Text>
-                </>
-              ) : data.rings.state === 'error' ? (
-                <View style={s.heroBlock}>
-                  <Text style={s.onDeep}>Your numbers did not load.</Text>
-                  <Pressable
-                    style={({ pressed }) => [s.retry, pressed && s.pressed]} onPress={retryRings} disabled={data.rings.retrying}
-                    accessibilityRole="button" accessibilityLabel="Try again" accessibilityState={{ busy: data.rings.retrying }} testID="home-rings-retry"
-                  >
-                    <Text style={s.retryText}>Try again</Text>
-                  </Pressable>
-                </View>
-              ) : (
-                // On its way: the three tracks and their names, no number until the server gives one.
-                <View style={s.rings} accessible accessibilityLabel="Loading" testID="home-rings-loading">
-                  {RINGS_PENDING.map((r) => <DayRing key={r.key} ring={r} pending />)}
-                </View>
-              )}
+              <View style={s.rings}>
+                {rings.map((r) => (
+                  // Reach-outs opens its own at-risk list, only when the ring has a goal and the list has someone in it.
+                  <DayRing key={r.key} ring={r} onPress={r.key === 'reach_outs' && r.of > 0 && reach.length > 0 ? tap(() => setList('reach')) : undefined} />
+                ))}
+              </View>
+              <Text style={s.onDeepMuted}>{ringsCaption(rings, roster)}</Text>
             </View>
           ) : null}
           {/* Only when the server returns the list: FEATURE_PLAN_RENEWAL off (404) or a failed read shows nothing. The quiet
@@ -351,9 +354,9 @@ export default function CoachHomeV11(p: Props) {
           {planEnded.page && ((planEnded.page.total > 0 && planEnded.page.items.length > 0) || roster > 0) ? <PlanEndedHomeRow page={planEnded.page} onOpen={() => { setEnded(true); void planEnded.reload(); }} /> : null}
         </View>
         <View style={s.page} testID="home-page">
+          {needsTile /* first under the masthead, always above Roman (#197-E5) */}
           {p.belowHero?.(!!o && roster === 0)}
           {roman}
-          {needsTile}
           {business}
           {clientsCard}
         </View>
@@ -396,12 +399,12 @@ const s = StyleSheet.create({
   needs: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   needsBox: { width: 72, height: 72, borderRadius: radius.card, backgroundColor: forestPop.deep, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
   needsNum: { fontFamily: SEMI, fontSize: 30, lineHeight: 36, color: forestPop.leaf },
+  needsGold: { borderWidth: 2, borderColor: safetyGold.edge, backgroundColor: safetyGold.card },
+  needsRing: { borderWidth: 2, borderColor: safetyGold.edge, borderRadius: radius.card + 4, padding: 2 },
+  split: { marginTop: 4 },
   romanHead: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  // A `.types`: three equal tiles, the count large and the kind beside it.
-  chips: { flexDirection: 'row', gap: 6, marginTop: 12 },
-  chip: { flex: 1, minWidth: 0, minHeight: 34, borderRadius: radius.button, paddingHorizontal: 8, paddingVertical: 6, justifyContent: 'center' },
-  chipN: { fontFamily: SEMI, fontSize: 17, lineHeight: 22 }, // A `.tyn`: forest, 17
-  chipL: { fontSize: 12.5, lineHeight: 16 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
+  chip: { minHeight: 32, borderRadius: radius.button, paddingHorizontal: 10, justifyContent: 'center' },
   approve: { minHeight: 52, marginTop: 12, borderRadius: radius.button, paddingHorizontal: 12, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   approveText: { ...typography.bodyMd, fontSize: 17, lineHeight: 22, flexShrink: 1, textAlign: 'center' },
   approveBadge: { minWidth: 28, height: 28, borderRadius: radius.chip, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: forestPop.leaf },

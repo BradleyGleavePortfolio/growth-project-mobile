@@ -39,6 +39,9 @@ import { RomanMark } from '../home-v11/RomanMark';
 import { needsYouReason, useCoachBlockList } from '../home-v11/blockList';
 import { useLookupNudge } from './useLookupNudge';
 import ClientPeekSheet, { type PeekTarget } from './ClientPeekSheet';
+import NeedsYouList from './NeedsYouList';
+import { commandCenterApi, isSafetyAlert, type ActionQueueItem } from '../../../services/commandCenterApi';
+import { needsYouAreas } from '../../../utils/coach/needsYou';
 import LookupSideIndex, { LETTERS } from './LookupSideIndex';
 
 // route.params.view 'needs' (for the coach Home's Needs you tile): the Needs you layout at any roster size, only clients with an
@@ -65,6 +68,19 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   const endedSeq = useRef(0);
   const [ask, setAsk] = useState<DraftAsk | null>(null);
   const [unread, setUnread] = useState<UnreadByClient>({});
+  // NEEDS-YOU-M: the open alerts the Needs you list groups (GET .../action-queue), read only while the view is up; a
+  // failed re-read keeps the last good answer.
+  const [alerts, setAlerts] = useState<{ items: ActionQueueItem[] | null; state: 'loading' | 'ok' | 'error' }>({ items: null, state: 'loading' });
+  const wantAlerts = useRef(false);
+  const loadAlerts = useCallback(async () => {
+    if (!wantAlerts.current) return;
+    try {
+      const res = await commandCenterApi.getActionQueue();
+      setAlerts({ items: Array.isArray(res?.data?.items) ? res.data.items : [], state: 'ok' });
+    } catch {
+      setAlerts((a) => (a.state === 'ok' ? a : { items: null, state: 'error' }));
+    }
+  }, []);
   const [archivedCount, setArchivedCount] = useState<number | null>(null);
   const [recentIds, setRecentIds] = useState<string[]>([]);
   const [peek, setPeek] = useState<RosterClient | null>(null);
@@ -104,12 +120,12 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   const loadSide = useCallback(async () => {
     if (!coachId) return;
     setRecentIds(await readRecentClientIds(coachId));
-    const [u, a] = await Promise.allSettled([coachApi.getUnreadCounts(), coachApi.getClients('archived', undefined, ROSTER_PAGE_SIZE), loadEnded()]);
+    const [u, a] = await Promise.allSettled([coachApi.getUnreadCounts(), coachApi.getClients('archived', undefined, ROSTER_PAGE_SIZE), loadEnded(), loadAlerts()]);
     // A failed unread read keeps the counts already shown. The archived count shows only when one page holds them all.
     if (u.status === 'fulfilled') setUnread((u.value?.data?.by_client as UnreadByClient) ?? {});
     const rows: unknown = a.status === 'fulfilled' ? a.value?.data : null;
     setArchivedCount(Array.isArray(rows) && rows.length < ROSTER_PAGE_SIZE ? rows.length : null);
-  }, [coachId, loadEnded]);
+  }, [coachId, loadEnded, loadAlerts]);
 
   useEffect(() => {
     if (coachId) loadClients(coachId, filterStatus);
@@ -135,6 +151,10 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   // A failed refresh keeps the last count, but only for the list it counted (a failed switch to Archived shows none).
   const known = !isLoading && (!loadError || (roster.length > 0 && shownStatus.current === filterStatus));
   const needsView = route?.params?.view === 'needs';
+  wantAlerts.current = needsView;
+  useEffect(() => {
+    if (needsView) void loadAlerts(); // the Home's card opened the view after this focus's read
+  }, [needsView, loadAlerts]);
   useEffect(() => {
     if (!needsView) return undefined;
     // The parent is the Clients tab: its blur is a tab change, never a push inside this stack (Review and back keeps the view).
@@ -404,6 +424,45 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
     );
   }
 
+  const overlays = (
+    <>
+      {peek ? null : nudge.modal}
+      <ClientPeekSheet client={peek} onClose={() => setPeek(null)} onOpen={openTarget} onNudge={nudge.open}>
+        {peek ? nudge.modal : null}
+      </ClientPeekSheet>
+      <HomeSheet list={null} ask={ask} onCloseList={() => setAsk(null)} onCloseAsk={() => setAsk(null)} onSent={() => void loadSide()} />
+    </>
+  );
+  if (needsView && !archived) {
+    // NEEDS-YOU-M: variant B of NEEDS-YOU-R2, the Home card's grouping (needsYouAreas), so its numbers are the list's.
+    const rows = sortRoster(roster, 'recent').map((client) => ({ client, reason: needsYouReason(client, unread, blockedIds) }))
+      .filter((r) => r.reason.action !== null);
+    return (
+      <View style={s.screen}>
+        <NeedsYouList
+          areas={needsYouAreas(rows, unread, alerts.items, blockedIds)}
+          rosterCount={roster.length}
+          loading={isLoading || !blockKnown || alerts.state === 'loading'}
+          error={loadError && roster.length === 0 ? loadError : null}
+          alertsFailed={alerts.state === 'error'}
+          refreshing={refreshing}
+          onRefresh={() => void onRefresh()}
+          onRetry={() => { if (coachId) loadClients(coachId, filterStatus); void loadAlerts(); }}
+          onBack={() => navigation.getParent()?.navigate('CommandCenter')}
+          onOpenSafety={(i) => {
+            if (!isSafetyAlert(i)) return;
+            navigation.navigate('CoachSafetyAlert', { alertType: i.alert_type, clientId: i.client_id, clientName: i.client_name, quote: i.quote ?? null, sentAt: i.sent_at ?? i.created_at });
+          }}
+          // Every other alert opens Actions, where it is read and dismissed (the Home has no Open alerts row now).
+          onOpenAlert={() => navigation.getParent()?.navigate('CommandCenter', { tab: 'action-queue' })}
+          onOpenClient={openClient}
+          onAction={runAction}
+        />
+        {overlays}
+      </View>
+    );
+  }
+
   return (
     <View style={s.screen}>
       <ScrollView
@@ -430,11 +489,7 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
         style={[s.index, { top: insets.top + 72 }]}
         letterStyle={s.indexLetter}
       />
-      {peek ? null : nudge.modal}
-      <ClientPeekSheet client={peek} onClose={() => setPeek(null)} onOpen={openTarget} onNudge={nudge.open}>
-        {peek ? nudge.modal : null}
-      </ClientPeekSheet>
-      <HomeSheet list={null} ask={ask} onCloseList={() => setAsk(null)} onCloseAsk={() => setAsk(null)} onSent={() => void loadSide()} />
+      {overlays}
     </View>
   );
 }

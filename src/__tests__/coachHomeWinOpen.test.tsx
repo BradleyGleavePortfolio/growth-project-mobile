@@ -5,7 +5,7 @@
  * alerts take Style A's two looks (Sol r4 B2 G8): an outline on deep at zero, white with the red count when any are open.
  */
 import React from 'react';
-import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { AccessibilityInfo, Animated, StyleSheet } from 'react-native';
 import type { HomeWin } from '../screens/coach/home-v11/homeDay';
 
@@ -52,7 +52,6 @@ jest.mock('../store/coachStore', () => {
 jest.mock('../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'coach-1', role: 'coach' }) }));
 jest.mock('../services/notificationsApi', () => ({ fetchUnreadCount: () => mockUnread() }));
 jest.mock('../hooks/usePendingAiDrafts', () => ({ usePendingAiDrafts: () => mockDrafts() }));
-jest.mock('../hooks/useCoachThreeArcCounts', () => ({ useCoachThreeArcCounts: () => ({ data: undefined, isError: false, isFetching: false, refetch: jest.fn() }) }));
 const mockFlags = { coachHomeV11: true, romanChat: true, coachBrief: false, coachTabsV2: true };
 jest.mock('../config/featureFlags', () => ({ featureFlags: mockFlags }));
 jest.mock('../screens/coach/command-center/CoachHomeCards', () => {
@@ -130,7 +129,7 @@ beforeEach(() => {
 
 async function renderHome() {
   const view = await render(<CommandCenterScreen />);
-  await waitFor(() => expect(view.getByTestId('home-alerts')).toBeTruthy());
+  await waitFor(() => expect(view.getByTestId('home-tile-active')).toBeTruthy());
   await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
   return view;
 }
@@ -220,28 +219,10 @@ describe('#168-3 op 1: at 130 % text the empty line fades out when the first win
   });
 });
 
-describe('Open alerts in Style A (Sol r4 B2 G8)', () => {
-  const look = async (alerts: number) => {
-    mockGet.mockResolvedValue({ data: { ...overview(30), open_alerts: alerts, home: home([win(1)], 1) } });
+describe('no Open alerts row (NEEDS-YOU-M, owner #197-E5)', () => {
+  it('folds the alerts into Needs you: the hero has no Open alerts row at any count', async () => {
+    mockGet.mockResolvedValue({ data: { ...overview(30), open_alerts: 3, home: home([win(1)], 1) } });
     const v = await renderHome();
-    const row = v.getByTestId('home-alerts');
-    const count = within(row).getByText(String(alerts));
-    return { v, row: StyleSheet.flatten(row.props.style), count: StyleSheet.flatten(count.props.style), waiting: within(row).queryByText('Waiting in Actions') };
-  };
-
-  it('a positive count draws the white row, the red count and Waiting in Actions', async () => {
-    const { v, row, count, waiting } = await look(3);
-    expect(row).toMatchObject({ backgroundColor: '#FFFFFF', borderColor: '#FFFFFF', borderRadius: 12, minHeight: 50 });
-    expect(count).toMatchObject({ color: '#B91C1C', fontSize: 22, lineHeight: 26 });
-    expect(waiting).toBeTruthy();
-    expect(v.getByTestId('home-alerts').props.accessibilityLabel).toBe('Open alerts, 3, Waiting in Actions');
-  });
-
-  it('zero draws the outline on deep, the count in the hero white and no second line', async () => {
-    const { row, count, waiting } = await look(0);
-    expect(row.backgroundColor).toBeUndefined();
-    expect(row).toMatchObject({ borderColor: '#4A6553', borderWidth: 1 });
-    expect(count.color).toBe('#F4F7F2');
-    expect(waiting).toBeNull();
+    expect([v.queryByTestId('home-alerts'), v.queryByText('Open alerts')]).toEqual([null, null]);
   });
 });

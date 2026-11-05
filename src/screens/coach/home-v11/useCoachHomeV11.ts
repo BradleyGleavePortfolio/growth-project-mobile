@@ -2,20 +2,16 @@
  * The reads behind the coach Home (spec #688 6295886580), all on existing endpoints plus `include=home` on the
  * overview (b#1123). Each read settles on its own, so a slow one never holds the others back; only the newest
  * load writes, and nothing writes after unmount. Needs you is counted as the list it opens counts it
- * (ClientLookupScreen, view 'needs'): the active roster and the unread counts, through lookupReason. The day
- * rings are HOME3 A's (#196-E15): GET /coach/home/daily-rings, behind romanThreeArcRouter as the router reads it.
- * Each return to the Home re-reads.
+ * (ClientLookupScreen, view 'needs'): the active roster and the unread counts, through lookupReason. The
+ * Reach-outs sheet lists the at-risk set the ring counts (b#1123 `needsYou`), and each return to the Home re-reads.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useIsFocused } from '@react-navigation/native';
-import type { CommandCenterOverview } from '../../../services/commandCenterApi';
+import type { AtRiskEntry, CommandCenterOverview } from '../../../services/commandCenterApi';
 import { coachApi } from '../../../services/api';
 import { useClientUnreadCount } from '../../../hooks/useClientUnreadCount';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { usePendingAiDrafts } from '../../../hooks/usePendingAiDrafts';
-import { useCoachThreeArcCounts } from '../../../hooks/useCoachThreeArcCounts';
-import type { DailyRings } from '../../../api/coachDailyRingsApi';
-import { featureFlags } from '../../../config/featureFlags';
 import { isStream2Capability } from '../../../api/types/coachAiExecution';
 import { isSubCoachBillingBlocked } from '../../../lib/coachSetup/errors';
 import type { LtvMetrics } from '../../../components/command-center/CoachLtvDashboard';
@@ -26,13 +22,15 @@ import { sortRoster, type RosterClient } from '../../../utils/coach/clientRoster
 import { coachHomeSources, type CoachHomeSources } from '../command-center/coachHomeSources';
 import { fetchOverviewWithHome, type CoachHomeDay, type OverviewRead } from './homeDay';
 import { needsYouReason, useCoachBlockList } from './blockList';
+import type { ActionQueueItem } from '../../../services/commandCenterApi';
+import { needsYouAreas, type NeedsAreas } from '../../../utils/coach/needsYou';
 
 export type MonthState = { kind: 'loading' | 'blocked' | 'error' } | { kind: 'ok'; summary: MoneySummary };
 /** A read that is still on its way, failed with nothing verified to show, or answered (an empty answer included). */
 export type ReadState = 'loading' | 'error' | 'ok';
 
 export interface NeedsRow { client: RosterClient; reason: LookupReason }
-export interface DraftKinds { workouts: number; mealPlans: number; nudges: number }
+export interface DraftKinds { workouts: number; mealPlans: number; nudges: number; workoutChanges: number }
 
 export interface CoachHomeData {
   overview: CommandCenterOverview | null;
@@ -42,9 +40,12 @@ export interface CoachHomeData {
   refreshing: boolean;
   /** Who needs the coach, as the Needs you list orders them. */
   needs: NeedsRow[];
-  /** YOUR DAY's rings (GET /coach/home/daily-rings); 'off' without romanThreeArcRouter, and then no rings. A failed
-   *  re-read keeps the last good answer. */
-  rings: { state: ReadState | 'off'; day: DailyRings | null; retrying: boolean };
+  /** NEEDS-YOU-M: the Needs you card's areas, as the list groups them (needsYouAreas). */
+  areas: NeedsAreas;
+  /** The open alerts read (GET .../action-queue); a failed re-read keeps the last good answer. */
+  alertsState: ReadState;
+  /** The at-risk clients the Reach-outs ring counts, most urgent first (null: not read). */
+  reachOuts: AtRiskEntry[] | null;
   /** Active clients not in `needs`, and how many of them logged today (null: the server sent no log days). */
   steady: { count: number; loggedToday: number | null };
   /** 'off': the Clients list is on Archived, so the shared roster is not the active one: no count. */
@@ -81,14 +82,11 @@ export function needsAndSteady(clients: RosterClient[], unread: UnreadByClient, 
   return { needs, steady: { count: steadyRows.length, loggedToday } };
 }
 
-export function useCoachHomeV11(sources: CoachHomeSources = coachHomeSources, readOverview: () => Promise<OverviewRead> = fetchOverviewWithHome) {
+/** `pathCopilot`: featureFlags.clientPathCopilot, passed in by the screen (tests import this file before their flag mock). */
+export function useCoachHomeV11(sources: CoachHomeSources = coachHomeSources, readOverview: () => Promise<OverviewRead> = fetchOverviewWithHome, pathCopilot = false) {
   const isFocused = useIsFocused();
   const coachId = useCurrentUser()?.id;
   const drafts = usePendingAiDrafts({ enabled: isFocused });
-  // The rings re-read on each return (enabled follows focus, 30 s fresh) and on pull to refresh; flag off, no request.
-  const ringsOn = featureFlags.romanThreeArcRouter;
-  const dayRings = useCoachThreeArcCounts({ enabled: ringsOn && isFocused });
-  const refetchRings = dayRings.refetch;
   // The bell polls every 30 s and on foreground while the Home is in view, and re-reads on each return to it.
   const unreadNotifications = useClientUnreadCount(isFocused);
   const clients = useCoachStore((s) => s.clients);
@@ -100,6 +98,11 @@ export function useCoachHomeV11(sources: CoachHomeSources = coachHomeSources, re
   const [ltv, setLtv] = useState<LtvMetrics | null>(null);
   const [month, setMonth] = useState<MonthState>({ kind: 'loading' });
   const [payout, setPayout] = useState<MoneyPayout | null>(null);
+  const [reachOuts, setReachOuts] = useState<AtRiskEntry[] | null>(null);
+  const [alerts, setAlerts] = useState<ActionQueueItem[] | null>(null);
+  const [alertsState, setAlertsState] = useState<ReadState>('loading');
+  // Path Copilot's pending workout changes (flag clientPathCopilot); null until read, or when the read failed.
+  const [workoutChanges, setWorkoutChanges] = useState<number | null>(null);
   const [now, setNow] = useState(() => new Date());
   const seq = useRef(0);
   useEffect(() => () => { seq.current += 1; }, []);
@@ -134,6 +137,14 @@ export function useCoachHomeV11(sources: CoachHomeSources = coachHomeSources, re
       void Promise.resolve().then(get).catch(() => fallback).then((v) => { if (fresh()) write(v); });
     settle(sources.ltv, setLtv, null);
     settle(sources.nextPayout, setPayout, null);
+    settle(sources.atRisk, (v) => setReachOuts(v ?? null), null);
+    // An older Home's sources (tests) have no queue: no alerts, as a server with none.
+    void Promise.resolve().then(() => sources.actionQueue?.() ?? [])
+      .then((v) => { if (fresh()) { setAlerts(v); setAlertsState('ok'); } })
+      .catch(() => { if (fresh()) setAlertsState((st) => (st === 'ok' ? 'ok' : 'error')); });
+    if (pathCopilot && sources.pathChangeDrafts) {
+      void Promise.resolve().then(sources.pathChangeDrafts).then((v) => { if (fresh()) setWorkoutChanges(v.length); }).catch(() => undefined);
+    }
     void loadRoster(mine);
     try {
       const res = await readOverview();
@@ -143,8 +154,8 @@ export function useCoachHomeV11(sources: CoachHomeSources = coachHomeSources, re
     } finally {
       if (fresh()) setRefreshing(false);
     }
-    if (isRefresh) { void drafts.refetch(); if (ringsOn) void refetchRings(); }
-  }, [drafts, refetchRings, ringsOn, loadMonth, loadRoster, readOverview, sources]);
+    if (isRefresh) void drafts.refetch();
+  }, [drafts, loadMonth, loadRoster, readOverview, sources, pathCopilot]);
 
   // Loads on mount and again, without the spinner, on each return to the Home: it stays mounted under its tab
   // (spec item 6, C3). A coach id that arrives later loads the roster then.
@@ -167,23 +178,22 @@ export function useCoachHomeV11(sources: CoachHomeSources = coachHomeSources, re
   const blockList = useCoachBlockList();
   const blockedSet = useMemo(() => new Set(blockList.blockedIds), [blockList.blockedIds]);
   const { needs, steady } = useMemo(() => needsAndSteady(clients, unread, now, blockedSet), [clients, unread, now, blockedSet]);
+  const areas = useMemo(() => needsYouAreas(needs, unread, alerts, blockedSet), [needs, unread, alerts, blockedSet]);
+  const changes = pathCopilot ? workoutChanges ?? 0 : 0;
   const queue = (drafts.data?.drafts ?? []).filter((d) => isStream2Capability(d.capability));
   const draftKinds: DraftKinds = {
     workouts: queue.filter((d) => d.capability === 'draft.assign_workout').length,
     mealPlans: queue.filter((d) => d.capability === 'draft.assign_meal_plan').length,
     nudges: queue.filter((d) => d.capability === 'draft.send_notification').length,
+    // #197-E5: workout-change approvals are tiles in Roman's drafts, counted here once (never in Needs you).
+    workoutChanges: changes,
   };
   // The query keeps its last good answer when a refetch fails, so the button stays while that answer stands.
   const draftsState: ReadState = drafts.data ? 'ok' : drafts.isError ? 'error' : 'loading';
-  const rings: CoachHomeData['rings'] = {
-    state: !ringsOn ? 'off' : dayRings.data ? 'ok' : dayRings.isError ? 'error' : 'loading',
-    day: ringsOn ? dayRings.data ?? null : null,
-    retrying: ringsOn && dayRings.isFetching,
-  };
   const data: CoachHomeData = {
     overview: read?.overview ?? null, home: read?.home ?? null, overviewFailed, refreshing,
-    needs, rings, steady, rosterState: rosterState === 'ok' && !blockList.known ? 'loading' : rosterState, ltv, month, payout, unreadNotifications,
-    draftsWaiting: queue.length, draftKinds, draftsState, draftsError: drafts.error, draftsRetrying: !!drafts.isFetching, now,
+    needs, areas, alertsState, reachOuts, steady, rosterState: rosterState === 'ok' && !blockList.known ? 'loading' : rosterState, ltv, month, payout, unreadNotifications,
+    draftsWaiting: queue.length + changes, draftKinds, draftsState, draftsError: drafts.error, draftsRetrying: !!drafts.isFetching, now,
   };
   return {
     // The Home's one block-list read: the Plan ended list takes this one (usePlanEnded), so a Home mount sends one
@@ -191,6 +201,5 @@ export function useCoachHomeV11(sources: CoachHomeSources = coachHomeSources, re
     data, blockList, focused: isFocused, reload: load, retryMonth: () => loadMonth(seq.current),
     retryRoster: () => { setRosterState('loading'); void loadRoster(seq.current); },
     retryDrafts: () => void drafts.refetch(),
-    retryRings: () => void refetchRings(),
   };
 }

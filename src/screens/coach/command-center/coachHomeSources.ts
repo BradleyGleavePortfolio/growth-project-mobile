@@ -4,10 +4,13 @@
  * (the calendar month so far), /coach/connect/payouts (Stripe's next payout),
  * /coach/command-center/ltv-metrics (monthly churn) and .../at-risk (most
  * urgent first). Every read throws on failure; the Home says so in words.
+ * NEEDS-YOU-M: .../action-queue (the open alerts the Needs you card folds in) and Path Copilot's drafts (the workout
+ * changes Roman's drafts counts), both existing reads.
  */
 import api from '../../../services/api';
 import { coachMoneyApi, nextPayout, toSummary } from '../../../api/coachMoneyApi';
 import { commandCenterApi } from '../../../services/commandCenterApi';
+import { copilotApi } from '../../../api/copilotApi';
 import { monthWindow } from './coachHomeCopy';
 
 export const coachHomeSources = {
@@ -24,6 +27,11 @@ export const coachHomeSources = {
     const res = await commandCenterApi.getAtRisk();
     return Array.isArray(res?.data?.items) ? res.data.items : [];
   },
+  actionQueue: async () => {
+    const res = await commandCenterApi.getActionQueue();
+    return Array.isArray(res?.data?.items) ? res.data.items : [];
+  },
+  pathChangeDrafts: () => copilotApi.pathChangeDrafts(),
 };
 
 export type CoachHomeSources = typeof coachHomeSources;

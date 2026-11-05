@@ -1,13 +1,11 @@
 /**
  * The coach Home's day (spec #688 6295886580, Style A): GET /coach/command-center/overview?include=home
- * (b#1123, "Contract for the phone"). The overview fields are unchanged; `home` adds this week's wins (its
- * rings are still read, not drawn: the Home's rings are HOME3 A's, from GET /coach/home/daily-rings). An older
- * server sends no `home`: the Home then draws only what the overview already says (active today, check-ins)
- * and no new number (guide rule 5). A malformed piece reads as absent. Pure, so the screen and the tests share one rule.
+ * (b#1123, "Contract for the phone"). The overview fields are unchanged; `home` adds this week's wins and
+ * today's three rings. An older server sends no `home`: the Home then draws only what the overview already
+ * says (active today, check-ins) and no new number (guide rule 5). A malformed piece reads as absent.
+ * Pure, so the screen and the tests share one rule.
  */
 import api from '../../../services/api';
-import type { DailyRings } from '../../../api/coachDailyRingsApi';
-import { romanDailyRingsCelebration, romanDailyRingsEncouragement } from '../../../lib/roman/copy';
 import { commandCenterApi, __USING_MOCK_DATA, type CommandCenterOverview } from '../../../services/commandCenterApi';
 
 export interface HomeWinDraft { capability: 'draft.coach_message'; subject_user_id: string; message: string }
@@ -121,21 +119,22 @@ export function winLine(w: HomeWin): string {
   }
 }
 
-/** The three day rings HOME3 Style A draws under YOUR DAY (#196-E15, SoT A1.17), from GET /coach/home/daily-rings. */
-export interface RingSpec { key: 'check_ins' | 'brief' | 'review'; label: string; done: number; of: number }
+export interface RingSpec { key: 'check_ins' | 'replies' | 'reach_outs'; label: string; done: number; of: number }
 
-export function dayRings(d: DailyRings): RingSpec[] {
+export function ringSpecs(r: HomeRings): RingSpec[] {
   return [
-    { key: 'check_ins', label: 'Check-ins', done: Math.min(d.checkIns.reviewed, d.checkIns.submitted), of: d.checkIns.submitted },
-    { key: 'brief', label: 'Brief', done: d.brief.opened ? 1 : 0, of: 1 },
-    { key: 'review', label: 'Review', done: Math.min(d.review.reviewed, d.review.totalConversations), of: d.review.totalConversations },
+    { key: 'check_ins', label: 'Check-ins', done: Math.min(r.check_ins.reviewed, r.check_ins.submitted), of: r.check_ins.submitted },
+    { key: 'replies', label: 'Replies', done: Math.min(r.replies.answered, r.replies.received), of: r.replies.received },
+    { key: 'reach_outs', label: 'Reach-outs', done: Math.min(r.reach_outs.contacted, r.reach_outs.goal), of: r.reach_outs.goal },
   ];
 }
 
-/** The line under the rings: the two ring lines the three-arc router already says, and the zero-client line. */
 export function ringsCaption(rings: RingSpec[], roster: number): string {
   if (roster === 0) return 'Your day fills in when your first client joins.';
-  return rings.every((r) => r.done >= r.of) ? romanDailyRingsCelebration : romanDailyRingsEncouragement;
+  const open = rings.filter((r) => r.of > 0);
+  if (open.length === 0) return 'Nothing to close yet today.';
+  if (open.every((r) => r.done >= r.of)) return 'Every ring is closed for today.';
+  return 'The day is in motion. Close the rings as you go.';
 }
 
 export const pct = (fraction: number) => `${Math.round(Math.max(0, Math.min(1, fraction)) * 100)}%`;

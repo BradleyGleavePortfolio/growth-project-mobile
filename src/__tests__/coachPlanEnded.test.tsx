@@ -53,7 +53,6 @@ jest.mock('../store/coachStore', () => {
 jest.mock('../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'coach-1', role: 'coach' }) }));
 jest.mock('../services/notificationsApi', () => ({ fetchUnreadCount: () => Promise.resolve(0) }));
 jest.mock('../hooks/usePendingAiDrafts', () => ({ usePendingAiDrafts: () => ({ data: { drafts: [] }, refetch: jest.fn() }) }));
-jest.mock('../hooks/useCoachThreeArcCounts', () => ({ useCoachThreeArcCounts: () => ({ data: undefined, isError: false, isFetching: false, refetch: jest.fn() }) }));
 jest.mock('../config/featureFlags', () => ({ featureFlags: { coachHomeV11: true, romanChat: true, coachBrief: false, coachTabsV2: true } }));
 jest.mock('../screens/coach/command-center/CoachHomeCards', () => ({ __esModule: true, default: () => null }));
 jest.mock('../screens/coach/command-center/coachHomeSources', () => ({
@@ -91,7 +90,7 @@ beforeEach(() => {
 
 async function renderHome() {
   const view = await render(<CommandCenterScreen />);
-  await waitFor(() => expect(view.getByTestId('home-alerts')).toBeTruthy());
+  await waitFor(() => expect(view.getByTestId('home-tile-active')).toBeTruthy());
   await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
   return view;
 }
