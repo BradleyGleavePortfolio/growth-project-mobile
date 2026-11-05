@@ -1,0 +1,17 @@
+src/services/__tests__/offlineFoodColdStart.ls931.test.ts
+src/components/log/__tests__/FoodDayView.offlineMark.ls931.test.tsx
+src/utils/log/__tests__/usualRepeatOffline.ls931.test.ts
+src/services/__tests__/offlineFoodAccountRead.ls931.test.ts
+src/services/__tests__/offlineFood
+src/services/__tests__/foodLog
+src/hooks/__tests__/useFoodLogQueueSync
+src/hooks/__tests__/useFoodBrowse
+src/services/__tests__/authActions
+src/store
+src/screens/client/__tests__/LogScreen
+src/components/log
+src/components/mealplan
+src/utils/log
+src/config
+scripts/__tests__/expectedEnv
+scripts/__tests__/routeContract.test.js
