@@ -16,8 +16,9 @@
  *                                                       { seen, seen_at }; POST records it (idempotent). Ported from m#858.
  */
 import { z } from 'zod';
-import api from '../../../services/api';
+import api, { type BoundRequestConfig } from '../../../services/api';
 import { call } from '../../../api/apiCall';
+import { boundRequestSignal, type AccountBinding } from '../../../services/accountBinding';
 
 const SenderSchema = z
   .object({ id: z.string(), name: z.string(), avatar_url: z.string().nullable().optional(), is_coach: z.boolean() })
@@ -84,6 +85,9 @@ export type VoiceConsent = z.infer<typeof ConsentSchema>;
 export const SPACE_PAGE_LIMIT = 30;
 export const SPACE_MESSAGE_MAX = 4000;
 
+/** FIX-938 B3: who a queued text goes out as: its sign-in's binding and the session generation it was read at. */
+export interface SpacePublisher { binding: AccountBinding; session: number }
+
 export const spaceChatApi = {
   list(cohortId: string, before?: string | null): Promise<SpaceMessagePage> {
     return call(
@@ -94,14 +98,21 @@ export const spaceChatApi = {
       'space_chat',
     );
   },
-  send(cohortId: string, body: string, idempotencyKey: string, parentMessageId?: string): Promise<SpaceMessage> {
+  // FIX-938 B3: `by` is the publisher the text was queued under (spaceChatOutbox). The request interceptor checks its
+  // session generation and its binding against the credential it reads (services/api.ts readTokenForRequest,
+  // assertBindingMatches), and the next auth change cancels the request, as a voice note's hops do.
+  send(cohortId: string, body: string, idempotencyKey: string, parentMessageId: string | undefined, by: SpacePublisher): Promise<SpaceMessage> {
+    const bound = boundRequestSignal(by.binding);
     return call(
       SentSchema,
       () => api.post<unknown>(`/community/cohorts/${cohortId}/messages`, parentMessageId ? { body, parent_message_id: parentMessageId } : { body }, {
         headers: { 'Idempotency-Key': idempotencyKey },
-      }),
+        accountBinding: by.binding,
+        _sessionGeneration: by.session,
+        signal: bound.signal,
+      } as BoundRequestConfig),
       'space_chat',
-    ).then((r) => r.message);
+    ).then((r) => r.message).finally(bound.done);
   },
   remove(messageId: string): Promise<void> {
     return call(AnySchema, () => api.delete<unknown>(`/community/messages/${messageId}`), 'space_chat').then(

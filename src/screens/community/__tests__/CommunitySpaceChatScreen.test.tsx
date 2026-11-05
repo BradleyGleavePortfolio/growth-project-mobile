@@ -145,6 +145,8 @@ beforeEach(() => {
   mockRealSafety = false;
   authEvents.emit('logout');
   mockDisk.clear();
+  // FIX-938 B3: the signed-in credential every text send is bound to (spaceChatOutbox, services/accountBinding).
+  (jest.requireMock('expo-secure-store') as { __store: Map<string, string> }).__store.set('supabase_token', 'tok-me-1');
   mockStack.routes = ['CommunityTab', 'CommunitySpaceChat'];
   mockStack.focused = true;
   mockCohorts.failed = false;

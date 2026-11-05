@@ -10,6 +10,10 @@
  * SC-M3 (agent 184): a reply keeps the message it answers (`reply`: its id and the quote drawn until the list has it).
  * FR-909 (LS-909 B1, LO-909 B1): once that message goes (removed, deleted, its author blocked, the space closed) the
  * row keeps only its id: the quoted words leave the row and the device (`forget`).
+ * FIX-938 (LS-938 B3): a text goes out only as the account that queued it. The outbox pins that account's credential
+ * subject when it starts for a user, and every send carries its publisher: the binding of its sign-in (subject and auth
+ * epoch, services/accountBinding.ts) and the session generation it was read at (services/sessionFence.ts). The request
+ * interceptor checks both against the credential it reads (services/api.ts), as a voice note's hops do.
  */
 import { useMemo, useSyncExternalStore } from 'react';
 import NetInfo from '@react-native-community/netinfo';
@@ -19,7 +23,9 @@ import { generateIdempotencyKey } from '../../../utils/idempotency';
 import { isEffectivelyOnline } from '../../../hooks/useNetworkStatus';
 import { describeCommunityFailure } from '../../../api/communityErrors';
 import { CONTENT_REJECTED_CODE, communityErrorCode } from '../../../api/communitySafetyApi';
-import { isNoAccess, spaceChatApi } from './spaceChatApi';
+import { bindingIsCurrent, captureAccountBinding, isAccountChangedError } from '../../../services/accountBinding';
+import { sessionGeneration, sessionWritesSettled } from '../../../services/sessionFence';
+import { isNoAccess, spaceChatApi, type SpacePublisher } from './spaceChatApi';
 import type { ReplyTarget } from '../../messaging/ReplyComposer';
 
 /** SC-M3: what a reply answers. FR-909: its author and time, so a block or a removal finds it; `gone` once it went. */
@@ -42,6 +48,10 @@ let online = false;
 // Each sign-in (and sign-out) starts a new generation; a send still out for an earlier one never touches the rows.
 let gen = 0;
 let running = -1;
+// FIX-938 B3: the account this generation's texts were queued by (its credential subject, pinned once) and the publisher
+// of its current sign-in. Another account's credential never binds; a new sign-in of the same account does.
+let account: string | null = null;
+let bound: SpacePublisher | null = null;
 let stopNet: (() => void) | null = null;
 const subs = new Set<() => void>();
 const onSent = new Set<(cohortId: string) => void>();
@@ -65,6 +75,22 @@ function set(next: PendingRow[]): void {
 const patch = (localId: string, change: Partial<PendingRow>) =>
   set(rows.map((r) => (r.localId === localId ? { ...r, ...change } : r)));
 
+/** The sign-in a text of generation `g` goes out under: the pinned account's, or none (nothing is sent). */
+async function publisher(g: number): Promise<SpacePublisher | null> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (bound && bindingIsCurrent(bound.binding) && bound.session === sessionGeneration()) return bound;
+    await sessionWritesSettled();
+    const session = sessionGeneration();
+    const binding = await captureAccountBinding();
+    if (gen !== g) return null;
+    if (!binding || session !== sessionGeneration()) continue;
+    account ??= binding.subject;
+    if (binding.subject !== account) return null;
+    bound = { binding, session };
+  }
+  return bound && bindingIsCurrent(bound.binding) && bound.session === sessionGeneration() ? bound : null;
+}
+
 /** One send at a time, oldest first, so a space reads in the order the texts were written. */
 async function flush(): Promise<void> {
   if (running === gen || !online || !uid) return;
@@ -75,13 +101,26 @@ async function flush(): Promise<void> {
       const next = rows.filter((r) => r.state === 'waiting').sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
       if (!next || !online || gen !== g) break;
       patch(next.localId, { state: 'sending' });
+      const under = await publisher(g);
+      if (gen !== g) break;
+      if (!under) {
+        patch(next.localId, { state: 'waiting' });
+        break;
+      }
       try {
-        const sent = await spaceChatApi.send(next.cohortId, next.body, next.key, next.reply?.id);
+        const sent = await spaceChatApi.send(next.cohortId, next.body, next.key, next.reply?.id, under);
         if (gen !== g) break;
         patch(next.localId, { state: 'sent', serverId: sent.id });
         onSent.forEach((fn) => fn(next.cohortId));
       } catch (err) {
         if (gen !== g) break;
+        // B3: its sign-in ended on the way (the send was called back, or never left): it goes again under the next
+        // sign-in of the same account, with the same Idempotency-Key.
+        if (!bindingIsCurrent(under.binding) || isAccountChangedError((err as { cause?: unknown })?.cause)) {
+          bound = null;
+          patch(next.localId, { state: 'waiting' });
+          continue;
+        }
         // Lost the connection on the way: it waits for the next reconnect; any answer from the server is a failure.
         const dropped = (err as { kind?: string })?.kind === 'network' && !online;
         const reason = dropped ? undefined : refusal(err);
@@ -104,6 +143,8 @@ export function setSpaceOutboxOnline(next: boolean): void {
 function reset(): void {
   uid = null;
   gen += 1;
+  account = null;
+  bound = null;
   set([]);
   void Promise.resolve()
     .then(() => cacheStorage.getAllKeys())
@@ -129,6 +170,9 @@ export function startSpaceOutbox(userId: string | null): void {
   uid = userId;
   gen += 1;
   const g = gen;
+  account = null;
+  bound = null;
+  void publisher(g).catch(() => undefined);
   rows = [];
   subs.forEach((fn) => fn());
   void cacheStorage.getStringAsync(`${SPACE_OUTBOX_PREFIX}${userId}`).then((raw) => {
