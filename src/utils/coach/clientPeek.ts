@@ -39,7 +39,8 @@ export function peekJoinedLine(c: RosterClient): string {
 }
 
 export interface PeekSlices {
-  checkIn: { text: string; hasOne: boolean };
+  /** `note`: the text carries the client's own free-text note (the one value the sheet cuts to a line). */
+  checkIn: { text: string; hasOne: boolean; note: boolean };
   food: { text: string };
   /** `week`: the ring's sessions, only when this week has one. */
   workouts: { text: string; week: WorkoutWeek | null };
@@ -62,7 +63,8 @@ export function peekSlices(
   const note = latest ? text(latest.notes)?.split('\n')[0] ?? null : null;
   const parts = [energy != null ? `energy ${energy} of 5` : null, note].filter(Boolean);
   // C_peek: K1-S-19 "{n} to review" (the roster's count, as on the list row); with none waiting, main's latest check-in.
-  const checkText = rosterReviewBadge(c) ?? (checkDay ? `${dayWord(checkDay, today)}${parts.length ? `: ${parts.join(', ')}` : ''}` : NOTHING);
+  const badge = rosterReviewBadge(c);
+  const checkText = badge ?? (checkDay ? `${dayWord(checkDay, today)}${parts.length ? `: ${parts.join(', ')}` : ''}` : NOTHING);
 
   const day = obj(s.today);
   const targets = resolveCoachTargets(target ?? null, (s.profile as ClientProfile | null) ?? null);
@@ -82,7 +84,7 @@ export function peekSlices(
   const weighText = lbs != null && weightDay ? `${dayWord(weightDay, today)}: ${Math.round(lbs * 10) / 10}\u00a0lb` : NOTHING;
 
   return {
-    checkIn: { text: checkText, hasOne: !!checkDay || (c.activity?.checkInsToReview ?? 0) > 0 },
+    checkIn: { text: checkText, hasOne: !!checkDay || (c.activity?.checkInsToReview ?? 0) > 0, note: !badge && !!checkDay && !!note },
     food: { text: foodText },
     workouts: { text: workoutText, week: week.total > 0 ? week : null },
     weighIn: { text: weighText },

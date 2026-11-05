@@ -235,7 +235,7 @@ describe('UI-4 peek sheet', () => {
     const slices = peekSlices(client(), { ...s, weight_logs: [{ weight_lbs: 182.44, date: day(0) }] }, [], workoutWeek(week(0).data), null);
     expect(slices.weighIn.text).toBe('Today: 182.4\u00a0lb');
     expect(slices.food.text).toBe('1,420\u00a0kcal'); // no target: no "of"; units never wrap apart; C_peek draws no protein
-    expect(slices.checkIn).toEqual({ text: '2 to review', hasOne: true }); // K1-S-19 from the roster
-    expect(peekSlices(client(false), s, [], workoutWeek(week(0).data), null).checkIn).toEqual({ text: 'Nothing logged yet', hasOne: false });
+    expect(slices.checkIn).toEqual({ text: '2 to review', hasOne: true, note: false }); // K1-S-19 from the roster
+    expect(peekSlices(client(false), s, [], workoutWeek(week(0).data), null).checkIn).toEqual({ text: 'Nothing logged yet', hasOne: false, note: false });
   });
 });

@@ -141,7 +141,7 @@ export default function ClientPeekSheet({ client, onClose, onOpen, onNudge, chil
                   <HapticPressable intent="light" style={s.review} onPress={() => open({ screen: 'ClientDetail', tab: 'timeline' })} accessibilityRole="button" accessibilityLabel="Review" testID="peek-review">
                     <Text style={s.link}>Review</Text>
                   </HapticPressable>
-                ) : undefined, false, (client.activity?.checkInsToReview ?? 0) > 0 ? 2 : 1)}
+                ) : undefined, false, slices.checkIn.note ? 1 : 2)}
                 {slice('food', 'Food', slices.food)}
                 {slice('workouts', 'Workouts', slices.workouts)}
                 {slice('weighins', 'Weigh-ins', slices.weighIn, undefined, true)}
