@@ -1,0 +1,11 @@
+src/navigation
+src/screens/community
+src/components/community
+src/components/messaging
+src/hooks
+src/api
+src/lib
+src/config
+src/ui
+src/services
+scripts/__tests__/routeContract.test.js
