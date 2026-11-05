@@ -534,12 +534,13 @@ describe('D10-BUILD-CLOSE: Roman history on the list (C3 Style B, B_inbox and B_
     [[], null],
   ])('romanLine %#', (messages, want) => expect(romanLine(messages as never)).toBe(want));
 
+  const proofPage = (messages: unknown[]) => ({ ok: true, value: { messages, nextCursor: null } });
   it.each([
     ['a newly opened empty chat', { ok: true, value: { messages: [], nextCursor: null } }],
-    ['a newest chat containing only an interrupted answer', page([said({ interrupted: true })])],
+    ['a newest chat containing only an interrupted answer', proofPage([said({ interrupted: true })])],
   ])('LS-935 B1: keeps the latest finished answer when %s is newest', async (_name, newest) => {
     mockList.mockResolvedValue(chats(2));
-    mockRead.mockImplementation(async (_binding, id) => id === 'rs0' ? newest : page([said()]));
+    mockRead.mockImplementation(async (_binding, id) => id === 'rs0' ? newest : proofPage([said()]));
     const { u } = await show();
     await waitFor(() => expect(mockRead).toHaveBeenCalled());
     await act(async () => { await Promise.resolve(); });
@@ -550,7 +551,7 @@ describe('D10-BUILD-CLOSE: Roman history on the list (C3 Style B, B_inbox and B_
     mockList.mockResolvedValue(chats(1));
     const newestSix = Array.from({ length: 6 }, (_, n) => ({ ...asked, id: `rq${n}` }));
     mockRead.mockImplementation(async (_binding, _id, params) => params?.before
-      ? page([said()])
+      ? proofPage([said()])
       : { ok: true, value: { messages: newestSix, nextCursor: 'older-turn' } });
     const { u } = await show();
     await waitFor(() => expect(mockRead).toHaveBeenCalled());
