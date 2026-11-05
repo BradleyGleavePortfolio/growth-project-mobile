@@ -116,7 +116,7 @@ export default function RecipeDetailScreen() {
   }, [isSaved, saving, recipe, queryClient]);
 
   if (isLoading && !recipe) {
-    return <Screen edges={['top']} scroll={false} {...page}><StyleCMasthead loading /><StyleCPaper style={styles.errorContainer}><StyleCLoadingLines rows={6} label="Loading" /></StyleCPaper></Screen>;
+    return <Screen edges={['top']} scroll={false} {...page}><StyleCMasthead loading onBack={() => navigation.goBack()} backLabel="Go back" /><StyleCPaper style={styles.errorContainer}><StyleCLoadingLines rows={6} label="Loading" /></StyleCPaper></Screen>;
   }
 
   // A 404 wins over a cached copy (list cache or an earlier open): the recipe is
@@ -127,7 +127,7 @@ export default function RecipeDetailScreen() {
     const unavailable = !recipeId || gone || !isError;
     return (
       <Screen edges={['top']} scroll={false} {...page}>
-        <StyleCMasthead />
+        <StyleCMasthead onBack={() => navigation.goBack()} backLabel="Go back" />
         <StyleCPaper style={styles.errorContainer}>
         <StyleCNotice>
           {isHiddenForAllergens(error)
@@ -236,12 +236,14 @@ export default function RecipeDetailScreen() {
       <FadeInView duration={250}>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>INGREDIENTS</Text>
-          {recipe.ingredients.map((ingredient, i) => (
-            <View key={i} style={styles.listItem}>
-              <View style={styles.bullet} />
-              <Text style={styles.listItemText}>{ingredient}</Text>
-            </View>
-          ))}
+          {/* A hairline row per ingredient (C_recipe), not a bullet; the rows sit flush, without the section gap. */}
+          <View>
+            {recipe.ingredients.map((ingredient, i) => (
+              <View key={i} style={styles.ingredientRow}>
+                <Text style={styles.listItemText}>{ingredient}</Text>
+              </View>
+            ))}
+          </View>
         </View>
       </FadeInView>
 
@@ -325,15 +327,7 @@ const makeStyles = (colors: SemanticTokens) =>
   macroValue: { ...typography.h2, color: colors.textPrimary, fontVariant: ['tabular-nums'] },
   macroLabel: { ...typography.bodySmall, color: colors.textMuted },
 
-  listItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  bullet: {
-    width: 6,
-    height: 6,
-    borderRadius: radius.chip,
-    backgroundColor: colors.accent,
-    marginTop: 7,
-    flexShrink: 0,
-  },
+  ingredientRow: { paddingVertical: 12, minHeight: 44, justifyContent: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   listItemText: { ...typography.body, flex: 1, color: colors.textPrimary },
 
   stepItem: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },

@@ -168,7 +168,10 @@ describe('recipe detail', () => {
     expect(await ui.findByText('This recipe is hidden because it lists an allergen saved on your profile.')).toBeTruthy();
     expect(ui.queryByText('Peanut satay')).toBeNull();
     expect(ui.queryByRole('button', { name: 'Retry recipe' })).toBeNull();
-    await fireEvent.press(ui.getByRole('button', { name: 'Go back' }));
+    // BEAUTY-929: the masthead chevron and the quiet link under the notice both go back.
+    const backs = ui.getAllByRole('button', { name: 'Go back' });
+    expect(backs).toHaveLength(2);
+    await fireEvent.press(backs[1]);
     expect(mockBack).toHaveBeenCalledTimes(1);
   });
 

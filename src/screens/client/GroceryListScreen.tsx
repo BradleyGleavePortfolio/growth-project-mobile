@@ -22,12 +22,7 @@ import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { typography, radius } from '../../theme/tokens';
 import { PrimaryButton, TextLink, Screen } from '../../ui';
 import { HapticService } from '../../ui/haptics/haptics.service';
-import { StyleCCheck, StyleCLoadingLines, StyleCMasthead, StyleCNotice, StyleCPaper, useStyleCScreen } from '../../ui/layout/StyleCPage';
-
-function EmptyState({ title, subtitle }: { icon: string; title: string; subtitle: string }) {
-  const { semanticColors: sc } = useTheme();
-  return <View style={{ padding: 24, gap: 12 }}><Text style={[typography.h2, { color: sc.textPrimary }]}>{title}</Text><Text style={[typography.bodySmall, { color: sc.textMuted }]}>{subtitle}</Text></View>;
-}
+import { StyleCCheck, StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCNotice, StyleCPaper, useStyleCScreen } from '../../ui/layout/StyleCPage';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface ListItem {
@@ -288,7 +283,7 @@ export default function GroceryListScreen() {
         </View>
       ) : items.length === 0 ? (
         <FadeInView>
-          <EmptyState
+          <StyleCEmpty
             icon="cart-outline"
             title="Your grocery list is empty"
             subtitle="Add items using the field above."

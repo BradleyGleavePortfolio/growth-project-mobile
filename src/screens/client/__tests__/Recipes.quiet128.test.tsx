@@ -110,3 +110,15 @@ it('shows loading and list failure honestly and keeps stored zero nutrition', as
   await ui.rerender(<RecipeDetailScreen />);
   expect(ui.queryByText(/kcal|min total|Calories|Protein|Carbs|Fat/)).toBeNull();
 });
+it('BEAUTY-929: every recipe row has its picture tile and a list failure has a Try again that refetches', async () => {
+  mockData = [recipe, { ...recipe, id: 'r2', title: 'Green salad', image_url: 'https://example.test/salad.jpg' }];
+  const ui = await render(<RecipesScreen />);
+  expect(ui.getAllByTestId('stylec-thumb', { includeHiddenElements: true })).toHaveLength(2);
+  mockData = []; mockError = true;
+  await ui.rerender(<RecipesScreen />);
+  expect(ui.getByRole('alert')).toBeTruthy();
+  expect(ui.getByText("Couldn't load recipes")).toBeTruthy();
+  expect(ui.getByText('Pull down to try again.')).toBeTruthy();
+  await fireEvent.press(ui.getByRole('button', { name: 'Try again' }));
+  expect(mockRefetch).toHaveBeenCalledTimes(1);
+});

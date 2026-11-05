@@ -18,15 +18,13 @@ import { prepGuideApi, listsApi } from '../../services/api';
 import FadeInView from '../../components/FadeInView';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { typography, radius } from '../../theme/tokens';
-import { Screen } from '../../ui';
-import { StyleCLoadingLines, StyleCMasthead, StyleCPaper, useStyleCScreen } from '../../ui/layout/StyleCPage';
+import { PrimaryButton, Screen } from '../../ui';
+import {
+  StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCNotice, StyleCPaper, StyleCThumb, useStyleCScreen,
+} from '../../ui/layout/StyleCPage';
 import { getLocalWeekStart } from '../../utils/date';
 import { RecipeAllergenFields, recipeAllergenSummary } from '../../lib/recipeAllergens';
 
-function EmptyState({ title, subtitle }: { icon: string; title: string; subtitle: string }) {
-  const { semanticColors: sc } = useTheme();
-  return <View style={{ padding: 24, gap: 12 }}><Text style={[typography.h2, { color: sc.textPrimary }]}>{title}</Text><Text style={[typography.bodySmall, { color: sc.textMuted }]}>{subtitle}</Text></View>;
-}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface PrepRecipe extends RecipeAllergenFields {
@@ -199,13 +197,13 @@ export default function PrepGuideScreen() {
             <StyleCLoadingLines />
           </View>
         ) : isError ? (
-          <EmptyState
-            icon="alert-circle-outline"
-            title="Couldn't load prep guide"
-            subtitle="Pull down to try again."
-          />
+          // The warm notice and a Try again button (C_error), the same words as before.
+          <View style={styles.errorBlock}>
+            <StyleCNotice title="Couldn't load prep guide">Pull down to try again.</StyleCNotice>
+            <PrimaryButton label="Try again" onPress={() => refetch()} disabled={isRefetching} haptic={false} />
+          </View>
         ) : !data || data.recipes.length === 0 ? (
-          <EmptyState
+          <StyleCEmpty
             icon="clipboard-outline"
             title="No recipes yet"
             subtitle="Recipes from a meal plan or available to this account appear here."
@@ -242,7 +240,7 @@ export default function PrepGuideScreen() {
                 <Text style={styles.sectionTitle}>
                   {fromPlan ? 'Recipes to prep' : 'Recipes'} ({data.recipes.length})
                 </Text>
-                {data.recipes.map((recipe, index) => (
+                {data.recipes.map((recipe) => (
                   <TouchableOpacity
                     key={recipe.id}
                     accessibilityRole="button"
@@ -251,9 +249,7 @@ export default function PrepGuideScreen() {
                     onPress={() => navigation.navigate('RecipeDetail', { recipeId: recipe.id })}
                     activeOpacity={0.7}
                   >
-                    <View style={styles.recipeIcon}>
-                      <Text style={styles.stepNumber}>{index + 1}</Text>
-                    </View>
+                    <StyleCThumb size={48} />
                     <View style={styles.recipeInfo}>
                       <Text style={styles.recipeName}>{recipe.title}</Text>
                       <View style={styles.recipeMeta}>
@@ -301,15 +297,15 @@ export default function PrepGuideScreen() {
                   </TouchableOpacity>
                 </View>
                 {data.aggregated_ingredients.map((ingredient, i) => (
+                  // Name at the left, amount at the right (C_recipe ingredients), not a bullet line.
                   <View key={i} style={styles.ingredientRow}>
-                    <View style={styles.ingredientBullet} />
-                    <Text style={styles.ingredientText}>
+                    <Text style={styles.ingredientName}>{ingredient.name}</Text>
+                    <Text style={styles.ingredientAmount}>
                       {ingredient.quantity > 0 && ingredient.unit
-                        ? `${Math.round(ingredient.quantity * 10) / 10} ${ingredient.unit} `
+                        ? `${Math.round(ingredient.quantity * 10) / 10} ${ingredient.unit}`
                         : ingredient.quantity > 1
-                        ? `${Math.round(ingredient.quantity * 10) / 10}× `
+                        ? `${Math.round(ingredient.quantity * 10) / 10}×`
                         : ''}
-                      <Text style={styles.ingredientName}>{ingredient.name}</Text>
                     </Text>
                   </View>
                 ))}
@@ -359,6 +355,7 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
   content: { flex: 1 },
   contentInner: { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 60, gap: 14 },
 
+  errorBlock: { paddingTop: 12, gap: 16 },
   loadingContainer: { paddingTop: 12, gap: 16 },
   loadingText: { ...typography.bodySmall, color: colors.textMuted },
 
@@ -382,7 +379,9 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: colors.primaryPale,
+    // A hairline pill: the page is the bone bgPrimary now, so a primaryPale (= bgPrimary) fill would vanish.
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: radius.chip,
@@ -390,14 +389,8 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
   prepDayText: { ...typography.eyebrow, color: colors.textMuted },
   prepDayHint: { ...typography.bodySmall, color: colors.textMuted },
 
-  recipeRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, minHeight: 44, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
-  // Serif numerals in muted ink (C_recipe method), not a filled chip.
-  stepNumber: { ...typography.h2, color: colors.textMuted },
-  recipeIcon: {
-    width: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  // The picture tile at the left of each row (C_kitchen), hairline between rows.
+  recipeRow: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 12, minHeight: 44, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   recipeInfo: { flex: 1 },
   recipeName: { ...typography.h3, fontSize: 21, lineHeight: 27, color: colors.textPrimary },
   recipeMeta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 4, marginTop: 2 },
@@ -417,16 +410,8 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
   addToGroceryBtnDisabled: { opacity: 0.6 },
   addToGroceryBtnText: { ...typography.bodyMd, color: colors.textOnPrimary },
 
-  ingredientRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
-  ingredientBullet: {
-    width: 6,
-    height: 6,
-    borderRadius: radius.chip,
-    backgroundColor: colors.primary,
-    marginTop: 7,
-    flexShrink: 0,
-  },
-  ingredientText: { ...typography.bodySmall, flex: 1, color: colors.textSecondary, fontVariant: ['tabular-nums'] },
-  ingredientName: { color: colors.textPrimary, fontWeight: '600' },
+  ingredientRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 16, paddingVertical: 14, minHeight: 44, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  ingredientName: { ...typography.body, flex: 1, color: colors.textPrimary },
+  ingredientAmount: { ...typography.body, color: colors.textPrimary, fontVariant: ['tabular-nums'], textAlign: 'right' },
 
   });

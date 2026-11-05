@@ -4,9 +4,11 @@
  * paper sheet whose 24 pt top corners overlap it. The screen keeps its Screen wrapper, which owns the
  * inset top (insets.top + 12); useStyleCScreen() turns that wrapper forest. Also the round check,
  * the warm notice and the static loading lines those frames draw. Gold is only ever the rule here, never text on light.
+ * BEAUTY-929: the paper is the app's page colour (bgPrimary, bone #F7FAF7, owner #197-E6 "we keep the toothpaste color
+ * for v1"), not the frames' cream; the row picture tile (C_kitchen) and the empty state with its line drawing live here too.
  */
 import React, { useEffect } from 'react';
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useStatusBarBand } from '../../components/StatusBarBand';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -52,7 +54,32 @@ export function useStyleCScreen(): { style: ViewStyle; contentStyle: ViewStyle }
 /** The paper sheet under the masthead: fills a fixed page, or grows under a masthead that scrolls. */
 export function StyleCPaper({ children, scrolls, style }: { children?: React.ReactNode; scrolls?: boolean; style?: StyleProp<ViewStyle> }) {
   const sc = useTheme().semanticColors;
-  return <View style={[s.paper, scrolls && s.paperFlow, { backgroundColor: sc.bgSurface }, style]}>{children}</View>;
+  return <View style={[s.paper, scrolls && s.paperFlow, { backgroundColor: sc.bgPrimary }, style]}>{children}</View>;
+}
+
+/** The 64 pt picture tile at the left of a row (C_kitchen): the recipe photo, else a warm tile with a line drawing
+ *  (the line is a non-text accent, so gold is allowed). Decorative: the row's own label names the recipe. */
+export function StyleCThumb({ uri, icon = 'restaurant-outline', size = 64 }: { uri?: string; icon?: string; size?: number }) {
+  const sc = useTheme().semanticColors;
+  return (
+    <View testID="stylec-thumb" importantForAccessibility="no-hide-descendants" accessibilityElementsHidden
+      style={[s.thumb, { width: size, height: size, backgroundColor: withAlpha(sc.data.trackLight, 0.6) }]}>
+      {uri ? <Image source={{ uri }} style={s.thumbImage} resizeMode="cover" accessibilityIgnoresInvertColors />
+        : <Ionicons name={icon as React.ComponentProps<typeof Ionicons>['name']} size={Math.round(size * 0.44)} color={gold[500]} />}
+    </View>
+  );
+}
+
+/** Empty state on the paper: the line-drawing tile over a serif title and a muted line (every kitchen screen). */
+export function StyleCEmpty({ icon, title, subtitle }: { icon: string; title: string; subtitle: string }) {
+  const sc = useTheme().semanticColors;
+  return (
+    <View style={s.empty}>
+      <StyleCThumb icon={icon} size={72} />
+      <Text style={[typography.h2, s.emptyText, { color: sc.textPrimary }]}>{title}</Text>
+      <Text style={[typography.bodySmall, s.emptyText, { color: sc.textMuted }]}>{subtitle}</Text>
+    </View>
+  );
 }
 
 /** Round check (C_grocery): a ring, filled forest with a light tick when checked. Visual only. */
@@ -65,13 +92,15 @@ export function StyleCCheck({ checked }: { checked: boolean }) {
   );
 }
 
-/** Warm notice (C_error): one alert region; the error haptic plays once when it appears. */
-export function StyleCNotice({ children }: { children: React.ReactNode }) {
+/** Warm notice (C_error): one alert region; the error haptic plays once when it appears. With a title, the title
+ *  is the first line in the medium sans and the children the line under it, as the frame draws it. */
+export function StyleCNotice({ children, title }: { children?: React.ReactNode; title?: string }) {
   const sc = useTheme().semanticColors;
   useEffect(() => { void HapticService.error(); }, []);
   return (
     <View accessible accessibilityRole="alert" accessibilityLiveRegion="polite" style={[s.notice, { backgroundColor: withAlpha(sc.data.trackLight, 0.5), borderLeftColor: gold[500] }]}>
-      <Text style={[typography.bodyMd, { color: sc.textPrimary }]}>{children}</Text>
+      {title ? <Text style={[typography.h4, { color: sc.textPrimary }]}>{title}</Text> : null}
+      {children ? <Text style={[typography.bodyMd, { color: sc.textPrimary }]}>{children}</Text> : null}
     </View>
   );
 }
@@ -100,7 +129,11 @@ const s = StyleSheet.create({
   paper: { flex: 1, marginTop: -radius.sheet, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, overflow: 'hidden' },
   paperFlow: { flex: 0, flexGrow: 1 },
   check: { width: 28, height: 28, borderRadius: radius.chip, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  notice: { borderLeftWidth: 3, borderRadius: radius.button, paddingHorizontal: 16, paddingVertical: 14 },
+  thumb: { borderRadius: radius.button, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  thumbImage: { width: '100%', height: '100%' },
+  empty: { alignItems: 'center', gap: 12, paddingHorizontal: 8, paddingVertical: 40 },
+  emptyText: { textAlign: 'center' },
+  notice: { gap: 4, borderLeftWidth: 3, borderRadius: radius.button, paddingHorizontal: 16, paddingVertical: 14 },
   lines: { gap: 24, paddingVertical: 8 },
   lineRow: { gap: 10 },
   lineShort: { height: 12, width: '40%', borderRadius: radius.control },

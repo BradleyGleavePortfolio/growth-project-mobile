@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   TextInput,
   RefreshControl,
-  Image,
   FlatList,
   ListRenderItem,
 } from 'react-native';
@@ -28,8 +27,8 @@ import EmptyState from '../../components/EmptyState';
 import AllergySafetyPrompt from '../../components/AllergySafetyPrompt';
 import { useTheme } from '../../theme/ThemeProvider';
 import { typography, radius, SemanticTokens } from '../../theme/tokens';
-import { Screen } from '../../ui';
-import { StyleCLoadingLines, StyleCMasthead, StyleCPaper, useStyleCScreen } from '../../ui/layout/StyleCPage';
+import { PrimaryButton, Screen } from '../../ui';
+import { StyleCLoadingLines, StyleCMasthead, StyleCNotice, StyleCPaper, StyleCThumb, useStyleCScreen } from '../../ui/layout/StyleCPage';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { patchUserCache } from '../../lib/userCache';
 import { track } from '../../lib/analytics';
@@ -74,19 +73,11 @@ function RecipeCard({ recipe, onPress }: { recipe: Recipe; onPress: () => void }
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.8}
       accessibilityRole="button" accessibilityLabel={`Open ${recipe.title}`}>
-      {recipe.image_url ? (
-        <View style={styles.cardImageWrap}>
-          <Image
-            source={{ uri: recipe.image_url }}
-            style={styles.cardImage}
-            resizeMode="cover"
-          />
-        </View>
-      ) : null}
+      <View style={styles.cardThumb}><StyleCThumb uri={recipe.image_url || undefined} size={56} /></View>
       <View style={styles.cardBody}>
         <Text style={styles.cardTitle}>{recipe.title}</Text>
         {recipe.description ? (
-          <Text style={styles.cardDesc} numberOfLines={2}>{recipe.description}</Text>
+          <Text style={styles.cardDesc}>{recipe.description}</Text>
         ) : null}
         <View style={styles.cardMeta}>
           {totalTime !== null && <View style={styles.cardMetaItem}>
@@ -322,11 +313,13 @@ export default function RecipesScreen() {
           }
           ListEmptyComponent={
             isError ? (
-              <EmptyState
-                icon="alert-circle-outline"
-                title={showingSaved ? "Couldn't load saved recipes" : "Couldn't load recipes"}
-                subtitle="Pull down to try again."
-              />
+              // The warm notice and a Try again button (C_error), not a centred icon: the same words as before.
+              <View style={styles.errorBlock}>
+                <StyleCNotice title={showingSaved ? "Couldn't load saved recipes" : "Couldn't load recipes"}>
+                  Pull down to try again.
+                </StyleCNotice>
+                <PrimaryButton label="Try again" onPress={() => refetch()} disabled={isRefetching} haptic={false} />
+              </View>
             ) : showingSaved && !search ? (
               <EmptyState
                 icon="bookmark-outline"
@@ -401,6 +394,7 @@ const makeStyles = (colors: SemanticTokens) =>
   listContent: { paddingHorizontal: 24, paddingBottom: 40 },
   hiddenNote: { ...typography.bodySmall, color: colors.textMuted, paddingVertical: 8 },
 
+  errorBlock: { paddingTop: 24, gap: 16 },
   loadingContainer: { paddingHorizontal: 24, paddingTop: 24, gap: 16 },
   loadingText: { ...typography.bodySmall, color: colors.textMuted },
 
@@ -412,24 +406,8 @@ const makeStyles = (colors: SemanticTokens) =>
     borderColor: colors.border,
     overflow: 'hidden',
   },
-  cardImagePlaceholder: {
-    height: 120,
-    backgroundColor: colors.bgPrimary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardImageWrap: {
-    width: 72,
-    height: 72,
-    marginTop: 20,
-    borderRadius: radius.button,
-    overflow: 'hidden',
-    backgroundColor: colors.bgSurface,
-  },
-  cardImage: {
-    width: '100%',
-    height: '100%',
-  },
+  // The picture tile (C_kitchen draws 64 pt; 56 here so a 320 pt screen at 130% keeps room for the name): the photo when there is one, else the warm tile with the line drawing.
+  cardThumb: { paddingTop: 20 },
   caloriesBadge: {
     position: 'absolute',
     bottom: 10,
@@ -455,8 +433,10 @@ const makeStyles = (colors: SemanticTokens) =>
     borderRadius: radius.chip,
   },
   tagsRow: { marginTop: 6 },
+  // A hairline pill: the page is bgPrimary now, so a bgPrimary fill would vanish.
   tag: {
-    backgroundColor: colors.bgPrimary,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: radius.chip,

@@ -18,16 +18,10 @@ import { listsApi } from '../../services/api';
 
 import FadeInView from '../../components/FadeInView';
 import { useTheme } from '../../theme/ThemeProvider';
-import { typography } from '../../theme/tokens';
 import { PrimaryButton, TextLink, Screen } from '../../ui';
 import { HapticService } from '../../ui/haptics/haptics.service';
-import { StyleCCheck, StyleCLoadingLines, StyleCMasthead, StyleCNotice, StyleCPaper, useStyleCScreen } from '../../ui/layout/StyleCPage';
+import { StyleCCheck, StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCNotice, StyleCPaper, useStyleCScreen } from '../../ui/layout/StyleCPage';
 import { makeListStyles as makeStyles } from './GroceryListScreen';
-
-function EmptyState({ title, subtitle }: { icon: string; title: string; subtitle: string }) {
-  const { semanticColors: sc } = useTheme();
-  return <View style={{ padding: 24, gap: 12 }}><Text style={[typography.h2, { color: sc.textPrimary }]}>{title}</Text><Text style={[typography.bodySmall, { color: sc.textMuted }]}>{subtitle}</Text></View>;
-}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface ListItem {
@@ -266,7 +260,7 @@ export default function ShoppingListScreen() {
         </View>
       ) : items.length === 0 ? (
         <FadeInView>
-          <EmptyState
+          <StyleCEmpty
             icon="bag-outline"
             title="Your shopping list is empty"
             subtitle="Add items using the field above."
