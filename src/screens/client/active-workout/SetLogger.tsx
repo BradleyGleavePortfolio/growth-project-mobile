@@ -178,7 +178,8 @@ export function SetLogger({
       showZero={!bwCell && (!!set.prescribedZero || (set.completed && previous?.weight === 0))}
       keyboardType="decimal-pad"
       placeholderTextColor={sc.textMuted}
-      accessibilityLabel={`Set ${setIdx + 1} weight in pounds`}
+      // LO-928 C2: a body-weight cell is named "body weight", not "in pounds".
+      accessibilityLabel={bwCell ? `Set ${setIdx + 1} weight, body weight` : `Set ${setIdx + 1} weight in pounds`}
       testID={`set-weight-${exIdx}-${setIdx}`}
     />
   );

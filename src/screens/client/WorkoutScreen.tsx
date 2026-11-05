@@ -48,6 +48,7 @@ import { EmptyStateNoWorkouts, EmptyStateNoData } from '../../ui/empty-states';
 import { useMyWorkoutAssignments } from '../../hooks/useWorkoutBuilder';
 import { assignmentPlanName } from '../../utils/workout/assignmentPrescription';
 import { dayStart, instantDay, workoutDay } from '../../utils/workout/workoutDay';
+import { setVolume } from '../../utils/workout/exerciseUnit';
 // Client tutorial (C08): pinned plan explanation card; flag-gated, renders
 // nothing unless featureFlags.clientTutorial and a program exists.
 import PlanExplanationCard from '../../components/tutorial/PlanExplanationCard';
@@ -445,7 +446,7 @@ export default function WorkoutScreen() {
               const weights = ex.weight_per_set || [];
               const reps = ex.reps_per_set || [];
               for (let i = 0; i < Math.min(weights.length, reps.length); i++) {
-                vol += (weights[i] || 0) * (reps[i] || 0);
+                vol += setVolume(weights[i], reps[i], ex.asked_unit);
               }
             }
           }

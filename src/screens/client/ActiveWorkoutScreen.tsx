@@ -46,6 +46,7 @@ import {
 } from '../../utils/workout/workoutLogging';
 import { workoutStartDay } from '../../utils/workout/workoutDay';
 import { catalogKey } from '../../utils/workout/exerciseId';
+import { isTimedRow } from '../../utils/workout/exerciseUnit';
 // Offline-first write path (audit fix H-5: comments were left
 // referencing the deleted WatermelonDB stack — current implementation
 // is built on expo-sqlite, see src/offline/database.ts and
@@ -1195,15 +1196,18 @@ export default function ActiveWorkoutScreen() {
   // saved without an order keep list order). Drives Roman's readback with the
   // real logged weight/reps. A set with a zero weight (e.g. bodyweight) is still
   // a valid readback, so the only gate is `completed`.
-  const lastCompletedSet: SessionSet | null = (() => {
-    let found: SessionSet | null = null;
+  // LS-928 B3: with the exercise it belongs to, so a timed or body-weight set
+  // is read back in its own words.
+  const lastCompleted: { set: SessionSet; exercise: SessionExercise } | null = (() => {
+    let found: { set: SessionSet; exercise: SessionExercise } | null = null;
     for (const ex of sessionExercises) {
       for (const s of ex.sets) {
-        if (s.completed && (!found || (s.doneOrder ?? 0) >= (found.doneOrder ?? 0))) found = s;
+        if (s.completed && (!found || (s.doneOrder ?? 0) >= (found.set.doneOrder ?? 0))) found = { set: s, exercise: ex };
       }
     }
     return found;
   })();
+  const lastCompletedSet = lastCompleted?.set ?? null;
 
   // REDO-LIVE-133: the rest timer sits in the pinned footer above Finish, so it
   // never covers a set row. Its handlers are unchanged (#474 rest alert).
@@ -1313,6 +1317,8 @@ export default function ActiveWorkoutScreen() {
             <RomanVoiceLogReadback
               weight={lastCompletedSet.weight}
               reps={lastCompletedSet.reps}
+              timed={isTimedRow(lastCompleted?.exercise)}
+              bodyWeight={!!(lastCompleted && bodyWeight[lastCompleted.exercise.exerciseId])}
               mode="default"
               testID="roman-voicelog-card"
             />

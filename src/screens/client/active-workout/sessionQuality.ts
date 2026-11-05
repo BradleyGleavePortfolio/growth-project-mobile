@@ -1,5 +1,6 @@
 import type { Exercise, SessionExercise, SessionSet } from './types';
 import { toServerMuscleGroup } from '../../../utils/workout/muscleGroup';
+import { setVolume, unitField } from '../../../utils/workout/exerciseUnit';
 
 export interface LoggedExercise {
   exercise_name: string;
@@ -122,7 +123,10 @@ export function workoutSummary(exercises: SessionExercise[], history: LoggedWork
       ? [{ name: exercise.exerciseName, weight: best }]
       : [];
   });
-  return { exercises: done.length, sets: sets.length, volume: sets.reduce((sum, s) => sum + s.weight * s.reps, 0), records };
+  // LS-928 B4: a set counted in seconds adds no lb volume.
+  const volume = done.reduce((sum, e) => sum + e.sets.reduce(
+    (inner, s) => inner + (s.completed ? setVolume(s.weight, s.reps, e.unit) : 0), 0), 0);
+  return { exercises: done.length, sets: sets.length, volume, records };
 }
 
 export function loggedWorkoutExercises(workout: LoggedWorkout): SessionExercise[] {
@@ -131,6 +135,8 @@ export function loggedWorkoutExercises(workout: LoggedWorkout): SessionExercise[
     exerciseName: e.exercise_name,
     muscleGroup: e.muscle_group,
     notes: e.notes ?? '',
+    // LS-928 B1: a saved timed exercise stays in seconds in the history edit.
+    ...unitField(e.asked_unit),
     // The plan row the server stored is sent back as it was (PUT is replace-all).
     ...(typeof e.plan_assignment_id === 'string' && e.plan_assignment_id && typeof e.plan_order === 'number'
       ? { planAssignmentId: e.plan_assignment_id, planOrder: e.plan_order }

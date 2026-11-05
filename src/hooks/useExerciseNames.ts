@@ -13,6 +13,7 @@
 import { useMemo } from 'react';
 import { useQueries } from '@tanstack/react-query';
 import { bodyWeightMap, byIdQuery, uniqueIds } from './exerciseByIdQuery';
+import { isPhoneMadeId } from '../utils/workout/exerciseId';
 
 /** Title-case a catalog name ("barbell bench press" -> "Barbell Bench Press"). */
 export function displayExerciseName(name: string): string {
@@ -34,7 +35,9 @@ export function useExerciseNames(ids: string[]): ExerciseNames {
   const unique = useMemo(() => uniqueIds(ids), [ids]);
   const results = useQueries({ queries: unique.map(byIdQuery) });
   const joined = results.map((r) => r.data?.name ?? '').join('\u0000');
-  const loading = results.some((r) => r.isPending && r.fetchStatus === 'fetching');
+  // LS-928 B2: never wait on an id the phone made; the catalog cannot answer it
+  // (one read, no retry), so a caller copying names does not hold for it.
+  const loading = results.some((r, i) => !isPhoneMadeId(unique[i]) && r.isPending && r.fetchStatus === 'fetching');
   const names = useMemo(() => {
     const out: Record<string, string> = {};
     const list = joined.split('\u0000');

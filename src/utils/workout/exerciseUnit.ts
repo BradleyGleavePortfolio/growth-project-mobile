@@ -25,3 +25,14 @@ export function unitField(unit: unknown): { unit?: ExerciseUnit } {
 /** The short word after a count: "reps" or "sec" (W1). */
 export const countWord = (row: { unit?: unknown } | null | undefined): string =>
   isTimedRow(row) ? 'sec' : 'reps';
+
+/**
+ * LS-928 B4: pounds lifted by one set, weight times reps. A set counted in
+ * seconds lifts no reps, so it adds 0 (its saved numbers are unchanged). Every
+ * lb-volume total (finish summary, member chart, coach session and weekly
+ * totals) adds sets through this.
+ */
+export function setVolume(weight: unknown, count: unknown, unit: unknown): number {
+  if (unit === 'seconds') return 0;
+  return (Number(weight) || 0) * (Number(count) || 0);
+}
