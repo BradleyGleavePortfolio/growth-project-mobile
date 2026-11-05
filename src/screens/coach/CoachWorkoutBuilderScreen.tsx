@@ -2080,7 +2080,7 @@ const stepperStyles = StyleSheet.create({
   label: { flexGrow: 1, flexShrink: 1 },
   group: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginStart: 'auto' },
   button: { width: 44, height: 44, borderRadius: radius.chip, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  value: { minWidth: 64, minHeight: 44, textAlign: 'center', fontFamily: 'Inter_600SemiBold', fontVariant: ['tabular-nums'], paddingVertical: 0 },
+  value: { width: 72, minHeight: 44, textAlign: 'center', fontFamily: 'Inter_600SemiBold', fontVariant: ['tabular-nums'], paddingVertical: 0 },
 });
 
 function makeStyles(sc: SemanticTokens) {
@@ -2148,7 +2148,8 @@ function makeStyles(sc: SemanticTokens) {
       paddingBottom: spacing.md,
     },
     rowIdentity: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
-    rowName: { flex: 1 },
+    // Lining figures: the serif's old-style 1 reads as a capital I ("I. Plank").
+    rowName: { flex: 1, fontVariant: ['lining-nums'] },
     rowControls: { flexDirection: 'row', gap: spacing.sm, justifyContent: 'flex-end' },
     controlBtn: {
       minHeight: 44, minWidth: 44, borderWidth: StyleSheet.hairlineWidth, borderColor: sc.surface.forestBandLine,
