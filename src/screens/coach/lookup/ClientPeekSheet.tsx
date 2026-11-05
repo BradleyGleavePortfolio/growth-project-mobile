@@ -158,15 +158,16 @@ export default function ClientPeekSheet({ client, onClose, onOpen, onNudge, chil
               </View>
             ) : null}
             {/* C_peek: Message {first} and Send nudge share one row, each as wide as its words with the spare width shared
-                (LO-933 B2: "Message Jordan" stays one line at 390 pt and 130%). When the two do not fit, each wraps
-                inside its own button, never below the other. */}
+                (LO-933 B2: "Message Jordan" stays one line at 390 pt and 130%). When the two do not fit, Message gives way
+                first, as C_peek android360 130% draws: Send nudge keeps its words' width, never more than half the row,
+                and either wraps inside its own button, never below the other. */}
             <View style={s.buttons} testID="peek-buttons">
-              <View style={s.slot} testID="peek-slot">
+              <View style={s.slotMessage} testID="peek-slot">
                 <HapticPressable intent="medium" containerStyle={s.flex} style={s.primary} onPress={() => open({ screen: 'chat' })} accessibilityRole="button" accessibilityLabel={`Message ${first}`} testID="peek-message">
                   <Text style={s.primaryText}>{`Message ${first}`}</Text>
                 </HapticPressable>
               </View>
-              <View style={s.slot} testID="peek-slot">
+              <View style={s.slotNudge} testID="peek-slot">
                 <HapticPressable intent="light" containerStyle={s.flex} style={s.outline} onPress={() => onNudge(client)} accessibilityRole="button" accessibilityLabel="Send nudge" testID="peek-nudge">
                   <Text style={s.outlineText}>Send nudge</Text>
                 </HapticPressable>
@@ -222,7 +223,8 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     // Two buttons 8 pt apart, each sized to its words plus an equal share of the spare width (C_peek), as tall as the
     // taller one (a wrapped name grows both together).
     buttons: { flexDirection: 'row', gap: 8, marginTop: 16 },
-    slot: { flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: 0 },
+    slotMessage: { flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: 0 },
+    slotNudge: { flexGrow: 1, flexShrink: 0, flexBasis: 'auto', maxWidth: '50%' },
     flex: { flex: 1 },
     primary: { flex: 1, minHeight: layout.buttonHeight, borderRadius: radius.button, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 8 },
     primaryText: { ...typography.bodyMd, fontFamily: 'Inter_600SemiBold', fontSize: 15, lineHeight: 20, textAlign: 'center', color: sem.textOnAccent },

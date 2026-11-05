@@ -132,10 +132,12 @@ describe('UI-4 peek sheet', () => {
     const row = StyleSheet.flatten(screen.getByTestId('peek-buttons').props.style);
     expect(row.flexDirection).toBe(direction);
     expect(row.flexWrap).toBeUndefined(); // never a content-sized wrap
-    // Each slot starts at its words' width (basis auto) and takes an equal share of what is left; never a zero-basis half.
+    // Each slot starts at its words' width (basis auto) and takes an equal share of what is left; never a zero-basis
+    // half. When short of room, Message gives way first; Send nudge never passes half the row (C_peek android360 130%).
     const slots = screen.getAllByTestId('peek-slot');
     expect(slots).toHaveLength(2);
-    for (const slot of slots) expect(StyleSheet.flatten(slot.props.style)).toMatchObject({ flexGrow: 1, flexShrink: 1, flexBasis: 'auto' });
+    expect(StyleSheet.flatten(slots[0].props.style)).toMatchObject({ flexGrow: 1, flexShrink: 1, flexBasis: 'auto' });
+    expect(StyleSheet.flatten(slots[1].props.style)).toMatchObject({ flexGrow: 1, flexShrink: 0, flexBasis: 'auto', maxWidth: '50%' });
     for (const slot of slots) expect(StyleSheet.flatten(slot.props.style).flex).toBeUndefined();
     expect(screen.getByText(`Message ${first}`)).toBeTruthy();
   });

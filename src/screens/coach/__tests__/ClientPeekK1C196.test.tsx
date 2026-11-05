@@ -136,7 +136,8 @@ describe('C_peek buttons (PEEK-K1-M)', () => {
     expect(row.flexWrap).toBeUndefined();
     const slots = screen.getAllByTestId('peek-slot');
     expect(slots).toHaveLength(2);
-    for (const slot of slots) expect(StyleSheet.flatten(slot.props.style)).toMatchObject({ flexGrow: 1, flexShrink: 1, flexBasis: 'auto' });
+    expect(StyleSheet.flatten(slots[0].props.style)).toMatchObject({ flexGrow: 1, flexShrink: 1, flexBasis: 'auto' });
+    expect(StyleSheet.flatten(slots[1].props.style)).toMatchObject({ flexGrow: 1, flexShrink: 0, flexBasis: 'auto', maxWidth: '50%' });
     for (const id of ['peek-message', 'peek-nudge']) expect(StyleSheet.flatten(screen.getByTestId(id).props.style).minHeight).toBeGreaterThanOrEqual(44);
     expect(screen.getByText(`Message ${first}`).props.numberOfLines).toBeUndefined(); // a long name wraps in its half, never cut
   });
