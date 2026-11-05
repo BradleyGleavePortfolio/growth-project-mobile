@@ -76,10 +76,22 @@ export type NeedsLead =
   | { kind: 'alert'; name: string; text: string }
   | { kind: 'client'; row: NeedsClientRow };
 
+/**
+ * The Home lead's words for an alert (GOAL H4 "Hana Kim · Crossed into the red risk band"): the server's message
+ * without the client's name already beside it and without a trailing "(82%)." figure; otherwise the message as sent.
+ */
+export function alertLeadText(i: Pick<ActionQueueItem, 'client_name' | 'message'>): string {
+  let t = i.message.trim();
+  const name = i.client_name.trim();
+  if (name && t.toLowerCase().startsWith(`${name.toLowerCase()} `)) t = t.slice(name.length + 1);
+  t = t.replace(/\s*\([^()]*\)\.?$/, '').replace(/\.$/, '').trim();
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : i.message;
+}
+
 /** The Home card's lead: the list's first row (Attention before Routine). */
 export function needsLead(a: NeedsAreas): NeedsLead | null {
   if (a.safety[0]) return { kind: 'safety', name: a.safety[0].client_name };
-  if (a.alerts[0]) return { kind: 'alert', name: a.alerts[0].client_name, text: a.alerts[0].message };
+  if (a.alerts[0]) return { kind: 'alert', name: a.alerts[0].client_name, text: alertLeadText(a.alerts[0]) };
   const row = a.quiet[0] ?? a.fresh[0] ?? a.routine[0];
   return row ? { kind: 'client', row } : null;
 }
