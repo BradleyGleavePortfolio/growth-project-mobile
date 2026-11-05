@@ -60,11 +60,14 @@ jest.mock('../../../components/HapticPressable', () => {
 jest.mock('../../../components/home/PushPermissionCard', () => () => null);
 
 import ClientsListScreen from '../ClientsListScreen';
+import { featureFlags } from '../../../config/featureFlags';
 
 type Nav = React.ComponentProps<typeof ClientsListScreen>['navigation'];
 
 beforeEach(() => {
   mockIsLoading = true;
+  // Pins EXPO_PUBLIC_FF_COACH_CLIENT_LOOKUP off: this file is the classic Clients roster (ClientsListScreen.tsx:60 swaps in the lookup).
+  jest.replaceProperty(featureFlags, 'coachClientLookup', false);
 });
 
 afterEach(() => {

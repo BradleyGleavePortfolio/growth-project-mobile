@@ -58,6 +58,7 @@ jest.mock('@stripe/stripe-react-native', () => ({
 
 import ClientPackagesScreen, { currentPlanLine } from '../screens/client/ClientPackagesScreen';
 import { clientPaymentsApi } from '../api/clientPaymentsApi';
+import { featureFlags } from '../config/featureFlags';
 
 const MONTHLY = {
   id: 'pkg-monthly', name: 'Monthly coaching', amount_cents: 4900, currency: 'usd',
@@ -78,6 +79,9 @@ function purchase(over: Record<string, unknown>) {
 
 let purchases: unknown[] = [];
 let plans: unknown[] = [];
+
+// Pins EXPO_PUBLIC_FF_CLIENT_BILLING_V2 off: this file is the classic plans screen, not the Style C one.
+jest.replaceProperty(featureFlags, 'clientBillingV2', false);
 
 beforeEach(() => {
   jest.clearAllMocks();

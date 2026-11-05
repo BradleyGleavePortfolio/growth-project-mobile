@@ -53,6 +53,10 @@ jest.mock('@react-navigation/native', () => {
 import api from '../../../services/api';
 import CoachInboxV2, { inboxPreview, inboxTimeLabel } from '../CoachInboxV2';
 import type { InboxThread } from '../../../api/messagingV2Api';
+import { featureFlags } from '../../../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_COACH_TABS_V2 off: threads open over Clients here (coachInbox.ts:18 sends them to Messages when on).
+jest.replaceProperty(featureFlags, 'coachTabsV2', false);
 
 const http = api as unknown as Record<'get' | 'put', jest.Mock>;
 

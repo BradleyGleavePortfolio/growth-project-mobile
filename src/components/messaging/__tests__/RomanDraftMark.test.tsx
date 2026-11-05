@@ -45,7 +45,14 @@ beforeEach(() => {
 afterEach(() => { jest.restoreAllMocks(); setFlag(false); });
 
 it('defaults off even in development', () => {
-  jest.isolateModules(() => expect(require('../../../config/featureFlags').featureFlags.romanDraftMark).toBe(false));
+  // Pins EXPO_PUBLIC_FF_ROMAN_DRAFT_MARK off: this test checks the shipped default.
+  const saved = process.env.EXPO_PUBLIC_FF_ROMAN_DRAFT_MARK;
+  delete process.env.EXPO_PUBLIC_FF_ROMAN_DRAFT_MARK;
+  try {
+    jest.isolateModules(() => expect(require('../../../config/featureFlags').featureFlags.romanDraftMark).toBe(false));
+  } finally {
+    if (saved !== undefined) process.env.EXPO_PUBLIC_FF_ROMAN_DRAFT_MARK = saved;
+  }
 });
 
 it.each([false, true])('walks every governed message path on side isMe=%s', async (isMe) => {
