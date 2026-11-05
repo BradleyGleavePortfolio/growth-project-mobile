@@ -150,12 +150,12 @@ export default function ClientPeekSheet({ client, onClose, onOpen, onNudge, chil
                 name or 130% text wraps inside its half, never below the other button. */}
             <View style={s.buttons} testID="peek-buttons">
               <View style={s.flex} testID="peek-slot">
-                <HapticPressable intent="medium" style={s.primary} onPress={() => open({ screen: 'chat' })} accessibilityRole="button" accessibilityLabel={`Message ${first}`} testID="peek-message">
+                <HapticPressable intent="medium" containerStyle={s.flex} style={s.primary} onPress={() => open({ screen: 'chat' })} accessibilityRole="button" accessibilityLabel={`Message ${first}`} testID="peek-message">
                   <Text style={s.primaryText}>{`Message ${first}`}</Text>
                 </HapticPressable>
               </View>
               <View style={s.flex} testID="peek-slot">
-                <HapticPressable intent="light" style={s.outline} onPress={() => onNudge(client)} accessibilityRole="button" accessibilityLabel="Send nudge" testID="peek-nudge">
+                <HapticPressable intent="light" containerStyle={s.flex} style={s.outline} onPress={() => onNudge(client)} accessibilityRole="button" accessibilityLabel="Send nudge" testID="peek-nudge">
                   <Text style={s.outlineText}>Send nudge</Text>
                 </HapticPressable>
               </View>
@@ -195,21 +195,21 @@ const makeStyles = ({ colors, semanticColors: sem }: ReturnType<typeof useTheme>
     // C_peek rows: a hairline above the first and between rows, none under the last; label left in ink, value right
     // in muted ink, one line each at 44 pt (Review is a 44 pt target inside the Check-ins row).
     slices: { marginTop: 8, borderTopWidth: StyleSheet.hairlineWidth, borderColor: sem.border },
-    slice: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: layout.touchMin, paddingVertical: 4, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: sem.border },
+    slice: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: layout.touchMin, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: sem.border },
     lastSlice: { borderBottomWidth: 0 },
-    sliceTitle: { ...typography.body, lineHeight: 22, flexShrink: 0, color: colors.textPrimary },
-    sliceText: { ...typography.body, lineHeight: 22, flex: 1, minWidth: 0, textAlign: 'right', color: colors.textMuted },
+    sliceTitle: { ...typography.body, fontSize: 15, lineHeight: 21, flexShrink: 0, color: colors.textPrimary },
+    sliceText: { ...typography.body, fontSize: 15, lineHeight: 21, flex: 1, minWidth: 0, textAlign: 'right', color: colors.textMuted },
     review: { minHeight: layout.touchMin, minWidth: layout.touchMin, justifyContent: 'center', alignItems: 'flex-end' },
-    link: { ...typography.bodyMd, lineHeight: 22, color: colors.primary, textDecorationLine: 'underline' },
+    link: { ...typography.bodyMd, fontSize: 15, lineHeight: 21, color: colors.primary, textDecorationLine: 'underline' },
     // Two equal halves, 8 pt apart, as tall as the taller one (a wrapped name grows both together).
     buttons: { flexDirection: 'row', gap: 8, marginTop: 16 },
     flex: { flex: 1 },
     primary: { flex: 1, minHeight: layout.buttonHeight, borderRadius: radius.button, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 8 },
-    primaryText: { ...typography.bodyMd, fontFamily: 'Inter_600SemiBold', lineHeight: 22, textAlign: 'center', color: sem.textOnAccent },
+    primaryText: { ...typography.bodyMd, fontFamily: 'Inter_600SemiBold', fontSize: 15, lineHeight: 20, textAlign: 'center', color: sem.textOnAccent },
     outline: { flex: 1, minHeight: layout.buttonHeight, borderRadius: radius.button, borderWidth: 1, borderColor: colors.primary, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 8 },
-    outlineText: { ...typography.bodyMd, fontFamily: 'Inter_600SemiBold', lineHeight: 22, textAlign: 'center', color: colors.primary },
+    outlineText: { ...typography.bodyMd, fontFamily: 'Inter_600SemiBold', fontSize: 15, lineHeight: 20, textAlign: 'center', color: colors.primary },
     // C_peek chips: each pill is itself the 44 pt target, 8 pt apart both ways.
     chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
     chip: { minHeight: layout.touchMin, paddingHorizontal: 12, justifyContent: 'center', borderRadius: radius.chip, borderWidth: 1, borderColor: sem.border, backgroundColor: colors.background },
-    chipText: { ...typography.bodyMd, lineHeight: 22, color: colors.primary },
+    chipText: { ...typography.bodySmall, fontFamily: 'Inter_500Medium', lineHeight: 20, color: colors.primary },
   });
