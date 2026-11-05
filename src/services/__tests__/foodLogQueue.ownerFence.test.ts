@@ -7,7 +7,7 @@
  * `setUserCache` / `clearUserCache` calls a sign-in / sign-out performs.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { clearUserCache, setUserCache } from '../../lib/userCache';
+import { clearUserCache, readUserCacheSync, setUserCache } from '../../lib/userCache';
 import { enqueue, flush, getQueueLength } from '../foodLogQueue';
 
 jest.mock('../api', () => {
@@ -102,4 +102,39 @@ describe('foodLogQueue — owner captured from the real identity mirror', () => 
     expect(res).toEqual({ flushed: 1, remaining: 0, parked: 0 });
     expect(await queueFor('user-A')).toEqual([]);
   });
+
+  it.each(['manual', 'search'] as const)(
+    'never sends A food under B after the %s food-item creation await',
+    async (kind) => {
+      await setUserCache(userA);
+      await enqueue({
+        kind,
+        food: {
+          name: 'Account A lunch', brand_or_restaurant: null, category: 'other',
+          serving_description: '1 serving', serving_size_grams: null,
+          calories: 240, protein_g: 20, carbs_g: 25, fat_g: 8,
+          tags: [], search_aliases: [],
+        },
+        log: { date: '2026-11-04', meal_type: 'lunch', quantity_multiplier: 1 },
+      }, 'a-created-food');
+
+      api.__create.mockImplementationOnce(async () => {
+        // A's first request was already sent. Its response resolves after B signed in.
+        await clearUserCache();
+        await setUserCache(userB);
+        return { data: { id: 'a-created-item' } };
+      });
+      const postedOwners: Array<string | undefined> = [];
+      api.__logFood.mockImplementation(async () => {
+        postedOwners.push(readUserCacheSync()?.id);
+        return { data: {} };
+      });
+      await flush();
+
+      expect(api.__create).toHaveBeenCalledTimes(1);
+      expect(await queueFor('user-B')).toEqual([]);
+      expect(postedOwners).not.toContain('user-B');
+      expect(api.__logFood).not.toHaveBeenCalled();
+    },
+  );
 });
