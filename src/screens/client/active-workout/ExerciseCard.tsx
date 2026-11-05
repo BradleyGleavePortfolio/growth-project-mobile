@@ -9,6 +9,7 @@ import type { SessionExercise, SessionSet } from './types';
 import type { ActiveWorkoutStyles } from './styles';
 import { SetLogger } from './SetLogger';
 import { blockLetter } from './blockLetter';
+import { readsBW } from '../../../utils/workout/bodyWeight';
 
 export function ExerciseCard({
   exercise,
@@ -30,6 +31,7 @@ export function ExerciseCard({
   active = false,
   foldable = false,
   notStarted = false,
+  bodyWeight = false,
 }: {
   exercise: SessionExercise;
   exIdx: number;
@@ -53,6 +55,8 @@ export function ExerciseCard({
   foldable?: boolean;
   /** C1 v2: a later block with no set done yet is one line with its plan until tapped. */
   notStarted?: boolean;
+  /** FIX-928-BW (#197-E10): a body-weight exercise; its unloaded sets read BW. */
+  bodyWeight?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const folded = foldable && !open;
@@ -76,11 +80,11 @@ export function ExerciseCard({
   );
   // C1 v2: "C  Romanian deadlift  3 × 8 · 135 lb", one tap opens the block.
   if (waiting) {
-    const plan = planLine(exercise.sets, exercise.unit === 'seconds');
+    const plan = planLine(exercise.sets, exercise.unit === 'seconds', bodyWeight);
     return (
       <HapticPressable intent="light" style={styles.exerciseCard} onPress={() => setOpen(true)}
         accessibilityRole="button" accessibilityState={{ expanded: false }}
-        accessibilityLabel={`Show sets for ${exercise.exerciseName}${plan ? `, ${plan}` : ''}`}
+        accessibilityLabel={`Show sets for ${exercise.exerciseName}${plan ? `, ${plan.replace(/ · BW$/, ' · body weight')}` : ''}`}
         testID={`exercise-waiting-${exIdx}`}>
         <View style={[styles.exerciseHeader, local.foldedHeader]}>
           {letter}
@@ -195,6 +199,7 @@ export function ExerciseCard({
           editable={!disabled}
           nextUp={setIdx === nextSet}
           timed={exercise.unit === 'seconds'}
+          bodyWeight={bodyWeight}
         />
       ))}
 
@@ -220,12 +225,13 @@ export function ExerciseCard({
 
 /**
  * C1 v2 plan line from the block's first set: "3 × 8 · 135 lb"; a coach's zero
- * stays "0 lb". TIMED-SETS-M: a timed block reads "3 × 60 sec".
+ * stays "0 lb". TIMED-SETS-M: a timed block reads "3 × 60 sec". FIX-928-BW: a
+ * body-weight exercise's zero reads "BW" ("3 × 60 sec · BW").
  */
-export function planLine(sets: SessionSet[], timed = false): string {
+export function planLine(sets: SessionSet[], timed = false, bodyWeight = false): string {
   const first = sets[0];
   if (!first) return '';
-  const weight = first.weight > 0 || first.prescribedZero ? ` · ${first.weight} lb` : '';
+  const weight = first.weight > 0 || first.prescribedZero ? ` · ${readsBW(bodyWeight, first.weight) ? 'BW' : `${first.weight} lb`}` : '';
   return first.reps > 0 ? `${sets.length} × ${first.reps}${timed ? ' sec' : ''}${weight}` : `${sets.length} ${sets.length === 1 ? 'set' : 'sets'}${weight}`;
 }
 

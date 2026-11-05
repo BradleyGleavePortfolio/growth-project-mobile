@@ -6,6 +6,7 @@ import type { ThemeColors } from '../../../theme/ThemeProvider';
 import { lightTokens as sc } from '../../../theme/tokens';
 import type { SessionSet } from './types';
 import type { ActiveWorkoutStyles } from './styles';
+import { readsBW } from '../../../utils/workout/bodyWeight';
 
 /**
  * Clean what the client typed into a weight cell. Keeps digits and ONE
@@ -120,6 +121,7 @@ export function SetLogger({
   hideCompletion = false,
   nextUp = false,
   timed = false,
+  bodyWeight = false,
 }: {
   set: SessionSet;
   setIdx: number;
@@ -135,6 +137,8 @@ export function SetLogger({
   nextUp?: boolean;
   /** TIMED-SETS-M: a timed row; the count is seconds (still saved as reps_per_set). */
   timed?: boolean;
+  /** FIX-928-BW (#197-E10): a body-weight exercise; an unloaded set reads "BW", spoken "body weight". */
+  bodyWeight?: boolean;
 }) {
   // The count's words: "reps" as on main, "seconds" / "sec" for a timed row.
   const spoken = timed ? 'seconds' : 'reps';
@@ -156,6 +160,10 @@ export function SetLogger({
   // blank from the previous set, as the check did. Not on screens without the
   // done button (the history edit keeps main's row).
   const asPlanned = !hideCompletion && !set.completed && (!!set.prescribedZero || set.weight > 0 || set.reps > 0 || !!previous);
+  // FIX-928-BW: the weight cell of an unloaded body-weight set shows "BW" (its
+  // placeholder) and no "lb"; a coach's 0 stays this set's weight, a load typed
+  // in reads "lb" again. Last time's load still shows when the coach set none.
+  const bwCell = !hideCompletion && readsBW(bodyWeight, set.weight) && (!!set.prescribedZero || readsBW(bodyWeight, previous?.weight));
   const weightCell = (style: React.ComponentProps<typeof TextInput>['style'], autoFocus = false, fit?: { min: number; size: number }) => (
     <NumericCell
       fit={fit}
@@ -166,8 +174,8 @@ export function SetLogger({
       parse={parseWeightText}
       onChangeValue={(v) => onUpdate(exIdx, setIdx, 'weight', v)}
       onBlankChange={setWeightBlank}
-      placeholder={String(previous?.weight ?? 0)}
-      showZero={!!set.prescribedZero || (set.completed && previous?.weight === 0)}
+      placeholder={bwCell ? 'BW' : String(previous?.weight ?? 0)}
+      showZero={!bwCell && (!!set.prescribedZero || (set.completed && previous?.weight === 0))}
       keyboardType="decimal-pad"
       placeholderTextColor={sc.textMuted}
       accessibilityLabel={`Set ${setIdx + 1} weight in pounds`}
@@ -196,14 +204,14 @@ export function SetLogger({
       disabled={set.completed || !editable}
       style={hideCompletion ? styles.previousSet : styles.previousLine}
       accessibilityRole="button"
-      accessibilityLabel={`Use previous set ${setIdx + 1}: ${previous.weight} pounds, ${previous.reps} ${spoken}`}
+      accessibilityLabel={`Use previous set ${setIdx + 1}: ${readsBW(bodyWeight, previous.weight) ? 'body weight' : `${previous.weight} pounds`}, ${previous.reps} ${spoken}`}
       onPress={() => {
         onUpdate(exIdx, setIdx, 'weight', previous.weight);
         onUpdate(exIdx, setIdx, 'reps', previous.reps);
       }}
     >
       <Text style={styles.previousSetLabel}>Previous</Text>
-      <Text style={styles.previousSetValue}>{previous.weight} × {previous.reps}{shownUnit}</Text>
+      <Text style={styles.previousSetValue}>{readsBW(bodyWeight, previous.weight) ? 'BW' : previous.weight} × {previous.reps}{shownUnit}</Text>
     </HapticPressable>
   ) : null;
   // The history edit (no done button) keeps main's grid row.
@@ -230,6 +238,7 @@ export function SetLogger({
   const shownWeight = set.weight > 0 || zero ? set.weight : previous?.weight ?? 0;
   const shownReps = set.reps > 0 ? set.reps : previous?.reps ?? 0;
   const ghost = !(set.weight > 0 || zero) || !(set.reps > 0);
+  const bw = readsBW(bodyWeight, shownWeight);
   return (
     <View style={[styles.setLine, nextUp && styles.setLineNext]} pointerEvents={editable ? 'auto' : 'none'} testID={`set-row-${exIdx}-${setIdx}`}>
       <View style={styles.setLineMain}>
@@ -237,15 +246,15 @@ export function SetLogger({
         {fields ? (
           <View style={styles.setLineValue}>
             {weightCell([styles.setLineInput, styles.setLineWeight, nextUp && styles.setLineInputNext], editing, { min: 40, size: 18 })}
-            <Text style={styles.setLineUnit} accessible={false}>lb ×</Text>
+            <Text style={styles.setLineUnit} accessible={false}>{bwCell && weightBlank ? '×' : 'lb ×'}</Text>
             {repsCell([styles.setLineInput, styles.setLineReps, nextUp && styles.setLineInputNext], { min: 28, size: 18 })}
             {timed ? <Text style={styles.setLineUnit} accessible={false}>sec</Text> : null}
           </View>
         ) : (
           <HapticPressable intent="light" style={[styles.setLineValue, nextUp && styles.setLineInputNext]} onPress={() => setEditing(true)}
-            accessibilityRole="button" accessibilityLabel={`Set ${setIdx + 1}, ${shownWeight} pounds, ${shownReps} ${spoken}. Change the numbers`}
+            accessibilityRole="button" accessibilityLabel={`Set ${setIdx + 1}, ${bw ? 'body weight' : `${shownWeight} pounds`}, ${shownReps} ${spoken}. Change the numbers`}
             testID={`set-value-${exIdx}-${setIdx}`}>
-            <Text style={[styles.setLineText, (ghost || (!set.completed && !nextUp)) && styles.setLineTextQuiet]}>{`${shownWeight} lb × ${shownReps}${shownUnit}`}</Text>
+            <Text style={[styles.setLineText, (ghost || (!set.completed && !nextUp)) && styles.setLineTextQuiet]}>{`${bw ? 'BW' : `${shownWeight} lb`} × ${shownReps}${shownUnit}`}</Text>
           </HapticPressable>
         )}
       </View>
@@ -256,7 +265,8 @@ export function SetLogger({
         disabled={!editable}
         onPress={() => {
           // Without its fields on screen, a blank is read from the set itself.
-          const blankWeight = fields ? weightBlank : set.weight <= 0 && !set.prescribedZero;
+          // A BW cell is blank on screen, but a coach's 0 is still the weight.
+          const blankWeight = fields ? weightBlank && !(bwCell && set.prescribedZero) : set.weight <= 0 && !set.prescribedZero;
           const blankReps = fields ? repsBlank : set.reps <= 0;
           if (!set.completed && previous) {
             if (blankWeight) onUpdate(exIdx, setIdx, 'weight', previous.weight);

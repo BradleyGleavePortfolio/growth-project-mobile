@@ -31,6 +31,7 @@ import type { SemanticTokens } from '../../theme/tokens';
 import { formatPlanType } from '../../utils/workout/formatPlanType';
 import { assignmentPrescription } from '../../utils/workout/assignmentPrescription';
 import { isTimedRow } from '../../utils/workout/exerciseUnit';
+import { readsBW } from '../../utils/workout/bodyWeight';
 import { assignmentDay, dayStart } from '../../utils/workout/workoutDay';
 
 export default function ClientWorkoutViewerScreen() {
@@ -155,7 +156,7 @@ function AssignmentCard({
   const plan = useMemo(() => assignmentPrescription(a), [a]);
   const prescribed = plan.exercises;
   const exerciseIds = useMemo(() => prescribed.map((e) => e.exercise_external_id), [prescribed]);
-  const { names } = useExerciseNames(exerciseIds);
+  const { names, bodyWeight } = useExerciseNames(exerciseIds);
   return (
     <Pressable
       onPress={onPress}
@@ -192,7 +193,10 @@ function AssignmentCard({
           </Text>
           <Text style={[typography.bodySmall, { color: sc.textMuted, fontVariant: ['tabular-nums'] }]}>
             {exercise.sets} sets × {exercise.reps_or_duration_seconds} {isTimedRow(exercise) ? 'sec' : 'reps / sec'}
-            {exercise.weight_lbs !== null ? ` · ${exercise.weight_lbs} lb prescribed` : ''}
+            {/* FIX-928-BW (#197-E10): a body-weight exercise reads "BW prescribed", never "0 lb". */}
+            {exercise.weight_lbs !== null
+              ? ` · ${readsBW(bodyWeight?.[exercise.exercise_external_id], exercise.weight_lbs) ? 'BW' : `${exercise.weight_lbs} lb`} prescribed`
+              : ''}
           </Text>
         </View>
       ))}

@@ -32,7 +32,8 @@ jest.mock('../hooks/useWorkoutBuilder', () => ({
 }));
 
 import { isBodyWeightEquipment } from '../utils/workout/bodyWeight';
-import { useBodyWeightExercises, useExerciseNames } from '../hooks/useExerciseNames';
+import { useExerciseNames } from '../hooks/useExerciseNames';
+import { useBodyWeightExercises } from '../hooks/useBodyWeightExercises';
 import { SetLogger } from '../screens/client/active-workout/SetLogger';
 import { planLine } from '../screens/client/active-workout/ExerciseCard';
 import type { SessionSet } from '../screens/client/active-workout/types';

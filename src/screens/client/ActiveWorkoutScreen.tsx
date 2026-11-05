@@ -33,6 +33,7 @@ import {
   type PersistedActiveWorkoutSession,
 } from '../../storage/activeWorkoutSession';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { useBodyWeightExercises } from '../../hooks/useBodyWeightExercises';
 import { errorMessage } from '../../types/common';
 import { randomUuid } from '../../utils/idempotency';
 import { toServerMuscleGroup } from '../../utils/workout/muscleGroup';
@@ -155,6 +156,11 @@ export default function ActiveWorkoutScreen() {
   const romanLocked = useClientNeedsCoach();
 
   const [sessionExercises, setSessionExercises] = useState<SessionExercise[]>([]);
+  // FIX-928-BW (#197-E10): body-weight exercises read "BW × 60 sec", from the
+  // cached catalog read (GET /exercises/:id equipment) the name lookup makes.
+  const exerciseIdsKey = sessionExercises.map((e) => e.exerciseId).join('\u0000');
+  const exerciseIds = useMemo(() => (exerciseIdsKey ? exerciseIdsKey.split('\u0000') : []), [exerciseIdsKey]);
+  const bodyWeight = useBodyWeightExercises(exerciseIds);
   const [workoutNotes, setWorkoutNotes] = useState('');
   const [history, setHistory] = useState<LoggedWorkout[]>([]);
   const [historyState, setHistoryState] = useState<'loading' | 'loaded' | 'unavailable'>('loading');
@@ -1332,6 +1338,7 @@ export default function ActiveWorkoutScreen() {
             colors={colors}
             styles={styles}
             previous={previousSets(history, exercise.exerciseName)}
+            bodyWeight={!!bodyWeight[exercise.exerciseId]}
             isLast={exIdx === sessionExercises.length - 1}
             disabled={saving}
             onMove={(index, direction) => setSessionExercises((prev) => moveExercise(prev, index, direction))}

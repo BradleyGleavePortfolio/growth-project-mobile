@@ -12,9 +12,7 @@
  */
 import { useMemo } from 'react';
 import { useQueries } from '@tanstack/react-query';
-import { exerciseLibraryApi, type Exercise } from '../api/exerciseLibraryApi';
-
-const FIFTEEN_MIN_MS = 15 * 60 * 1000;
+import { bodyWeightMap, byIdQuery, uniqueIds } from './exerciseByIdQuery';
 
 /** Title-case a catalog name ("barbell bench press" -> "Barbell Bench Press"). */
 export function displayExerciseName(name: string): string {
@@ -28,21 +26,13 @@ export function displayExerciseName(name: string): string {
 export interface ExerciseNames {
   names: Record<string, string>;
   loading: boolean;
+  /** FIX-928-BW: ids whose catalog equipment is body weight (true), from the same read. */
+  bodyWeight: Record<string, boolean>;
 }
 
 export function useExerciseNames(ids: string[]): ExerciseNames {
-  const unique = useMemo(
-    () => Array.from(new Set(ids.filter((id) => typeof id === 'string' && id.length > 0))),
-    [ids],
-  );
-  const results = useQueries({
-    queries: unique.map((id) => ({
-      queryKey: ['exercises', 'by-id', id],
-      queryFn: () => exerciseLibraryApi.getById(id).then((r) => r.data as Exercise),
-      staleTime: FIFTEEN_MIN_MS,
-      retry: 1,
-    })),
-  });
+  const unique = useMemo(() => uniqueIds(ids), [ids]);
+  const results = useQueries({ queries: unique.map(byIdQuery) });
   const joined = results.map((r) => r.data?.name ?? '').join('\u0000');
   const loading = results.some((r) => r.isPending && r.fetchStatus === 'fetching');
   const names = useMemo(() => {
@@ -54,5 +44,5 @@ export function useExerciseNames(ids: string[]): ExerciseNames {
     });
     return out;
   }, [unique, joined]);
-  return { names, loading };
+  return { names, loading, bodyWeight: bodyWeightMap(unique, results) };
 }
