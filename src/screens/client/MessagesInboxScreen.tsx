@@ -17,7 +17,7 @@
  * (useRomanHistory, existing routes).
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import api from '../../services/api';
@@ -204,6 +204,8 @@ export default function MessagesInboxScreen({ navigation }: { navigation: Naviga
   const openSupport = useOpenSupport();
   const roman = featureFlags.romanChat;
   const history = useRomanHistory(roman, !needsCoach);
+  // Three lines as drawn; five with large text, so the drawn answer still reads whole at 130%.
+  const romanLines = useWindowDimensions().fontScale > 1.15 ? 5 : 3;
   const chatCount = history.count !== null && history.count > 0 ? history.count : null;
   const tap = (go: () => void) => () => {
     void HapticService.selection();
@@ -309,7 +311,7 @@ export default function MessagesInboxScreen({ navigation }: { navigation: Naviga
                     </View>
                   ) : null}
                 </View>
-                <Text style={[s.body, { color: sc.textPrimary }]} numberOfLines={history.line ? 3 : undefined} testID="inbox-roman-line">{history.line ?? ROMAN_COMPOSER_PLACEHOLDER}</Text>
+                <Text style={[s.body, { color: sc.textPrimary }]} numberOfLines={history.line ? romanLines : undefined} testID="inbox-roman-line">{history.line ?? ROMAN_COMPOSER_PLACEHOLDER}</Text>
               </Pressable>
             </Rise>
             <Rise index={2}>

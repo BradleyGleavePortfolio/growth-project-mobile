@@ -449,6 +449,7 @@ describe('D10-BUILD-CLOSE: Roman history on the list (C3 Style B, B_inbox and B_
     expect(await u.findByLabelText(`${ROMAN_LABEL}. ${ANSWER}`)).toBeTruthy();
     expect(u.getByTestId('inbox-roman-line').props.children).toBe(ANSWER);
     expect(u.getByTestId('inbox-roman-line').props.numberOfLines).toBe(3);
+    expect(fs.readFileSync(path.join(__dirname, '..', 'MessagesInboxScreen.tsx'), 'utf8')).toMatch(/useWindowDimensions\(\)\.fontScale > 1\.15 \? 5 : 3/);
     expect(u.queryByText('Ask Roman anything.')).toBeNull();
     expect(mockList).toHaveBeenCalledWith({ subject: 'client-1', epoch: 1 }, { limit: 100 });
     expect(mockRead).toHaveBeenCalledWith({ subject: 'client-1', epoch: 1 }, 'rs0', { limit: 6 });
