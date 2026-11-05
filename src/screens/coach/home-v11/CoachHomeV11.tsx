@@ -13,7 +13,6 @@ import { useTheme } from '../../../theme/ThemeProvider';
 import { forestPop, layout, radius, typography } from '../../../theme/tokens';
 import { useScreenInsets } from '../../../ui';
 import { QuietError, QuietLoading, loadFailureMessage } from '../../../ui/states/QuietStates';
-import RomanAvatar from '../../../components/roman/RomanAvatar';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { rosterDisplayName } from '../../../utils/coach/clientRoster';
 import { formatCount } from '../../../components/home/rings/homeRings';
@@ -30,6 +29,7 @@ import { needsLead } from '../../../utils/coach/needsYou';
 import { featureFlags } from '../../../config/featureFlags';
 import { safetyGold } from '../../../theme/safetyGold';
 import { PlanEndedHomeRow, PlanEndedList } from './PlanEnded';
+import { RomanMark } from './RomanMark';
 
 /** Reach-outs: the ring's goal is at most five of the at-risk set (b#1123), so the sheet offers its five most urgent. */
 const REACH_ROWS = 5;
@@ -163,10 +163,39 @@ export default function CoachHomeV11(p: Props) {
         </View>
       </View>
     );
-    if (data.rosterState === 'error') {
-      return <View style={cs.card}><QuietError layout="inline" message="Who needs you could not load." onRetry={retryRoster} testID="home-needs-error" /></View>;
+    const safetyMark = (
+      <Text style={[s.bold, { color: safetyGold.text }]} testID="home-needs-safety">
+        <Ionicons name="shield-outline" size={14} color={safetyGold.text} />{' Safety alert'}
+      </Text>
+    );
+    const rosterHeld = data.rosterState === 'error' ? (
+      <View style={cs.card}><QuietError layout="inline" message="Who needs you could not load." onRetry={retryRoster} testID="home-needs-error" /></View>
+    ) : data.rosterState === 'loading' ? (
+      <View style={cs.card}><QuietLoading label="Loading who needs you" rows={1} testID="home-needs-loading" /></View>
+    ) : null;
+    // LS-934 B2: a verified open safety alert never waits on the roster: its gold lead and the tap to the list stay,
+    // with no count (the clients are not verified), and the roster's own loading or Try again sits under it.
+    if (gold && rosterHeld) {
+      const name = a.safety[0].client_name;
+      return (
+        <>
+          <Pressable
+            style={({ pressed }) => [cs.card, s.needs, s.needsGold, pressed && s.pressed]} onPress={tap(p.onOpenNeedsYou)}
+            accessibilityRole="button" accessibilityLabel={`Needs you. ${name}, Safety alert`} testID="home-needs"
+          >
+            {box(null)}
+            <View style={s.grow}>
+              <Text style={cs.title}>Needs you</Text>
+              <Text style={[cs.body, s.small]} testID="home-needs-lead"><Text style={s.bold}>{name}</Text>{' · '}{safetyMark}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+          </Pressable>
+          {rosterHeld}
+        </>
+      );
     }
-    if (data.rosterState === 'loading' || data.alertsState === 'loading') {
+    if (rosterHeld) return rosterHeld;
+    if (data.alertsState === 'loading') {
       return <View style={cs.card}><QuietLoading label="Loading who needs you" rows={1} testID="home-needs-loading" /></View>;
     }
     if (o && roster === 0 && !gold) {
@@ -196,11 +225,7 @@ export default function CoachHomeV11(p: Props) {
           {off && !gold ? <Text style={cs.body}>Open the list</Text> : n === 0 || !lead ? <Text style={cs.body}>Nobody needs you right now.</Text> : (
             <Text style={[cs.body, s.small]} testID="home-needs-lead">
               <Text style={s.bold}>{leadName}</Text>{' · '}
-              {lead.kind === 'safety' ? (
-                <Text style={[s.bold, { color: safetyGold.text }]} testID="home-needs-safety">
-                  <Ionicons name="shield-outline" size={14} color={safetyGold.text} />{' Safety alert'}
-                </Text>
-              ) : leadText}
+              {lead.kind === 'safety' ? safetyMark : leadText}
               {n > 1 ? <Text style={s.bold}>{`  +${n - 1} more`}</Text> : null}
             </Text>
           )}
@@ -243,7 +268,7 @@ export default function CoachHomeV11(p: Props) {
     return (
       <View style={cs.card} testID="home-roman">
         <View style={s.romanHead}>
-          <RomanAvatar crop="monogram" size={48} />
+          <RomanMark size={35} r={20} testID="home-roman-mark" />
           <View style={s.grow}>
             <Text style={cs.title}>{n > 0 ? `Roman has ${n} ${n === 1 ? 'draft' : 'drafts'} ready` : 'Roman'}</Text>
             {data.draftsState === 'ok' && n === 0 ? (
@@ -396,13 +421,14 @@ const s = StyleSheet.create({
   grow: { flex: 1, minWidth: 0 },
   bold: { fontFamily: SEMI },
   small: { fontSize: 14, lineHeight: 20 }, // the kinds and the Needs you line, on one and two rows (Style A A-2)
-  needs: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  needsBox: { width: 72, height: 72, borderRadius: radius.card, backgroundColor: forestPop.deep, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
-  needsNum: { fontFamily: SEMI, fontSize: 30, lineHeight: 36, color: forestPop.leaf },
+  // LS-934 B4: GOAL NEEDS-YOU-R2 gen.py `.need` (gap 14, padding 12 x 14) and `.nbox` (64, number 28).
+  needs: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 12, paddingHorizontal: 14 },
+  needsBox: { width: 64, height: 64, borderRadius: radius.card, backgroundColor: forestPop.deep, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
+  needsNum: { fontFamily: SEMI, fontSize: 28, lineHeight: 34, color: forestPop.leaf },
   needsGold: { borderWidth: 2, borderColor: safetyGold.edge, backgroundColor: safetyGold.card },
   needsRing: { borderWidth: 2, borderColor: safetyGold.edge, borderRadius: radius.card + 4, padding: 2 },
   split: { marginTop: 4 },
-  romanHead: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  romanHead: { flexDirection: 'row', alignItems: 'center', gap: 12 }, // GOAL `.rom .row` gap 12 beside the 38 pt `.rav`
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
   chip: { minHeight: 32, borderRadius: radius.button, paddingHorizontal: 10, justifyContent: 'center' },
   approve: { minHeight: 52, marginTop: 12, borderRadius: radius.button, paddingHorizontal: 12, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },

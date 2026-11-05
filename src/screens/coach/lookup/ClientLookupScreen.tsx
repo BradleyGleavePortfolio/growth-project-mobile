@@ -40,7 +40,8 @@ import { needsYouReason, useCoachBlockList } from '../home-v11/blockList';
 import { useLookupNudge } from './useLookupNudge';
 import ClientPeekSheet, { type PeekTarget } from './ClientPeekSheet';
 import NeedsYouList from './NeedsYouList';
-import { commandCenterApi, isSafetyAlert, type ActionQueueItem } from '../../../services/commandCenterApi';
+import { isSafetyAlert, type ActionQueueItem } from '../../../services/commandCenterApi';
+import { readOpenAlerts } from '../command-center/coachHomeSources';
 import { needsYouAreas } from '../../../utils/coach/needsYou';
 import LookupSideIndex, { LETTERS } from './LookupSideIndex';
 
@@ -68,17 +69,16 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   const endedSeq = useRef(0);
   const [ask, setAsk] = useState<DraftAsk | null>(null);
   const [unread, setUnread] = useState<UnreadByClient>({});
-  // NEEDS-YOU-M: the open alerts the Needs you list groups (GET .../action-queue), read only while the view is up; a
-  // failed re-read keeps the last good answer.
+  // NEEDS-YOU-M: the open alerts the Needs you list groups (every page of GET .../action-queue, readOpenAlerts, LO-934
+  // B1), read only while the view is up; a failed re-read keeps the last good rows and says it failed (LS-934 B1).
   const [alerts, setAlerts] = useState<{ items: ActionQueueItem[] | null; state: 'loading' | 'ok' | 'error' }>({ items: null, state: 'loading' });
   const wantAlerts = useRef(false);
   const loadAlerts = useCallback(async () => {
     if (!wantAlerts.current) return;
     try {
-      const res = await commandCenterApi.getActionQueue();
-      setAlerts({ items: Array.isArray(res?.data?.items) ? res.data.items : [], state: 'ok' });
+      setAlerts({ items: await readOpenAlerts(), state: 'ok' });
     } catch {
-      setAlerts((a) => (a.state === 'ok' ? a : { items: null, state: 'error' }));
+      setAlerts((a) => ({ items: a.items, state: 'error' }));
     }
   }, []);
   const [archivedCount, setArchivedCount] = useState<number | null>(null);

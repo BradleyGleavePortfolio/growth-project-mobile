@@ -16,7 +16,7 @@ import { colors as palette, forestPop, layout, radius, typography } from '../../
 import { useScreenInsets } from '../../../ui';
 import { QuietError, QuietLoading } from '../../../ui/states/QuietStates';
 import { initialsOf, type LookupAction } from '../../../utils/coach/clientLookup';
-import { matchesRosterSearch, rosterDisplayName, type RosterClient } from '../../../utils/coach/clientRoster';
+import { joinedLine, matchesRosterSearch, rosterDisplayName, type RosterClient } from '../../../utils/coach/clientRoster';
 import { alertWhen, sentAgo, type NeedsAreas, type NeedsClientRow } from '../../../utils/coach/needsYou';
 import { safetyCardLine } from '../client-detail/SafetyAlertCard';
 import { EYEBROW, SEMI, styleA } from '../home-v11/HomeParts';
@@ -28,9 +28,9 @@ export interface NeedsYouListProps {
   areas: NeedsAreas;
   /** The active roster's size, for the subtitle. */
   rosterCount: number;
-  /** The roster or the alerts are still on their way. */
+  /** The roster or the alerts are still on their way (verified alerts still show above it, LS-934 B2). */
   loading: boolean;
-  /** The roster did not load and nothing verified is on screen. */
+  /** The roster did not load and no verified client is on screen (verified alerts still show above it). */
   error: string | null;
   /** The alerts read failed: the list says so under the switch. */
   alertsFailed: boolean;
@@ -118,6 +118,7 @@ export default function NeedsYouList(p: NeedsYouListProps) {
   const clientRow = (r: NeedsClientRow, k: number, tone: 'quiet' | 'new' | 'routine') => {
     const name = rosterDisplayName(r.client);
     const act = r.reason.action;
+    const joined = tone === 'routine' ? null : joinedLine(r.client); // GOAL N1: Gone quiet and New this week (NY-16, LO-934 B3)
     return (
       <View key={r.client.id} style={[s.row, k > 0 && s.rowLine]}>
         {/* HapticPressable's own wrapper takes no flex, so each side gets a View; under 170 pt the action wraps below. */}
@@ -129,6 +130,7 @@ export default function NeedsYouList(p: NeedsYouListProps) {
             {avatar(initialsOf(r.client))}
             <View style={s.mid}>
               <Text style={s.name} numberOfLines={2}>{name}</Text>
+              {joined ? <Text style={s.when}>{joined}</Text> : null}
               {dotLine(r.reason.text, tone)}
               {r.also ? <View style={s.tag}><Text style={s.tagText}>{r.also}</Text></View> : null}
             </View>
@@ -156,9 +158,17 @@ export default function NeedsYouList(p: NeedsYouListProps) {
     );
 
   let body: React.ReactNode;
-  if (p.loading) body = <QuietLoading label="Loading who needs you" rows={5} testID="needs-loading" />;
-  else if (p.error) body = <QuietError message={p.error} onRetry={p.onRetry} testID="needs-error" />;
-  else if (a.total === 0) {
+  if (p.loading || p.error) {
+    // LS-934 B2: verified alerts never wait on the roster; the clients' loading or Try again sits under them.
+    body = (
+      <>
+        {group('Safety', a.safety, safetyRow, { safety: true })}
+        {group('Alerts', a.alerts, alertRow)}
+        {p.loading ? <QuietLoading label="Loading who needs you" rows={5} testID="needs-loading" />
+          : <QuietError message={p.error ?? ''} onRetry={p.onRetry} testID="needs-error" />}
+      </>
+    );
+  } else if (a.total === 0) {
     body = (
       <View style={s.card} testID="needs-empty">
         <View style={s.emptyBox}>
@@ -250,7 +260,8 @@ const s = StyleSheet.create({
   topRow: { flexDirection: 'row', alignItems: 'center', minHeight: 44 },
   back: { minWidth: 44, minHeight: 44, marginLeft: -10, alignItems: 'center', justifyContent: 'center' },
   eyebrow: { ...EYEBROW, color: forestPop.onDeepMuted },
-  title: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 34, lineHeight: 42, color: styleA.onDeep, marginTop: 4 },
+  // LS-934 B4: GOAL NEEDS-YOU-R2 gen.py `.h1` 32/38, `.lr` padding 10 x 14, `.av` 40 (14), `.nm` 15.5/20.
+  title: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 32, lineHeight: 38, color: styleA.onDeep, marginTop: 4 },
   sub: { ...typography.bodySmall, color: forestPop.onDeepMuted, marginTop: 2 },
   search: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48, marginTop: 14, paddingHorizontal: 14, borderRadius: radius.input, backgroundColor: styleA.deep2 },
   searchInput: { ...typography.body, flex: 1, minWidth: 0, color: styleA.onDeep, paddingVertical: 8 },
@@ -271,14 +282,14 @@ const s = StyleSheet.create({
   card: { backgroundColor: styleA.card, borderRadius: radius.card, borderWidth: 1, borderColor: styleA.cardLine, overflow: 'hidden' },
   cardGold: { borderWidth: 2, borderColor: safetyGold.edge, backgroundColor: safetyGold.card },
   first: { marginTop: 14 },
-  row: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12, rowGap: 8, minHeight: 72, paddingVertical: 12, paddingHorizontal: 14 },
+  row: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12, rowGap: 8, minHeight: 72, paddingVertical: 10, paddingHorizontal: 14 },
   rowLine: { borderTopWidth: 1, borderTopColor: styleA.cardLine },
   rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 48 },
   mid: { flex: 1, minWidth: 0 },
-  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: forestPop.deep, alignItems: 'center', justifyContent: 'center' },
+  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: forestPop.deep, alignItems: 'center', justifyContent: 'center' },
   avatarGold: { borderWidth: 2, borderColor: safetyGold.edge },
-  avatarText: { fontFamily: SEMI, fontSize: 15, color: forestPop.leaf },
-  name: { ...typography.bodyMd, fontFamily: SEMI, fontSize: 17, lineHeight: 22, color: styleA.ink },
+  avatarText: { fontFamily: SEMI, fontSize: 14, color: forestPop.leaf },
+  name: { ...typography.bodyMd, fontFamily: SEMI, fontSize: 15.5, lineHeight: 20, color: styleA.ink },
   when: { ...typography.bodySmall, color: styleA.grey },
   dotRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 7, marginTop: 1 },
   dot: { width: 7, height: 7, borderRadius: 4, marginTop: 7 },

@@ -354,10 +354,11 @@ export const commandCenterApi = {
   /**
    * GET /coach/command-center/action-queue
    * Returns pending coach alerts requiring action, sorted by created_at desc.
+   * `page`: the server's existing paging (`limit` up to 100, default 50; `before` = the last row's created_at).
    */
-  getActionQueue: async (): Promise<{ data: ActionQueueResponse }> => {
+  getActionQueue: async (page?: { limit?: number; before?: string }): Promise<{ data: ActionQueueResponse }> => {
     if (__USING_MOCK_DATA) return mockDelay(MOCK_ACTION_QUEUE);
-    return api.get<ActionQueueResponse>(`${BASE}/action-queue`);
+    return page ? api.get<ActionQueueResponse>(`${BASE}/action-queue`, { params: page }) : api.get<ActionQueueResponse>(`${BASE}/action-queue`);
   },
 
   /**
