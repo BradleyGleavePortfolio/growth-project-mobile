@@ -1,13 +1,13 @@
 /**
- * UI-4 peek sheet (client-peek-sheet mockup): one line per slice from GET /coach/clients/:id/summary
- * and the latest check-in. A slice with nothing in it reads the existing "Nothing logged yet", never an
- * empty value. #SHARE-SIMPLE: every slice reaches the current coach, so no slice is "not shared".
+ * UI-4 peek sheet (client-peek-sheet mockup): one line per slice from GET /coach/clients/:id/summary,
+ * the latest check-in and (Workouts) the client file's week. A slice with nothing in it reads the
+ * existing "Nothing logged yet" (Workouts: "Nothing planned this week"), never an empty value.
+ * #SHARE-SIMPLE: every slice reaches the current coach, so no slice is "not shared".
  */
 import type { MacroTarget } from '../../api/macrosApi';
 import type { ClientProfile } from '../../types';
 import { bucketDateLocal } from '../date';
-import { assignmentDay, instantDay, workoutDay } from '../workout/workoutDay';
-import { newestWorkoutsFirst } from '../workout/workoutLogging';
+import { weekHeadline, workoutsLine, type WorkoutWeek } from '../../screens/coach/client-detail/thisWeek';
 import { dayWord } from './clientLookup';
 import { rosterActivityLine, type RosterClient } from './clientRoster';
 import { resolveCoachTargets } from './foodReview';
@@ -19,7 +19,6 @@ const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : n
 const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
 const grouped = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const NOTHING = 'Nothing logged yet';
 
 /** A date-only value ("2026-10-05" or its midnight ISO) or a timestamp, as the local YYYY-MM-DD. */
@@ -29,12 +28,6 @@ function localDay(v: unknown, timestamp: boolean): string | null {
   if (!timestamp && /^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
   const d = new Date(s);
   return Number.isNaN(d.getTime()) ? null : bucketDateLocal(d);
-}
-
-/** "on Wednesday" within the last week, else "on Sep 30" (the mockup's "Full body A on Wednesday"). */
-function whenWords(day: string, today: Date): string {
-  const [y, m, d] = day.split('-').map(Number);
-  return /^(Today|Yesterday|[A-Z][a-z]{2})$/.test(dayWord(day, today)) ? `on ${WEEKDAYS[new Date(y, m - 1, d).getDay()]}` : `on ${MONTHS[m - 1]} ${d}`;
 }
 
 /** "Active, joined Aug 14" (the mockup's plan type is on no coach route, so it is left out); archived reads "Archived". */
@@ -58,22 +51,16 @@ export function peekStatusLine(c: RosterClient, today: Date = new Date()): { tex
 export interface PeekSlices {
   checkIn: { text: string; hasOne: boolean };
   food: { text: string };
-  workouts: { text: string };
+  /** `week`: the ring's sessions, only when this week has one. */
+  workouts: { text: string; week: WorkoutWeek | null };
   weighIn: { text: string };
-}
-
-/** Monday 00:00 of this week, local. */
-function weekStart(today: Date): Date {
-  const d = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-  return d;
 }
 
 export function peekSlices(
   _c: RosterClient,
   summary: unknown,
   checkIns: unknown,
-  coachId: string | undefined,
+  week: WorkoutWeek,
   target: MacroTarget | null | undefined,
   today: Date = new Date(),
 ): PeekSlices {
@@ -93,21 +80,9 @@ export function peekSlices(
   // A no-break space keeps each number with its unit when the line wraps ("96 g", never "96" / "g").
   const foodText = rows(day.entries).length > 0 ? `${grouped(kcal)}${of}\u00a0kcal, protein ${grouped(num(day.total_protein_g) ?? 0)}\u00a0g` : NOTHING;
 
-  // The newest day, not the newest save (the summary sends newest saves first).
-  const session = newestWorkoutsFirst(rows(s.recent_workouts))[0];
-  // The day the client recorded, not the day it reached the server (utils/workout/workoutDay).
-  const sessionDay = session ? workoutDay({ date: text(session.date), created_at: text(session.completed_at) ?? text(session.created_at) }) || null : null;
-  const name = session ? text(session.workout_name) ?? text(session.name) ?? 'Workout' : null;
-  const monday = weekStart(today);
-  const from = instantDay(monday);
-  const to = instantDay(new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 7));
-  const week = rows(s.recent_assignments).filter((a) => {
-    const day = assignmentDay({ scheduled_for: text(a.scheduled_for) });
-    return a.assigned_by_coach_id === coachId && !!day && day >= from && day < to;
-  });
-  const done = week.filter((a) => a.completed_at != null).length;
-  const count = week.length > 0 ? `, ${done} of ${week.length}` : '';
-  const workoutText = name && sessionDay ? `${name} ${whenWords(sessionDay, today)}${count}` : NOTHING;
+  // CLIENT-FILE-DAYS-M: the week the client file's ring reads (GET /coach/clients/:id/week, the client's own
+  // Monday-to-Sunday in their zone), in the file's words: K1-S-39 "Missed {day}", else K1-S-38 "{n} of {m} done".
+  const workoutText = week.total > 0 ? weekHeadline(week) : workoutsLine(week);
 
   const weight = rows(s.weight_logs)[0];
   const lbs = weight ? num(weight.weight_lbs) : null;
@@ -118,7 +93,7 @@ export function peekSlices(
   return {
     checkIn: { text: checkText, hasOne: !!checkDay },
     food: { text: foodText },
-    workouts: { text: workoutText },
+    workouts: { text: workoutText, week: week.total > 0 ? week : null },
     weighIn: { text: weighText },
   };
 }
