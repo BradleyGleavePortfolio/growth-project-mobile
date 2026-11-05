@@ -2075,12 +2075,13 @@ function StepperField(props: {
 
 const stepperStyles = StyleSheet.create({
   // The minus-number-plus group moves under its label as one group when they
-  // do not fit on one line (320 wide, large text).
+  // do not fit on one line (320 wide, large text). The number is 60 wide:
+  // four 17 px digits at 130% text (about 55) still fit.
   line: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', columnGap: spacing.sm, rowGap: spacing.xs, paddingVertical: spacing.sm },
   label: { flexGrow: 1, flexShrink: 1 },
   group: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginStart: 'auto' },
   button: { width: 44, height: 44, borderRadius: radius.chip, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  value: { width: 72, minHeight: 44, textAlign: 'center', fontFamily: 'Inter_600SemiBold', fontVariant: ['tabular-nums'], paddingVertical: 0 },
+  value: { width: 60, minHeight: 44, textAlign: 'center', fontFamily: 'Inter_600SemiBold', fontVariant: ['tabular-nums'], paddingVertical: 0 },
 });
 
 function makeStyles(sc: SemanticTokens) {
