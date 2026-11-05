@@ -148,7 +148,9 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchRequest = useRef(0);
   // FOOD-DAY-STYLEC-M (C_portion, C2-S-33): "Log food" closes the add sheet; "Add another food" keeps it open.
-  const closeAddAfterLog = useRef(false);
+  // 'classic' (switch off) is main's: open after an online save, closed after an offline one. FIX-930R1
+  // (LS-930 B3): the online and offline saves both read this one choice, so Add another stays open offline too.
+  const addSheetAfterLog = useRef<'close' | 'keep' | 'classic'>('classic');
 
   // Show "Searching 1M+ foods..." after 3 seconds of searching
   useEffect(() => {
@@ -349,7 +351,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
         void notifyPendingFoodLogs();
         setQuantityModalVisible(false);
         setSelectedFood(null);
-        setModalVisible(false);
+        if (addSheetAfterLog.current !== 'keep') setModalVisible(false);
         Alert.alert(
           'Saved offline',
           `${selectedFood.name} will sync to your log when you reconnect.`,
@@ -375,7 +377,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
       setAddedFoodName(selectedFood.name);
       setSavedMessage(`${selectedFood.name} added to ${MEAL_SECTIONS.find((s) => s.type === activeMealType)?.label}.`);
       onSaved?.();
-      if (closeAddAfterLog.current) setModalVisible(false);
+      if (addSheetAfterLog.current === 'close') setModalVisible(false);
     } catch (err) {
       console.error('LogScreen: handleConfirmLog failed', err);
       // Phase 11 / Track 3: error haptic on failed API action
@@ -860,11 +862,11 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
             selectedUnit={selectedUnit}
             onQuantityChange={setQuantityInput}
             onUnitChange={setSelectedUnit}
-            onConfirm={() => { closeAddAfterLog.current = styleCDay; void handleConfirmLog(); }}
+            onConfirm={() => { addSheetAfterLog.current = styleCDay ? 'close' : 'classic'; void handleConfirmLog(); }}
             saving={foodSaving}
             dayLeft={styleCDay && macroTargets && macroTargets.calories > 0
               ? { kcal: macroTargets.calories - dailyTotals.calories, protein: macroTargets.protein - dailyTotals.protein } : undefined}
-            onAddAnother={styleCDay ? () => { closeAddAfterLog.current = false; void handleConfirmLog(); } : undefined}
+            onAddAnother={styleCDay ? () => { addSheetAfterLog.current = 'keep'; void handleConfirmLog(); } : undefined}
             onCancel={() => {
               setQuantityModalVisible(false);
               setSelectedFood(null);

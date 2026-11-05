@@ -226,7 +226,10 @@ export default function FoodDayView(p: FoodDayViewProps) {
   if (!day && !isToday) return withTop(p.fallback);
 
   const left = dayLeft(p.targets, p.eaten);
-  const leftLine = left && !left.over ? `${n(left.kcal)} kcal and ${n(left.protein)} g protein left.` : null;
+  // FIX-930R1 (LS-930 B1): one target line for every masthead, left or above it; null only with no target.
+  const leftLine = !left ? null : left.over
+    ? `${n(left.kcal)} kcal above today's target. Protein ${n(left.eatenProtein)} of ${n(left.targetProtein)} g.`
+    : `${n(left.kcal)} kcal and ${n(left.protein)} g protein left.`;
   const dayLabel = isToday ? `Today, ${longDay(p.selectedDate)}` : longDay(p.selectedDate);
   const forest = sc.textOnAccent;
 
@@ -246,6 +249,17 @@ export default function FoodDayView(p: FoodDayViewProps) {
       </HapticPressable>
     </View>
   );
+
+  // A done meal opened: one row per food, each to its edit sheet (amount, meal, delete). FIX-930R1 (LS-930 B2,
+  // LO-930 B1): shared by plan and usual meals and the first day's meals, so no meal folds its foods behind one tap.
+  const foodRows = (logs: FoodLog[]) => logs.map((l) => (
+    <HapticPressable key={l.id} intent="light" disableAnimation onPress={() => p.onEditFood(l)} style={s.food}
+      accessibilityRole="button" accessibilityLabel={`${l.foodName}, ${n(l.calories)} kcal${l.offline ? '. Saved offline' : ''}`}>
+      <View style={s.rail}><View style={s.line} /></View>
+      <Text style={[s.small, s.grow]} numberOfLines={1}>{l.foodName}</Text>
+      <Text style={s.smallMuted}>{n(l.calories)}</Text>
+    </HapticPressable>
+  ));
 
   if (!day) {
     // C_first (coachless, or coached with no plan, and no usual meal yet): no coach, no Roman.
@@ -278,21 +292,30 @@ export default function FoodDayView(p: FoodDayViewProps) {
             {FIRST_MEALS.map((m) => {
               const mine = logsOf(m.type);
               const waiting = mine.filter((l) => l.offline === 'waiting');
+              // Nothing yet: the search sheet for this meal. One food: its edit sheet. Two or more: the meal
+              // opens to one row per food, as a done plan meal does.
+              const several = mine.length > 1;
+              const expanded = several && open === `first-${m.type}`;
               return (
-                <HapticPressable key={m.type} intent="light" disableAnimation testID={`food-day-first-${m.type}`}
-                  onPress={() => (mine.length === 1 ? p.onEditFood(mine[0]) : p.onSomethingElse(m.type))}
-                  accessibilityRole="button" accessibilityLabel={mine.length ? `${m.label}. ${joinNames(mine.map((l) => l.foodName))}${waiting.length ? `. ${offlineLine(waiting)}` : ''}` : `${m.label}. Nothing yet`}
-                  style={s.row}>
-                  <Text style={s.time}>{mine.length && logMinutes(mine[0]) != null ? clockOf(logMinutes(mine[0]) as number) : ''}</Text>
-                  <View style={s.rail}><View style={s.line} /><Mark done={mine.length > 0 && waiting.length === 0} waiting={waiting.length > 0} reduced={reduced}
-                    style={s.mark} fill={s.markFill} testID={waiting.length ? `food-day-waiting-${m.type}` : undefined} /></View>
-                  <View style={s.body}>
-                    <Text style={s.eyebrow}>{m.label.toUpperCase()}</Text>
-                    {mine.length ? <Text style={s.sansName}>{joinNames(mine.map((l) => l.foodName))}</Text>
-                      : <Text style={s.nothing}>Nothing yet</Text>}
-                    {waiting.length ? <Text style={s.meta}>{offlineLine(waiting)}</Text> : null}
-                  </View>
-                </HapticPressable>
+                <View key={m.type}>
+                  <HapticPressable intent="light" disableAnimation testID={`food-day-first-${m.type}`}
+                    onPress={() => (several ? setOpen(expanded ? null : `first-${m.type}`)
+                      : mine.length === 1 ? p.onEditFood(mine[0]) : p.onSomethingElse(m.type))}
+                    accessibilityState={several ? { expanded } : undefined}
+                    accessibilityRole="button" accessibilityLabel={mine.length ? `${m.label}. ${joinNames(mine.map((l) => l.foodName))}${waiting.length ? `. ${offlineLine(waiting)}` : ''}` : `${m.label}. Nothing yet`}
+                    style={s.row}>
+                    <Text style={s.time}>{mine.length && logMinutes(mine[0]) != null ? clockOf(logMinutes(mine[0]) as number) : ''}</Text>
+                    <View style={s.rail}><View style={s.line} /><Mark done={mine.length > 0 && waiting.length === 0} waiting={waiting.length > 0} reduced={reduced}
+                      style={s.mark} fill={s.markFill} testID={waiting.length ? `food-day-waiting-${m.type}` : undefined} /></View>
+                    <View style={s.body}>
+                      <Text style={s.eyebrow}>{m.label.toUpperCase()}</Text>
+                      {mine.length ? <Text style={s.sansName}>{joinNames(mine.map((l) => l.foodName))}</Text>
+                        : <Text style={s.nothing}>Nothing yet</Text>}
+                      {waiting.length ? <Text style={s.meta}>{offlineLine(waiting)}</Text> : null}
+                    </View>
+                  </HapticPressable>
+                  {expanded ? foodRows(mine) : null}
+                </View>
               );
             })}
             {others.map((l) => extraRow(s, l, reduced, p.onEditFood))}
@@ -354,14 +377,7 @@ export default function FoodDayView(p: FoodDayViewProps) {
             {tag(x)}
           </View>
         </HapticPressable>
-        {expanded ? x.logs.map((l) => (
-          <HapticPressable key={l.id} intent="light" disableAnimation onPress={() => p.onEditFood(l)} style={s.food}
-            accessibilityRole="button" accessibilityLabel={`${l.foodName}, ${n(l.calories)} kcal${l.offline ? '. Saved offline' : ''}`}>
-            <View style={s.rail}><View style={s.line} /></View>
-            <Text style={[s.small, s.grow]} numberOfLines={1}>{l.foodName}</Text>
-            <Text style={s.smallMuted}>{n(l.calories)}</Text>
-          </HapticPressable>
-        )) : null}
+        {expanded ? foodRows(x.logs) : null}
       </View>
     );
   };
@@ -446,9 +462,7 @@ export default function FoodDayView(p: FoodDayViewProps) {
               .map((x) => <View key={x.key} style={[s.seg, (x.logs.length > 0 || left?.over) && s.segDone]} />)}
           </View>
           {isPlan ? (
-            <Text style={s.mastLine}>
-              {left?.over ? `${n(left.kcal)} kcal above today's target. Protein ${n(left.eatenProtein)} of ${n(left.targetProtein)} g.` : leftLine ?? ''}
-            </Text>
+            <Text style={s.mastLine}>{leftLine ?? ''}</Text>
           ) : (
             <Text style={s.mastLine}>{`Built from the meals you logged this week.${p.targets?.calories ? ` ${n(p.targets.calories)} kcal target.` : ''}`}</Text>
           )}
