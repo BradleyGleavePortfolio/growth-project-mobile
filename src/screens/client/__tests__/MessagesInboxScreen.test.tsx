@@ -5,7 +5,7 @@
 import React from 'react';
 import * as fs from 'fs';
 import * as path from 'path';
-import { Animated, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { Animated, Dimensions, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { COMMUNITY_REPORT_CRISIS_LINE } from '../../../api/communitySafetyApi';
@@ -448,7 +448,8 @@ describe('D10-BUILD-CLOSE: Roman history on the list (C3 Style B, B_inbox and B_
     const { u } = await show();
     expect(await u.findByLabelText(`${ROMAN_LABEL}. ${ANSWER}`)).toBeTruthy();
     expect(u.getByTestId('inbox-roman-line').props.children).toBe(ANSWER);
-    expect(u.getByTestId('inbox-roman-line').props.numberOfLines).toBe(3);
+    // The jest window reports its own font scale; three lines at normal text, five above 1.15.
+    expect(u.getByTestId('inbox-roman-line').props.numberOfLines).toBe(Dimensions.get('window').fontScale > 1.15 ? 5 : 3);
     expect(fs.readFileSync(path.join(__dirname, '..', 'MessagesInboxScreen.tsx'), 'utf8')).toMatch(/useWindowDimensions\(\)\.fontScale > 1\.15 \? 5 : 3/);
     expect(u.queryByText('Ask Roman anything.')).toBeNull();
     expect(mockList).toHaveBeenCalledWith({ subject: 'client-1', epoch: 1 }, { limit: 100 });
