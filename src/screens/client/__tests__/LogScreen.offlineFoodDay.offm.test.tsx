@@ -160,6 +160,24 @@ describe('Food Log: foods saved offline count in the day', () => {
     alert.mockRestore();
   });
 
+  it.each(['empty', 'waiting', 'refused'] as const)('%s rows: only a counted meal suppresses Repeat', async (offline) => {
+    mockBrowse.lastMeals = {
+      breakfast: {
+        date: addDays(mockToday, -1), calories: 150,
+        entries: [{ foodItemId: 'food-oats', name: 'Rolled oats', calories: 150, quantityMultiplier: 1 }],
+      },
+    };
+    mockStore.foodLogs = offline === 'empty' ? [] : [row({
+      id: 'pfl_refused', clientUuid: 'pfl_refused', offline,
+      foodName: 'Rolled oats', calories: 150,
+    })];
+    await render(<LogScreen />);
+    await act(async () => fireEvent.press(screen.getAllByText('Add food')[0]));
+    const repeat = screen.queryByLabelText("Repeat yesterday's breakfast: add all 1 food");
+    if (offline === 'waiting') expect(repeat).toBeNull();
+    else expect(repeat).not.toBeNull();
+  });
+
   it('search with no signal says so at once and does not search', async () => {
     await render(<LogScreen />);
     await act(async () => {
