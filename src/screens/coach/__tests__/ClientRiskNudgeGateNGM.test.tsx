@@ -78,7 +78,7 @@ it.each(CASES)('$name: nudge $nudge, closed line $line', async ({ blocked, known
   await render(<ClientRiskDetailScreen />);
   await screen.findByText('Risk detail');
   // Let every read answer (or not) before asserting what the screen draws.
-  await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  await act(async () => { await new Promise<void>((r) => setTimeout(r, 0)); });
   if (nudge) {
     await screen.findByLabelText('Send check-in nudge');
     await fireEvent.press(screen.getByLabelText('Send check-in nudge'));

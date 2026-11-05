@@ -113,7 +113,7 @@ describe.each([['the legacy file', false], ['the Style C file', true]] as const)
     await render(file());
     await screen.findAllByLabelText('Open messages');
     // Let every read answer (or not) before asserting what the screen draws.
-    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    await act(async () => { await new Promise<void>((r) => setTimeout(r, 0)); });
     if (nudge) {
       await screen.findByLabelText('Send nudge notification');
       await fireEvent.press(screen.getByLabelText('Send nudge notification'));
