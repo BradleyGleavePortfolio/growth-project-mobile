@@ -28,6 +28,8 @@ import { WorkoutsTab } from './client-detail/WorkoutsTab';
 import { ProgressTab } from './client-detail/ProgressTab';
 import { HealthFitnessTab } from './client-detail/HealthFitnessTab';
 import { NudgeModal } from './client-detail/NudgeModal';
+import { useNudgeGate } from './client-detail/useNudgeGate';
+import { ConversationClosedLine } from '../../components/messaging/ConversationClosed';
 import { useClientDetailData } from './client-detail/useClientDetailData';
 // PR-HK-3b — coach Sleep & Recovery tab content.
 import { SleepRecoveryTab } from './client-detail/SleepRecoveryTab';
@@ -118,6 +120,8 @@ function ClientFile({ navigation, route }: Props) {
   const [nudgeError, setNudgeError] = useState('');
   const [nudgeSuccess, setNudgeSuccess] = useState(false);
   const [archiveBusy, setArchiveBusy] = useState(false);
+  // NUDGE-GATE-M: Send nudge only for an open pair, as m#933's peek; a block either way shows the chat's closed line.
+  const nudgeGate = useNudgeGate(clientId);
   // Stream 2 — Ask-AI sheet visibility. Opens via the SummaryTab "Ask
   // AI" pill, closes either via the X icon, scrim tap, or after a
   // successful submit (the sheet calls onClose then onAfterSubmit so
@@ -148,9 +152,9 @@ function ClientFile({ navigation, route }: Props) {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     setPlanReloadKey((k) => k + 1);
-    await Promise.all([loadData(), loadArchiveStatus(true), styleC ? thisWeek.refresh() : null]);
+    await Promise.all([loadData(), loadArchiveStatus(true), styleC ? thisWeek.refresh() : null, nudgeGate.reload()]);
     setRefreshing(false);
-  }, [loadData, loadArchiveStatus, setRefreshing, styleC, thisWeek]);
+  }, [loadData, loadArchiveStatus, setRefreshing, styleC, thisWeek, nudgeGate]);
 
   const sendNudge = async () => {
     setNudgeError('');
@@ -439,10 +443,13 @@ function ClientFile({ navigation, route }: Props) {
             clientName={clientName}
             nudgeSuccess={nudgeSuccess}
             onOpenMessages={openThread}
-            onOpenNudge={() => {
+            onOpenNudge={nudgeGate.open ? () => {
               setShowNudgeModal(true);
               setNudgeError('');
-            }}
+            } : undefined}
+            nudgeClosed={nudgeGate.closed ? (
+              <ConversationClosedLine by={nudgeGate.by} name={clientName} style={styles.nudgeClosedLine} testID="client-file-nudge-closed" />
+            ) : null}
             onOpenMacrosReview={() =>
               navigation.navigate('CoachMacrosReview', {
                 clientId,
@@ -571,7 +578,7 @@ function ClientFile({ navigation, route }: Props) {
       {styleC ? message : null}
 
       <NudgeModal
-        visible={showNudgeModal}
+        visible={showNudgeModal && nudgeGate.open}
         onClose={() => {
           setShowNudgeModal(false);
           setNudgeError('');
