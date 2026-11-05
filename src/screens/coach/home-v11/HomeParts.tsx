@@ -28,6 +28,7 @@ export const styleA = {
   ink: '#142019', // text on the open alerts row
   inkMuted: '#4F5D54', // chevrons on white (A `.mut`)
   checkLine: '#8A988E', // the open tick circle on white (A `.ck`)
+  page: '#F1F4EE', // the page under the hero (A `.mist`, #196-E15): this screen's own ground, never the app's #F7FAF7
   grey: brand.graphite, // small grey text on a light ground: #2C2C2C (owner #168-13, after the mockups, wins over A's #4F5D54)
 } as const;
 
@@ -80,7 +81,8 @@ export function AlertsRow({ count, onPress }: { count: number | null; onPress: (
 }
 
 /** One of the day's rings: gold arc over a quiet track, "done/of" inside, shrunk to fit the ring and never scaled up. */
-export function DayRing({ ring, onPress }: { ring: RingSpec; onPress?: () => void }) {
+/** One of YOUR DAY's rings; `pending`: the track and the name only, while the day is on its way. */
+export function DayRing({ ring, onPress, pending }: { ring: RingSpec; onPress?: () => void; pending?: boolean }) {
   const r = (RING - STROKE) / 2;
   const c = 2 * Math.PI * r;
   const share = ring.of > 0 ? Math.min(1, ring.done / ring.of) : 0;
@@ -96,11 +98,12 @@ export function DayRing({ ring, onPress }: { ring: RingSpec; onPress?: () => voi
             />
           ) : null}
         </Svg>
-        <Text style={hs.ringValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} maxFontSizeMultiplier={1}>{`${ring.done}/${ring.of}`}</Text>
+        {pending ? null : <Text style={hs.ringValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} maxFontSizeMultiplier={1}>{`${ring.done}/${ring.of}`}</Text>}
       </View>
       <Text style={hs.ringLabel} numberOfLines={1} maxFontSizeMultiplier={1.15}>{ring.label.toUpperCase()}</Text>
     </>
   );
+  if (pending) return <View style={hs.ring} testID={`home-ring-${ring.key}-pending`}>{body}</View>;
   const label = `${ring.label}, ${ring.done} of ${ring.of}`;
   return onPress ? (
     <Pressable style={({ pressed }) => [hs.ring, pressed && hs.pressed]} onPress={onPress} accessibilityRole="button" accessibilityLabel={label} testID={`home-ring-${ring.key}`}>

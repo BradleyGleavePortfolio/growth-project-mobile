@@ -52,6 +52,7 @@ jest.mock('../store/coachStore', () => {
 jest.mock('../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'coach-1', role: 'coach' }) }));
 jest.mock('../services/notificationsApi', () => ({ fetchUnreadCount: () => mockUnread() }));
 jest.mock('../hooks/usePendingAiDrafts', () => ({ usePendingAiDrafts: () => mockDrafts() }));
+jest.mock('../hooks/useCoachThreeArcCounts', () => ({ useCoachThreeArcCounts: () => ({ data: undefined, isError: false, isFetching: false, refetch: jest.fn() }) }));
 const mockFlags = { coachHomeV11: true, romanChat: true, coachBrief: false, coachTabsV2: true };
 jest.mock('../config/featureFlags', () => ({ featureFlags: mockFlags }));
 jest.mock('../screens/coach/command-center/CoachHomeCards', () => {

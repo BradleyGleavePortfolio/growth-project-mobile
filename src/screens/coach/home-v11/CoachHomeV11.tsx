@@ -1,8 +1,9 @@
 /**
  * The coach Home (spec #688 6295886580, Style A of planning/MOCKUP3/HOME3), behind featureFlags.coachHomeV11. Hero:
  * date, bell, gear, setup checklist until done, "{n} wins this week" with one win in turn (opens the wins list), tiles,
- * Open alerts, the day's rings. Page: push ask and brief, Roman, one Needs you tile, Business, Clients rows. Only real
- * numbers: a server without b#1123's `home` gets the hero and tiles from the overview, and no rings.
+ * Open alerts, YOUR DAY's three rings (Check-ins, Brief, Review: HOME3 A, #196-E15, from GET /coach/home/daily-rings).
+ * Page (#F1F4EE, A's `.mist`): push ask and brief, Roman, one Needs you tile, Business, Clients rows. Only real numbers:
+ * a server without b#1123's `home` gets the hero and tiles from the overview.
  */
 import React, { useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
@@ -19,21 +20,20 @@ import type { CoachHomeSources } from '../command-center/coachHomeSources';
 import { dateOverline, heroAmount, monthOverline, paceLine, payoutWords, retentionPct } from '../command-center/coachHomeCopy';
 import { hasMonthMoney } from '../command-center/CoachHomeSections';
 import { AlertsRow, DayRing, EYEBROW, LinkRow, MiniTile, SEMI, styleA, useCardStyles } from './HomeParts';
-import { HomeSheet, reachOutAsk, type DraftAsk, type SheetList } from './DraftSheets';
-import { firstWord, pct, ringSpecs, ringsCaption, winLine, winsHeadline, type HomeWin } from './homeDay';
+import { HomeSheet, type DraftAsk, type SheetList } from './DraftSheets';
+import { dayRings, firstWord, pct, ringsCaption, winLine, winsHeadline, type HomeWin, type RingSpec } from './homeDay';
 import { useCoachHomeV11 } from './useCoachHomeV11';
 import { WinTurn, useWinFade, useWinTurn } from './WinTurn';
 import { usePlanEnded } from './planEndedData';
 import { PlanEndedHomeRow, PlanEndedList } from './PlanEnded';
-
-/** Reach-outs: the ring's goal is at most five of the at-risk set (b#1123), so the sheet offers its five most urgent. */
-const REACH_ROWS = 5;
 
 type Go = () => void;
 interface Props {
   onOpenNeedsYou: Go; onOpenClients: Go; onOpenStreaks: Go; onOpenAlerts: Go; onOpenMoney: Go; onOpenDrafts: Go; onOpenNotifications: Go; onOpenSettings: Go;
   /** Only when Roman's coach chat is on. */
   onAskRoman?: Go;
+  /** The Brief ring opens today's brief (only with coachBrief) and the Review ring the Messages inbox. */
+  onOpenBrief?: Go; onOpenMessages?: Go;
   /** The setup checklist (CoachHomeCards 'setup'), on the hero until setup is done. */
   setup?: React.ReactNode;
   /** The push ask and brief (CoachHomeCards 'below'); `zero`: no clients, so no brief (#161-16, ruling 6296068749). */
@@ -41,16 +41,22 @@ interface Props {
   sources?: CoachHomeSources;
 }
 
+/** The rings while they are on their way: the three-arc router's names, no number. */
+const RINGS_PENDING: RingSpec[] = [
+  { key: 'check_ins', label: 'Check-ins', done: 0, of: 0 }, { key: 'brief', label: 'Brief', done: 0, of: 0 }, { key: 'review', label: 'Review', done: 0, of: 0 },
+];
+
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export default function CoachHomeV11(p: Props) {
-  const { colors, semanticColors: sc } = useTheme();
+  const { colors, semanticColors: sc, colorScheme } = useTheme();
+  const page = colorScheme === 'dark' ? sc.bgPrimary : styleA.page; // A's page; a dark scheme keeps the theme's
   const cs = useCardStyles();
   const { top, bottom } = useScreenInsets();
   const bigText = useWindowDimensions().fontScale > 1.15; // no win line, Approve over the kinds: on the first screen (LS B2)
-  const { data, blockList, reload, retryMonth, retryRoster, retryDrafts, focused } = useCoachHomeV11(p.sources);
+  const { data, blockList, reload, retryMonth, retryRoster, retryDrafts, retryRings, focused } = useCoachHomeV11(p.sources);
   const [ask, setAsk] = useState<DraftAsk | null>(null);
-  const [list, setList] = useState<'wins' | 'reach' | null>(null);
+  const [list, setList] = useState<'wins' | null>(null);
   const planEnded = usePlanEnded(blockList);
   const [ended, setEnded] = useState(false); // the plan-ended list, over the Home
   const o = data.overview;
@@ -68,25 +74,22 @@ export default function CoachHomeV11(p: Props) {
     <Text style={s.onDeepMuted}>{(home?.wins.count ?? 0) === 0 ? 'Wins show here as your clients hit them.' : 'Pull down to see them.'}</Text>
   ));
   const bell = data.unreadNotifications;
-  const rings = home?.rings ? ringSpecs(home.rings) : null;
+  const rings = data.rings.day ? dayRings(data.rings.day) : null;
   const retention = retentionPct(data.ltv);
   const checkIns = o ? pct(o.check_in_rate_7day) : null;
   const monthOk = data.month.kind === 'ok' ? data.month.summary : null;
 
   const askWin = (w: HomeWin) => setAsk({ clientName: w.client_name, about: `A congratulations for ${firstWord(w.client_name)}: ${winLine(w)}.`, request: w.draft });
   const winLabel = (w: HomeWin) => `${winLine(w)}. Ask Roman to congratulate ${firstWord(w.client_name)}`;
-  const reach = (data.reachOuts ?? []).slice(0, REACH_ROWS);
-  const reached = new Set(home?.rings?.reach_outs.contacted_ids ?? []); // REACHED-TODAY: an older server marks none
   const sheetList: SheetList | null = list === 'wins'
     ? { title: 'Wins this week', rows: items.map((w) => ({ id: w.id, title: winLine(w), label: winLabel(w), onPick: () => askWin(w) })) }
-    : list === 'reach'
-      ? { title: 'Reach-outs', rows: reach.map((r) => {
-        const mark = reached.has(r.user_id) ? 'Reached out today' : undefined;
-        const title = `Reach out to ${r.display_name}?`;
-        return { id: r.user_id, title, line: r.top_factor, mark, label: mark ? `${title} ${mark}` : title, onPick: () => setAsk(reachOutAsk(r)) };
-      }) }
-      : null;
+    : null;
   const tap = (go: () => void) => () => { void HapticService.softImpact(); go(); };
+  const ringGo: Record<RingSpec['key'], Go | undefined> = {
+    check_ins: tap(p.onOpenClients),
+    brief: p.onOpenBrief ? tap(p.onOpenBrief) : undefined,
+    review: p.onOpenMessages ? tap(p.onOpenMessages) : undefined,
+  };
 
   const hero = (() => {
     if (!o && data.overviewFailed) {
@@ -229,7 +232,7 @@ export default function CoachHomeV11(p: Props) {
         {chips.length > 0 ? (
           <View style={s.chips}>
             {chips.map(([c, label]) => (
-              <View key={label} style={[s.chip, { backgroundColor: sc.bgPrimary }]}><Text style={[cs.strong, s.small]}>{c} <Text style={[cs.body, s.small]}>{label}</Text></Text></View>
+              <View key={label} style={[s.chip, { backgroundColor: page }]}><Text style={[cs.strong, s.small]}>{c} <Text style={[cs.body, s.small]}>{label}</Text></Text></View>
             ))}
           </View>
         ) : null}
@@ -282,7 +285,7 @@ export default function CoachHomeV11(p: Props) {
   ) : null;
 
   return (
-    <View style={[s.fill, { backgroundColor: sc.bgPrimary }]}>
+    <View style={[s.fill, { backgroundColor: page }]} testID="coach-home-root">
       <ScrollView
         style={s.fill} contentContainerStyle={{ paddingBottom: 32 + bottom }} testID="coach-home-v11"
         importantForAccessibility={ended ? 'no-hide-descendants' : 'auto'} // TalkBack stays in the list over it (LO C1)
@@ -307,16 +310,33 @@ export default function CoachHomeV11(p: Props) {
           {hero}
           {tiles}
           {o ? <AlertsRow count={o.open_alerts} onPress={tap(p.onOpenAlerts)} /> : null}
-          {o && rings ? (
+          {o && data.rings.state !== 'off' ? (
             <View testID="home-rings">
               <Text style={s.dayLabel} accessibilityRole="header">YOUR DAY</Text>
-              <View style={s.rings}>
-                {rings.map((r) => (
-                  // Reach-outs opens its own at-risk list, only when the ring has a goal and the list has someone in it.
-                  <DayRing key={r.key} ring={r} onPress={r.key === 'reach_outs' && r.of > 0 && reach.length > 0 ? tap(() => setList('reach')) : undefined} />
-                ))}
-              </View>
-              <Text style={s.onDeepMuted}>{ringsCaption(rings, roster)}</Text>
+              {rings ? (
+                <>
+                  <View style={s.rings}>
+                    {/* A taps a ring only with clients (A `.arcs.plain` at zero); each opens where its work is. */}
+                    {rings.map((r) => <DayRing key={r.key} ring={r} onPress={roster > 0 ? ringGo[r.key] : undefined} />)}
+                  </View>
+                  <Text style={s.onDeepMuted}>{ringsCaption(rings, roster)}</Text>
+                </>
+              ) : data.rings.state === 'error' ? (
+                <View style={s.heroBlock}>
+                  <Text style={s.onDeep}>Your numbers did not load.</Text>
+                  <Pressable
+                    style={({ pressed }) => [s.retry, pressed && s.pressed]} onPress={retryRings} disabled={data.rings.retrying}
+                    accessibilityRole="button" accessibilityLabel="Try again" accessibilityState={{ busy: data.rings.retrying }} testID="home-rings-retry"
+                  >
+                    <Text style={s.retryText}>Try again</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                // On its way: the three tracks and their names, no number until the server gives one.
+                <View style={s.rings} accessible accessibilityLabel="Loading" testID="home-rings-loading">
+                  {RINGS_PENDING.map((r) => <DayRing key={r.key} ring={r} pending />)}
+                </View>
+              )}
             </View>
           ) : null}
           {/* Only when the server returns the list: FEATURE_PLAN_RENEWAL off (404) or a failed read shows nothing. The quiet

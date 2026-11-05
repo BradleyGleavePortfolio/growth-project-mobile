@@ -129,6 +129,11 @@ export default function CommandCenterScreen({
   // Spec #688 6295886580: the Needs you tile opens the vertical Needs you list (ClientLookupScreen, view 'needs').
   const openNeedsYou = () => navigation.navigate('ClientsStack', { screen: 'ClientsList', params: { view: 'needs' }, pop: true });
   const openSettings = () => navigation.navigate('SettingsStack', { screen: 'SettingsHome', pop: true });
+  // #196-E15: the Home's Brief ring opens today's brief (as its brief card does) and the Review ring the inbox.
+  const openBrief = featureFlags.coachBrief
+    ? () => navigation.navigate('SettingsStack', { screen: 'CoachBrief', initial: false })
+    : undefined;
+  const openMessages = () => navigation.navigate('Messages');
   const askRoman = featureFlags.romanChat
     ? () => navigation.navigate('SettingsStack', { screen: 'RomanChat', initial: false })
     : undefined;
@@ -162,6 +167,8 @@ export default function CommandCenterScreen({
               onOpenNotifications={openNotifications}
               onOpenSettings={openSettings}
               onAskRoman={askRoman}
+              onOpenBrief={openBrief}
+              onOpenMessages={openMessages}
               setup={<CoachHomeCards part="setup" />}
               belowHero={(zero) => <CoachHomeCards part="below" brief={!zero} />}
             />
