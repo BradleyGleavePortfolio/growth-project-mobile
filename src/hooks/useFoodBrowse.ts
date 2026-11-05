@@ -5,6 +5,9 @@ import { SearchResult, unitOptionsFor } from '../utils/log/types';
 import { mapLogEntryToFood, RawLogEntry } from '../utils/log/mapFoodItem';
 import { quantityMultiplier } from '../utils/log/macros';
 import { addDays } from '../utils/date';
+import type { QueuedFoodShown } from '../services/foodLogQueue';
+import { shownFor } from '../utils/log/queuedDay';
+import { earlierMeals, keepBrowseCopy, readBrowseCopy } from '../utils/log/browseCache';
 
 // How far back Recent, Frequent and "repeat a past meal" look. Seven days
 // covers the everyday case (same breakfast as yesterday, the usual lunch)
@@ -21,6 +24,8 @@ export interface PastMealEntry {
   quantityMultiplier: number;
   originalQuantity?: number;
   originalUnit?: string;
+  // OFFLINE-FOOD-M: name and per-unit macros, so a Repeat saved offline shows in the day at once.
+  shown?: QueuedFoodShown;
 }
 
 export interface PastMeal {
@@ -82,6 +87,7 @@ function toPastMealEntry(e: BrowseEntry, food: SearchResult): PastMealEntry | nu
     quantityMultiplier: multiplier,
     originalQuantity: typeof e.original_quantity === 'number' ? e.original_quantity : undefined,
     originalUnit: e.original_unit?.trim() || undefined,
+    shown: shownFor(food),
   };
 }
 
@@ -102,6 +108,17 @@ export function useFoodBrowse(currentUserId: string | undefined, selectedDate: s
   // The lists from the last successful read stay usable, including offline.
   const [browseUnavailable, setBrowseUnavailable] = useState(false);
 
+  // OFFLINE-FOOD-M: no day could be read. Lists already in memory stay; an empty sheet (a cold
+  // start with no signal) takes this member's kept copy from the last good read.
+  const fillFromKeptCopy = useCallback(async () => {
+    if (!currentUserId) return;
+    const copy = await readBrowseCopy(currentUserId);
+    if (!copy) return;
+    setRecentFoods((now) => (now.length > 0 ? now : copy.recentFoods));
+    setFrequentFoods((now) => (now.length > 0 ? now : copy.frequentFoods));
+    setLastMeals((now) => (Object.keys(now).length > 0 ? now : earlierMeals(copy.lastMeals, selectedDate)));
+  }, [currentUserId, selectedDate]);
+
   const loadBrowseFoods = useCallback(async () => {
     if (!currentUserId) return;
     try {
@@ -114,6 +131,7 @@ export function useFoodBrowse(currentUserId: string | undefined, selectedDate: s
       const settled = await Promise.allSettled(dateStrings.map((ds) => logApi.getDaily(ds)));
       if (settled.every((result) => result.status === 'rejected')) {
         setBrowseUnavailable(true);
+        await fillFromKeptCopy();
         return;
       }
       setBrowseUnavailable(false);
@@ -165,11 +183,13 @@ export function useFoodBrowse(currentUserId: string | undefined, selectedDate: s
       setRecentFoods(recent.slice(0, BROWSE_LIMIT));
       setFrequentFoods(frequent);
       setLastMeals(meals);
+      void keepBrowseCopy(currentUserId, { readFor: selectedDate, recentFoods: recent, frequentFoods: frequent, lastMeals: meals });
     } catch (err) {
       console.error('useFoodBrowse: loadBrowseFoods failed', err);
       setBrowseUnavailable(true);
+      await fillFromKeptCopy().catch(() => undefined);
     }
-  }, [currentUserId, selectedDate]);
+  }, [currentUserId, selectedDate, fillFromKeptCopy]);
 
   // Both tabs come from the same single fetch; the older names stay as
   // aliases so existing callers keep working.

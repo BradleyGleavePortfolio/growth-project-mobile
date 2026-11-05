@@ -4,6 +4,8 @@ import { getTodayString } from '../../../utils/date';
 import { StyleSheet } from 'react-native';
 import { homeCells } from '../../../macros/macroDisplay';
 import { lightTokens, typography } from '../../../theme/tokens';
+import { withQueuedFoods } from '../../../utils/log/queuedDay';
+import type { PendingFoodLog } from '../../../services/foodLogQueue';
 const mockNavigate = jest.fn();
 const mockHistory = jest.fn();
 const mockAssignments = jest.fn();
@@ -63,6 +65,7 @@ import HomeScreen from '../HomeScreen';
 import { homeDateLine } from '../homeDate';
 beforeEach(() => {
   jest.clearAllMocks();
+  mockDay.foodLogs = [{ mealType: 'lunch' }];
   mockUser.coach_id = 'c1'; mockUser.profile = {}; mockTargets = null; mockMacroMode = 'full';
   mockHistory.mockResolvedValue({ data: [] });
   mockAssignments.mockResolvedValue([]);
@@ -205,4 +208,28 @@ it.each(['simple', 'full'] as const)('keeps every %s metric in one hairline row 
   const positions = sections.map((section) => home.indexOf(section));
   expect(positions.every((position) => position > 0)).toBe(true);
   expect(positions).toEqual([...positions].sort((a, b) => a - b));
+});
+
+// LS-931R2B: the real day join retains refused rows for removal, but they count in nothing.
+it.each([
+  ['waiting only', [false], 'One meal logged.'],
+  ['refused only', [true], null],
+  ['waiting lunch and refused snack', [false, true], 'One meal logged.'],
+  ['two refused meals', [true, true], null],
+] as const)('%s: Home counts only meals that count in the food day', async (_name, parked, expected) => {
+  const queue: PendingFoodLog[] = parked.map((refused, i) => ({
+    id: `ls931-home-${i}`, createdAt: Date.now(), kind: 'search',
+    foodItemId: `food-${i}`,
+    shown: { name: `Food ${i}`, calories: 150, protein_g: 10, carbs_g: 20, fat_g: 4 },
+    log: { date: getTodayString(), meal_type: i === 0 ? 'lunch' : 'snack', quantity_multiplier: 1 },
+    ...(refused ? { parkedAt: Date.now() } : {}),
+  }));
+  const joined = withQueuedFoods([], { calories: 0, protein: 0, carbs: 0, fat: 0 }, queue, getTodayString(), mockUser.id);
+  expect(joined.foodLogs).toHaveLength(queue.length);
+  expect(joined.dailyTotals.calories).toBe(parked.filter((v) => !v).length * 150);
+  mockDay.foodLogs = joined.foodLogs;
+  await render(<HomeScreen />);
+  await screen.findByLabelText('Log a meal');
+  if (expected) expect(screen.getByText(expected)).toBeTruthy();
+  else expect(screen.queryByText(/meals? logged\./)).toBeNull();
 });
