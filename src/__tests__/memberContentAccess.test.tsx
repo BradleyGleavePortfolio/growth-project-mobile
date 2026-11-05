@@ -1834,3 +1834,62 @@ it('LO-911R4 outside: no case in this file writes a fixture under src/', () => {
   const self = fs.readFileSync(__filename, 'utf8');
   expect(self.includes(['mkdtemp', 'Sync(path.join(SRC'].join(''))).toBe(false);
 });
+
+// ─── FIX-911R4 (LO-911R4 B1, class-first): every via row, every part ──────────────────────────────────────────────
+// A via row's parts read as empty only at its file's own root and in the exports the row stops (default and file-named,
+// or the row's exports), and in a local those reach. Any other export of a via file carries its parts' kinds on, so a
+// new screen that draws a gap part through it is named. One case per via row and part (all 11 rows, 18 parts).
+describe('FIX-911R4: a via row mutes its parts only at its root and in the exports it stops', () => {
+  const ctx0 = scanCtx();
+  const cases = REGISTRY.flatMap((s) => (s.proof.by === 'via' ? s.proof.parts.map((part) => [s.kind, s.file, part] as [Kind, string, string]) : []));
+  /** the name the via file draws a part by (an import of the part) */
+  const localOf = (file: string, part: string) =>
+    [...infoOf(ctx0, file).bindings].find(([, b]) => 'from' in b && resolveSpec(ctx0, file, b.from) === part)?.[0];
+  const card = (file: string) => {
+    const s = `${path.posix.dirname(file)}/FIX911R4Card.tsx`;
+    const base = path.posix.basename(file).replace(/\.tsx?$/, '');
+    return [s, `import React from 'react';\nimport { FIX911R4Wrap } from './${base}';\nexport default function FIX911R4Card() { return <FIX911R4Wrap />; }\n`] as const;
+  };
+  it('every via part is imported by a name the cases below draw', () => {
+    expect(cases.length).toBe(18);
+    expect(cases.filter(([, f, p]) => !localOf(f, p)).map(([k, f, p]) => `${k} ${f} ${p}`)).toEqual([]);
+  });
+  it.each(cases)('%s via %s: a new export drawing %s, drawn on a new screen, names that screen (the via file stays muted)', (kind, file, part) => {
+    const t = `${read(file)}\nexport function FIX911R4Wrap() { return <${localOf(file, part)} />; }\n`;
+    const [s, st] = card(file);
+    const ctx = scanCtx({ [file]: t, [s]: st });
+    expect(classify(s, st, ctx)[kind]).toBe(true);
+    expect(classify(file, t, ctx)[kind] && !registered(file, kind)).toBe(false);
+  });
+  it.each(cases)('control: %s via %s: a new screen drawing the file\'s stopped export is not named for %s', (kind, file) => {
+    const base = path.posix.basename(file).replace(/\.tsx?$/, '');
+    const s = `${path.posix.dirname(file)}/FIX911R4Host.tsx`;
+    const st = `import React from 'react';\nimport ${base} from './${base}';\nexport default function FIX911R4Host() { return <${base} />; }\n`;
+    expect(classify(s, st, scanCtx({ [s]: st }))[kind]).toBe(false);
+  });
+  // the scope rides from a stopped export into the local it reaches, and no further: a synthetic ProgressScreen whose
+  // default export draws ShareSheet through a local, and that also exports the local
+  const f = 'screens/client/ProgressScreen.tsx';
+  const synth = "import React from 'react';\nimport ShareSheet from '../../components/share/ShareSheet';\n" +
+    'export function FIX911R4Inner() { return <ShareSheet card={null} onClose={() => undefined} />; }\n' +
+    'export default function ProgressScreen() { return <FIX911R4Inner />; }\n';
+  it('control: a stopped export that draws its part through a local is still muted for its callers', () => {
+    const s = 'screens/client/FIX911R4Host.tsx';
+    const st = "import React from 'react';\nimport ProgressScreen from './ProgressScreen';\nexport default function FIX911R4Host() { return <ProgressScreen />; }\n";
+    const ctx = scanCtx({ [f]: synth, [s]: st });
+    expect(classify(s, st, ctx).composer).toBe(false);
+    expect(classify(f, synth, ctx).composer).toBe(false);
+  });
+  it('the same local, exported and drawn on a new screen, names that screen (whichever is read first)', () => {
+    const s = 'screens/client/FIX911R4Inner.tsx';
+    const st = "import React from 'react';\nimport { FIX911R4Inner } from './ProgressScreen';\nexport default function FIX911R4InnerCard() { return <FIX911R4Inner />; }\n";
+    const h = 'screens/client/FIX911R4Host.tsx';
+    const ht = "import React from 'react';\nimport ProgressScreen from './ProgressScreen';\nexport default function FIX911R4Host() { return <ProgressScreen />; }\n";
+    const ctx = scanCtx({ [f]: synth, [s]: st, [h]: ht });
+    expect(classify(h, ht, ctx).composer).toBe(false);
+    expect(classify(s, st, ctx).composer).toBe(true);
+    const ctx2 = scanCtx({ [f]: synth, [s]: st, [h]: ht });
+    expect(classify(s, st, ctx2).composer).toBe(true);
+    expect(classify(h, ht, ctx2).composer).toBe(false);
+  });
+});
