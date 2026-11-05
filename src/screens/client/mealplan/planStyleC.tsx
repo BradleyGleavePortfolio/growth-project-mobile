@@ -230,7 +230,8 @@ const s = StyleSheet.create({
     paddingBottom: spacing['2xl'] + radius.sheet,
   },
   eyebrow: { ...typography.eyebrow, color: mast.muted, marginBottom: spacing.sm },
-  title: { ...typography.h1, color: mast.ink },
+  // C2's masthead title is larger than the scale's h1 (about 38 pt in C_day); 36 pt keeps the serif's line-height floor.
+  title: { ...typography.h1, fontSize: 36, lineHeight: 44, color: mast.ink },
   line: { ...typography.bodySmall, color: mast.ink, marginTop: spacing.sm },
   lineMuted: { color: mast.muted },
   rule: { height: 1, alignSelf: 'stretch', backgroundColor: mast.rule, marginTop: spacing.lg },
