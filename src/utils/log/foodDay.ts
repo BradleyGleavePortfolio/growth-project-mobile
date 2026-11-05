@@ -9,6 +9,7 @@ import type { DailyMealPlan, SlotLabel } from '../../api/mealTemplatesApi';
 import type { PastMeal } from '../../hooks/useFoodBrowse';
 import { formatPortion } from './quickLog';
 import { mapLogEntryToFood, type RawLogEntry } from './mapFoodItem';
+import { shownFor } from './queuedDay';
 
 export interface DaySlot {
   key: string;
@@ -129,6 +130,9 @@ function usualMeal(meal: MealType, newestFirst: PastDay[]): Usual | null {
       foodItemId: id, name: food.name, calories: (Number(food.calories) || 0) * k, quantityMultiplier: k,
       originalQuantity: typeof e.original_quantity === 'number' ? e.original_quantity : undefined,
       originalUnit: e.original_unit?.trim() || undefined,
+      // OFFLINE-FOOD-M (LS-931 B3): the same name and per-unit macros as the search sheet's Repeat,
+      // so this meal repeated with no signal shows and counts in the day at once.
+      shown: shownFor(food),
     }));
     groups.set(signature, {
       days: [day.date],
