@@ -178,7 +178,7 @@ describe('DEMO_ fixtures match the phone API types', () => {
     expect((DEMO_USER satisfies CurrentUser).id).toBe('demo-user-screenshot');
     expect(fixtures.DEMO_AUTH_ME.user.id).toBe(DEMO_USER.id);
     expect(fixtures.DEMO_AUTH_ME.profile).toBe(DEMO_USER.profile);
-    expect((DEMO_MEAL_PLAN_TODAY satisfies ClientTodayResponse).plan).not.toBeNull();
+    expect((DEMO_MEAL_PLAN_TODAY satisfies ClientTodayResponse).assignments.length).toBeGreaterThan(0);
   });
 
   it('the Roman fixtures parse with the strict wire schemas the Roman API uses', () => {
