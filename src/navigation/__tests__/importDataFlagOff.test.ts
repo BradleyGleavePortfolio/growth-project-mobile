@@ -11,6 +11,18 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { featureFlags } from '../../config/featureFlags';
 
+// Pins EXPO_PUBLIC_FF_EXTENSION_IMPORT off: 'defaults OFF at runtime' checks the shipped default.
+const shippedDefault = (key: string): typeof featureFlags => {
+  const saved = process.env[key];
+  delete process.env[key];
+  let flags = featureFlags;
+  jest.isolateModules(() => {
+    flags = require('../../config/featureFlags').featureFlags;
+  });
+  if (saved !== undefined) process.env[key] = saved;
+  return flags;
+};
+
 const ROOT = path.resolve(__dirname, '..', '..');
 function read(rel: string): string {
   return fs.readFileSync(path.join(ROOT, rel), 'utf8');
@@ -22,7 +34,7 @@ const FLAGS = read(path.join('config', 'featureFlags.ts'));
 
 describe('extensionImport flag defaults', () => {
   it('defaults OFF at runtime', () => {
-    expect(featureFlags.extensionImport).toBe(false);
+    expect(shippedDefault('EXPO_PUBLIC_FF_EXTENSION_IMPORT').extensionImport).toBe(false);
   });
 
   it('reads EXPO_PUBLIC_FF_EXTENSION_IMPORT with a false default (not isDev)', () => {

@@ -153,6 +153,7 @@ beforeEach(() => {
   intentResponses = [intent('payment')];
   mockGet.mockImplementation(async (url: string) => {
     if (url === '/v1/clients/me/coach/packages') return { data: { packages: PACKAGES } };
+    if (url === '/v1/clients/me/coach') return { data: { id: 'coach-1', name: 'Avery Stone' } }; // FR-1TO1R2: the sheet sells once the coach is named
     if (url === `/v1/checkout/subscriptions/${PURCHASE}`) {
       const next = planResponses.length > 1 ? planResponses.shift() : planResponses[0];
       if (next instanceof Error) throw next;
@@ -324,6 +325,8 @@ describe('B-334-3 an unknown card-step outcome is read, never reported as no cha
     let release: (v: unknown) => void = () => undefined;
     mockPresent.mockRejectedValueOnce(new Error('bridge lost the response'));
     mockGet.mockImplementation(async (url: string) => {
+      if (url === '/v1/clients/me/coach/packages') return { data: { packages: PACKAGES } };
+      if (url === '/v1/clients/me/coach') return { data: { id: 'coach-1', name: 'Avery Stone' } };
       if (url === `/v1/checkout/subscriptions/${PURCHASE}`) {
         return new Promise((res) => {
           release = res;
@@ -373,6 +376,8 @@ describe('C-334-3 the confirm poll never reports after unmount', () => {
     let reads = 0;
     mockPresent.mockRejectedValueOnce(new Error('bridge lost the response'));
     mockGet.mockImplementation(async (url: string) => {
+      if (url === '/v1/clients/me/coach/packages') return { data: { packages: PACKAGES } };
+      if (url === '/v1/clients/me/coach') return { data: { id: 'coach-1', name: 'Avery Stone' } };
       if (url === `/v1/checkout/subscriptions/${PURCHASE}`) {
         reads += 1;
         if (reads === 1) return { data: planView('confirming', { checkout_state: 'processing' }) };

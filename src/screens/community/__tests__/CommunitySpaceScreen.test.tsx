@@ -45,6 +45,8 @@ jest.mock('../../../hooks/useCurrentUser', () => ({
 // ── Safe-area stub ───────────────────────────────────────────────────────────
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
+  // EXPO_PUBLIC_FF_COMMUNITY_VOICE_NOTES: the voice sheet (VoiceRecordSheet.tsx:22) reads the insets.
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
 // ── PostCard → an inert node forwarding testID, so the feed render path is

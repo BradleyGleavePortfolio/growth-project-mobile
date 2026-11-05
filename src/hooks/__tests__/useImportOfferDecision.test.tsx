@@ -38,6 +38,7 @@ import {
   readImportOfferDecision,
   type ImportOfferDecision,
 } from '../../storage/importOfferDecision';
+import { featureFlags } from '../../config/featureFlags';
 
 /** Seed an answer as if a previous process had recorded it for `userId`. */
 async function seedDecision(userId: string, decision: ImportOfferDecision) {
@@ -107,6 +108,8 @@ describe('useImportOfferDecision — inert and unresolved states', () => {
   });
 
   it('defaults to the OFF kill switch (featureFlags.extensionImport is false in test env)', async () => {
+    // Pins EXPO_PUBLIC_FF_EXTENSION_IMPORT off: this test is the switch-off path.
+    jest.replaceProperty(featureFlags, 'extensionImport', false);
     const getSpy = jest.spyOn(AsyncStorage, 'getItem');
     spies.push(getSpy);
     const { result } = await renderHook(() => useImportOfferDecision());

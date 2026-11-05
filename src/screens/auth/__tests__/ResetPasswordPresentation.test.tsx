@@ -3,6 +3,10 @@ import { fireEvent, render } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 import ResetPasswordScreen from '../ResetPasswordScreen';
 import { lightTokens } from '../../../theme/tokens';
+import { featureFlags } from '../../../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_FIRST_RUN_V2 off: this file is the classic auth screens (AuthStyleB.tsx:15 swaps in Style B).
+jest.replaceProperty(featureFlags, 'firstRunV2', false);
 
 let mockDone = false;
 let mockFalseStates = 0;

@@ -13,6 +13,8 @@ const mockToday = getTodayString();
 const mockStore = {
   selectedDate: mockToday, foodLogs: [], hasLoadedDay: true, dailyTotals: { calories: 0, protein: 0, carbs: 0, fat: 0 },
   waterOz: 0, isLoading: false, loadError: null, setSelectedDate: jest.fn(), loadDayData: jest.fn().mockResolvedValue(undefined),
+  // Like the store: reads the day again only while it is the day on screen.
+  refreshShownDay: jest.fn((u: string, d: string): Promise<void> => (d === mockStore.selectedDate ? mockStore.loadDayData(u, d) : Promise.resolve())),
   logWater: jest.fn(), removeFoodLogLocally: jest.fn(),
 };
 const mockPlan = { date: mockToday, assignments: [{ daily_meal_plan: { name: 'Lean week 2', slots: [{ id: 's', slot_label: 'snack', order: 0,
@@ -79,7 +81,7 @@ it('queues the plan meal offline with its plan_slot_id, so it survives a relaunc
   mockOnline = false;
   await show();
   await fireEvent.press(await screen.findByText('Ate it as planned'));
-  await waitFor(() => expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({ kind: 'manual', log: linked })));
+  await waitFor(() => expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({ kind: 'manual', log: linked }), expect.stringMatching(/^pfl_/)));
   expect(logApi.logFood).not.toHaveBeenCalled();
 });
 
@@ -125,7 +127,7 @@ it('repeats the usual meal of a client with no coach with the saved portions', a
   await fireEvent.press(await screen.findByText("Repeat yesterday's snack"));
   await waitFor(() => expect(logApi.logFood).toHaveBeenCalledWith({
     date: mockToday, meal_type: 'snack', food_item_id: 'apple', quantity_multiplier: 1, original_quantity: 1, original_unit: 'medium',
-    fills_usual_meal: true,
+    fills_usual_meal: true, client_uuid: expect.stringMatching(/^pfl_/),
   }));
   expect(await screen.findByText('1 food added to Snacks.')).toBeTruthy();
 });

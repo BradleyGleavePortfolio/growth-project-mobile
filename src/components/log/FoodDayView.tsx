@@ -26,6 +26,7 @@ import type { FoodLog, MealType } from '../../types';
 import { addDays, getTodayString } from '../../utils/date';
 import { buildPlanDay, buildUsualDay, dayWord, joinNames, loggedOn, nextSlot, weekday, type DaySlot, type PastDay } from '../../utils/log/foodDay';
 import type { PlanLink } from '../../utils/log/planLink';
+import { countsInDay } from '../../utils/log/queuedDay';
 
 const n = (v: number) => Math.round(v).toLocaleString('en-US');
 const sumOf = (plan: DailyMealPlan, key: 'calories_kcal' | 'protein_g') =>
@@ -35,6 +36,13 @@ const DOTS = [gold[300], palette.forest, gold[700]].map((backgroundColor) => ({ 
 const dotOf = (i = 0) => DOTS[i % DOTS.length];
 const clock = (iso: string) =>
   new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
+// OFFLINE-FOOD-M (LS-931 B2): a food saved offline reads as waiting in the plan day too, with the words
+// the C2 Style C offline frame draws under its meal (C2-S-15 + C2-S-16; several foods: the plural
+// approved #196-E11); a refused one with the app's error title (C2-S-18). Shown, never as synced.
+const offlineLine = (waiting: FoodLog[]) => (waiting.length === 1
+  ? `Saved offline. ${waiting[0].foodName} will sync when you reconnect.`
+  : `Saved offline. ${waiting.length} foods will sync when you reconnect.`);
+const REFUSED = "Couldn't log food";
 const longDay = (date: string) =>
   new Date(`${date}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }).replace(',', '');
 
@@ -104,12 +112,15 @@ export default function FoodDayView(p: FoodDayViewProps) {
   const assigned = plans[0];
   const many = plans.length > 1;
   // Each food carries the plan or usual meal it was logged for (FOODLINK), so the day is rebuilt from the server's log.
+  // A food the server refused ticks off no meal and counts in nothing; it shows with the extras, marked.
+  const counted = useMemo(() => p.foodLogs.filter(countsInDay), [p.foodLogs]);
+  const refused = useMemo(() => p.foodLogs.filter((l) => !countsInDay(l)), [p.foodLogs]);
   const day = useMemo(() => {
-    if (plans.length > 0) return buildPlanDay(plans, p.foodLogs);
+    if (plans.length > 0) return buildPlanDay(plans, counted);
     if (!usualDay) return null;
-    const usual = past.data ? buildUsualDay(past.data, p.foodLogs) : null;
+    const usual = past.data ? buildUsualDay(past.data, counted) : null;
     return usual && usual.slots.length > 0 ? usual : null;
-  }, [plans, usualDay, past.data, p.foodLogs]);
+  }, [plans, usualDay, past.data, counted]);
 
   // Until the day and the plan (or the past week) are read, the classic log stays open for logging.
   if (!p.ready || (p.coached && plan.isLoading) || (usualDay && past.isPending)) return <>{p.fallback}</>;
@@ -148,9 +159,10 @@ export default function FoodDayView(p: FoodDayViewProps) {
 
   const slotRow = (x: DaySlot) => {
     const isDone = x.logs.length > 0;
+    const waiting = x.logs.filter((l) => l.offline === 'waiting');
     const first = [...x.logs].sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1))[0];
     const label = isDone && first?.createdAt ? `${x.label}, ${clock(first.createdAt)}` : x.label;
-    const sub = isDone ? x.status : x.usual
+    const sub = isDone ? (waiting.length > 0 ? offlineLine(waiting) : x.status) : x.usual
       ? `${x.usual.meal.entries.length > 1 ? `${x.usual.meal.entries.length} foods, ` : ''}${n(x.protein)} g protein, last on ${weekday(x.usual.days[0])}`
       : `${n(x.protein)} g protein`;
     const name = !isDone && x.usual ? `Your usual: ${x.name}` : x.name;
@@ -162,8 +174,10 @@ export default function FoodDayView(p: FoodDayViewProps) {
           accessibilityRole={isDone ? 'button' : undefined} accessibilityState={isDone ? { expanded } : undefined}
           accessibilityLabel={`${label}. ${name}. ${sub}. ${kcal} kcal${x.plan ? `. From ${x.plan}.` : ''}`}
           style={s.slot} testID={`food-day-slot-${x.key}`}>
-          <View style={[s.ring, isDone ? s.ringDone : s.ringSoft]}>
-            {isDone ? <Ionicons name="checkmark" size={14} color={sc.textOnAccent} /> : null}
+          {/* The C2 offline frame's dashed ring: logged on this phone, not yet on the server. */}
+          <View style={[s.ring, waiting.length > 0 ? s.ringWaiting : isDone ? s.ringDone : s.ringSoft]}
+            testID={waiting.length > 0 ? `food-day-waiting-${x.key}` : undefined}>
+            {isDone && waiting.length === 0 ? <Ionicons name="checkmark" size={14} color={sc.textOnAccent} /> : null}
           </View>
           <View style={s.grow}>
             <Text style={s.eyebrow}>{label.toUpperCase()}</Text>
@@ -175,7 +189,7 @@ export default function FoodDayView(p: FoodDayViewProps) {
         </HapticPressable>
         {expanded ? x.logs.map((l) => (
           <HapticPressable key={l.id} intent="light" disableAnimation onPress={() => p.onEditFood(l)} style={s.food}
-            accessibilityRole="button" accessibilityLabel={`${l.foodName}, ${n(l.calories)} kcal`}>
+            accessibilityRole="button" accessibilityLabel={`${l.foodName}, ${n(l.calories)} kcal${l.offline ? '. Saved offline' : ''}`}>
             <Text style={[s.small, s.grow]} numberOfLines={1}>{l.foodName}</Text>
             <Text style={s.smallMuted}>{n(l.calories)}</Text>
           </HapticPressable>
@@ -295,18 +309,24 @@ export default function FoodDayView(p: FoodDayViewProps) {
           onPress={() => p.onSomethingElse(next?.mealType ?? 'snack')} />
       </View>
       {/* The water card's top hairline closes this list, so the last extra draws none of its own. */}
-      {day.extras.map((l, i) => (
-        <HapticPressable key={l.id} intent="light" disableAnimation onPress={() => p.onEditFood(l)}
-          style={[s.extra, i < day.extras.length - 1 && s.extraLine]}
-          accessibilityRole="button" accessibilityLabel={`${l.foodName}, logged to ${l.mealType}, ${n(l.calories)} kcal`}>
-          <Text style={s.time}>{l.createdAt ? clock(l.createdAt) : ''}</Text>
-          <View style={s.grow}>
-            <Text style={s.smallMd} numberOfLines={1}>{l.foodName}</Text>
-            <Text style={s.meta}>{`Logged to ${l.mealType}`}</Text>
-          </View>
-          <Text style={s.smallMd}>{n(l.calories)}</Text>
-        </HapticPressable>
-      ))}
+      {[...day.extras, ...refused].map((l, i, all) => {
+        const mark = l.offline === 'refused' ? REFUSED : l.offline === 'waiting' ? offlineLine([l]) : null;
+        return (
+          <HapticPressable key={l.id} intent="light" disableAnimation onPress={() => p.onEditFood(l)}
+            style={[s.extra, i < all.length - 1 && s.extraLine]} testID={mark ? `food-day-offline-${l.id}` : undefined}
+            accessibilityRole="button"
+            accessibilityLabel={l.offline === 'refused' ? `${l.foodName}. ${REFUSED}`
+              : `${l.foodName}, logged to ${l.mealType}, ${n(l.calories)} kcal${mark ? '. Saved offline' : ''}`}>
+            <Text style={s.time}>{l.createdAt ? clock(l.createdAt) : ''}</Text>
+            <View style={s.grow}>
+              <Text style={s.smallMd} numberOfLines={1}>{l.foodName}</Text>
+              <Text style={s.meta}>{mark ?? `Logged to ${l.mealType}`}</Text>
+            </View>
+            {/* A refused food counts in nothing, so it shows no number. */}
+            {l.offline === 'refused' ? null : <Text style={s.smallMd}>{n(l.calories)}</Text>}
+          </HapticPressable>
+        );
+      })}
       <View style={s.water}>{p.water}</View>
 
       {isPlan && next && isToday ? (
@@ -371,6 +391,7 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   ring: { width: 24, height: 24, borderRadius: radius.chip, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
   ringDone: { backgroundColor: sc.accent },
   ringSoft: { borderWidth: 1.5, borderColor: palette.stone },
+  ringWaiting: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: sc.textMuted },
   slotName: { ...typography.bodyMd, color: sc.textPrimary, marginTop: 4 },
   kcal: { ...typography.bodySmall, fontFamily: typography.bodyMd.fontFamily, color: sc.textMuted, marginTop: 13, fontVariant: ['tabular-nums'] },
   food: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: layout.touchMin, paddingLeft: 38, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: sc.border },

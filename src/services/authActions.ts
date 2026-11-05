@@ -24,6 +24,7 @@ import {
   pushQueuedWorkouts,
 } from '../offline/sync/sync-engine';
 import { flush as flushFoodLogQueue, getQueueLength as foodQueueLength } from './foodLogQueue';
+import { BROWSE_COPY_KEY_PREFIX } from '../utils/log/browseCache';
 import { OUTBOX_KEY_PREFIX, outboxLength, releaseOutbox, sendOutboxBeforeSignOut } from './messageOutbox';
 import { activeWorkoutSessionKey } from '../storage/activeWorkoutSession';
 import { AUTOSAVE_MIRROR_KEY_PREFIX } from '../storage/autosaveMirror';
@@ -37,6 +38,7 @@ import { useClientStore } from '../store/clientStore';
 import { useFastingStore } from '../store/fastingStore';
 import { foregroundBannerStore } from '../store/foregroundBannerStore';
 import { dunningLockoutStore } from '../entitlements/dunning/dunningLockoutStore';
+import { useBlockedUsersStore } from '../store/blockedUsersStore';
 import { resetCrispIdentity } from './support/crisp.service';
 import { COACH_SIGNUP_UNCONFIRMED_KEY } from '../lib/coachSignupAttempt';
 import { SIGNUP_ROLE_NOTICE_KEY } from '../lib/signupRoleNotice';
@@ -46,6 +48,7 @@ import { firstPaymentSeenKey } from '../screens/coach/ed/firstPaymentGate';
 import { ROMAN_JOIN_OFFER_KEY_PREFIX } from '../lib/romanJoinOffer';
 import { deletionScheduledThisSession } from './deletionSchedule';
 import { releaseAgeHolds } from '../lib/ageGate';
+import { NOTIF_CATEGORY_PREFS_KEY } from '../storage/notificationCategoryPrefs';
 
 // Tokens live in SecureStore; everything else is plain AsyncStorage.
 const SECURE_SIGN_OUT_KEYS = [
@@ -99,6 +102,8 @@ const ASYNC_SIGN_OUT_KEYS = [
   // migrate it into their namespace and surface the previous user's
   // working set. See audit #2 / R15.
   '@activeWorkoutSession/v1',
+  // LS-908R2 B-R2-1 (STORE-B2): the notification category switches, the plan renewal offers yes among them.
+  NOTIF_CATEGORY_PREFS_KEY,
 ];
 // Prefixes whose every matching AsyncStorage key should be wiped on signOut.
 // Per-user namespaced data lives behind these prefixes; without enumeration the
@@ -147,6 +152,10 @@ const PER_USER_KEY_PREFIXES = [
   'macro_targets:', // useMacroTargets — per-user macro cache
   // Offline food queue: another account's unsent foods stay on the phone.
   'pending_food_logs_',
+  // FIX-931R2: foods that queue sent and no read of their day holds yet (foodLogQueue.readSent).
+  'sent_food_logs_', // = foodLogQueue SENT_KEY_PREFIX (authActions.browseCopy.offm test)
+  // OFFLINE-FOOD-M: the add sheet's kept Recent, Frequent and Repeat lists (utils/log/browseCache).
+  BROWSE_COPY_KEY_PREFIX,
   // Per-coach Roman import-offer answer (UX-01 J0/J1), keyed
   // `import_offer_decision:<userId>`. Non-secret and readable only under the
   // owning coach's key, so — like macro_targets — only the signing-out coach's
@@ -642,6 +651,8 @@ export function resetUserScopedStores(): void {
     ['foregroundBannerStore', () => foregroundBannerStore.getState().reset()],
     // B-352-1: the payment lockout belongs to the signed-in account.
     ['dunningLockoutStore', () => dunningLockoutStore.retire()],
+    // LS-914 B1: the blocked list belongs to the signed-in account; a block answered later writes nothing.
+    ['blockedUsersStore', () => useBlockedUsersStore.getState().retire()],
   ];
   for (const [name, reset] of stores) {
     try {

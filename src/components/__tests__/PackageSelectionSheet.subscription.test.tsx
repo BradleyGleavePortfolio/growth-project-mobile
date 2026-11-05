@@ -44,7 +44,8 @@ jest.mock('../../services/api', () => ({
 }));
 const mockGetEntitlement = jest.fn();
 jest.mock('../../api/clientPaymentsApi', () => ({
-  clientPaymentsApi: { getEntitlement: () => mockGetEntitlement() },
+  // EXPO_PUBLIC_FF_CLIENT_BILLING_V2: the success moment (PlanActiveMoment.tsx:169) reads getPurchases; here it is unknown.
+  clientPaymentsApi: { getEntitlement: () => mockGetEntitlement(), getPurchases: async () => ({ ok: false }) },
 }));
 const mockCapture = jest.fn();
 jest.mock('../../services/sentry', () => ({ captureError: (...a: unknown[]) => mockCapture(...a) }));
@@ -141,6 +142,7 @@ beforeEach(() => {
   planResponses = [planView('active')];
   mockGet.mockImplementation(async (url: string) => {
     if (url === '/v1/clients/me/coach/packages') return { data: { packages: PACKAGES } };
+    if (url === '/v1/clients/me/coach') return { data: { id: 'coach-1', name: 'Avery Stone' } }; // FR-1TO1R2: the sheet sells once the coach is named
     if (url === `/v1/checkout/subscriptions/${PURCHASE}`) {
       const next = planResponses.length > 1 ? planResponses.shift() : planResponses[0];
       return { data: next };

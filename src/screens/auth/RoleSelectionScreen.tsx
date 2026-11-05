@@ -35,6 +35,7 @@ import { isNetworkFailure, unknownAuthFailure } from '../../utils/authFailure';
 import { radius, typography } from '../../theme/tokens';
 import { useCoachSharingNotice } from '../../lib/coachSharingNotice';
 import { presentJoinFrom } from '../../lib/joinPackage';
+import { isCoachNotAcceptingRefusal } from '../../lib/coachNotAccepting';
 import CoachSharingNotice from '../../components/coachSharing/CoachSharingNotice';
 
 type Props = {
@@ -306,8 +307,11 @@ export default function RoleSelectionScreen({ navigation, route }: Props) {
       let unknownFailure = false;
       let msg: string;
       if (trimmed && status >= 400 && status < 500) {
+        // 1TO1-FU-M: a coach who cannot take you says so (today's 404 PACKAGE_NOT_FOUND, then the code).
         msg = inviteAttachErrorMessage(
-          r.response?.data?.reason ?? r.response?.data?.code ?? r.response?.data?.message ?? 'invalid',
+          isCoachNotAcceptingRefusal(err)
+            ? 'coach_not_accepting_clients'
+            : r.response?.data?.reason ?? r.response?.data?.code ?? r.response?.data?.message ?? 'invalid',
         );
       } else if (isNetworkFailure(err)) {
         msg = 'The server could not be reached. Check your connection, then tap Continue again.';

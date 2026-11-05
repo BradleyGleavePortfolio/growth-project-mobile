@@ -119,7 +119,7 @@ describe('active session controls', () => {
   it('uses the latest matching exercise and copies a previous set in one tap', async () => {
     function Harness() {
       const [set, setSet] = useState<SessionSet>({ weight: 0, reps: 10, completed: false });
-      return <SetLogger set={set} exIdx={0} setIdx={0} onUpdate={(_e, _s, field, value) => setSet((s) => ({ ...s, [field]: value }))} onToggleComplete={() => undefined} previous={previousSets(mockHistory, 'bench press')[0]} styles={styles} colors={colors} />;
+      return <SetLogger nextUp set={set} exIdx={0} setIdx={0} onUpdate={(_e, _s, field, value) => setSet((s) => ({ ...s, [field]: value }))} onToggleComplete={() => undefined} previous={previousSets(mockHistory, 'bench press')[0]} styles={styles} colors={colors} />;
     }
     const screen = await render(<Harness />);
     await fireEvent.press(screen.getByLabelText('Use previous set 1: 135 pounds, 8 reps'));

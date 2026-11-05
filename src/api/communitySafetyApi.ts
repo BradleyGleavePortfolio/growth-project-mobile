@@ -20,6 +20,7 @@ import api from '../services/api';
 import { generateIdempotencyKey } from '../utils/idempotency';
 import { call } from './apiCall';
 import { blockPlaced, blockLifted } from '../lib/blockSync';
+import { blockListOwner } from '../store/blockedUsersStore';
 import { COMMUNITY_SUPPORT_EMAIL, describeCommunityFailure } from './communityErrors';
 
 /**
@@ -175,19 +176,21 @@ export const communitySafetyApi = {
   },
 
   block(userId: string): Promise<void> {
+    const owner = blockListOwner(); // LS-914 B1: the answer writes only into the list it was sent from
     return call(
       BlockResultSchema,
       () => api.post<unknown>('/community/blocks', { user_id: userId }, idempotentHeaders()),
       'community block',
-    ).then(() => blockPlaced(userId)); // FX-872: the same block cache the coaching chat and Settings read
+    ).then(() => blockPlaced(userId, {}, owner)); // FX-872: the same block cache the coaching chat and Settings read
   },
 
   unblock(userId: string): Promise<void> {
+    const owner = blockListOwner();
     return call(
       BlockResultSchema,
       () => api.delete<unknown>(`/community/blocks/${userId}`),
       'community unblock',
-    ).then(() => blockLifted(userId));
+    ).then(() => blockLifted(userId, owner));
   },
 
   /** GET /community/safety/notices — the member's own moderation notices, newest first. */

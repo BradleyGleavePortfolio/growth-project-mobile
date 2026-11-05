@@ -4,6 +4,7 @@
  * only the day on screen. A client opening an empty "today" must still see
  * yesterday's oats, at the portion logged last time.
  */
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, renderHook } from '@testing-library/react-native';
 
 jest.mock('../../services/api', () => ({
@@ -91,8 +92,11 @@ describe('useFoodBrowse — recent foods and past meals for fast logging', () =>
     const breakfast = result.current.lastMeals.breakfast;
     expect(breakfast?.date).toBe('2026-10-05');
     expect(breakfast?.entries).toEqual([
-      { foodItemId: 'food-oats', name: 'Rolled oats', calories: 379 * 0.6, quantityMultiplier: 0.6, originalQuantity: 60, originalUnit: 'g' },
-      { foodItemId: 'food-banana', name: 'Banana', calories: 89 * 1.18, quantityMultiplier: 1.18, originalQuantity: 1, originalUnit: 'serving' },
+      // OFFLINE-FOOD-M adds `shown` (name + per-unit macros, for a Repeat saved offline).
+      { foodItemId: 'food-oats', name: 'Rolled oats', calories: 379 * 0.6, quantityMultiplier: 0.6, originalQuantity: 60, originalUnit: 'g',
+        shown: { name: 'Rolled oats', calories: 379, protein_g: 13, carbs_g: 68, fat_g: 6.5 } },
+      { foodItemId: 'food-banana', name: 'Banana', calories: 89 * 1.18, quantityMultiplier: 1.18, originalQuantity: 1, originalUnit: 'serving',
+        shown: { name: 'Banana', calories: 89, protein_g: 1.1, carbs_g: 23, fat_g: 0.3 } },
     ]);
     expect(Math.round(breakfast?.calories ?? 0)).toBe(Math.round(379 * 0.6 + 89 * 1.18));
     // Lunch also comes from the most recent day that has one, not a mix of days.
@@ -168,6 +172,8 @@ describe('useFoodBrowse — offline', () => {
   });
 
   it('clears the flag on the next successful read', async () => {
+    // OFFLINE-FOOD-M: a phone that never read the week (no kept copy from the tests above).
+    await AsyncStorage.clear();
     const working = getDaily.getMockImplementation();
     getDaily.mockRejectedValue(new Error('Network Error'));
     const result = await loaded();

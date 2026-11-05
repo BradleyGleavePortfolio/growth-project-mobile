@@ -75,6 +75,10 @@ import CreateAccountScreen from '../CreateAccountScreen';
 import LoginScreen from '../LoginScreen';
 import { __resetSignupPolicyCacheForTests } from '../../../lib/signupPolicy';
 import { toAuthErrorDetail } from '../../../utils/authErrorDetail';
+import { featureFlags } from '../../../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_FIRST_RUN_V2 off: this file is the classic auth screens (AuthStyleB.tsx:15 swaps in Style B).
+jest.replaceProperty(featureFlags, 'firstRunV2', false);
 
 type Nav = { navigate: jest.Mock; replace: jest.Mock };
 const OFF = { invite_code_required: false, providers: ['email', 'apple', 'google'], role_choice: false };

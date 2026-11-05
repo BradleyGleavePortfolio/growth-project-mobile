@@ -132,6 +132,8 @@ jest.mock('expo-font', () => ({ isLoaded: () => true }));
 // Stable idempotency key so we can assert it flows through to the API.
 jest.mock('../utils/idempotency', () => ({
   generateIdempotencyKey: () => 'test-idem-key-0001',
+  // EXPO_PUBLIC_FF_MWB_PROGRAMS: the program picker's error copy (programErrors.ts:280) mints a reference.
+  randomUuid: () => 'test-uuid-0001',
 }));
 
 jest.mock('../utils/haptics', () => ({

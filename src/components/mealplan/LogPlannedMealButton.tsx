@@ -24,7 +24,7 @@ import { queryClient } from '../../services/queryClient';
 import { isEffectivelyOnline } from '../../hooks/useNetworkStatus';
 import { useClientStore } from '../../store/clientStore';
 import { readUserCacheSync } from '../../lib/userCache';
-import { getTodayString } from '../../utils/date';
+import { dayForNewLog } from '../../utils/logDay';
 import { track } from '../../lib/analytics';
 import { AnalyticsEvents } from '../../analytics/events';
 import { HapticService } from '../../ui/haptics/haptics.service';
@@ -83,7 +83,7 @@ function refreshFoodLog() {
   void queryClient.invalidateQueries({ queryKey: ['food', 'log'] });
   const userId = readUserCacheSync()?.id;
   const store = useClientStore.getState();
-  if (userId) void store.loadDayData(userId, store.selectedDate);
+  if (userId) void store.refreshShownDay(userId, store.selectedDate);
 }
 
 type Phase = 'idle' | 'saving' | 'logged' | 'queued' | 'undoing';
@@ -111,7 +111,7 @@ export default function LogPlannedMealButton({ meal, slot, planSlotId }: { meal:
   const log = async (v: Values, t: MealType) => {
     setPhase('saving');
     setNote(null);
-    const args = { foodName: name, ...v, quantity: '1', unit: 'serving', date: getTodayString(), mealType: t, link: { planSlotId } };
+    const args = { foodName: name, ...v, quantity: '1', unit: 'serving', date: dayForNewLog(), mealType: t, link: { planSlotId } };
     try {
       const net = await NetInfo.fetch();
       if (!isEffectivelyOnline({ isOnline: !!net.isConnected, isInternetReachable: net.isInternetReachable })) {

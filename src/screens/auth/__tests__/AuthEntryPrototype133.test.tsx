@@ -29,6 +29,10 @@ jest.mock('../../../theme/ThemeProvider', () => ({
 
 import CreateAccountScreen from '../CreateAccountScreen';
 import { __resetSignupPolicyCacheForTests } from '../../../lib/signupPolicy';
+import { featureFlags } from '../../../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_FIRST_RUN_V2 off: this file is the classic auth screens (AuthStyleB.tsx:15 swaps in Style B).
+jest.replaceProperty(featureFlags, 'firstRunV2', false);
 
 // Production GET /api/auth/signup-policy at 16:58 PDT 8 Oct (role_choice on).
 const LIVE = { invite_code_required: false, providers: ['email', 'google', 'apple'], role_choice: true };

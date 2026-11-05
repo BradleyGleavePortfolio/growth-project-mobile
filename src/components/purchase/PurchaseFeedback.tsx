@@ -18,7 +18,7 @@ import { PACKAGE_PAYMENT_COPY } from "../../lib/packagePayment";
 import { money } from "../../lib/planTerms";
 import type { PackagePurchase } from "../../hooks/usePackagePurchase";
 import PlanTermsBlock from "./PlanTermsBlock";
-import PlanActiveMoment from "./PlanActiveMoment";
+import PlanActiveMoment, { type PlanMoment } from "./PlanActiveMoment";
 import { featureFlags } from "../../config/featureFlags";
 
 export interface PurchaseFeedbackProps {
@@ -31,6 +31,19 @@ export interface PurchaseFeedbackProps {
   openPlanLabel?: string;
   /** C5 Style C: open what the purchase unlocks (surfaces in the More stack). */
   onSeeUnlocks?: (purchaseId: string) => void;
+  /**
+   * LS-914R2 B2: the host's usePlanMoment read. Given, the host shows the
+   * success actions in its pinned bottom bar (PlanActiveActions/PlanActiveBar).
+   */
+  moment?: PlanMoment;
+}
+
+/** The success the Style C moment is showing, or null (host footer switch). */
+export function styleCSuccess(purchase: PackagePurchase) {
+  const { state } = purchase;
+  return state.phase === "success" && state.success && featureFlags.clientBillingV2
+    ? state.success
+    : null;
 }
 
 export default function PurchaseFeedback({
@@ -39,6 +52,7 @@ export default function PurchaseFeedback({
   onOpenPlan,
   openPlanLabel = PACKAGE_PAYMENT_COPY.openPlan,
   onSeeUnlocks,
+  moment,
 }: PurchaseFeedbackProps) {
   const { semanticColors, tokens } = useTheme();
   const styles = useMemo(
@@ -81,6 +95,7 @@ export default function PurchaseFeedback({
           success={state.success}
           onContinue={onContinue}
           onSeeUnlocks={onSeeUnlocks}
+          moment={moment}
         />
       ) : state.phase === "success" && state.success ? (
         <View

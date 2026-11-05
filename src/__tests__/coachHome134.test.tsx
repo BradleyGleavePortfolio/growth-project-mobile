@@ -13,6 +13,10 @@ import { commandCenterApi } from '../services/commandCenterApi';
 import OverviewScreen from '../screens/coach/command-center/OverviewScreen';
 import CommandCenterScreen from '../screens/coach/command-center/CommandCenterScreen';
 import { clientsNarrative, dateOverline, heroAmount, overlinePair, overlineWidth, paceLine, retentionPct } from '../screens/coach/command-center/coachHomeCopy';
+import { featureFlags } from '../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_COACH_HOME_V11 off: this file is the Home with its top tab row (V11 drops the row, spec #688).
+jest.replaceProperty(featureFlags, 'coachHomeV11', false);
 
 jest.mock('@react-navigation/native', () => ({ ...jest.requireActual('@react-navigation/native'), useNavigation: () => ({ navigate: jest.fn() }) }));
 jest.mock('../services/commandCenterApi', () => ({

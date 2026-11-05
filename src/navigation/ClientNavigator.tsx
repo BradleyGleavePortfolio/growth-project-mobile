@@ -424,17 +424,24 @@ export type MoreStackParamList = {
  * Opened from More they get a native header with only the back chevron, so
  * the way back is always visible and the safe area is respected.
  */
-/** `onMasthead`: the C8 v2 Progress page starts on the deep forest masthead, so its bar does too (ForestStatusBar paints the inset). */
-function backOnlyHeader(title = '', onMasthead = false) {
+/**
+ * `onMasthead`: the C8 v2 Progress page starts on the deep forest masthead, so its bar does too (ForestStatusBar paints the inset).
+ * A colour instead of `true` paints the bar in that masthead's own ground: the C2 Style C plan screens (meal plan, macros,
+ * fasting) start on the C2 frame's forest band, so the back chevron sits on forest and no bone strip shows (FIX-927, LO-927 B1).
+ */
+function backOnlyHeader(title = '', onMasthead: boolean | string = false) {
+  const ground = typeof onMasthead === 'string' ? onMasthead : onMasthead ? lightTokens.surface.masthead : colors.bone;
   return {
     headerShown: true,
     title,
     headerBackTitle: 'Back',
     headerShadowVisible: false,
-    headerStyle: { backgroundColor: onMasthead ? lightTokens.surface.masthead : colors.bone },
+    headerStyle: { backgroundColor: ground },
     headerTintColor: onMasthead ? lightTokens.textOnAccent : colors.ink,
   } as const;
 }
+/** The C2 frame's forest band (#2C4A36), the ground of the plan screens' masthead (planStyleC `mast.ground`). */
+const PLAN_BAND = lightTokens.surface.forestBand;
 
 const Tab           = createBottomTabNavigator<ClientTabParamList>();
 const HomeStackNav  = createNativeStackNavigator<HomeStackParamList>();
@@ -572,7 +579,7 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
       <MoreStackNav.Screen name="GroceryList"  component={GroceryListScreen} />
       <MoreStackNav.Screen name="ShoppingList" component={ShoppingListScreen} />
       <MoreStackNav.Screen name="PrepGuide"    component={PrepGuideScreen} />
-      <MoreStackNav.Screen name="Fast"         component={ProtectedFastingScreen} options={backOnlyHeader()} />
+      <MoreStackNav.Screen name="Fast"         component={ProtectedFastingScreen} options={backOnlyHeader('', PLAN_BAND)} />
       <MoreStackNav.Screen name="Community"    component={ProtectedCommunityScreen} />
       <MoreStackNav.Screen name="CommunitySafety" component={CommunitySafetyScreen} />
       <MoreStackNav.Screen name="Progress" options={backOnlyHeader('', featureFlags.clientProgressV2)}>
@@ -647,8 +654,8 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
           Reachable via deep-link and from MoreScreen entries (added
           in a follow-up; route registration first so deep-links
           work today). */}
-      <MoreStackNav.Screen name="ClientMacros"        component={ProtectedClientMacrosScreen} options={backOnlyHeader('Macro targets')} />
-      <MoreStackNav.Screen name="ClientDailyMealPlan" component={ProtectedClientDailyMealPlanScreen} options={backOnlyHeader()} />
+      <MoreStackNav.Screen name="ClientMacros"        component={ProtectedClientMacrosScreen} options={backOnlyHeader('Macro targets', PLAN_BAND)} />
+      <MoreStackNav.Screen name="ClientDailyMealPlan" component={ProtectedClientDailyMealPlanScreen} options={backOnlyHeader('', PLAN_BAND)} />
       <MoreStackNav.Screen name="ClientWorkoutViewer" component={ProtectedClientWorkoutViewerScreen} />
       <MoreStackNav.Screen name="WorkoutAssignmentDetail" component={ProtectedWorkoutAssignmentDetailScreen} />
       {/* Concierge Phase 1 — scheduling client surfaces. The old

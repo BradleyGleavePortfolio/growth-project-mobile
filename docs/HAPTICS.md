@@ -67,6 +67,7 @@ When the toggle changes:
 | `messaging/RomanDraftMark` (Roman draft mark, both threads and C3 Style B) | `selection()` | Show or fold the draft line, open its explanation, or forward a long press to message actions (flag off by default) |
 | `ActiveWorkoutScreen` | `heavyImpact()` | Workout saved successfully |
 | `ActiveWorkoutScreen` | `error()` | Workout save failed |
+| `log/PortionRuler` (portion sheet, STYLEC-916) | `selection()` | Each step the ruler moves by drag, tap or screen-reader swipe |
 | `LogScreen` | `success()` | Food logged (search + manual flows) |
 | `LogScreen` | `error()` | Food log API failure |
 | `EditProfileScreen` | `warning()` | DOB / weight validation error |

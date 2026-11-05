@@ -191,9 +191,9 @@ describe('§2.8 producer: ActiveWorkoutScreen finish path is pre-P3 when romanCh
     };
 
     try {
-      const { getByText } = await render(<ActiveWorkoutScreen />);
-      // Wait until the restored session committed (routine header visible).
-      await waitFor(() => expect(getByText('Push Day')).toBeTruthy());
+      const { getByText, getByTestId } = await render(<ActiveWorkoutScreen />);
+      // Wait until the screen committed (FR-917R3: the C1 v2 header's set count; it shows no workout name).
+      await waitFor(() => expect(getByTestId('live-set-count')).toBeTruthy());
 
       // Trigger the finish flow. Pressing the Finish control calls
       // finishWorkout() -> Alert.alert('Finish Workout?', ...), which our spy

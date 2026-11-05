@@ -13,7 +13,15 @@ import {
   type WorkoutSession,
 } from './types';
 import type { OpenSafetyAlert } from './SafetyAlertCard';
-import { mapCoachWorkoutSessions, workoutTimelineSubtitle } from '../../../utils/workout/workoutLogging';
+import { mapCoachWorkoutSessions, newestWorkoutsFirst, workoutTimelineSubtitle, type CoachSessionRow } from '../../../utils/workout/workoutLogging';
+import { dayStart, instantDay, workoutDay } from '../../../utils/workout/workoutDay';
+
+/** A workout's place on the timeline: when it was stored, or its recorded day when it synced on a later day. */
+function recordedAt(s: { date?: string; created_at?: string }): string {
+  const day = workoutDay(s);
+  if (s.created_at && instantDay(s.created_at) === day) return s.created_at;
+  return dayStart(day)?.toISOString() ?? s.created_at ?? s.date ?? '';
+}
 
 const openAlertOf = (data: { error?: unknown; open_safety_alert?: OpenSafetyAlert | null }) =>
   (data.error ? null : data.open_safety_alert ?? null);
@@ -158,7 +166,14 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
       const data = res.data;
       if (data.error) throw new Error('Timeline unavailable');
 
-      const events: TimelineEvent[] = [];
+      // COACH-DAY-ORDER-M: the server's timeline order (b#1213). Every event sits on a
+      // calendar day, newest day first; inside one day meals, workouts, weights,
+      // check-ins, each in its own list's order. Times never pick the place: a meal has
+      // only its day, so a workout done that day sits under the meals, saved late or not.
+      const placed: Array<{ day: string; rank: number; at: number; event: TimelineEvent }> = [];
+      const add = (day: string, rank: number, event: TimelineEvent) => {
+        placed.push({ day, rank, at: placed.length, event });
+      };
 
       // Food events grouped by date
       const mealsByDate = new Map<string, { count: number; totalCals: number }>();
@@ -171,7 +186,7 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
         mealsByDate.set(dateStr, existing);
       }
       for (const [dateStr, info] of mealsByDate) {
-        events.push({
+        add(dateStr, 0, {
           id: `food_${dateStr}`,
           type: 'food',
           title: `${info.count} meals logged`,
@@ -185,7 +200,7 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
       // Weight events
       for (const w of (data.weights || [])) {
         const dateStr = (w.date || '').slice(0, 10);
-        events.push({
+        add(dateStr, 2, {
           id: `weight_${w.id}`,
           type: 'weight',
           title: `Weight: ${w.weight_lbs} lbs`,
@@ -197,15 +212,16 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
       }
 
       // Workout events
-      for (const s of (data.workouts || [])) {
-        events.push({
+      // Day, then save time, then id, newest first (newestWorkoutsFirst).
+      for (const s of newestWorkoutsFirst((data.workouts || []) as CoachSessionRow[])) {
+        add(workoutDay(s), 1, {
           id: `workout_${s.id}`,
           type: 'workout',
           // WorkoutSession rows carry workout_name (no name / completed_at).
           title: s.workout_name || s.name || 'Workout',
           // FU-WORKLOG2-126: what was done, not "Logged" on every row.
           subtitle: workoutTimelineSubtitle(s),
-          date: s.created_at || s.date,
+          date: recordedAt(s),
           icon: 'barbell',
           iconColor: colors.primaryDark, // Round 3: hex → token (workout event icon)
         });
@@ -213,7 +229,7 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
 
       // Check-in events
       for (const c of (data.checkIns || [])) {
-        events.push({
+        add(String(c.date || '').slice(0, 10), 3, {
           id: `checkin_${c.id}`,
           type: 'checkin',
           title: 'Check-in',
@@ -232,8 +248,8 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
         });
       }
 
-      events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      setTimeline(events);
+      placed.sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : a.rank - b.rank || a.at - b.at));
+      setTimeline(placed.map((p) => p.event));
     } catch (err) {
       console.error('ClientDetailScreen: loadTimeline failed', err);
       setTimelineError(loadFailureMessage(err, 'Timeline'));
@@ -326,7 +342,7 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
       // Aggregate workout sessions
       if (Array.isArray(workouts)) {
         for (const session of workouts) {
-          const dateStr = (session.created_at || session.date || '').slice(0, 10);
+          const dateStr = workoutDay(session);
           if (!dateStr) continue;
           const week = ensureWeek(dateStr);
           week.workoutCount += 1;

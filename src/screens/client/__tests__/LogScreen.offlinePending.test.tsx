@@ -23,7 +23,10 @@ const mockStore = {
   selectedDate: mockToday, foodLogs: [], hasLoadedDay: true,
   dailyTotals: { calories: 0, protein: 0, carbs: 0, fat: 0 }, waterOz: 0,
   isLoading: false, loadError: null as string | null,
-  setSelectedDate: jest.fn(), loadDayData: jest.fn().mockResolvedValue(undefined), logWater: jest.fn(),
+  setSelectedDate: jest.fn(), loadDayData: jest.fn().mockResolvedValue(undefined),
+  // Like the store: reads the day again only while it is the day on screen.
+  refreshShownDay: jest.fn((u: string, d: string): Promise<void> => (d === mockStore.selectedDate ? mockStore.loadDayData(u, d) : Promise.resolve())),
+  logWater: jest.fn(),
   removeFoodLogLocally: jest.fn(),
 };
 const mockBrowse = {

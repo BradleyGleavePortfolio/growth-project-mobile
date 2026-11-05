@@ -32,7 +32,8 @@ jest.mock('../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'coac
 jest.mock('../hooks/useNetworkStatus', () => ({ useNetworkStatus: () => ({ isOnline: true, isInternetReachable: true }) }));
 jest.mock('../config/featureFlags', () => {
   const actual = jest.requireActual('../config/featureFlags');
-  return { ...actual, featureFlags: { ...actual.featureFlags, coachBrief: true } };
+  // Pins EXPO_PUBLIC_FF_COACH_HOME_V11 and EXPO_PUBLIC_FF_COACH_TABS_V2 off: this file is the five-tab row without the Settings gear.
+  return { ...actual, featureFlags: { ...actual.featureFlags, coachBrief: true, coachHomeV11: false, coachTabsV2: false } };
 });
 jest.mock('../lib/coachSetup/setupStatus', () => ({
   ...jest.requireActual('../lib/coachSetup/setupStatus'),

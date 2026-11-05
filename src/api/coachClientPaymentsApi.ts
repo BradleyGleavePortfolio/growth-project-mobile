@@ -48,6 +48,12 @@ export interface ClientPlan {
   accessExpiresAt: string | null;
   cancelAtPeriodEnd: boolean;
   billing: PlanBilling;
+  /**
+   * HELD-RENEWAL-M2: b#1216's marker for a renewal TGP holds on the coach's
+   * own Stripe account (not the client's failed payment); null otherwise,
+   * and on a server that does not send it yet.
+   */
+  waitingOn: "coach_account" | null;
   actions: PlanActions;
   payments: ClientPayment[];
 }
@@ -99,6 +105,8 @@ export function toPlan(raw: unknown, at = "plan"): ClientPlan {
     accessExpiresAt: r.dateOrNull(p.access_expires_at, `${at}.access_expires_at`),
     cancelAtPeriodEnd: r.bool(p.cancel_at_period_end, `${at}.cancel_at_period_end`),
     billing,
+    // Optional and never a drift: only the exact marker counts (as Money's charges, coachMoneyApi).
+    waitingOn: p.waiting_on === "coach_account" ? "coach_account" : null,
     actions: {
       refund: r.bool(a.refund, `${at}.actions.refund`),
       pause: r.bool(a.pause, `${at}.actions.pause`),

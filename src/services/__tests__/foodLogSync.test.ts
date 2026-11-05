@@ -8,9 +8,9 @@ jest.mock('../foodLogQueue', () => ({
   flush: () => mockFlush(),
   getQueueLength: () => mockQueueLength(),
 }));
-const mockLoadDayData = jest.fn(async () => undefined);
+const mockRefreshShownDay = jest.fn(async () => undefined);
 jest.mock('../../store/clientStore', () => ({
-  useClientStore: { getState: () => ({ selectedDate: '2026-10-06', loadDayData: mockLoadDayData }) },
+  useClientStore: { getState: () => ({ selectedDate: '2026-10-06', refreshShownDay: mockRefreshShownDay }) },
 }));
 let mockUser: { id: string } | null = { id: 'client-1' };
 jest.mock('../../lib/userCache', () => ({ readUserCacheSync: () => mockUser }));
@@ -21,7 +21,7 @@ beforeEach(() => {
   mockFlush.mockReset();
   mockQueueLength.mockReset();
   mockQueueLength.mockResolvedValue(0);
-  mockLoadDayData.mockClear();
+  mockRefreshShownDay.mockClear();
   mockUser = { id: 'client-1' };
 });
 
@@ -29,20 +29,20 @@ describe('syncFoodLogQueue', () => {
   it('reloads the selected day after a food saved offline is sent', async () => {
     mockFlush.mockResolvedValue({ flushed: 1, remaining: 0, parked: 0 });
     await expect(syncFoodLogQueue()).resolves.toBe(1);
-    expect(mockLoadDayData).toHaveBeenCalledWith('client-1', '2026-10-06');
+    expect(mockRefreshShownDay).toHaveBeenCalledWith('client-1', '2026-10-06');
   });
 
   it('does not reload when nothing was waiting', async () => {
     mockFlush.mockResolvedValue({ flushed: 0, remaining: 0, parked: 0 });
     await expect(syncFoodLogQueue()).resolves.toBe(0);
-    expect(mockLoadDayData).not.toHaveBeenCalled();
+    expect(mockRefreshShownDay).not.toHaveBeenCalled();
   });
 
   it('does not reload when no one is signed in', async () => {
     mockUser = null;
     mockFlush.mockResolvedValue({ flushed: 1, remaining: 0, parked: 0 });
     await syncFoodLogQueue();
-    expect(mockLoadDayData).not.toHaveBeenCalled();
+    expect(mockRefreshShownDay).not.toHaveBeenCalled();
   });
 
   it('shares one send between overlapping triggers (foreground and reconnect together)', async () => {
@@ -63,6 +63,6 @@ describe('syncFoodLogQueue', () => {
     await expect(syncFoodLogQueue()).resolves.toBe(0);
     unsubscribe();
     expect(seen).toEqual([2]);
-    expect(mockLoadDayData).not.toHaveBeenCalled();
+    expect(mockRefreshShownDay).not.toHaveBeenCalled();
   });
 });

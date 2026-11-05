@@ -231,3 +231,59 @@ describe('ContactView — coach inbox follows block and unblock (FR-868)', () =>
     spy.mockRestore();
   });
 });
+
+describe('ContactView — an answer after an account change stays with its account (LS-914 B1)', () => {
+  function held<T>() {
+    let release!: (value: T) => void;
+    const promise = new Promise<T>((resolve) => {
+      release = resolve;
+    });
+    return { promise, release };
+  }
+  const nextRow = { blockedId: 'u1', displayName: 'Next account name', blockedAt: '2026-10-30T09:00:00.000Z' };
+  async function nextAccountSignsIn(reset: boolean, rows: Array<typeof nextRow>) {
+    if (reset) await useBlockedUsersStore.getState().reset();
+    await useBlockedUsersStore.getState().hydrate('next-account');
+    await useBlockedUsersStore.getState().addFromServer(rows, { replace: true });
+  }
+
+  it.each([false, true])('a named block answered late never reaches the next account (reset=%s)', async (reset) => {
+    const request = held<{ ok: true }>();
+    mockBlock.mockImplementationOnce(() => request.promise);
+    const { getByLabelText } = await render(<ContactView />);
+    await waitFor(() => expect(useBlockedUsersStore.getState().hydrated).toBe(true));
+    await pressDestructive('Block', async () => {
+      await fireEvent.press(getByLabelText('Block user'));
+    });
+    await waitFor(() => expect(mockBlock).toHaveBeenCalledWith('u1'));
+
+    await nextAccountSignsIn(reset, []);
+    request.release({ ok: true });
+    await waitFor(() => expect(getByLabelText('Block user')).toBeTruthy());
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(useBlockedUsersStore.getState().userId).toBe('next-account');
+    expect(useBlockedUsersStore.getState().blocked).toEqual([]);
+    expect(mockGoBack).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])('an unblock answered late never unblocks in the next account (reset=%s)', async (reset) => {
+    await useBlockedUsersStore.getState().hydrate('me');
+    await useBlockedUsersStore.getState().block({ id: 'u1', displayName: 'Alice Smith', role: 'coach' });
+    const request = held<{ ok: true }>();
+    mockUnblock.mockImplementationOnce(() => request.promise);
+    const { getByLabelText } = await render(<ContactView />);
+    await waitFor(() => getByLabelText('Unblock user'));
+    await pressDestructive('Unblock', async () => {
+      await fireEvent.press(getByLabelText('Unblock user'));
+    });
+    await waitFor(() => expect(mockUnblock).toHaveBeenCalledWith('u1'));
+
+    await nextAccountSignsIn(reset, [nextRow]);
+    request.release({ ok: true });
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(useBlockedUsersStore.getState().userId).toBe('next-account');
+    expect(useBlockedUsersStore.getState().blocked.map((b) => b.displayName)).toEqual(['Next account name']);
+  });
+});

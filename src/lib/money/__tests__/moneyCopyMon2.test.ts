@@ -20,6 +20,7 @@ const charge = (state: MoneyCharge["state"]): MoneyCharge => ({
   refundedCents: 0,
   chargedBackCents: 0,
   movedAwayAt: null,
+  waitingOn: null,
   createdAt: "2026-10-01T00:00:00Z",
 });
 
