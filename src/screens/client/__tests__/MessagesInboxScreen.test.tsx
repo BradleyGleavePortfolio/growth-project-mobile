@@ -25,6 +25,24 @@ const mockGet = jest.fn();
 jest.mock('../../../services/api', () => ({ __esModule: true, default: { get: (u: string) => mockGet(u) } }));
 const mockInbox = jest.fn();
 jest.mock('../../../api/messagingV2Api', () => ({ messagingV2Api: { getClientInbox: () => mockInbox() } }));
+// D10-BUILD-CLOSE: the client's own Roman history (list newest first, then the newest chat's messages newest first).
+const mockList = jest.fn();
+const mockRead = jest.fn();
+jest.mock('../../../api/romanChatsApi', () => ({
+  ROMAN_CHATS_MAX_LIMIT: 100,
+  romanChatsApi: { list: (...a: unknown[]) => mockList(...a), readMessages: (...a: unknown[]) => mockRead(...a) },
+}));
+const mockBindingCurrent = jest.fn(() => true);
+const mockCapture = jest.fn(async () => ({ subject: 'client-1', epoch: 1 }) as { subject: string; epoch: number } | null);
+jest.mock('../../../services/accountBinding', () => ({
+  captureAccountBinding: () => mockCapture(),
+  bindingIsCurrent: () => mockBindingCurrent(),
+}));
+const OFFLINE = { ok: false, failure: { reason: 'offline' } };
+const chats = (n: number, nextCursor: string | null = null) => ({ ok: true, value: { sessions: Array.from({ length: n }, (_, i) => ({ id: `rs${i}`, surface: 'client', dayKey: '2026-11-04', messageCount: 4, startedAt: '2026-11-04T18:00:00.000Z', lastActivityAt: '2026-11-04T18:00:00.000Z' })), nextCursor } });
+const ANSWER = "62 g, Jordan. Sam's dinner covers 45 g of it, so a Greek yoghurt this evening closes the rest.";
+const said = (o: Record<string, unknown> = {}) => ({ id: 'rm2', role: 'assistant', content: ANSWER, interrupted: false, createdAt: '2026-11-04T18:02:00.000Z', ...o });
+const asked = { id: 'rm1', role: 'user', content: 'How much protein is left?', interrupted: false, createdAt: '2026-11-04T18:01:00.000Z' };
 const mockFlags = { messaging_core_v2: true };
 jest.mock('../../../hooks/useFeatureFlags', () => ({ useFeatureFlags: () => ({ flags: mockFlags }) }));
 const mockReduce = jest.fn(() => false);
@@ -57,7 +75,7 @@ jest.mock('@react-navigation/native', () => ({
   }, [cb]),
 }));
 
-import MessagesInboxScreen, { previewOf, romanLeft } from '../MessagesInboxScreen';
+import MessagesInboxScreen, { previewOf, romanLeft, romanLine } from '../MessagesInboxScreen';
 
 const thread = (o: Partial<InboxThread> = {}): InboxThread => ({
   thread_id: 't1', kind: 'coach_client', coach_id: 'coach-9', client_id: 'client-1',
@@ -95,6 +113,10 @@ beforeEach(() => {
   mockFlags.messaging_core_v2 = true;
   mockSupportOn = true;
   http();
+  mockList.mockResolvedValue(OFFLINE);
+  mockRead.mockResolvedValue(OFFLINE);
+  mockBindingCurrent.mockReturnValue(true);
+  mockCapture.mockResolvedValue({ subject: 'client-1', epoch: 1 });
   mockInbox.mockResolvedValue({ items: [thread()], next_cursor: null, total_unread: 2 });
 });
 
@@ -414,4 +436,96 @@ describe('previewOf and romanLeft', () => {
     [null, null],
     ['<html>', null],
   ])('%#: %j -> %p', (d, want) => expect(romanLeft(d)).toBe(want));
+});
+
+describe('D10-BUILD-CLOSE: Roman history on the list (C3 Style B, B_inbox and B_coachless)', () => {
+  it('the Roman card quotes his latest finished answer, in its label too; the newest chat is the one read', async () => {
+    mockList.mockResolvedValue(chats(3));
+    mockRead.mockResolvedValue({ ok: true, value: { messages: [said(), asked], nextCursor: null } });
+    const { u } = await show();
+    expect(await u.findByLabelText(`${ROMAN_LABEL}. ${ANSWER}`)).toBeTruthy();
+    expect(u.getByTestId('inbox-roman-line').props.children).toBe(ANSWER);
+    expect(u.getByTestId('inbox-roman-line').props.numberOfLines).toBe(3);
+    expect(u.queryByText('Ask Roman anything.')).toBeNull();
+    expect(mockList).toHaveBeenCalledWith({ subject: 'client-1', epoch: 1 }, { limit: 100 });
+    expect(mockRead).toHaveBeenCalledWith({ subject: 'client-1', epoch: 1 }, 'rs0', { limit: 6 });
+    expect(u.queryByTestId('inbox-chats-count')).toBeNull(); // the count is the coachless row's, not this list's
+  });
+
+  it.each([
+    ['no chats yet', chats(0), null],
+    ['the list read fails', OFFLINE, null],
+    ['the chat read fails', chats(2), OFFLINE],
+    ['only a crisis reply', chats(1), { ok: true, value: { messages: [said({ safetyActions: [{ kind: 'call', label: 'Call 988' }] }), asked], nextCursor: null } }],
+    ['only a cut-off reply', chats(1), { ok: true, value: { messages: [said({ interrupted: true })], nextCursor: null } }],
+  ])('%s: the card keeps "Ask Roman anything."', async (_n, list, read) => {
+    mockList.mockResolvedValue(list);
+    if (read) mockRead.mockResolvedValue(read);
+    const { u } = await show();
+    expect(await u.findByLabelText(ROMAN_LABEL)).toBeTruthy();
+    await act(async () => { await Promise.resolve(); });
+    expect(u.getByTestId('inbox-roman-line').props.children).toBe('Ask Roman anything.');
+  });
+
+  it('an answer for a sign-in that has ended is never shown; a later failed read keeps the last good line', async () => {
+    mockList.mockResolvedValue(chats(1));
+    mockRead.mockResolvedValue({ ok: true, value: { messages: [said()], nextCursor: null } });
+    const { u } = await show();
+    expect(await u.findByText(ANSWER)).toBeTruthy();
+    mockRead.mockResolvedValue(OFFLINE);
+    await act(async () => { mockRefocus(); });
+    await act(async () => { await Promise.resolve(); });
+    expect(u.getByText(ANSWER)).toBeTruthy();
+    mockBindingCurrent.mockReturnValue(false);
+    await act(async () => { mockRefocus(); });
+    expect(u.queryByText(ANSWER)).toBeNull();
+    expect(u.getByText('Ask Roman anything.')).toBeTruthy();
+  });
+
+  it('signed out (no credential): nothing is read', async () => {
+    mockCapture.mockResolvedValue(null);
+    const { u } = await show();
+    expect(await u.findByLabelText(ROMAN_LABEL)).toBeTruthy();
+    expect(mockList).not.toHaveBeenCalled();
+  });
+
+  it('without Roman chat nothing is read', async () => {
+    mockRoman.mockReturnValue(false);
+    await show();
+    await act(async () => { await Promise.resolve(); });
+    expect(mockCapture).not.toHaveBeenCalled();
+    expect(mockList).not.toHaveBeenCalled();
+  });
+
+  describe('no coach', () => {
+    beforeEach(() => mockNeedsCoach.mockReturnValue(true));
+
+    it('the old-chats row leads with how many chats are kept, and says it; no chat is opened to count', async () => {
+      mockList.mockResolvedValue(chats(3));
+      const { u } = await show();
+      expect(await u.findByLabelText('Your conversations with Roman, 3')).toBeTruthy();
+      expect(u.getByTestId('inbox-chats-count').props.children).toBe(3);
+      expect(mockRead).not.toHaveBeenCalled();
+      expect(u.queryByText(ANSWER)).toBeNull();
+    });
+
+    it.each([
+      ['no chats', chats(0)],
+      ['more than one page (no guessed total)', chats(100, 'rs100')],
+      ['the read fails', OFFLINE],
+    ])('%s: no number, the row reads as before', async (_n, list) => {
+      mockList.mockResolvedValue(list);
+      const { u } = await show();
+      await act(async () => { await Promise.resolve(); });
+      expect(u.getByLabelText('Your conversations with Roman')).toBeTruthy();
+      expect(u.queryByTestId('inbox-chats-count')).toBeNull();
+    });
+  });
+
+  it.each([
+    [[said({ content: '**62 g**, Jordan.\n- Greek yoghurt\n1. berries' })], '62 g, Jordan. Greek yoghurt berries'],
+    [[asked, said()], ANSWER],
+    [[said({ content: '   ' })], null],
+    [[], null],
+  ])('romanLine %#', (messages, want) => expect(romanLine(messages as never)).toBe(want));
 });

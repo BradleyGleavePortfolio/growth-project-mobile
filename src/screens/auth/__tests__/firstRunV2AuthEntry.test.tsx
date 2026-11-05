@@ -241,6 +241,17 @@ it('Sign in: Google keeps "or", the existing-account question and its call', asy
   await waitFor(() => expect(mockGoogle).toHaveBeenCalledWith());
 });
 
+it('Sign in (D10-BUILD-CLOSE, C7 Style B): Google\'s four-colour mark, not a typed G, and the providers 16 pt under the title', async () => {
+  const view = await login(nav());
+  const google = await view.findByLabelText('Continue with Google');
+  expect(view.getByTestId('login-google-mark', HIDDEN)).toBeTruthy();
+  expect(view.queryByText('G')).toBeNull();
+  expect(google).toBeTruthy();
+  const src = fs.readFileSync(path.join(__dirname, '..', 'LoginScreen.tsx'), 'utf8');
+  for (const c of ['#EA4335', '#4285F4', '#FBBC05', '#34A853']) expect(src).toContain(`fill="${c}"`);
+  expect(src).toMatch(/bTitle: \{ marginTop: Spacing\.sm, marginBottom: Spacing\.md \}/);
+});
+
 const fill = async (view: Awaited<ReturnType<typeof create>>) => {
   await fireEvent.changeText(view.getByLabelText('Full name'), 'Jordan');
   await fireEvent.changeText(view.getByLabelText('Email'), 'jordan@example.com');

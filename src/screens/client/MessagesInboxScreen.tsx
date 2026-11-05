@@ -12,6 +12,9 @@
  * the coach row out: it does while either person blocks; with messaging v2 off the thread read's closed header says it,
  * FR-880R2) the coach card leaves the list, with no name and no unread; an unblock reads again and the card comes back.
  * Cards slide up 250 ms on the decel curve; with Reduce Motion they fade in 150 ms and nothing moves.
+ * D10-BUILD-CLOSE (C3 Style B, B_inbox and B_coachless): the Roman card quotes Roman's latest answer (else "Ask Roman
+ * anything.") and the old-chats row leads with how many chats are kept, both from the client's own Roman history
+ * (useRomanHistory, existing routes).
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -30,6 +33,9 @@ import { useOpenSupport } from '../../components/ai/useOpenSupport';
 import RomanAvatar from '../../components/roman/RomanAvatar';
 import { ROMAN_COMPOSER_PLACEHOLDER } from '../../components/roman/romanVoice';
 import { ROMAN_CHATS_COPY } from '../settings/romanChatsCopy';
+import { romanChatsApi, ROMAN_CHATS_MAX_LIMIT, type RomanChatsApi } from '../../api/romanChatsApi';
+import type { RomanMessage } from '../../api/romanApi';
+import { bindingIsCurrent, captureAccountBinding, type AccountBinding } from '../../services/accountBinding';
 import { Headline, Screen, ScreenTopBar } from '../../ui';
 import { Skeleton } from '../../ui/skeletons/Skeleton';
 import { HapticService } from '../../ui/haptics/haptics.service';
@@ -64,6 +70,54 @@ export function romanLeft(d: unknown): number | null {
   const used = u?.used?.messages;
   const limit = u?.limits?.messages;
   return typeof used === 'number' && typeof limit === 'number' && limit > 0 ? Math.max(0, Math.floor(limit - used)) : null;
+}
+
+/** Roman's latest finished answer as one plain line (the room's own clean-up: emphasis markers and list marks drop),
+ * or null. A crisis reply (server-marked) or a cut-off one is never quoted on the list. Messages come newest first. */
+export function romanLine(messages: readonly RomanMessage[]): string | null {
+  const m = messages.find((x) => x.role === 'assistant' && !x.interrupted && !x.safetyActions?.length);
+  const text = m?.content.replace(/\*\*|__/g, '').replace(/^\s*(?:[-*\u2022]|\d+\.)\s+/gm, '').replace(/\s+/g, ' ').trim();
+  return text ? text : null;
+}
+
+/**
+ * The client's own Roman history for the list (GET /roman/sessions, newest first; GET /roman/sessions/:id/messages for
+ * the newest chat's last answer when `wantLine`). Read on focus, bound to the signed-in account (A-331-4): an answer
+ * that lands after a sign-out or account switch is dropped and nothing from it is shown. A failed read keeps the last
+ * good value of the same sign-in. `count` is set only when the whole list fits one page (no guessed total).
+ */
+export function useRomanHistory(enabled: boolean, wantLine: boolean, chats: RomanChatsApi = romanChatsApi) {
+  const [state, setState] = useState<{ binding: AccountBinding; count: number | null; line: string | null } | null>(null);
+  useFocusEffect(useCallback(() => {
+    if (!enabled) return undefined;
+    let live = true;
+    void (async () => {
+      const binding = await captureAccountBinding();
+      if (!live) return;
+      if (!binding) { setState(null); return; }
+      const page = await chats.list(binding, { limit: ROMAN_CHATS_MAX_LIMIT });
+      if (!live || !bindingIsCurrent(binding)) return;
+      if (!page.ok) {
+        if (page.failure.reason === 'account_changed' || page.failure.reason === 'signed_out') setState(null);
+        return;
+      }
+      const latest = page.value.sessions[0];
+      let line: string | null | undefined = null; // undefined: the chat read failed, keep the last good line
+      if (wantLine && latest) {
+        const t = await chats.readMessages(binding, latest.id, { limit: 6 });
+        if (!live || !bindingIsCurrent(binding)) return;
+        line = t.ok ? romanLine(t.value.messages) : undefined;
+      }
+      const count = page.value.nextCursor === null ? page.value.sessions.length : null;
+      setState((prev) => {
+        const same = !!prev && prev.binding.subject === binding.subject && prev.binding.epoch === binding.epoch;
+        return { binding, count, line: line === undefined ? (prev && same ? prev.line : null) : line };
+      });
+    })();
+    return () => { live = false; };
+  }, [enabled, wantLine, chats]));
+  const current = state && bindingIsCurrent(state.binding) ? state : null;
+  return { count: current?.count ?? null, line: wantLine ? (current?.line ?? null) : null };
 }
 
 const firstName = (name: string | null) => name?.split(/\s+/)[0] ?? null;
@@ -147,6 +201,8 @@ export default function MessagesInboxScreen({ navigation }: { navigation: Naviga
   const { messageCoach } = useEntitlement();
   const openSupport = useOpenSupport();
   const roman = featureFlags.romanChat;
+  const history = useRomanHistory(roman, !needsCoach);
+  const chatCount = history.count !== null && history.count > 0 ? history.count : null;
   const tap = (go: () => void) => () => {
     void HapticService.selection();
     go();
@@ -190,7 +246,8 @@ export default function MessagesInboxScreen({ navigation }: { navigation: Naviga
           </Rise>
         ) : null}
         <Rise index={2}>
-          <Pressable onPress={openChats} accessibilityRole="button" accessibilityLabel={ROMAN_CHATS_COPY.entryLabel} accessibilityHint={ROMAN_CHATS_COPY.entryHint} testID="inbox-chats" style={({ pressed }) => [s.card, s.row, { backgroundColor: palette.cream }, pressed && s.pressed]}>
+          <Pressable onPress={openChats} accessibilityRole="button" accessibilityLabel={`${ROMAN_CHATS_COPY.entryLabel}${chatCount !== null ? `, ${chatCount}` : ''}`} accessibilityHint={ROMAN_CHATS_COPY.entryHint} testID="inbox-chats" style={({ pressed }) => [s.card, s.row, { backgroundColor: palette.cream }, pressed && s.pressed]}>
+            {chatCount !== null ? <Text style={[s.rowCount, { color: sc.textPrimary }]} testID="inbox-chats-count">{chatCount > 99 ? '99+' : chatCount}</Text> : null}
             <Text style={[s.rowText, { color: sc.textPrimary }]}>{ROMAN_CHATS_COPY.entryLabel}</Text>
             <Ionicons name="chevron-forward" size={20} color={sc.textPrimary} />
           </Pressable>
@@ -236,7 +293,7 @@ export default function MessagesInboxScreen({ navigation }: { navigation: Naviga
         {roman ? (
           <>
             <Rise index={1}>
-              <Pressable onPress={tap(() => navigation.navigate('MoreTab', { screen: 'RomanChat', initial: false }))} accessibilityRole="button" accessibilityLabel={`Roman, your assistant${left !== null ? `, ${left} left today` : ''}`} testID="inbox-roman" style={({ pressed }) => [s.card, { backgroundColor: palette.cream }, pressed && s.pressed]}>
+              <Pressable onPress={tap(() => navigation.navigate('MoreTab', { screen: 'RomanChat', initial: false }))} accessibilityRole="button" accessibilityLabel={`Roman, your assistant${left !== null ? `, ${left} left today` : ''}${history.line ? `. ${history.line}` : ''}`} testID="inbox-roman" style={({ pressed }) => [s.card, { backgroundColor: palette.cream }, pressed && s.pressed]}>
                 <View style={s.top}>
                   <View style={[s.ringed, { borderColor: gold[500] }]}><RomanAvatar crop="neutral" size={52} /></View>
                   <View style={s.who}>
@@ -250,7 +307,7 @@ export default function MessagesInboxScreen({ navigation }: { navigation: Naviga
                     </View>
                   ) : null}
                 </View>
-                <Text style={[s.body, { color: sc.textPrimary }]}>{ROMAN_COMPOSER_PLACEHOLDER}</Text>
+                <Text style={[s.body, { color: sc.textPrimary }]} numberOfLines={history.line ? 3 : undefined} testID="inbox-roman-line">{history.line ?? ROMAN_COMPOSER_PLACEHOLDER}</Text>
               </Pressable>
             </Rise>
             <Rise index={2}>
@@ -302,6 +359,7 @@ const s = StyleSheet.create({
   outline: { borderWidth: 1 },
   actionText: { ...typography.bodyMd, textAlign: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', minHeight: layout.rowMinHeight, paddingVertical: 12 },
+  rowCount: { ...typography.h1, fontVariant: ['tabular-nums'] },
   rowText: { ...typography.body, flex: 1 },
   privacy: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: layout.touchMin, paddingHorizontal: 4, justifyContent: 'center' },
 });
