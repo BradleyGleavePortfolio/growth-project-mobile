@@ -550,7 +550,7 @@ describe('D10-BUILD-CLOSE: Roman history on the list (C3 Style B, B_inbox and B_
   it('LS-935 B1: follows message pagination to the latest finished answer', async () => {
     mockList.mockResolvedValue(chats(1));
     const newestSix = Array.from({ length: 6 }, (_, n) => ({ ...asked, id: `rq${n}` }));
-    mockRead.mockImplementation(async (_binding, _id, params) => params?.before
+    mockRead.mockImplementation(async (_binding, _id, params) => params?.cursor
       ? proofPage([said()])
       : { ok: true, value: { messages: newestSix, nextCursor: 'older-turn' } });
     const { u } = await show();
