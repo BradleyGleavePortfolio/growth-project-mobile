@@ -96,7 +96,8 @@ export function useRomanHistory(enabled: boolean, wantLine: boolean, chats: Roma
       if (!live) return;
       if (!binding) { setState(null); return; }
       const page = await chats.list(binding, { limit: ROMAN_CHATS_MAX_LIMIT });
-      if (!live || !bindingIsCurrent(binding)) return;
+      if (!live) return;
+      if (!bindingIsCurrent(binding)) { setState(null); return; } // that sign-in has ended: drop what it read
       if (!page.ok) {
         if (page.failure.reason === 'account_changed' || page.failure.reason === 'signed_out') setState(null);
         return;
@@ -105,7 +106,8 @@ export function useRomanHistory(enabled: boolean, wantLine: boolean, chats: Roma
       let line: string | null | undefined = null; // undefined: the chat read failed, keep the last good line
       if (wantLine && latest) {
         const t = await chats.readMessages(binding, latest.id, { limit: 6 });
-        if (!live || !bindingIsCurrent(binding)) return;
+        if (!live) return;
+        if (!bindingIsCurrent(binding)) { setState(null); return; }
         line = t.ok ? romanLine(t.value.messages) : undefined;
       }
       const count = page.value.nextCursor === null ? page.value.sessions.length : null;

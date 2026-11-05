@@ -64,14 +64,17 @@ jest.mock('../../../components/ai/useOpenSupport', () => ({ useOpenSupport: () =
 jest.mock('@expo/vector-icons', () => ({
   Ionicons: ({ name }: { name: string }) => require('react').createElement(require('react-native').Text, { testID: `icon-${name}` }),
 }));
-/** Focus runs the effect; mockRefocus() is a blur and a focus again (the cleanup, then a fresh read). */
-let mockRefocus: () => void = () => undefined;
+/** Focus runs the effect; mockRefocus() is a blur and a focus again (the cleanup, then a fresh read) of every focus
+ * effect on the screen (D10-BUILD-CLOSE: the coach reads and the Roman history are two). */
+const mockFocused = new Set<() => void>();
+const mockRefocus = () => { mockFocused.forEach((again) => again()); };
 jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'),
   useFocusEffect: (cb: () => void | (() => void)) => jest.requireActual('react').useEffect(() => {
     let undo = cb();
-    mockRefocus = () => { if (typeof undo === 'function') undo(); undo = cb(); };
-    return () => { if (typeof undo === 'function') undo(); };
+    const again = () => { if (typeof undo === 'function') undo(); undo = cb(); };
+    mockFocused.add(again);
+    return () => { mockFocused.delete(again); if (typeof undo === 'function') undo(); };
   }, [cb]),
 }));
 
@@ -478,7 +481,7 @@ describe('D10-BUILD-CLOSE: Roman history on the list (C3 Style B, B_inbox and B_
     expect(u.getByText(ANSWER)).toBeTruthy();
     mockBindingCurrent.mockReturnValue(false);
     await act(async () => { mockRefocus(); });
-    expect(u.queryByText(ANSWER)).toBeNull();
+    await waitFor(() => expect(u.queryByText(ANSWER)).toBeNull());
     expect(u.getByText('Ask Roman anything.')).toBeTruthy();
   });
 
