@@ -5,7 +5,7 @@
 import React from 'react';
 import * as fs from 'fs';
 import * as path from 'path';
-import { Animated, Dimensions, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { Animated, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { COMMUNITY_REPORT_CRISIS_LINE } from '../../../api/communitySafetyApi';
@@ -78,7 +78,7 @@ jest.mock('@react-navigation/native', () => ({
   }, [cb]),
 }));
 
-import MessagesInboxScreen, { previewOf, romanLeft, romanLine } from '../MessagesInboxScreen';
+import MessagesInboxScreen, { previewOf, romanLeft } from '../MessagesInboxScreen';
 
 const thread = (o: Partial<InboxThread> = {}): InboxThread => ({
   thread_id: 't1', kind: 'coach_client', coach_id: 'coach-9', client_id: 'client-1',
@@ -441,65 +441,39 @@ describe('previewOf and romanLeft', () => {
   ])('%#: %j -> %p', (d, want) => expect(romanLeft(d)).toBe(want));
 });
 
-describe('D10-BUILD-CLOSE: Roman history on the list (C3 Style B, B_inbox and B_coachless)', () => {
-  it('the Roman card quotes his latest finished answer, in its label too; the newest chat is the one read', async () => {
-    mockList.mockResolvedValue(chats(3));
-    mockRead.mockResolvedValue({ ok: true, value: { messages: [said(), asked], nextCursor: null } });
-    const { u } = await show();
-    expect(await u.findByLabelText(`${ROMAN_LABEL}. ${ANSWER}`)).toBeTruthy();
-    expect(u.getByTestId('inbox-roman-line').props.children).toBe(ANSWER);
-    // The jest window reports its own font scale; three lines at normal text, five above 1.15.
-    expect(u.getByTestId('inbox-roman-line').props.numberOfLines).toBe(Dimensions.get('window').fontScale > 1.15 ? 5 : 3);
-    expect(fs.readFileSync(path.join(__dirname, '..', 'MessagesInboxScreen.tsx'), 'utf8')).toMatch(/useWindowDimensions\(\)\.fontScale > 1\.15 \? 5 : 3/);
-    expect(u.queryByText('Ask Roman anything.')).toBeNull();
-    expect(mockList).toHaveBeenCalledWith({ subject: 'client-1', epoch: 1 }, { limit: 100 });
-    expect(mockRead).toHaveBeenCalledWith({ subject: 'client-1', epoch: 1 }, 'rs0', { limit: 6 });
-    expect(u.queryByTestId('inbox-chats-count')).toBeNull(); // the count is the coachless row's, not this list's
-  });
-
+describe('D10-BUILD-CLOSE: the Roman card on the list (C3 Style B, B_inbox and B_coachless)', () => {
+  const SRC = fs.readFileSync(path.join(__dirname, '..', 'MessagesInboxScreen.tsx'), 'utf8');
+  const page = (messages: unknown[], nextCursor: string | null = null) => ({ ok: true, value: { messages, nextCursor } });
+  const today = { id: 'rs-today', surface: 'client', dayKey: '2026-11-05', messageCount: 0, startedAt: '2026-11-05T09:00:00.000Z', lastActivityAt: '2026-11-05T09:00:00.000Z' };
+  const yesterday = { id: 'rs-yday', surface: 'client', dayKey: '2026-11-04', messageCount: 2, startedAt: '2026-11-04T18:00:00.000Z', lastActivityAt: '2026-11-04T18:02:00.000Z' };
+  // FIX-935R1: the owner moved quoting Roman's latest answer to v1.1 (op198/v1-1-messages-roman-line keeps the work),
+  // so LO-935 B1 and LS-935 B1 close with the quote. Every history shape those B-TESTs and the round before named
+  // now gives the same card: "Ask Roman anything.", the same label, and no Roman history read at all.
   it.each([
-    ['no chats yet', chats(0), null],
-    ['the list read fails', OFFLINE, null],
-    ['the chat read fails', chats(2), OFFLINE],
-    ['only a crisis reply', chats(1), { ok: true, value: { messages: [said({ safetyActions: [{ kind: 'call', label: 'Call 988' }] }), asked], nextCursor: null } }],
-    ['only a cut-off reply', chats(1), { ok: true, value: { messages: [said({ interrupted: true })], nextCursor: null } }],
-  ])('%s: the card keeps "Ask Roman anything."', async (_n, list, read) => {
+    ['a finished answer in the newest chat', chats(3), page([said(), asked])],
+    ['LO-935 B1: today\'s empty chat is newest', { ok: true, value: { sessions: [today, yesterday], nextCursor: null } }, page([said(), asked])],
+    ['LS-935 B1: a newly opened empty chat is newest', chats(2), page([])],
+    ['LS-935 B1: the newest chat holds only a cut-off answer', chats(2), page([said({ interrupted: true })])],
+    ['LS-935 B1: the answer sits past the first message page', chats(1), page([asked], 'older-turn')],
+    ['only a crisis reply', chats(1), page([said({ safetyActions: [{ kind: 'call', label: 'Call 988' }] }), asked])],
+    ['no chats yet', chats(0), page([])],
+    ['the history read fails', OFFLINE, OFFLINE],
+  ])('%s: the coached card says "Ask Roman anything." and reads no Roman history', async (_n, list, read) => {
     mockList.mockResolvedValue(list);
-    if (read) mockRead.mockResolvedValue(read);
+    mockRead.mockResolvedValue(read);
     const { u } = await show();
     expect(await u.findByLabelText(ROMAN_LABEL)).toBeTruthy();
     await act(async () => { await Promise.resolve(); });
     expect(u.getByTestId('inbox-roman-line').props.children).toBe('Ask Roman anything.');
-  });
-
-  it('an answer for a sign-in that has ended is never shown; a later failed read keeps the last good line', async () => {
-    mockList.mockResolvedValue(chats(1));
-    mockRead.mockResolvedValue({ ok: true, value: { messages: [said()], nextCursor: null } });
-    const { u } = await show();
-    expect(await u.findByText(ANSWER)).toBeTruthy();
-    mockRead.mockResolvedValue(OFFLINE);
-    await act(async () => { mockRefocus(); });
-    await act(async () => { await Promise.resolve(); });
-    expect(u.getByText(ANSWER)).toBeTruthy();
-    mockBindingCurrent.mockReturnValue(false);
-    await act(async () => { mockRefocus(); });
-    await waitFor(() => expect(u.queryByText(ANSWER)).toBeNull());
-    expect(u.getByText('Ask Roman anything.')).toBeTruthy();
-  });
-
-  it('signed out (no credential): nothing is read', async () => {
-    mockCapture.mockResolvedValue(null);
-    const { u } = await show();
-    expect(await u.findByLabelText(ROMAN_LABEL)).toBeTruthy();
+    expect(u.getByTestId('inbox-roman-line').props.numberOfLines).toBeUndefined();
+    expect(u.queryByText(ANSWER)).toBeNull();
     expect(mockList).not.toHaveBeenCalled();
+    expect(mockRead).not.toHaveBeenCalled();
+    expect(u.queryByTestId('inbox-chats-count')).toBeNull();
   });
 
-  it('without Roman chat nothing is read', async () => {
-    mockRoman.mockReturnValue(false);
-    await show();
-    await act(async () => { await Promise.resolve(); });
-    expect(mockCapture).not.toHaveBeenCalled();
-    expect(mockList).not.toHaveBeenCalled();
+  it('the screen has no way left to read or quote a Roman message', () => {
+    expect(SRC).not.toMatch(/readMessages|romanLine|RomanMessage|fontScale|numberOfLines/);
   });
 
   describe('no coach', () => {
@@ -510,6 +484,7 @@ describe('D10-BUILD-CLOSE: Roman history on the list (C3 Style B, B_inbox and B_
       const { u } = await show();
       expect(await u.findByLabelText('Your conversations with Roman, 3')).toBeTruthy();
       expect(u.getByTestId('inbox-chats-count').props.children).toBe(3);
+      expect(mockList).toHaveBeenCalledWith({ subject: 'client-1', epoch: 1 }, { limit: 100 });
       expect(mockRead).not.toHaveBeenCalled();
       expect(u.queryByText(ANSWER)).toBeNull();
     });
@@ -525,52 +500,62 @@ describe('D10-BUILD-CLOSE: Roman history on the list (C3 Style B, B_inbox and B_
       expect(u.getByLabelText('Your conversations with Roman')).toBeTruthy();
       expect(u.queryByTestId('inbox-chats-count')).toBeNull();
     });
-  });
 
-  it.each([
-    [[said({ content: '**62 g**, Jordan.\n- Greek yoghurt\n1. berries' })], '62 g, Jordan. Greek yoghurt berries'],
-    [[asked, said()], ANSWER],
-    [[said({ content: '   ' })], null],
-    [[], null],
-  ])('romanLine %#', (messages, want) => expect(romanLine(messages as never)).toBe(want));
+    it('a count for a sign-in that has ended is never shown; a later failed read keeps the last good count', async () => {
+      mockList.mockResolvedValue(chats(3));
+      const { u } = await show();
+      expect(await u.findByLabelText('Your conversations with Roman, 3')).toBeTruthy();
+      mockList.mockResolvedValue(OFFLINE);
+      await act(async () => { mockRefocus(); });
+      await act(async () => { await Promise.resolve(); });
+      expect(u.getByTestId('inbox-chats-count').props.children).toBe(3);
+      mockBindingCurrent.mockReturnValue(false);
+      await act(async () => { mockRefocus(); });
+      await waitFor(() => expect(u.queryByTestId('inbox-chats-count')).toBeNull());
+      expect(u.getByLabelText('Your conversations with Roman')).toBeTruthy();
+    });
 
-  const proofPage = (messages: unknown[]) => ({ ok: true, value: { messages, nextCursor: null } });
-  it.each([
-    ['a newly opened empty chat', { ok: true, value: { messages: [], nextCursor: null } }],
-    ['a newest chat containing only an interrupted answer', proofPage([said({ interrupted: true })])],
-  ])('LS-935 B1: keeps the latest finished answer when %s is newest', async (_name, newest) => {
-    mockList.mockResolvedValue(chats(2));
-    mockRead.mockImplementation(async (_binding, id) => id === 'rs0' ? newest : proofPage([said()]));
-    const { u } = await show();
-    await waitFor(() => expect(mockRead).toHaveBeenCalled());
-    await act(async () => { await Promise.resolve(); });
-    expect(u.getByTestId('inbox-roman-line').props.children).toBe(ANSWER);
-  });
+    it('signed out (no credential): nothing is read', async () => {
+      mockCapture.mockResolvedValue(null);
+      const { u } = await show();
+      await act(async () => { await Promise.resolve(); });
+      expect(u.getByLabelText('Your conversations with Roman')).toBeTruthy();
+      expect(mockList).not.toHaveBeenCalled();
+    });
 
-  it('LS-935 B1: follows message pagination to the latest finished answer', async () => {
-    mockList.mockResolvedValue(chats(1));
-    const newestSix = Array.from({ length: 6 }, (_, n) => ({ ...asked, id: `rq${n}` }));
-    mockRead.mockImplementation(async (_binding, _id, params) => params?.cursor
-      ? proofPage([said()])
-      : { ok: true, value: { messages: newestSix, nextCursor: 'older-turn' } });
-    const { u } = await show();
-    await waitFor(() => expect(mockRead).toHaveBeenCalled());
-    await act(async () => { await Promise.resolve(); });
-    expect(u.getByTestId('inbox-roman-line').props.children).toBe(ANSWER);
-  });
-});
+    it('without Roman chat nothing is read', async () => {
+      mockRoman.mockReturnValue(false);
+      await show();
+      await act(async () => { await Promise.resolve(); });
+      expect(mockCapture).not.toHaveBeenCalled();
+      expect(mockList).not.toHaveBeenCalled();
+    });
 
-// LO-935 B-TEST (agent 198, Opus lens): opening the Roman room creates today's empty chat (POST /roman/sessions,
-// backend roman.service.ts:293-299, one session per UTC day), which is then the newest in GET /roman/sessions
-// (started_at desc, :397). The card must still quote Roman's latest finished answer from the newest chat that has one.
-describe('LO-935 B1: an empty chat for today does not hide Roman\'s latest answer', () => {
-  it('B1: the newest chat is empty (messageCount 0): the card still quotes the latest finished answer', async () => {
-    const today = { id: 'rs-today', surface: 'client', dayKey: '2026-11-05', messageCount: 0, startedAt: '2026-11-05T09:00:00.000Z', lastActivityAt: '2026-11-05T09:00:00.000Z' };
-    const yesterday = { id: 'rs-yday', surface: 'client', dayKey: '2026-11-04', messageCount: 2, startedAt: '2026-11-04T18:00:00.000Z', lastActivityAt: '2026-11-04T18:02:00.000Z' };
-    mockList.mockResolvedValue({ ok: true, value: { sessions: [today, yesterday], nextCursor: null } });
-    mockRead.mockImplementation(async (_b: unknown, id: string) => ({ ok: true, value: { messages: id === 'rs-yday' ? [said(), asked] : [], nextCursor: null } }));
-    const { u } = await show();
-    await act(async () => { await Promise.resolve(); });
-    await waitFor(() => expect(u.getByTestId('inbox-roman-line').props.children).toBe(ANSWER));
+    // m#935 B2 (LO-935, LS-935): the drawn face, Cormorant Medium 22 on a 28 line, so it sits on one line at 390 pt.
+    it('B2: "Roman works with a coach" is set as drawn', async () => {
+      const { u } = await show();
+      expect(flat(u.getByTestId('inbox-roman-lock-title'))).toMatchObject({ fontFamily: 'CormorantGaramond_500Medium', fontSize: 22, lineHeight: 28, letterSpacing: 0 });
+    });
+
+    // m#935 B4 (LO-935, LS-935): Roman waits for a coach, so his portrait is the grey canonical crop at 75%.
+    it('B4: the no-coach portrait is grey and faded; the coached card keeps colour', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const grey = require('../../../../assets/roman/neutral-grey.png');
+      const { u } = await show();
+      const ring = u.getByTestId('inbox-roman-grey');
+      expect(flat(ring).opacity).toBe(0.75);
+      expect(u.getByTestId('inbox-roman-grey-face').props.source).toEqual(grey);
+      mockNeedsCoach.mockReturnValue(false);
+      const coached = await show();
+      expect(coached.u.queryByTestId('inbox-roman-grey')).toBeNull();
+    });
+
+    // m#935 LO-935 non-blocking: 10 pt apart with no side padding, as drawn, so "Contact support" fits at 360 pt.
+    it('the two coach buttons are spaced and padded as drawn', async () => {
+      const { u } = await show();
+      expect(flat(u.getByTestId('inbox-join'))).toMatchObject({ paddingHorizontal: 0, minHeight: 48 });
+      expect(flat(u.getByTestId('inbox-support'))).toMatchObject({ paddingHorizontal: 0, minHeight: 48 });
+      expect(SRC).toMatch(/actions: \{ flexDirection: 'row', flexWrap: 'wrap', gap: 10,/);
+    });
   });
 });

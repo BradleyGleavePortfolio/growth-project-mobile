@@ -8,7 +8,7 @@ import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeProvider';
-import { layout, lightTokens, radius, typography, type SemanticTokens } from '../../theme/tokens';
+import { colors as palette, layout, lightTokens, radius, typography, type SemanticTokens } from '../../theme/tokens';
 import { featureFlags } from '../../config/featureFlags';
 
 /** Read at render, so a test can switch it per file. */
@@ -23,7 +23,7 @@ export function RoundBack({ onBack, label = 'Back', testID }: { onBack: () => vo
         accessibilityRole="button"
         accessibilityLabel={label}
         testID={testID ? `${testID}-back` : undefined}
-        style={({ pressed }) => [s.back, { backgroundColor: sc.bgSurface, borderColor: sc.border }, pressed && s.pressed]}
+        style={({ pressed }) => [s.back, { backgroundColor: palette.cream }, pressed && s.pressed]}
       >
         <Ionicons name="chevron-back" size={22} color={sc.textPrimary} />
       </Pressable>
@@ -111,7 +111,9 @@ const s = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: radius.chip,
-    borderWidth: StyleSheet.hairlineWidth,
+    // C7 Style B draws every auth back button as a cream disc with no outline (B_signin, B_error, B_create, B_role,
+    // B_reset; FIX-935R1, m#935 B3).
+    borderWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
