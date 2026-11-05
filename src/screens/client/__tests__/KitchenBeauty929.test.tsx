@@ -55,6 +55,17 @@ it('the page is the bone bgPrimary, not the cream the frames draw', async () => 
   expect(lightTokens.bgPrimary).toBe('#F7FAF7');
 });
 
+it('empty lists show the line-drawing tile over the words on main', async () => {
+  jest.mocked(listsApi.getList).mockResolvedValue({ data: [] } as Awaited<ReturnType<typeof listsApi.getList>>);
+  const g = await mount(GroceryListScreen);
+  await waitFor(() => expect(g.getByText('Your grocery list is empty')).toBeTruthy());
+  expect(g.getByTestId('stylec-thumb', { includeHiddenElements: true })).toBeTruthy();
+  g.unmount();
+  const s = await mount(ShoppingListScreen);
+  await waitFor(() => expect(s.getByText('Your shopping list is empty')).toBeTruthy());
+  expect(s.getByTestId('stylec-thumb', { includeHiddenElements: true })).toBeTruthy();
+});
+
 it('a prep guide failure is the warm notice with a Try again that loads again', async () => {
   jest.mocked(prepGuideApi.getWeeklyGuide).mockRejectedValue(new Error('offline'));
   const ui = await mount(PrepGuideScreen);
@@ -90,15 +101,4 @@ it('the recipe page keeps Back in the masthead while it loads and when it fails'
   expect(backs).toHaveLength(2); // the masthead chevron and the quiet link under the notice
   await fireEvent.press(backs[0]);
   expect(mockBack).toHaveBeenCalledTimes(2);
-});
-
-it('empty lists show the line-drawing tile over the words on main', async () => {
-  jest.mocked(listsApi.getList).mockResolvedValue({ data: [] } as Awaited<ReturnType<typeof listsApi.getList>>);
-  const g = await mount(GroceryListScreen);
-  await waitFor(() => expect(g.getByText('Your grocery list is empty')).toBeTruthy());
-  expect(g.getByTestId('stylec-thumb', { includeHiddenElements: true })).toBeTruthy();
-  g.unmount();
-  const s = await mount(ShoppingListScreen);
-  await waitFor(() => expect(s.getByText('Your shopping list is empty')).toBeTruthy());
-  expect(s.getByTestId('stylec-thumb', { includeHiddenElements: true })).toBeTruthy();
 });
