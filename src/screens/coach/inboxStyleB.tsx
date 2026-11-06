@@ -6,7 +6,7 @@
  * wait times, Draft ready, safety rows) or new words are not here; they are listed in the PR split plan.
  */
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useIsFocused, useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { coachInboxB as B, radius } from '../../theme/tokens';
@@ -48,11 +48,14 @@ export function RomanDraftsHero(): React.ReactElement | null {
   const isFocused = useIsFocused();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const { total: n, kinds } = useRomanDrafts(isFocused);
+  // A narrow phone with large text (320 pt at 130%) keeps the portrait above, so the headline has the card's width.
+  const { width, fontScale } = useWindowDimensions();
+  const stacked = width / Math.max(fontScale, 1) < 260;
   if (n === 0) return null;
   return (
     <View style={s.hero} testID="inbox-roman-drafts">
       {/* LS-952 C1: the portrait sits beside the headline, as the drawing's portrait row does, so the card stays compact */}
-      <View style={s.heroTop}>
+      <View style={[s.heroTop, stacked && s.heroTopStacked]}>
         <View style={s.ring}><RomanAvatar crop="neutral" size={44} /></View>
         <Text style={s.heroTitle} maxFontSizeMultiplier={1.3}>{`Roman has ${n} ${n === 1 ? 'draft' : 'drafts'} ready`}</Text>
       </View>
@@ -165,8 +168,9 @@ const s = StyleSheet.create({
   pressed: { opacity: 0.85 },
   hero: { backgroundColor: B.deep, borderRadius: radius.sheet, padding: 20, gap: 14 },
   heroTop: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  heroTopStacked: { flexDirection: 'column', alignItems: 'flex-start' },
   ring: { flexShrink: 0, borderWidth: 2, borderColor: B.goldEdge, borderRadius: radius.chip, padding: 2 },
-  heroTitle: { flex: 1, fontFamily: SERIF, fontSize: 30, lineHeight: 38, fontWeight: '400', fontVariant: ['lining-nums'], color: B.onDeep },
+  heroTitle: { flexShrink: 1, fontFamily: SERIF, fontSize: 30, lineHeight: 38, fontWeight: '400', fontVariant: ['lining-nums'], color: B.onDeep },
   heroChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   heroChip: { borderRadius: radius.chip, borderWidth: 1, borderColor: B.onDeepMuted, paddingHorizontal: 12, paddingVertical: 6 },
   heroChipText: { fontFamily: 'Inter_500Medium', fontSize: 15, lineHeight: 20, color: B.onDeep },
