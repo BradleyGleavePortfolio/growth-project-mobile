@@ -221,7 +221,7 @@ export default function InviteCodesScreen({ navigation }: { navigation: Navigati
 
         <TouchableOpacity
           style={styles.secondaryBtn}
-          onPress={() => navigation.navigate('CoachBulkInvite')}
+          onPress={() => navigation.navigate('BulkInvite')}
           accessibilityRole="button"
           accessibilityLabel="Bulk invite clients"
         >
