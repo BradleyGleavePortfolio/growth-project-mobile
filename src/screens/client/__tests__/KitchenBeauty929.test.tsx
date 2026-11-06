@@ -102,3 +102,20 @@ it('empty lists show the line-drawing tile over the words on main', async () => 
   await waitFor(() => expect(s.getByText('Your shopping list is empty')).toBeTruthy());
   expect(s.getByTestId('stylec-thumb', { includeHiddenElements: true })).toBeTruthy();
 });
+
+// REFINE-929 (ctx#457 GOAL): the sheet after Add all keeps main's words and choices; OK closes it without moving.
+it('Add all ends on the Style C sheet: View List goes to the grocery list, OK closes it', async () => {
+  const { Alert } = jest.requireActual('react-native');
+  jest.spyOn(Alert, 'alert').mockImplementation((...args: unknown[]) => {
+    (args[2] as { text: string; onPress?: () => void }[] | undefined)?.find((b) => b.text === 'Add')?.onPress?.();
+  });
+  jest.mocked(prepGuideApi.getWeeklyGuide).mockResolvedValue({ data: { ...guide, source: 'plan' } } as Awaited<ReturnType<typeof prepGuideApi.getWeeklyGuide>>);
+  jest.mocked(listsApi.bulkAdd).mockResolvedValue({ data: { added: 1 } } as Awaited<ReturnType<typeof listsApi.bulkAdd>>);
+  const ui = await mount(PrepGuideScreen);
+  await fireEvent.press(await ui.findByRole('button', { name: 'Add all ingredients' }));
+  expect(await ui.findByText('Added to Grocery List')).toBeTruthy();
+  expect(ui.getByText('1 ingredient added to your grocery list.')).toBeTruthy();
+  await fireEvent.press(ui.getByText('OK'));
+  await waitFor(() => expect(ui.queryByText('Added to Grocery List')).toBeNull());
+  expect(listsApi.bulkAdd).toHaveBeenCalledTimes(1);
+});
