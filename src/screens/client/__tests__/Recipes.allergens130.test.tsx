@@ -15,6 +15,8 @@ const mockList = jest.fn(), mockListSaved = jest.fn(), mockGetById = jest.fn(), 
 const mockUpdate = jest.fn(async (_body: unknown) => ({})), mockGuide = jest.fn();
 let mockRestrictions: string[] | undefined = [];
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: mockBack, navigate: mockNavigate }), useRoute: () => ({ params: { recipeId: 'satay' } }) }));
+// The Style C masthead paints the status bar on focus; no navigator here (STYLE-KITCHEN-M).
+jest.mock('../../../components/StatusBarBand', () => ({ useStatusBarBand: () => undefined }));
 jest.mock('../../../theme/ThemeProvider', () => ({ useTheme: () => ({ semanticColors: require('../../../theme/tokens').lightTokens, colors: new Proxy({}, { get: () => 'legacy' }) }) }));
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'client', profile: { diet_restrictions: mockRestrictions } }) }));
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
@@ -166,7 +168,10 @@ describe('recipe detail', () => {
     expect(await ui.findByText('This recipe is hidden because it lists an allergen saved on your profile.')).toBeTruthy();
     expect(ui.queryByText('Peanut satay')).toBeNull();
     expect(ui.queryByRole('button', { name: 'Retry recipe' })).toBeNull();
-    await fireEvent.press(ui.getByRole('button', { name: 'Go back' }));
+    // BEAUTY-929: the masthead chevron and the quiet link under the notice both go back.
+    const backs = ui.getAllByRole('button', { name: 'Go back' });
+    expect(backs).toHaveLength(2);
+    await fireEvent.press(backs[1]);
     expect(mockBack).toHaveBeenCalledTimes(1);
   });
 
