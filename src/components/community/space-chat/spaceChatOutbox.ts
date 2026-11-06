@@ -19,6 +19,7 @@ import { useMemo, useSyncExternalStore } from 'react';
 import NetInfo from '@react-native-community/netinfo';
 import { cacheStorage } from '../../../storage/mmkv';
 import { authEvents } from '../../../utils/authEvents';
+import { registerSignOutQueue } from '../../../services/signOutQueues';
 import { generateIdempotencyKey } from '../../../utils/idempotency';
 import { isEffectivelyOnline } from '../../../hooks/useNetworkStatus';
 import { describeCommunityFailure } from '../../../api/communityErrors';
@@ -199,22 +200,23 @@ export function startSpaceOutbox(userId: string | null): void {
 }
 
 /**
- * FIX-942 (LO-942 B1, LS-942 B3): the sign-out confirm (services/authActions.sendUnsyncedLogs) counts this account's
+ * FIX-942 (LO-942 B1, LS-942 B3): the sign-out confirm (services/signOutQueues) counts this account's
  * texts still only on this phone: waiting, failed (refused too) and on their way. It starts this account's outbox.
  */
-export async function spaceOutboxLength(userId: string): Promise<number> {
+async function spaceOutboxLength(userId: string): Promise<number> {
   startSpaceOutbox(userId);
   await loaded;
   return rows.filter((r) => r.state !== 'sent').length;
 }
 /** The sign-out's one try: every text the server has not refused goes again, oldest first, as this account. */
-export async function sendSpaceOutboxBeforeSignOut(userId: string): Promise<void> {
+async function sendSpaceOutboxBeforeSignOut(userId: string): Promise<void> {
   await spaceOutboxLength(userId);
   set(rows.map((r) => (r.state === 'failed' && !r.reason ? { ...r, state: 'waiting' } : r)));
   const s = await NetInfo.fetch();
   online = isEffectivelyOnline({ isOnline: !!s.isConnected, isInternetReachable: s.isInternetReachable ?? null });
   await flush();
 }
+registerSignOutQueue('space-texts', { count: spaceOutboxLength, send: sendSpaceOutboxBeforeSignOut });
 
 export const spaceOutbox = {
   add(cohortId: string, body: string, reply?: SpaceReplyTarget): void {

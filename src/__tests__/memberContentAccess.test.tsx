@@ -487,9 +487,6 @@ const LIST_PARTS = new Set(['FlatList', 'SectionList', 'FlashList']);
 const NOT_CONTENT: Record<string, string> = {
   'communityApi.getMe': 'my own workspace id and unread totals; the totals are the Community badge rows (useCommunityBadge, cache case badge-community-me)',
   'services/messageOutbox.ts:sendOutboxBeforeSignOut': 'sends at sign-out what a registered chat already queued; nothing is typed or drawn',
-  // FIX-942: the sign-out confirm's one try of the space texts and voice notes already queued (authActions).
-  'components/community/space-chat/spaceChatOutbox.ts:sendSpaceOutboxBeforeSignOut': 'sends at sign-out what the registered space chat already queued; nothing is typed or drawn',
-  'hooks/useVoiceOutbox.ts:sendVoiceOutboxBeforeSignOut': 'sends at sign-out what a registered voice composer already queued; nothing is typed or drawn',
   'hooks/useMessageOutbox.ts:useMessageOutboxDrain': 'sends in the background what a registered chat already queued; nothing is typed or drawn where it runs',
   communityEventsApi: 'coach-made events and my own RSVP (v2-3 events): no member\'s words or rows',
   communityClassroomApi: 'coach-made lessons (v3-2 classroom): no member\'s words or rows',
