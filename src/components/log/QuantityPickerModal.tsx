@@ -9,7 +9,7 @@ import {
   ScrollView,
   useWindowDimensions,
 } from 'react-native';
-import { colors, gold, layout, typography } from '../../theme/tokens';
+import { colors, gold, layout, radius, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/useTheme';
 import { QuietText as Text } from '../../ui/progress/QuietBar';
 import HapticPressable from '../HapticPressable';
@@ -214,7 +214,7 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   grip: {
     width: 36,
     height: 5,
-    borderRadius: 3,
+    borderRadius: radius.control,
     backgroundColor: sc.border,
   },
   mealLine: {
