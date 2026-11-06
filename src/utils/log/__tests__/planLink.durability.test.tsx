@@ -5,7 +5,7 @@
 import React from 'react';
 import { Text } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { FoodDayGate } from '../../../components/log/FoodDayView';
 import { flush, getQueueLength } from '../../../services/foodLogQueue';
@@ -26,6 +26,12 @@ jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate:
 
 // A fake server: it keeps what POST /log/food sends (as the backend does for the caller's own slot) and answers
 // GET /log/daily with the stored rows in the backend's snake-case shape.
+// FIX-930R2 (LO-930R2 B1 class): a fixed clock, never the real date, set before today is read below. Only Date is
+// faked (and keeps ticking); timers stay real.
+jest.useFakeTimers({ now: new Date('2026-11-05T12:00:00'), advanceTimers: true, doNotFake: ['nextTick', 'setImmediate',
+  'clearImmediate', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'queueMicrotask', 'hrtime',
+  'performance', 'requestAnimationFrame', 'cancelAnimationFrame', 'requestIdleCallback', 'cancelIdleCallback'] });
+afterAll(() => jest.useRealTimers());
 const today = getTodayString();
 const mockFoods: Record<string, Record<string, unknown>> = { cat: { id: 'cat', name: 'Overnight oats', calories: 390, protein_g: 28 } };
 const mockRows: Array<Record<string, unknown>> = [];
@@ -86,7 +92,9 @@ it('keeps an offline Something else meal done through the queue, a relaunch, the
   const first = await relaunchAndShow();
   expect(useClientStore.getState().foodLogs.map((l) => l.planSlotId)).toEqual(['b', undefined]);
   expect(await screen.findByText('Logged with a change: Eggs on toast')).toBeTruthy();
-  expect(screen.getByText('1 of 2 meals done')).toBeTruthy();
+  // Style C: one plan meal marked done on the timeline, the other up next.
+  expect(screen.getAllByTestId(/^food-day-slot-/)).toHaveLength(1);
+  expect(screen.getByTestId('food-day-next')).toBeTruthy();
   expect(screen.getByLabelText('Overnight oats, logged to breakfast, 390 kcal')).toBeTruthy();
   await first.unmount();
 
@@ -128,7 +136,8 @@ it('keeps a usual-day meal logged through the queue, a relaunch, the server row 
   };
   const first = await relaunchAndShow(false, onRepeat);
   expect(useClientStore.getState().foodLogs.map((l) => l.fillsUsualMeal)).toEqual([true, undefined]);
-  expect(await screen.findByText('1 of 2 meals logged')).toBeTruthy();
+  expect(await screen.findByTestId('food-day-next')).toBeTruthy();
+  expect(screen.getAllByTestId(/^food-day-slot-/)).toHaveLength(1);
   expect(screen.getByText('Eggs on toast')).toBeTruthy();
   expect(screen.getByText('UP NEXT, YOUR USUAL SNACK')).toBeTruthy();
   expect(screen.getByLabelText('Greek yogurt, logged to snack, 210 kcal')).toBeTruthy();
@@ -142,7 +151,8 @@ it('keeps a usual-day meal logged through the queue, a relaunch, the server row 
   // Sign out and in, a cleared cache or another phone: the phone's storage is empty, the server rows are not.
   await AsyncStorage.clear();
   await relaunchAndShow(false);
-  expect(await screen.findByText('2 of 2 meals logged')).toBeTruthy();
+  await waitFor(() => expect(screen.getAllByTestId(/^food-day-slot-/)).toHaveLength(2));
+  expect(screen.queryByTestId('food-day-next')).toBeNull();
   expect(useClientStore.getState().foodLogs.map((l) => l.fillsUsualMeal)).toEqual([true, undefined, true]);
   expect(screen.getByLabelText('Greek yogurt, logged to snack, 210 kcal')).toBeTruthy();
   expect(screen.queryByText(/^UP NEXT/)).toBeNull();

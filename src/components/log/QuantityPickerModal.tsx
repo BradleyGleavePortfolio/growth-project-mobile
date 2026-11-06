@@ -39,6 +39,13 @@ interface Props {
   blocked?: boolean;
   /** The meal this food goes to ("For Lunch"); the coach picker passes its slot name ("For Pre-workout"). */
   mealLabel?: string;
+  /**
+   * FOOD-DAY-STYLEC-M (C2 C_portion, C2-S-32): what the day has left before this plate (target minus eaten).
+   * Passed only by the Food tab behind featureFlags.foodPlanChecklist; without it no "After this plate" line.
+   */
+  dayLeft?: { kcal: number; protein: number } | null;
+  /** C2-S-33: "Add another food" logs this plate and keeps the add sheet open; it takes Cancel's place. */
+  onAddAnother?: () => void;
 }
 
 export default function QuantityPickerModal({ visible, ...props }: Props) {
@@ -74,6 +81,8 @@ export function QuantityPickerContent({
   notice,
   blocked = false,
   mealLabel,
+  dayLeft,
+  onAddAnother,
 }: Omit<Props, 'visible'>) {
   const quantity = parseQuantityInput(quantityInput);
   const { semanticColors: sc } = useTheme();
@@ -92,6 +101,14 @@ export function QuantityPickerContent({
   // No-break spaces keep each number with its unit when the line wraps (320 pt, 130% text).
   const summary = `${shown(previewMacros.calories)}\u00A0kcal, ${shown(previewMacros.protein)}\u00A0g protein, `
     + `${shown(previewMacros.carbs)}\u00A0g carbs, ${shown(previewMacros.fat)}\u00A0g fat.`;
+  // C2-S-32: the plate as the summary shows it (rounded) taken from what the day has left. Once the plate passes
+  // the target there is no drawn sentence, so no line; protein still to go never reads below 0.
+  const plateKcal = Math.round(previewMacros.calories);
+  const afterKcal = dayLeft ? Math.round(dayLeft.kcal) - plateKcal : -1;
+  const afterProtein = dayLeft ? Math.max(0, Math.round(dayLeft.protein) - Math.round(previewMacros.protein)) : 0;
+  const afterPlate = dayLeft && quantity != null && Number.isFinite(plateKcal) && afterKcal >= 0
+    ? `After this plate: ${afterKcal.toLocaleString('en-US')} kcal left and ${afterProtein.toLocaleString('en-US')} g protein to go.`
+    : null;
 
   return (
     <KeyboardAvoidingView
@@ -147,6 +164,7 @@ export function QuantityPickerContent({
           onChange={(next) => onQuantityChange(String(next))} />
 
         {quantity != null ? <Text style={styles.summary} testID="portion-summary">{summary}</Text> : null}
+        {afterPlate ? <Text style={styles.afterPlate} testID="portion-after-plate">{afterPlate}</Text> : null}
         {selectedFood?.serving_size ? (
           <Text style={styles.servingSizeInfo}>1 serving = {selectedFood.serving_size}</Text>
         ) : null}
@@ -166,7 +184,12 @@ export function QuantityPickerContent({
           testID="quantity-log-food"
           style={styles.quantityLogButton}
         />
-        <TextLink label="Cancel" tone="accent" disabled={saving} onPress={onCancel} />
+        {onAddAnother ? (
+          <TextLink label="Add another food" tone="accent" disabled={saving || quantity == null || blocked} onPress={onAddAnother}
+            testID="quantity-add-another" />
+        ) : (
+          <TextLink label="Cancel" tone="accent" disabled={saving} onPress={onCancel} />
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -248,6 +271,14 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     lineHeight: 22,
     color: colors.graphite,
     marginTop: 12,
+    fontVariant: ['lining-nums', 'tabular-nums'],
+  },
+  // C_portion: the after-this-plate line sits under the summary in ink, at the summary's size (C_portion draws both lines as one meta size).
+  afterPlate: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: sc.textPrimary,
+    marginTop: 4,
     fontVariant: ['lining-nums', 'tabular-nums'],
   },
   servingSizeInfo: {

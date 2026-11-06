@@ -101,6 +101,8 @@ export interface ClientWorkoutAssignment {
   client_id: string;
   assigned_by_coach_id: string;
   scheduled_for: string;
+  /** C2-C0 (backend 96f20061): the coach's planned time, local "HH:MM"; null or absent when none. */
+  scheduled_time?: string | null;
   completed_at: string | null;
   /** When the client began the workout (sent with the done call); null on older rows. */
   started_at?: string | null;
