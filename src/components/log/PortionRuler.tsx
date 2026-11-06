@@ -101,8 +101,9 @@ export default function PortionRuler({ value, unit, label, onChange, disabled = 
 }
 
 const styles = StyleSheet.create({
-  ruler: { height: 58, justifyContent: 'center', marginTop: 8, marginBottom: 6 },
-  tick: { position: 'absolute', top: 0, width: 1, height: 58, backgroundColor: colors.charcoal },
-  needle: { position: 'absolute', top: 0, width: 2.5, height: 58, borderRadius: radius.control, backgroundColor: colors.forest },
+  // The drawing's 58 pt marks have 8 pt above and 6 pt below inside its 72 pt wrapper.
+  ruler: { height: 72, justifyContent: 'center', marginTop: 0, marginBottom: 0 },
+  tick: { position: 'absolute', top: 8, width: 1, height: 58, backgroundColor: colors.charcoal },
+  needle: { position: 'absolute', top: 0, width: 2.5, height: 72, borderRadius: radius.control, backgroundColor: colors.forest },
   needleCentre: { alignSelf: 'center' },
 });
