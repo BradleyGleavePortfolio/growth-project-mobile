@@ -23,6 +23,7 @@ import {
   Alert,
 } from 'react-native';
 import { colors, spacing, typography } from '../../../theme/tokens';
+import { safetyGold } from '../../../theme/safetyGold';
 import {
   commandCenterApi,
   ActionQueueItem,
@@ -161,6 +162,7 @@ export default function ActionQueueScreen({ onSelectClient, onOpenSafetyAlert }:
                 onPress={() => onOpenSafetyAlert?.(item)}
                 onDismiss={() => handleDismiss(item.alert_id, item.client_name)}
                 testID="command-center-safety-alert-row"
+                style={styles.safetyRow}
               />
             </View>
           ) : (
@@ -179,6 +181,8 @@ export default function ActionQueueScreen({ onSelectClient, onOpenSafetyAlert }:
 }
 
 const styles = StyleSheet.create({
+  // SAFETY-GOLD-M (owner #197-E3): a safety alert card wears safety gold, not the camel edge on cream.
+  safetyRow: { backgroundColor: safetyGold.card, borderLeftColor: safetyGold.edge },
   container: {
     flex: 1,
     backgroundColor: colors.bone,

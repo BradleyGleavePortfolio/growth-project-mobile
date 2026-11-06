@@ -20,7 +20,10 @@ jest.mock('../config/featureFlags', () => {
           ? mockState.hide
           : k === 'iosUsCreditPackLink'
             ? mockState.usLink
-            : (t as Record<string | symbol, unknown>)[k],
+            : // Pins EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK off: this file is the iOS US link alone.
+              k === 'androidCreditPackLink'
+              ? false
+              : (t as Record<string | symbol, unknown>)[k],
     }),
   };
 });

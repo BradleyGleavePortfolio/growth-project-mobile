@@ -41,6 +41,10 @@ jest.mock('../api/clientPaymentsApi', () => ({
 
 import { PaywallSheet } from '../entitlements/PaywallSheet';
 import { clientPaymentsApi } from '../api/clientPaymentsApi';
+import { featureFlags } from '../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES off: this file is the package list; iosNonP2PSurfacesMatrix covers the hidden sheet.
+jest.replaceProperty(featureFlags, 'iosHideNonP2PPurchases', false);
 
 const mockedGetPackages = clientPaymentsApi.getPackages as jest.Mock;
 

@@ -87,6 +87,12 @@ jest.mock('../../../api/coachAiConsentApi', () => ({
   markCoachAskedAtSignUp: (id: string) => mockMarkAsked(id),
 }));
 
+// Pins EXPO_PUBLIC_FF_FIRST_RUN_V2 off: this file is the classic auth screens (AuthStyleB.tsx:15 swaps in Style B).
+beforeEach(() => {
+  const { featureFlags } = jest.requireActual<typeof import('../../../config/featureFlags')>('../../../config/featureFlags');
+  jest.replaceProperty(featureFlags, 'firstRunV2', false);
+});
+
 import CreateAccountScreen from '../CreateAccountScreen';
 import { PRIVACY_POLICY_URL, TERMS_URL } from '../../../config/env';
 import { __resetSignupPolicyCacheForTests, loadSignupPolicy } from '../../../lib/signupPolicy';

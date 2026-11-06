@@ -24,10 +24,11 @@
  *      "true", "false"), for build switches such as TGP_ANDROID_HEALTH_CONNECT.
  * Mock and capture modes (a name with MOCK or SCREENSHOT_MODE) are found but
  * not turned on: they swap the real data paths for fakes and are not features.
- * Three more layers are printed here and turned on by switchesOn.setup.js:
- * build metadata (app.config.js extra, read through expo-constants), the
- * server switches (SERVER_FEATURE_FLAG_KEYS, read from GET /me/feature-flags)
- * and the server switch state inside the community payloads.
+ * Two more layers are printed here and turned on by switchesOn.setup.js:
+ * build metadata (app.config.js extra, read through expo-constants) and the
+ * server switches (SERVER_FEATURE_FLAG_KEYS, read from GET /me/feature-flags).
+ * The server switch state inside the community payloads is counted but left
+ * as each test's fixture sets it (ALL-ON-TRIAGE-M).
  */
 'use strict';
 
@@ -108,12 +109,17 @@ function find() {
   const builtExtra = require(path.resolve('app.config.js'))().extra || {};
   process.env = saved;
   const metadata = Object.keys(builtExtra).filter((k) => typeof builtExtra[k] === 'boolean' && !(k in appExtra));
-  const prodOn = (n) => /^(1|true)$/i.test(String(production[n] ?? ''));
+  // A switch the production build leaves unset reads its code default, which
+  // the manifest records (EXPO_PUBLIC_FF_AI_SOURCE_BADGE: aiGatewayFlags.ts
+  // envBool(..., true), manifest default "on").
+  const prodValue = (n) => production[n] ?? (manifest[n] && /^on\b/i.test(String(manifest[n].default)) ? 'true' : '');
+  const prodOn = (n) => /^(1|true)$/i.test(String(prodValue(n)));
+  const prodWhy = (n) => (n in production ? 'eas.json' : 'code default');
   const prodOnCount = on.filter(prodOn).length;
 
   const rows = on.map((n, i) => {
     const d = manifest[n] ? String(manifest[n].default) : 'not in the manifest';
-    return `${String(i + 1).padStart(3)}  ${n}  [${[...found.get(n)].join('+')}]  production build: ${prodOn(n) ? 'on' : 'off'}  default: ${d}`;
+    return `${String(i + 1).padStart(3)}  ${n}  [${[...found.get(n)].join('+')}]  production build: ${prodOn(n) ? 'on' : 'off'} (${prodWhy(n)})  default: ${d}`;
   });
   const diff = on.length - V1_PRS_LEFT_COUNT;
   const lines = [
@@ -128,8 +134,8 @@ function find() {
     ...metadata.map((k) => `     extra.${k} = ${builtExtra[k]}`),
     `Server switches the phone reads from GET /me/feature-flags (${serverKeys.length}), on in this job through switchesOn.setup.js:`,
     ...serverKeys.map((k) => `     ${k}`),
-    `Server switch state inside community payloads (${payloadStates} schemas carry feature_flag_state; GET /community/me also a flags map), on in this job through switchesOn.setup.js.`,
-    `Total: ${on.length + serverKeys.length} switches on (${on.length} env, ${serverKeys.length} server) plus the community payload state; ${metadata.length} build metadata value(s) follow from the env.`,
+    `Server switch state inside community payloads (${payloadStates} schemas carry feature_flag_state; GET /community/me also a flags map): left as each test's fixture sets it, so a test's own value wins.`,
+    `Total: ${on.length + serverKeys.length} switches on (${on.length} env, ${serverKeys.length} server); ${metadata.length} build metadata value(s) follow from the env.`,
   ];
   console.log(lines.join('\n'));
 
@@ -153,20 +159,34 @@ function report(file) {
   }
   const r = readJson(file);
   const failed = [];
+  const causes = new Map();
+  const cause = (why) => {
+    const key = why.replace(/\s+/g, ' ').trim().slice(0, 120) || '(no message)';
+    causes.set(key, (causes.get(key) || 0) + 1);
+  };
   for (const s of r.testResults || []) {
     const suite = path.relative(process.cwd(), s.name);
     const tests = (s.assertionResults || []).filter((a) => a.status === 'failed');
     if (s.status !== 'failed') continue;
     if (tests.length === 0) {
+      cause(`(suite failed to run) ${String(s.message || '').split('\n').find((l) => l.trim()) || ''}`);
       failed.push(`${suite} :: (suite failed to run) ${String(s.message || '').split('\n').find((l) => l.trim()) || ''}`.trim());
     }
     for (const t of tests) {
       const why = String((t.failureMessages || [])[0] || '').split('\n').find((l) => l.trim()) || '';
+      cause(why);
       failed.push(`${suite} :: ${t.fullName} :: ${why.trim().slice(0, 200)}`);
     }
   }
   const head = `All switches on: ${r.numFailedTests} failed tests in ${r.numFailedTestSuites} failed suites (of ${r.numTotalTests} tests in ${r.numTotalTestSuites} suites).`;
-  const lines = [head, ...failed.map((f, i) => `${String(i + 1).padStart(3)}  ${f}`)];
+  // Grouped by first error line, so a shared cause shows as one row.
+  const byCause = [...causes.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const lines = [
+    head,
+    ...failed.map((f, i) => `${String(i + 1).padStart(3)}  ${f}`),
+    `By first error (${byCause.length} distinct):`,
+    ...byCause.map(([k, n]) => `${String(n).padStart(5)}  ${k}`),
+  ];
   console.log(lines.join('\n'));
   if (process.env.GITHUB_STEP_SUMMARY) {
     fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, '```\n' + lines.join('\n') + '\n```\n');

@@ -27,10 +27,15 @@ jest.mock("react-native-safe-area-context", () => {
 jest.mock("../../../../theme/ThemeProvider", () => ({
   useTheme: () => ({
     colors: new Proxy({}, { get: () => "#123456" }),
+    // EXPO_PUBLIC_FF_MEAL_PLANS_V2: the library's Programs/Meals tabs (mealUi.tsx) read semanticColors.
+    semanticColors: new Proxy({}, { get: (_t, k) => (k === "data" ? new Proxy({}, { get: () => "#123456" }) : "#123456") }),
   }),
 }));
 
 jest.mock("@tanstack/react-query", () => ({
+  // EXPO_PUBLIC_FF_COACH_LESSONS (lessons on the library) reads a query and a save mutation; they stay idle here.
+  useQuery: () => ({ data: undefined, isLoading: true, isError: false, refetch: jest.fn() }),
+  useMutation: () => ({ mutate: jest.fn(), mutateAsync: jest.fn(), isPending: false }),
   useQueryClient: () => ({
     setQueryData: jest.fn(),
     invalidateQueries: jest.fn(),

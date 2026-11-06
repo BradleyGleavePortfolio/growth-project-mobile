@@ -52,7 +52,8 @@ jest.mock('../../../services/queryClient', () => ({
 }));
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn(), identify: jest.fn() }));
 jest.mock('../../../theme/ThemeProvider', () => ({
-  useTheme: () => ({ colors: new Proxy({}, { get: () => '#000000' }) }),
+  // EXPO_PUBLIC_FF_FIRST_RUN_V2: the Style B auth screens sit in the shared Screen, which reads semanticColors.
+  useTheme: () => ({ colors: new Proxy({}, { get: () => '#000000' }), semanticColors: new Proxy({}, { get: () => '#000000' }) }),
 }));
 const mockEmit = jest.fn();
 jest.mock('../../../utils/authEvents', () => ({ authEvents: { emit: () => mockEmit() } }));
@@ -73,6 +74,10 @@ import {
   markRoleSelectionPending,
   readCoachRecoveryGate,
 } from '../../../lib/roleSelectionGate';
+import { featureFlags } from '../../../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_FIRST_RUN_V2 off: this file is the classic auth screens (AuthStyleB.tsx:15 swaps in Style B).
+jest.replaceProperty(featureFlags, 'firstRunV2', false);
 
 // Coach sign-up was withdrawn (D4 fallback), so the Login provider buttons
 // sign in directly, as in production today.

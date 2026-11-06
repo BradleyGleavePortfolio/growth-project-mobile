@@ -74,6 +74,8 @@ jest.mock('@tanstack/react-query', () => ({
     getQueryData: () => undefined,
     setQueryData: () => undefined,
   }),
+  // EXPO_PUBLIC_FF_COMMUNITY_AI_TRIAGE: the inbox's triage banner reads useInboxTriage (useQuery); here it stays loading.
+  useQuery: () => ({ isLoading: true, isError: false, data: undefined, isRefetching: false, refetch: () => undefined }),
 }));
 
 // useTheme → real light tokens (no ThemeProvider), mirroring the repo pattern.

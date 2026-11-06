@@ -31,6 +31,10 @@ jest.mock('../screens/coach/command-center/CoachHomeCards', () => () => null);
 
 import { commandCenterApi } from '../services/commandCenterApi';
 import CommandCenterScreen from '../screens/coach/command-center/CommandCenterScreen';
+import { featureFlags } from '../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_COACH_HOME_V11 off: this file is the Home with its top tab row (V11 drops the row, spec #688).
+jest.replaceProperty(featureFlags, 'coachHomeV11', false);
 
 beforeEach(() => {
   mockNavigate.mockClear();

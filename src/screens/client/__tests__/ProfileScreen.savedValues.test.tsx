@@ -48,6 +48,10 @@ jest.mock('../../../components/HapticPressable', () => {
     React.createElement(View, props) };
 });
 import ProfileScreen from '../ProfileScreen';
+import { featureFlags } from '../../../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_LEARN_HUB off: this file keeps Learn as a quick route on the profile (ProfileScreen.tsx:187 moves it to the You list).
+jest.replaceProperty(featureFlags, 'learnHub', false);
 
 function focusSaved() {
   const cleanup = mockFocus.mock.calls.at(-2)?.[0]();
