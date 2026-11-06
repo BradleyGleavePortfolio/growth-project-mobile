@@ -84,7 +84,6 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   const activeTotal = useRef<number | null>(null);
   const shownStatus = useRef<string | null>(null); // which list (active or archived) the rows on screen are
   const shownList = useRef<unknown>(null);
-  const nudge = useLookupNudge(colors);
   const teamEntry = useContext(CoachTeamEntryContext); // COACHTABS: a Team Mode head coach opens Team here, as on today's list
   const archived = filterStatus === 'archived';
 
@@ -165,8 +164,13 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   // LS-933R2 B1: the peek's Send nudge is messaging too: 'me' (this coach blocked them, the rows' rule), 'them' (the
   // server's closed_client_ids, a block either way), 'open', or null while either list is unread.
   const closedKnown = !!closedIds && closedIds.coach === coachId;
-  const peekPair: PeekPair = !peek || !blockKnown || !closedKnown ? null
-    : !canMessage(peek) ? 'me' : closedIds?.ids.has(peek.id) ? 'them' : 'open';
+  const pairOf = (c: RosterClient): PeekPair => (!blockKnown || !closedKnown ? null
+    : !canMessage(c) ? 'me' : closedIds?.ids.has(c.id) ? 'them' : 'open');
+  const peekPair: PeekPair = peek ? pairOf(peek) : null;
+  // LS-933R3 B1: the nudge form takes the same answer. A nudge the server refuses as closed is its newest answer for
+  // that pair, so this visit's list holds the pair closed until the next read (a stale 'open' must not reopen it).
+  const onRefused = useCallback((id: string) => setClosedIds((p) => (p ? { coach: p.coach, ids: new Set(p.ids).add(id) } : p)), []);
+  const nudge = useLookupNudge(colors, pairOf, onRefused);
   const endedPage = useMemo(
     () => (ended && ended.coach === coachId && blockList.known ? withoutBlocked(ended.page, blockList.blockedIds) : null),
     [ended, coachId, blockList.known, blockList.blockedIds],
@@ -195,8 +199,11 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
     else openInboxChat(navigation, c.id, p.clientName);
   };
   const openMessages = (c: RosterClient) => openTarget(c, { screen: 'chat' });
+  // LS-933R3 B1, every Nudge entry on this screen (row bell, Needs you Nudge, the peek): the form only for a pair known
+  // open; otherwise the client's peek, which says why (the chat's closed line) or, while the pair is unread, no Send.
+  const nudgeOrPeek = (c: RosterClient) => { if (!nudge.open(c)) openClient(c); };
   const runAction = (c: RosterClient, a: LookupAction) =>
-    a === 'review' ? openTarget(c, { screen: 'ClientDetail', tab: 'timeline' }) : a === 'nudge' ? nudge.open(c) : openMessages(c);
+    a === 'review' ? openTarget(c, { screen: 'ClientDetail', tab: 'timeline' }) : a === 'nudge' ? nudgeOrPeek(c) : openMessages(c);
   // Everyone opens at the top (search and chips), not at the scroll depth of the shorter Needs you list.
   const showEveryone = () => { scrollRef.current?.scrollTo({ y: 0, animated: false }); navigation.setParams({ view: undefined }); };
   const toggleArchived = () => { setChip(null); setFilterStatus(archived ? 'active' : 'archived'); };
@@ -251,7 +258,7 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
     return clientRow(c, { ...lookupReason(c, unread, 'recent'), ok: false }, canMessage(c) ? (
       <>
         {iconButton('chatbubble-ellipses-outline', `Message ${firstName(c)}`, () => openMessages(c), `lookup-message-${c.id}`)}
-        {iconButton('notifications-outline', `Nudge, ${name}`, () => nudge.open(c), `lookup-nudge-${c.id}`)}
+        {iconButton('notifications-outline', `Nudge, ${name}`, () => nudgeOrPeek(c), `lookup-nudge-${c.id}`)}
       </>
     ) : null);
   };
