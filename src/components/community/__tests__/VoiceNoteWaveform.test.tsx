@@ -47,6 +47,46 @@ describe('VoiceNoteWaveform', () => {
     },
   );
 
+  // LO-949 B1: every v1 iPhone is 2x or 3x. At 320 pt the fitted light-tone bar is ~1.71 pt, which holds a
+  // one-device-pixel moss edge on each side (2x: 0.5 + 0.71 + 0.5 pt), so the GOAL's leaf-bar-with-moss-edge
+  // look must survive; only a 1x screen (1 px = 1 pt) cannot fit it.
+  it.each([2, 3])(
+    'keeps the light strip moss edge at 320 pt on a %ix phone (one device pixel fits)',
+    async (scale) => {
+      const { PixelRatio } = jest.requireActual('react-native');
+      const spies = [
+        jest.spyOn(PixelRatio, 'get').mockReturnValue(scale),
+        jest.spyOn(PixelRatio, 'roundToNearestPixel').mockImplementation((v: unknown) => Math.round((v as number) * scale) / scale),
+        jest.spyOn(PixelRatio, 'getPixelSizeForLayoutSize').mockImplementation((v: unknown) => Math.round((v as number) * scale)),
+      ];
+      const hairline = StyleSheet.hairlineWidth;
+      Object.defineProperty(StyleSheet, 'hairlineWidth', { value: 1 / scale, configurable: true, writable: true });
+      try {
+        const slotWidth = 320 - 32 - 24 - 24 - 64;
+        const { getByTestId } = await render(
+          <VoiceNoteWaveform peaks={[0.2, 0.8]} barCount={48} height={34} gap={2} tone="light" />,
+        );
+        const strip = () => getByTestId('voice-waveform', { includeHiddenElements: true });
+        await fireEvent(strip(), 'layout', { nativeEvent: { layout: { width: slotWidth, height: 34 } } });
+        const row = StyleSheet.flatten(strip().props.style);
+        const bars = strip().props.children[0];
+        const styles = bars.map((bar: React.ReactElement<{ style: StyleProp<ViewStyle> }>) => StyleSheet.flatten(bar.props.style));
+        expect(bars).toHaveLength(48);
+        const barWidth = (slotWidth - row.gap * (bars.length - 1)) / bars.length;
+        for (const bar of styles as { borderWidth: number; borderColor: string }[]) {
+          // A positive border rasterizes to whole device pixels, at least one.
+          const raster = bar.borderWidth > 0 ? Math.max(1, Math.floor(bar.borderWidth * scale + 1e-9)) / scale : 0;
+          expect(bar.borderColor).not.toBe('transparent');
+          expect(raster).toBeGreaterThan(0);
+          expect(2 * raster).toBeLessThan(barWidth);
+        }
+      } finally {
+        Object.defineProperty(StyleSheet, 'hairlineWidth', { value: hairline, configurable: true, writable: true });
+        spies.forEach((spy) => spy.mockRestore());
+      }
+    },
+  );
+
   it('renders the requested bar count regardless of peak length', async () => {
     const { getByTestId } = await render(
       <VoiceNoteWaveform peaks={[0.2, 0.8]} barCount={16} />,
