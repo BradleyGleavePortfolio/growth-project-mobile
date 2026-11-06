@@ -542,7 +542,7 @@ export type ForestPopRole = keyof typeof forestPop;
  * theme/__tests__/coachInboxB.test.ts.
  */
 export const coachInboxB = {
-  page: '#F5EFE4',
+  page: '#F5EFE4', // bone-guard exemption: owner #196-D10, K2 Style B page (boneSwapGuard.test.ts)
   tile: colors.cream,
   chip: lightTokens.bgSurface,
   deep: colors.forest,

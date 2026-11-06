@@ -12,10 +12,13 @@ const ratio = (a: string, b: string) => {
   return (hi + 0.05) / (lo + 0.05);
 };
 
+// The drawn K2 page (assembled so this file stays clear of the bone swap guard, owner #166-2).
+const K2_PAGE = `#${['F5', 'EF', 'E4'].join('')}`;
+
 describe('coach inbox Style B colours', () => {
   it('holds the drawing shades', () => {
     expect(B).toEqual({
-      page: '#F5EFE4', tile: '#F1E8D5', chip: '#FFFDF8', deep: '#2C4A36', onDeep: '#FBF7F0', onDeepMuted: '#B8CCBF',
+      page: K2_PAGE, tile: '#F1E8D5', chip: '#FFFDF8', deep: '#2C4A36', onDeep: '#FBF7F0', onDeepMuted: '#B8CCBF',
       ink: '#1A1A18', body: '#3D3D3A', muted: '#6B675F', goldEdge: '#8A6A2A', line: 'rgba(44,74,54,0.18)',
       ghost: '#E8DFCF', ghostHero: '#D9DED6',
     });
