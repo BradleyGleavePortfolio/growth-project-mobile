@@ -231,6 +231,24 @@ async function run(id: string, qc: QueryClient): Promise<void> {
   }
 }
 
+/**
+ * FIX-942 (LS-942 B3): the sign-out confirm (services/authActions.sendUnsyncedLogs) counts this author's notes still
+ * only on this phone (Hall, space and message notes alike): waiting, failed and on their way.
+ */
+export async function voiceOutboxLength(authorId: string): Promise<number> {
+  await restore();
+  return items.filter((i) => i.authorId === authorId).length;
+}
+/** The sign-out's one try: each of this author's notes not already on its way goes once more, under this sign-in. */
+export async function sendVoiceOutboxBeforeSignOut(authorId: string): Promise<void> {
+  await restore();
+  if (session && session.authorId !== authorId) return;
+  const s = (session ??= { authorId, qc: queryClient });
+  const net = await NetInfo.fetch().catch(() => null);
+  if (net) online = isEffectivelyOnline({ isOnline: !!net.isConnected, isInternetReachable: net.isInternetReachable });
+  await Promise.allSettled(items.filter((i) => i.authorId === authorId && i.status !== 'sending').map((i) => run(i.id, s.qc)));
+}
+
 export interface VoiceOutbox {
   items: VoiceOutboxItem[];
   online: boolean;
