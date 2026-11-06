@@ -210,7 +210,9 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
   const [sheetLink, setSheetLink] = useState<PlanLink | undefined>(undefined);
   // UI-3d: only the Food tab's Extras "Add" (no link) lets the client switch the meal in the sheet.
   const [mealChoice, setMealChoice] = useState(false);
-  const openAddFood = useCallback(async (mealType: MealType, link?: PlanLink, choose = false) => {
+  // FIX-930R2 (LS-930R2 B2): `manual` opens the same sheet on its manual entry form (the first day's Enter manually);
+  // its Back still returns to search, and every other open starts on search.
+  const openAddFood = useCallback(async (mealType: MealType, link?: PlanLink, choose = false, manual = false) => {
     setSheetLink(link);
     setMealChoice(choose);
     searchRequest.current += 1;
@@ -223,7 +225,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
     setSearchResults([]);
     setDidYouMean([]);
     setSearchError(null);
-    setManualMode(false);
+    setManualMode(manual);
     setRecentTab('recent');
     setAddedFoodName(null);
     resetManualFields();
@@ -751,7 +753,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
           onDateChange={handleDateChange}
           onLogPlanned={(slot) => void logPlanned(slot)}
           onRepeat={(slot) => void repeatMealTo(slot.usual?.meal ?? null, slot.mealType, { fillsUsualMeal: true })}
-          onSomethingElse={(meal, link) => void openAddFood(meal, link, !link)}
+          onSomethingElse={(meal, link, manual) => void openAddFood(meal, link, !link, manual)}
           onEditFood={handleEditFood}
         >
         <Overline>Food log</Overline>

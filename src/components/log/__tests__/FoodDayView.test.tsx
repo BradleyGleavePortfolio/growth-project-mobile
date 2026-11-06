@@ -242,7 +242,8 @@ it('shows the first day: the meals with nothing yet, manual entry and search, al
   await fireEvent.press(screen.getByTestId('food-day-first-search'));
   expect(props.onSomethingElse).toHaveBeenLastCalledWith('breakfast');
   await fireEvent.press(screen.getByTestId('food-day-first-manual'));
-  expect(props.onSomethingElse).toHaveBeenLastCalledWith('breakfast');
+  // FIX-930R2 (LS-930R2 B2): Enter manually opens the sheet on its manual form, for the next meal with nothing yet.
+  expect(props.onSomethingElse).toHaveBeenLastCalledWith('breakfast', undefined, true);
 });
 
 const entry = (meal: string, id: string, name: string, kcal: number, qty: number, unit: string) => ({

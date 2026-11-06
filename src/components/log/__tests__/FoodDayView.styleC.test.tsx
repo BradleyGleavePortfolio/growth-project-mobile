@@ -218,7 +218,8 @@ describe('coachless days: no coach, no Roman', () => {
     expect(screen.getByText('After a few days, this page builds your usual day from the meals you repeat.')).toBeTruthy();
     expect(screen.getAllByText('Nothing yet')).toHaveLength(3);
     await fireEvent.press(screen.getByLabelText('Enter manually'));
-    expect(props.onSomethingElse).toHaveBeenLastCalledWith('breakfast');
+    // FIX-930R2 (LS-930R2 B2): the manual form, for the next meal with nothing yet.
+    expect(props.onSomethingElse).toHaveBeenLastCalledWith('breakfast', undefined, true);
     await fireEvent.press(screen.getByTestId('food-day-first-dinner'));
     expect(props.onSomethingElse).toHaveBeenLastCalledWith('dinner');
     expect(screen.queryByText(/Sam|Roman|plan for today/)).toBeNull();

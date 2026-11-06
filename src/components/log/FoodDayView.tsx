@@ -33,7 +33,7 @@ import { useStatusBarBand } from '../StatusBarBand';
 import type { FoodLog, MealType } from '../../types';
 import { addDays, getTodayString } from '../../utils/date';
 import { assignmentDay } from '../../utils/workout/workoutDay';
-import { buildPlanDay, buildUsualDay, dayWord, joinNames, loggedOn, nextSlot, type DaySlot, type PastDay } from '../../utils/log/foodDay';
+import { buildPlanDay, buildUsualDay, dayWord, joinNames, loggedOn, nextSlot, type DaySlot, type FoodDay, type PastDay } from '../../utils/log/foodDay';
 import { buildTimeline, clockOf, dayLeft, logMinutes, minutesOf, type TimelineItem } from '../../utils/log/foodTimeline';
 import type { PlanLink } from '../../utils/log/planLink';
 import { countsInDay } from '../../utils/log/queuedDay';
@@ -76,8 +76,11 @@ export interface FoodDayViewProps {
   onLogPlanned: (slot: DaySlot) => void;
   /** Usual day: logs the slot's usual meal again with the same foods and portions. */
   onRepeat: (slot: DaySlot) => void;
-  /** Opens the search sheet for this meal; `link` (FOODLINK) is what the sheet's foods are logged for. */
-  onSomethingElse: (mealType: MealType, link?: PlanLink) => void;
+  /**
+   * Opens the search sheet for this meal; `link` (FOODLINK) is what the sheet's foods are logged for. `manual`
+   * (FIX-930R2, LS-930R2 B2): the same sheet opened on its manual entry form (the first day's Enter manually).
+   */
+  onSomethingElse: (mealType: MealType, link?: PlanLink, manual?: boolean) => void;
   onEditFood: (log: FoodLog) => void;
 }
 
@@ -255,7 +258,8 @@ export default function FoodDayView(p: FoodDayViewProps) {
   const foodRows = (logs: FoodLog[]) => logs.map((l) => (
     <HapticPressable key={l.id} intent="light" disableAnimation onPress={() => p.onEditFood(l)} style={s.food}
       accessibilityRole="button" accessibilityLabel={`${l.foodName}, ${n(l.calories)} kcal${l.offline ? '. Saved offline' : ''}`}>
-      <View style={s.rail}><View style={s.line} /></View>
+      {/* FIX-930R2 (LO-930R2 C2): the rail runs the row's full height, as the now line's, so the dotted line does not break. */}
+      <View style={[s.rail, s.nowRail]}><View style={s.line} /></View>
       <Text style={[s.small, s.grow]} numberOfLines={1}>{l.foodName}</Text>
       <Text style={s.smallMuted}>{n(l.calories)}</Text>
     </HapticPressable>
@@ -265,6 +269,46 @@ export default function FoodDayView(p: FoodDayViewProps) {
     // C_first (coachless, or coached with no plan, and no usual meal yet): no coach, no Roman.
     const logsOf = (t: MealType) => counted.filter((l) => l.mealType === t);
     const others = [...counted.filter((l) => !FIRST_MEALS.some((m) => m.type === l.mealType)), ...refused];
+    // FIX-930R2 (LO-930R2 B2 = LS-930R2 B1): the first day is the same clock-order timeline as every other day
+    // (buildTimeline): a meal eaten before now sits above the now line at its log time, a meal with nothing yet
+    // under it in Breakfast, Lunch, Dinner order, other foods at their time, and the day's workout from Train.
+    const firstDay: FoodDay = {
+      kind: 'usual',
+      slots: FIRST_MEALS.map((m) => ({ key: `first-${m.type}`, mealType: m.type, label: m.label, name: m.label,
+        kcal: 0, protein: 0, carbs: 0, fat: 0, foods: [], logs: logsOf(m.type), status: null })),
+      extras: others,
+    };
+    const firstItems = buildTimeline({ day: firstDay, nowMin, workout });
+    const firstMeal = (x: DaySlot, min: number | null) => {
+      const m = { type: x.mealType, label: x.label };
+      const mine = x.logs;
+      const waiting = mine.filter((l) => l.offline === 'waiting');
+      // Nothing yet: the search sheet for this meal. One food: its edit sheet. Two or more: the meal
+      // opens to one row per food, as a done plan meal does.
+      const several = mine.length > 1;
+      const expanded = several && open === `first-${m.type}`;
+      return (
+        <View key={m.type}>
+          <HapticPressable intent="light" disableAnimation testID={`food-day-first-${m.type}`}
+            onPress={() => (several ? setOpen(expanded ? null : `first-${m.type}`)
+              : mine.length === 1 ? p.onEditFood(mine[0]) : p.onSomethingElse(m.type))}
+            accessibilityState={several ? { expanded } : undefined}
+            accessibilityRole="button" accessibilityLabel={mine.length ? `${m.label}. ${joinNames(mine.map((l) => l.foodName))}${waiting.length ? `. ${offlineLine(waiting)}` : ''}` : `${m.label}. Nothing yet`}
+            style={s.row}>
+            <Text style={s.time}>{mine.length && min != null ? clockOf(min) : ''}</Text>
+            <View style={s.rail}><View style={s.line} /><Mark done={mine.length > 0 && waiting.length === 0} waiting={waiting.length > 0} reduced={reduced}
+              style={s.mark} fill={s.markFill} testID={waiting.length ? `food-day-waiting-${m.type}` : undefined} /></View>
+            <View style={s.body}>
+              <Text style={s.eyebrow}>{m.label.toUpperCase()}</Text>
+              {mine.length ? <Text style={s.sansName}>{joinNames(mine.map((l) => l.foodName))}</Text>
+                : <Text style={s.nothing}>Nothing yet</Text>}
+              {waiting.length ? <Text style={s.meta}>{offlineLine(waiting)}</Text> : null}
+            </View>
+          </HapticPressable>
+          {expanded ? foodRows(mine) : null}
+        </View>
+      );
+    };
     return (
       <View testID="food-day">
         <View style={[s.mast, { paddingTop: top }]} testID="food-day-masthead">
@@ -277,7 +321,7 @@ export default function FoodDayView(p: FoodDayViewProps) {
         <View style={s.paper} testID="food-day-page">
           {p.notes}
           <Text style={s.lead}>After a few days, this page builds your usual day from the meals you repeat.</Text>
-          <HapticPressable intent="light" onPress={() => p.onSomethingElse('breakfast')} style={s.tool}
+          <HapticPressable intent="light" onPress={() => p.onSomethingElse(nextFirst(counted), undefined, true)} style={s.tool}
             accessibilityRole="button" accessibilityLabel="Enter manually" testID="food-day-first-manual">
             <Ionicons name="create-outline" size={22} color={sc.accentText} />
             <Text style={s.toolText}>Enter manually</Text>
@@ -288,37 +332,9 @@ export default function FoodDayView(p: FoodDayViewProps) {
             <Text style={s.searchText}>Search foods...</Text>
           </HapticPressable>
           <View style={s.timeline}>
-            {nowMin != null ? nowRow(s, nowMin, () => p.onSomethingElse(nextFirst(counted))) : null}
-            {FIRST_MEALS.map((m) => {
-              const mine = logsOf(m.type);
-              const waiting = mine.filter((l) => l.offline === 'waiting');
-              // Nothing yet: the search sheet for this meal. One food: its edit sheet. Two or more: the meal
-              // opens to one row per food, as a done plan meal does.
-              const several = mine.length > 1;
-              const expanded = several && open === `first-${m.type}`;
-              return (
-                <View key={m.type}>
-                  <HapticPressable intent="light" disableAnimation testID={`food-day-first-${m.type}`}
-                    onPress={() => (several ? setOpen(expanded ? null : `first-${m.type}`)
-                      : mine.length === 1 ? p.onEditFood(mine[0]) : p.onSomethingElse(m.type))}
-                    accessibilityState={several ? { expanded } : undefined}
-                    accessibilityRole="button" accessibilityLabel={mine.length ? `${m.label}. ${joinNames(mine.map((l) => l.foodName))}${waiting.length ? `. ${offlineLine(waiting)}` : ''}` : `${m.label}. Nothing yet`}
-                    style={s.row}>
-                    <Text style={s.time}>{mine.length && logMinutes(mine[0]) != null ? clockOf(logMinutes(mine[0]) as number) : ''}</Text>
-                    <View style={s.rail}><View style={s.line} /><Mark done={mine.length > 0 && waiting.length === 0} waiting={waiting.length > 0} reduced={reduced}
-                      style={s.mark} fill={s.markFill} testID={waiting.length ? `food-day-waiting-${m.type}` : undefined} /></View>
-                    <View style={s.body}>
-                      <Text style={s.eyebrow}>{m.label.toUpperCase()}</Text>
-                      {mine.length ? <Text style={s.sansName}>{joinNames(mine.map((l) => l.foodName))}</Text>
-                        : <Text style={s.nothing}>Nothing yet</Text>}
-                      {waiting.length ? <Text style={s.meta}>{offlineLine(waiting)}</Text> : null}
-                    </View>
-                  </HapticPressable>
-                  {expanded ? foodRows(mine) : null}
-                </View>
-              );
-            })}
-            {others.map((l) => extraRow(s, l, reduced, p.onEditFood))}
+            {firstItems.map((it) => (it.kind === 'now' ? nowRow(s, it.min, () => p.onSomethingElse(nextFirst(counted)))
+              : it.kind === 'extra' ? extraRow(s, it.log, reduced, p.onEditFood)
+                : it.kind === 'workout' ? workoutRow(s, it.name, it.min) : firstMeal(it.slot, it.min)))}
           </View>
           <View style={s.water}>{p.water}</View>
         </View>
@@ -406,22 +422,10 @@ export default function FoodDayView(p: FoodDayViewProps) {
     </View>
   );
 
-  const workoutRow = (name: string, min: number | null) => (
-    <View key="workout" style={s.row} testID="food-day-workout" accessible
-      accessibilityLabel={`${min != null ? `${clockOf(min)}. ` : ''}Workout. ${name}`}>
-      <Text style={s.time}>{min != null ? clockOf(min) : ''}</Text>
-      <View style={s.rail}><View style={s.line} /><View style={s.workoutMark} /></View>
-      <View style={s.body}>
-        <Text style={s.eyebrow}>WORKOUT</Text>
-        <Text style={s.sansName}>{name}</Text>
-      </View>
-    </View>
-  );
-
   const row = (it: TimelineItem) => {
     if (it.kind === 'now') return nowRow(s, it.min, () => p.onSomethingElse(next?.mealType ?? 'snack'));
     if (it.kind === 'extra') return extraRow(s, it.log, reduced, p.onEditFood, isPlan);
-    if (it.kind === 'workout') return workoutRow(it.name, it.min);
+    if (it.kind === 'workout') return workoutRow(s, it.name, it.min);
     return it.slot === next ? nextRow(it.slot, it.min) : slotRow(it.slot, it.min);
   };
 
@@ -512,6 +516,21 @@ function nowRow(s: Styles, min: number, onAdd: () => void) {
       <Pressable onPress={onAdd} accessibilityRole="button" accessibilityLabel={`Add food at ${clockOf(min)}`} testID="food-day-add" style={s.nowAdd}>
         <Text style={s.linkText}>Add</Text>
       </Pressable>
+    </View>
+  );
+}
+
+/** C_workout: the day's workout from Train on the timeline (plan, usual and first days alike). */
+function workoutRow(s: Styles, name: string, min: number | null) {
+  return (
+    <View key="workout" style={s.row} testID="food-day-workout" accessible
+      accessibilityLabel={`${min != null ? `${clockOf(min)}. ` : ''}Workout. ${name}`}>
+      <Text style={s.time}>{min != null ? clockOf(min) : ''}</Text>
+      <View style={s.rail}><View style={s.line} /><View style={s.workoutMark} /></View>
+      <View style={s.body}>
+        <Text style={s.eyebrow}>WORKOUT</Text>
+        <Text style={s.sansName}>{name}</Text>
+      </View>
     </View>
   );
 }
