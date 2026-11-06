@@ -26,6 +26,12 @@ jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate:
 
 // A fake server: it keeps what POST /log/food sends (as the backend does for the caller's own slot) and answers
 // GET /log/daily with the stored rows in the backend's snake-case shape.
+// FIX-930R2 (LO-930R2 B1 class): a fixed clock, never the real date, set before today is read below. Only Date is
+// faked (and keeps ticking); timers stay real.
+jest.useFakeTimers({ now: new Date('2026-11-05T12:00:00'), advanceTimers: true, doNotFake: ['nextTick', 'setImmediate',
+  'clearImmediate', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'queueMicrotask', 'hrtime',
+  'performance', 'requestAnimationFrame', 'cancelAnimationFrame', 'requestIdleCallback', 'cancelIdleCallback'] });
+afterAll(() => jest.useRealTimers());
 const today = getTodayString();
 const mockFoods: Record<string, Record<string, unknown>> = { cat: { id: 'cat', name: 'Overnight oats', calories: 390, protein_g: 28 } };
 const mockRows: Array<Record<string, unknown>> = [];

@@ -15,6 +15,12 @@ jest.mock('../../../config/featureFlags', () => {
   return { ...actual, featureFlags: { ...actual.featureFlags, foodPlanChecklist: true } };
 });
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate: jest.fn() }) }));
+// FIX-930R2 (LO-930R2 B1 class): a fixed clock, never the real date, set before today is read below. Only Date is
+// faked (and keeps ticking); timers stay real.
+jest.useFakeTimers({ now: new Date('2026-11-05T12:00:00'), advanceTimers: true, doNotFake: ['nextTick', 'setImmediate',
+  'clearImmediate', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'queueMicrotask', 'hrtime',
+  'performance', 'requestAnimationFrame', 'cancelAnimationFrame', 'requestIdleCallback', 'cancelIdleCallback'] });
+afterAll(() => jest.useRealTimers());
 const mockStore = {
   selectedDate: getTodayString(), foodLogs: [], hasLoadedDay: true,
   dailyTotals: { calories: 0, protein: 0, carbs: 0, fat: 0 }, waterOz: 0,

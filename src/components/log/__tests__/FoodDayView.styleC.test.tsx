@@ -17,6 +17,12 @@ jest.mock('../../../services/api', () => ({
 jest.mock('../../../entitlements/EntitlementProvider', () => ({ useEntitlement: () => ({ messageCoach: jest.fn() }) }));
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate: jest.fn() }), useFocusEffect: jest.fn() }));
 
+// FIX-930R2 (LO-930R2 B1 class): a fixed clock, never the real date, set before today is read below. Only Date is
+// faked (and keeps ticking); timers stay real.
+jest.useFakeTimers({ now: new Date('2026-11-05T12:00:00'), advanceTimers: true, doNotFake: ['nextTick', 'setImmediate',
+  'clearImmediate', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'queueMicrotask', 'hrtime',
+  'performance', 'requestAnimationFrame', 'cancelAnimationFrame', 'requestIdleCallback', 'cancelIdleCallback'] });
+afterAll(() => jest.useRealTimers());
 const today = getTodayString();
 const template = (name: string, kcal: number, protein: number, items: unknown[] = []) => ({
   name, calories_kcal: kcal, protein_g: protein, carbs_g: 20, fats_g: 5, items,
