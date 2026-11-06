@@ -183,8 +183,8 @@ export function QuantityPickerContent({
           loading={saving}
           onPress={onConfirm}
           testID="quantity-log-food"
-        style={[styles.quantityLogButton, afterPlate && !selectedFood?.serving_size
-          && !['cup', 'tbsp', 'tsp'].includes(selectedUnit) && !notice ? styles.afterPlateButton : undefined]}
+          style={[styles.quantityLogButton, afterPlate && !selectedFood?.serving_size
+            && !['cup', 'tbsp', 'tsp'].includes(selectedUnit) && !notice ? styles.afterPlateButton : undefined]}
         />
         {onAddAnother ? (
           <TextLink label="Add another food" tone="accent" disabled={saving || quantity == null || blocked} onPress={onAddAnother}
