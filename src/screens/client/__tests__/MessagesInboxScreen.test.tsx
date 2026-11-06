@@ -577,3 +577,19 @@ describe('LO-935R2 B1: the big Cormorant numbers use lining figures, as drawn', 
     expect(flat(el).fontVariant).toEqual(expect.arrayContaining(['lining-nums']));
   });
 });
+
+// LO-935R3 B1 (agent 199, review round 3): every C3 Style B inbox drawing (B_inbox ios390/android360 at 100 and 130)
+// draws the gold unread ring's "2" as Cormorant's old-style figure (x-height tall, height/width about 1.2, the font's
+// `two`), not the lining `two.lf` (about 1.75). "36 left today" and the no-coach "3" are drawn lining and stay so.
+describe('LO-935R3 B1: the unread ring keeps the drawn old-style figure', () => {
+  it('LO-935R3 B1: the unread ring "2" is not set in lining figures', async () => {
+    mockNeedsCoach.mockReturnValue(false);
+    mockList.mockResolvedValue(chats(3));
+    const { u } = await show();
+    await u.findByLabelText(ROMAN_LABEL);
+    await u.findByLabelText(COACH_LABEL);
+    const el = u.getByText('2');
+    expect(String(el.props.children)).toBe('2');
+    expect(flat(el).fontVariant ?? []).not.toContain('lining-nums');
+  });
+});
