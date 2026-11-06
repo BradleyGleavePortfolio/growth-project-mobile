@@ -32,7 +32,7 @@ export interface NeedsYouListProps {
   loading: boolean;
   /** The roster did not load and no verified client is on screen (verified alerts still show above it). */
   error: string | null;
-  /** The alerts read failed: the list says so under the switch. */
+  /** The alerts read failed: retain verified rows, but withhold completeness and the counted filters. */
   alertsFailed: boolean;
   refreshing: boolean;
   now?: Date;
@@ -165,6 +165,13 @@ export default function NeedsYouList(p: NeedsYouListProps) {
       <>
         {group('Safety', a.safety, safetyRow, { safety: true })}
         {group('Alerts', a.alerts, alertRow)}
+        {!p.loading && !p.error ? <>
+          {group('Gone quiet', a.quiet, (r, k) => clientRow(r, k, 'quiet'))}
+          {group('New this week', a.fresh, (r, k) => clientRow(r, k, 'new'))}
+          {a.routine.length > 0 ? <View style={[s.card, s.first]} testID="needs-group-routine">
+            {a.routine.map((r, k) => clientRow(r, k, 'routine'))}
+          </View> : null}
+        </> : null}
         {p.loading ? <QuietLoading label="Loading who needs you" rows={5} testID="needs-loading" />
           : <QuietError message={p.error ?? 'Alerts did not load. Pull down to try again.'} onRetry={p.onRetry} testID={p.error ? 'needs-error' : 'needs-alerts-error'} />}
       </>

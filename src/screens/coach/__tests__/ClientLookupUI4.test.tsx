@@ -260,7 +260,9 @@ describe('UI-4 Needs you (under 15 clients)', () => {
   it('says the alerts did not load, and still lists the clients', async () => {
     mockQueue.mockRejectedValue(new Error('down'));
     await mount(UNDER_15, {}, undefined, { params: { view: 'needs' } });
-    expect([!!screen.getByText('Alerts did not load. Pull down to try again.'), screen.getByTestId('needs-title').props.children]).toEqual([true, 'Needs you, 2']);
+    expect([!!screen.getByText('Alerts did not load. Pull down to try again.'), screen.getByTestId('needs-title').props.children]).toEqual([true, 'Needs you']);
+    expect(screen.getByTestId('needs-act-c1')).toBeTruthy();
+    expect(screen.queryByTestId('needs-search')).toBeNull();
   });
   it('the full list never listens for the tab and shows no Everyone link', async () => {
     await mount(UNDER_15);
