@@ -195,7 +195,7 @@ export default function GroceryListScreen() {
         </Text>
         {(item.quantity !== 1 || item.unit) ? (
           <Text style={styles.itemMeta}>
-            {item.quantity}{'\u00a0'}{item.unit || 'unit'}
+            {item.quantity} {item.unit || 'unit'}
           </Text>
         ) : null}
       </View>
@@ -405,12 +405,13 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
     gap: 6,
   },
   itemRowChecked: { opacity: 1 },
-  // ctx#457: the ring at the left edge, the serif name, the amount at the right on one line (never split), the cross at the edge.
+  // ctx#457: the ring at the left edge, the serif name, the amount at the right on one line (up to 70% of the row, so it
+  // wraps rather than runs off at 320 and 130%), the cross at the edge.
   checkbox: { width: 44, height: 44, marginLeft: -2, alignItems: 'flex-start', justifyContent: 'center' },
   itemContent: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
   itemName: { ...typography.h3, fontSize: 21, lineHeight: 26, paddingVertical: 10, color: colors.textPrimary, flex: 1 },
   itemNameChecked: { textDecorationLine: 'line-through', color: colors.textMuted },
-  itemMeta: { ...typography.body, fontSize: 15, lineHeight: 22, color: colors.textMuted, fontVariant: ['tabular-nums'], textAlign: 'right', flexShrink: 0, maxWidth: '58%' },
+  itemMeta: { ...typography.body, fontSize: 15, lineHeight: 22, color: colors.textMuted, fontVariant: ['tabular-nums'], textAlign: 'right', flexShrink: 0, maxWidth: '70%' },
   deleteBtn: { width: 44, height: 44, alignItems: 'flex-end', justifyContent: 'center' },
 
   });

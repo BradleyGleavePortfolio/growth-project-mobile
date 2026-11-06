@@ -173,7 +173,7 @@ export default function ShoppingListScreen() {
         </Text>
         {(item.quantity !== 1 || item.unit) ? (
           <Text style={styles.itemMeta}>
-            {item.quantity}{'\u00a0'}{item.unit || 'unit'}
+            {item.quantity} {item.unit || 'unit'}
           </Text>
         ) : null}
       </View>
