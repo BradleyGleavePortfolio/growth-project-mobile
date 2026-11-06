@@ -20,7 +20,7 @@
  *   - Tokens only (no raw hex). No emoji, no heavy font weights.
  */
 import React, { useMemo, useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, PixelRatio } from 'react-native';
 import { forestPop as fp, voiceShades } from '../../theme/tokens';
 import { downsamplePeaks } from './voiceFormat';
 
@@ -76,6 +76,9 @@ export default function VoiceNoteWaveform({
     ? Math.min(gap, Math.max(0, (width - count) / (count - 1))) : gap;
   const fittedBarWidth = !barWidth && width > 0
     ? Math.min(6, Math.max(0, (width - fittedGap * (count - 1)) / count)) : undefined;
+  const pixel = 1 / PixelRatio.get();
+  const fittedBorderWidth = fittedBarWidth === undefined || fittedBarWidth >= 2
+    ? 1 : pixel * 2 < fittedBarWidth ? pixel : 0;
   const bars = useMemo(
     () => downsamplePeaks(peaks, count),
     [peaks, count],
@@ -101,9 +104,9 @@ export default function VoiceNoteWaveform({
               // Fixed bars carry no flex at all: on react-native-web `flex: 0` is CSS `0 1 0%`, which drops
               // the width to the border (a 2 pt bar in the web preview); a plain width holds on both.
               barWidth ? [styles.fixedBar, { width: barWidth }] : styles.bar,
-              // Subpixel borders can still rasterize to 1 px on each side.
-              // Drop only narrow-bar outlines so all samples fit at 1x too.
-              !barWidth && fittedBarWidth !== undefined && { borderWidth: fittedBarWidth < 2 ? 0 : 1 },
+              // Keep a one-device-pixel edge when both sides fit inside a narrow bar.
+              // At 1x the same bar may have no room for the edge and its leaf core.
+              !barWidth && fittedBarWidth !== undefined && { borderWidth: fittedBorderWidth },
               {
                 height: Math.max(4, Math.round(height * scale)),
                 backgroundColor: played ? t.played : t.unplayed,
