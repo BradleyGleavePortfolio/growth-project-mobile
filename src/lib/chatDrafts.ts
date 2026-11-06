@@ -109,6 +109,8 @@ export interface ChatSendKey {
   keyFor: (text: string) => string | undefined;
   /** Keep a failed send's key with its text, here and on the device. */
   keepFailed: (text: string, key: string) => void;
+  /** Forget a kept send's key (the text stays): its next send is a new send (SEND-ONCE-PHONE, a box not emptied). */
+  dropFailed: () => void;
 }
 
 /**
@@ -197,5 +199,9 @@ export function useChatDraft(thread: string | null, initialText?: string): [stri
     put({ text: current().text, failed: { text, key } });
   }, [current, put]);
 
-  return [shown.draft.text, setText, { keyFor, keepFailed }];
+  const dropFailed = useCallback(() => {
+    if (current().failed) put({ text: current().text });
+  }, [current, put]);
+
+  return [shown.draft.text, setText, { keyFor, keepFailed, dropFailed }];
 }

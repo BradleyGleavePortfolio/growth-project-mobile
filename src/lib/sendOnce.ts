@@ -7,7 +7,9 @@
  * - kept after a failure that may have stored the first try or stored nothing under the key: no answer, a timeout,
  *   offline, a 5xx, a 429, any other 4xx, a 2xx the phone could not read, an uncoded failure;
  * - replaced when the words change, when the send succeeded (the draft ends), and after a 400 or 409 answer (the
- *   server read this send and refused it; a 409 IDEMPOTENCY_KEY_REUSED means the key is spent on other words).
+ *   server read this send and refused it; a 409 IDEMPOTENCY_KEY_REUSED means the key is spent on other words);
+ *   Roman also after a coded frame once the stream opened (the turn is stored with no reply; under the same key the
+ *   server could only replay that, so Send again would never ask once more).
  * Two separate sends of the same words are two drafts, so two keys. A draft kept on the device keeps its key there
  * (lib/chatDrafts `keyFor` / `keepFailed`); a draft held in screen state keeps it in the screen (useDraftSendKey).
  */
@@ -22,8 +24,12 @@ function answeredStatus(err: unknown): number | undefined {
   return typeof status === 'number' ? status : undefined;
 }
 
-/** Whether a failed send keeps its key for Send again: every failure but a 400 or 409 answer. */
+/**
+ * Whether a failed send keeps its key for Send again: every failure but a 400 or 409 answer, and (Roman) a coded frame
+ * after the stream opened, which a same-key resend could only replay (romanApi RomanKeySpentError).
+ */
 export function failedSendKeepsKey(err: unknown): boolean {
+  if ((err as { sendOnceKeySpent?: unknown } | null)?.sendOnceKeySpent === true) return false;
   const status = answeredStatus(err);
   return status !== 400 && status !== 409;
 }
