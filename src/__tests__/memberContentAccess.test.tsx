@@ -295,14 +295,16 @@ const REGISTRY: Surface[] = [
       { file: 'components/community/space-chat/useSpaceChat.ts', kind: 'list', what: 'one space\'s messages (text, voice, photo, quotes) and its read line',
         how: 'the server leaves out blocks (both ways), bans and departed authors; my block (dropAuthor) takes the author\'s rows and every quote of them (held this visit, or by who wrote it) from every kept list, reply mode and a waiting reply at once; a read or send refused with 403 / 404 closes the space, mid-visit too (noAccess: nothing readable, no sheet, no reply)',
         proof: { by: 'suite', file, titles: [BLOCK, BLOCK_UNHELD, READ, READ_HELD, SEND] } },
+      // FIX-942 (LO-942 N2): the row claims only what SEND proves; the account binding is proven in
+      // spaceChatOutbox.account.test.ts and LO938R2SameAccountLogin, the sign-out in LO942 / LS942SpaceSignOut.
       { file: 'components/community/space-chat/spaceChatOutbox.ts', kind: 'composer', what: 'the space chat text outbox (texts queued on the phone, sent one at a time)',
-        how: 'a 403 / 404 fails the row as closed (never sent again) and tells the open space; a text goes out only as the account that queued it; a sign-out names the queued texts in its confirm, gives them one try as that account, then wipes the queue',
+        how: 'a 403 / 404 fails the row as closed (never sent again) and tells the open space',
         proof: { by: 'suite', file, titles: [SEND] }, exports: ['spaceOutbox', 'startSpaceOutbox', 'setSpaceOutboxOnline'] },
       { file: 'components/community/space-chat/useSpaceVoiceOutbox.ts', kind: 'composer', what: 'the space chat\'s voice notes on the voice outbox (useVoiceOutbox)',
         how: 'holds only my own notes for this space and sends into this space only; the record entry is drawn only by the space chat while the space is open',
         proof: { by: 'suite', file, titles: ['KT-2: the space voice outbox holds only my notes for this space, and sends into this space only'] } },
       ...(['list', 'composer'] as const).map((kind): Surface => ({ file: 'components/community/space-chat/spaceChatApi.ts', kind,
-        what: 'the space chat wire (messages read, send, delete)', how: 'the server leaves out blocks (both ways), bans and departed authors and refuses a send with 403 / 404 (isNoAccess), which the hook and the outbox turn into a closed space',
+        what: 'the space chat wire (messages read, send, delete)', how: 'the server leaves out blocks (both ways), bans and departed authors and refuses a send with 403 / 404 (isNoAccess), which the hook and the outbox turn into a closed space; the row stops nothing (exports: [], LS-942 N1), so every caller is named on its own',
         proof: { by: 'suite', file, titles: [WIRE] }, exports: [] })),
     ];
   })(),
