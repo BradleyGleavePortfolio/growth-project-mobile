@@ -86,10 +86,10 @@ it('does not double the final 10 pt gap when the after-plate line is last', asyn
   expect(flat(screen.getByTestId('quantity-log-food')).marginTop).toBe(0);
 });
 
-it('uses the drawing meta rule default figures, without extra tabular width', async () => {
+it('preserves the existing metadata lining and tabular figure contract', async () => {
   await render(<QuantityPickerContent {...props} />);
-  expect(flat(screen.getByTestId('portion-summary')).fontVariant).toBeUndefined();
-  expect(flat(screen.getByTestId('portion-after-plate')).fontVariant).toBeUndefined();
+  expect(flat(screen.getByTestId('portion-summary')).fontVariant).toEqual(['lining-nums', 'tabular-nums']);
+  expect(flat(screen.getByTestId('portion-after-plate')).fontVariant).toEqual(['lining-nums', 'tabular-nums']);
 });
 
 it('uses a local 36 by 5 grip, with 14 pt before the overline, without changing other food sheets', async () => {
