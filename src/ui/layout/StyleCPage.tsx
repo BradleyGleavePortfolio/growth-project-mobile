@@ -99,7 +99,7 @@ export function StyleCSheet({ visible, icon, title, body, action, onAction, link
   const bottom = useBottomInset();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <Pressable style={[s.scrim, { backgroundColor: withAlpha(sc.surface.masthead, 0.45) }]} onPress={onClose} accessibilityLabel={link} accessibilityRole="button" />
+      <Pressable style={[s.scrim, { backgroundColor: withAlpha(sc.surface.masthead, 0.45) }]} onPress={onClose} accessible={false} importantForAccessibility="no" />
       <View accessibilityViewIsModal style={[s.sheet, { backgroundColor: sc.bgPrimary, paddingBottom: bottom + 16 }]}>
         <View style={[s.grab, { backgroundColor: sc.border }]} />
         <StyleCThumb icon={icon} size={72} />
