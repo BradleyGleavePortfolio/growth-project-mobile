@@ -9,6 +9,7 @@ import { authEvents } from '../../utils/authEvents';
 import { resetVoiceOutbox } from '../../hooks/useVoiceOutbox';
 import { releaseOutbox } from '../messageOutbox';
 import { setSpaceOutboxOnline } from '../../components/community/space-chat/spaceChatOutbox';
+import type { SessionFencePass } from '../sessionFence';
 
 const mockCache = new Map<string, string>();
 const mockTextSend = jest.fn();
@@ -263,4 +264,29 @@ it('empty queues make no send or connection lookup', async () => {
   expect(net.fetch).not.toHaveBeenCalled();
   expect(mockVoiceSend).not.toHaveBeenCalled();
   expect(mockTextSend).not.toHaveBeenCalled();
+});
+
+it('a refused-session sign-out skips every send and still wipes both registered queues', async () => {
+  saveTexts([text('a')]);
+  await saveVoices([voice('a', 'failed', 'user-A', 'hall')]);
+  engine.countQueuedWorkouts.mockResolvedValue(1);
+  net.fetch.mockResolvedValue({ isConnected: true, isInternetReachable: true });
+  await signOut('user-A', { sessionFence: Object.freeze({}) as SessionFencePass });
+  expect(engine.pushQueuedWorkouts).not.toHaveBeenCalled();
+  expect(mockVoiceSend).not.toHaveBeenCalled();
+  expect(mockTextSend).not.toHaveBeenCalled();
+  expect(mockCache.size).toBe(0);
+  expect(JSON.parse((await AsyncStorage.getItem('tgp.voiceOutbox.v1')) ?? '[]')).toEqual([]);
+});
+
+it('repeated Sign out while a registered queue sends prepares only one confirm and one attempt', async () => {
+  jest.useFakeTimers();
+  await saveVoices([voice('a')]);
+  mockVoiceSend.mockReturnValue(new Promise(() => undefined));
+  net.fetch.mockResolvedValue({ isConnected: true, isInternetReachable: true });
+  const first = prepareSignOutConfirm('user-A');
+  await expect(prepareSignOutConfirm('user-A')).resolves.toBeNull();
+  await jest.advanceTimersByTimeAsync(4001);
+  await expect(first).resolves.toBe('1 message has not synced yet and will be removed from this phone.');
+  expect(mockVoiceSend).toHaveBeenCalledTimes(1);
 });
