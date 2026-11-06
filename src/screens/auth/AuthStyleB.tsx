@@ -8,16 +8,19 @@ import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeProvider';
-import { layout, lightTokens, radius, typography, type SemanticTokens } from '../../theme/tokens';
+import { colors, darkTokens, layout, lightTokens, radius, typography, type SemanticTokens } from '../../theme/tokens';
 import { featureFlags } from '../../config/featureFlags';
 
 /** Read at render, so a test can switch it per file. */
 export const authStyleB = (): boolean => featureFlags.firstRunV2;
 
-export function RoundBack({ onBack, label = 'Back', testID }: { onBack: () => void; label?: string; testID?: string }) {
+/** Where the client is on the sign-up path (C7 Style B step bars and pill; LS-E4R2 B3). */
+export interface SignupStep { n: number; of: number }
+
+export function RoundBack({ onBack, label = 'Back', testID, step }: { onBack: () => void; label?: string; testID?: string; step?: SignupStep }) {
   const { semanticColors: sc = lightTokens } = useTheme();
   return (
-    <View style={s.topBar} testID={testID}>
+    <View style={[s.topBar, step && s.topRow]} testID={testID}>
       <Pressable
         onPress={onBack}
         accessibilityRole="button"
@@ -27,6 +30,24 @@ export function RoundBack({ onBack, label = 'Back', testID }: { onBack: () => vo
       >
         <Ionicons name="chevron-back" size={22} color={sc.textPrimary} />
       </Pressable>
+      {/* The pill reads the step; the bars are drawn only (no second announcement). */}
+      {step ? (
+        <View style={s.bars} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" testID="signup-step-bars">
+          {Array.from({ length: step.of }, (_, i) => (
+            <View key={i} style={[s.bar, { backgroundColor: i < step.n ? sc.accent : sc.border }]} />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/** "Step n of m" under the bars; the count is the client's own path (role, account, inbox; no role step from a link). */
+export function StepPill({ step }: { step: SignupStep }) {
+  const { semanticColors: sc = lightTokens } = useTheme();
+  return (
+    <View style={[s.pill, { backgroundColor: sc === darkTokens ? sc.bgSurface : colors.cream }]} testID="signup-step-pill">
+      <Text style={[s.pillText, { color: sc.textPrimary }]}>{`Step ${step.n} of ${step.of}`}</Text>
     </View>
   );
 }
@@ -116,6 +137,11 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   pressed: { opacity: 0.6 },
+  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: 16 },
+  bars: { flex: 1, flexDirection: 'row', gap: 4, paddingRight: 8 },
+  bar: { flex: 1, height: 4, borderRadius: radius.chip },
+  pill: { alignSelf: 'flex-start', borderRadius: radius.chip, paddingHorizontal: 12, paddingVertical: 6, marginBottom: 12 },
+  pillText: { ...typography.bodySmall, fontFamily: 'Inter_600SemiBold', fontWeight: '600' },
   row: { flexDirection: 'row', alignItems: 'center' },
   fill: { flex: 1 },
 });

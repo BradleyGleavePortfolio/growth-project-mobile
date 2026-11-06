@@ -1,5 +1,8 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import {
+  AccessibilityInfo,
+  Pressable,
+  ScrollView,
   View,
   Text,
   TextInput,
@@ -13,6 +16,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { Spacing } from '../../theme';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { authApi, InvitePreview } from '../../services/api';
 import { secureStorage } from '../../services/secureStorage';
 import { track } from '../../lib/analytics';
@@ -90,13 +94,10 @@ import {
 } from '../../lib/coachSignupAttempt';
 import { layout, lightTokens, radius, typography, type SemanticTokens } from '../../theme/tokens';
 import ResendVerificationLink from './ResendVerificationLink';
-import { authStyleB, RoundBack, styleBFieldStyles } from './AuthStyleB';
+import { authStyleB, RoundBack, StepPill, styleBFieldStyles, type SignupStep } from './AuthStyleB';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { Headline, Overline, PrimaryButton, Screen, ScreenTopBar, TextLink } from '../../ui';
 import { Checkbox } from '../consultation/components';
-import { coachAiConsentApi, markCoachAskedAtSignUp } from '../../api/coachAiConsentApi';
-import { COACH_AI_CONSENT_COPY } from '../../lib/ai/coachAiConsentCopy';
-import { logger } from '../../utils/logger';
 
 interface Props {
   navigation: NativeStackNavigationProp<AuthStackParamList>;
@@ -136,6 +137,13 @@ interface SignupAttempt {
   method: CoachSignupMethod;
   coach: boolean;
 }
+
+/**
+ * STORE-E4 (agent 185; owner #184-E5 / #184-E6 op 1, PERM-W4, copied exactly): the coach's required box,
+ * in place of the optional Roman box. Create account (and Apple / Google) stay off until it is ticked.
+ */
+export const COACH_SIGNUP_AGREEMENT_LABEL =
+  'I agree to the Terms of Service and Privacy Policy, and TGP Fitness may send me service and plan notices.';
 
 function firstStep(arrivedWithCode: boolean, roleChoice: boolean | null): Step {
   if (arrivedWithCode) return 'register';
@@ -200,6 +208,11 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
     () => getLastKnownSignupPolicy()?.roleChoice ?? null,
   );
   const [step, setStep] = useState<Step>(() => firstStep(arrivedWithCode, roleChoiceEnabled));
+  // LS-E4R2 B3 (C7 Style B, code entry kept): the step count is the client's own path, role, account,
+  // inbox; from a link (or with no role choice) there is no role step, so it is 2.
+  const hasRoleStep = roleChoiceEnabled === true && !arrivedWithCode;
+  const stepAt = (n: number): SignupStep | undefined => (v2 ? { n, of: hasRoleStep ? 3 : 2 } : undefined);
+  const registerStep = stepAt(hasRoleStep ? 2 : 1);
   const [intendedRole, setIntendedRole] = useState<IntendedRole>('client');
   // Prototype ROLE (01): a row tap only selects; Continue commits. `null`
   // until the person picks, so Continue starts disabled.
@@ -262,8 +275,23 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   // repeats it.
   const [coachRequestNotApplied, setCoachRequestNotApplied] = useState(false);
   const [loading, setLoading] = useState(false);
-  // COACH-AI-CONSENT (owner op 2 item 1): the optional Roman box, unticked by default.
-  const [romanOn, setRomanOn] = useState(false);
+  // STORE-E4 (owner #184-E5 / #184-E6 op 1, PERM-W4): the coach's required box, unticked by default; it
+  // replaces the optional Roman box (a coach is asked about Roman the first time Roman opens).
+  const [coachTermsAgreed, setCoachTermsAgreed] = useState(false);
+  // PERM-W4: a coach signs up (email, Apple or Google) only once the box is ticked.
+  const coachTermsMissing = isCoachSignup && !coachTermsAgreed;
+  // LO-E4 B2: a tap on a waiting sign-up button brings the unticked box into view and moves screen-reader focus to it.
+  const formScrollRef = useRef<ScrollView>(null);
+  const coachTermsRef = useRef<View>(null);
+  const coachTermsY = useRef(0);
+  const reduceMotion = useReducedMotion();
+  const showCoachTerms = useCallback(() => {
+    formScrollRef.current?.scrollTo({ y: Math.max(0, coachTermsY.current - Spacing.lg), animated: !reduceMotion });
+    // RNWeb has no native focus event; the web preview shows the scroll only.
+    if (typeof AccessibilityInfo.sendAccessibilityEvent === 'function' && coachTermsRef.current) {
+      AccessibilityInfo.sendAccessibilityEvent(coachTermsRef.current, 'focus');
+    }
+  }, [reduceMotion]);
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [error, setError] = useState('');
   const [recheckLoading, setRecheckLoading] = useState(false);
@@ -506,7 +534,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   };
 
   const handleRegister = async () => {
-    if (step === 'coach-unavailable' || attemptRef.current) return;
+    if (step === 'coach-unavailable' || attemptRef.current || coachTermsMissing) return;
     // Surrounding spaces (keyboard autocomplete) are never part of the
     // address. Case is left to the server, which stores the canonical form
     // and returns it (#597); see `accountEmail` below.
@@ -718,16 +746,6 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
       await purgePersistedQueryCacheForAllUsers();
       await clearRoleSelectionPending();
       await clearSignupRoleNotice();
-      // COACH-AI-CONSENT: ticked grants now the account exists; empty records nothing. Either way
-      // this run never opens the one-time sheet (the box was the ask).
-      if (coachAttempt) {
-        markCoachAskedAtSignUp(userIdOf(user as { id?: unknown } | null | undefined));
-        if (romanOn) {
-          void coachAiConsentApi.grant().then((out) => {
-            if (out.kind !== 'ok') logger.warn('CreateAccount.coachAiGrant', out.kind);
-          });
-        }
-      }
       authEvents.emit();
       return 'success';
     }
@@ -793,7 +811,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   };
 
   const handleAppleSignup = async () => {
-    if (step === 'coach-unavailable' || attemptRef.current) return;
+    if (step === 'coach-unavailable' || attemptRef.current || coachTermsMissing) return;
     // A coach signup never carries a client invite code.
     const trimmedCode = isCoachSignup ? '' : inviteCode.trim();
     if (requireInviteCode && !isCoachSignup && !trimmedCode) {
@@ -875,7 +893,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   };
 
   const handleGoogleSignup = async () => {
-    if (step === 'coach-unavailable' || attemptRef.current) return;
+    if (step === 'coach-unavailable' || attemptRef.current || coachTermsMissing) return;
     // A coach signup never carries a client invite code.
     const trimmedCode = isCoachSignup ? '' : inviteCode.trim();
     if (requireInviteCode && !isCoachSignup && !trimmedCode) {
@@ -1178,7 +1196,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
     return (
       <Screen
         testID="create-account-role"
-        header={v2 ? <RoundBack onBack={leaveCreateAccount} testID="role-choice-back" /> : <ScreenTopBar onBack={leaveCreateAccount} testID="role-choice-back" />}
+        header={v2 ? <RoundBack onBack={leaveCreateAccount} testID="role-choice-back" step={stepAt(1)} /> : <ScreenTopBar onBack={leaveCreateAccount} testID="role-choice-back" />}
         footer={
           <>
             <PrimaryButton
@@ -1207,6 +1225,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
         }
       >
           <View style={styles.header}>
+            {v2 ? <StepPill step={{ n: 1, of: 3 }} /> : null}
             <Overline style={styles.eyebrow}>Welcome</Overline>
             <Headline style={styles.title}>How will you use TGP Fitness?</Headline>
           </View>
@@ -1274,6 +1293,8 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
         label="Create account"
         onPress={handleRegister}
         loading={loading}
+        disabled={coachTermsMissing}
+        onDisabledPress={coachTermsMissing ? showCoachTerms : undefined}
         testID="create-account-submit"
       />
       {/* Apple 1.2 (B-IOSREV-2): covers email, Google and Apple sign-up. */}
@@ -1303,11 +1324,15 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
 
   return (
     <Screen
+      // Own key: a scroll area reused from the role step never hands its node to scrollRef (RNWeb, at least).
+      key="register"
       testID="create-account-register"
-      header={v2 ? <RoundBack onBack={backFromRegister} testID="create-account-back" /> : <ScreenTopBar onBack={backFromRegister} testID="create-account-back" />}
+      scrollRef={formScrollRef}
+      header={v2 ? <RoundBack onBack={backFromRegister} testID="create-account-back" step={registerStep} /> : <ScreenTopBar onBack={backFromRegister} testID="create-account-back" />}
       footer={<>{keyboardOpen ? null : footerContent}</>}
     >
         <View style={styles.header}>
+          {registerStep ? <StepPill step={registerStep} /> : null}
           <Overline style={styles.eyebrow} testID="create-account-eyebrow">{eyebrow}</Overline>
           <Headline style={styles.title}>
             {isCoachSignup ? 'Create your coach account.' : 'Create your account.'}
@@ -1422,28 +1447,52 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
           </View>
         ) : null}
 
+        {/* PERM-W4 box; owner #186-P3 op 1: just above Apple and Google, on screen whenever they are. */}
+        {isCoachSignup ? (
+          <View
+            style={styles.coachTermsPlace}
+            onLayout={(e) => { coachTermsY.current = e.nativeEvent.layout.y; }}
+            testID="create-account-coach-terms-place"
+          >
+            <Checkbox
+              variant="tan"
+              checked={coachTermsAgreed}
+              onToggle={() => setCoachTermsAgreed((v) => !v)}
+              label={COACH_SIGNUP_AGREEMENT_LABEL}
+              boxRef={coachTermsRef}
+              testID="create-account-coach-terms"
+            />
+          </View>
+        ) : null}
+
         {showProviders ? (
-          <View style={styles.providers} testID="create-account-providers">
+          <View
+            style={[styles.providers, coachTermsMissing && styles.providersOff]}
+            testID="create-account-providers"
+          >
             {/* Apple Sign-In: required by App Store policy when any other
                 third-party sign-in is offered. Renders nothing on Android or
                 unsupported iOS configurations. */}
             <AppleSignInButton
-              onPress={handleAppleSignup}
+              onPress={coachTermsMissing ? showCoachTerms : handleAppleSignup}
+              accessibilityState={{ disabled: coachTermsMissing }}
               label="CONTINUE"
               cornerRadius={radius.button}
               style={v2 ? { height: layout.buttonHeight } : undefined}
               onAvailable={() => setAppleShown(true)}
             />
             {googleEnabled ? (
-              <TouchableOpacity
-                style={styles.googleButton}
-                onPress={handleGoogleSignup}
+              // Pressable, not TouchableOpacity: a disabled state there would also block the tap that shows the box.
+              <Pressable
+                style={({ pressed }) => [styles.googleButton, pressed && styles.googlePressed]}
+                onPress={coachTermsMissing ? showCoachTerms : handleGoogleSignup}
                 accessibilityRole="button"
                 accessibilityLabel="Continue with Google"
+                accessibilityState={{ disabled: coachTermsMissing }}
               >
                 <Text style={styles.googleG}>G</Text>
                 <Text style={styles.googleButtonText}>Continue with Google</Text>
-              </TouchableOpacity>
+              </Pressable>
             ) : null}
             {appleShown || googleEnabled ? (
               <View
@@ -1617,18 +1666,6 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
           />
         </View>
 
-        {/* COACH-AI-CONSENT: the coach form's last item, right above Create account (owner mockup 1). */}
-        {isCoachSignup ? (
-          <Checkbox
-            variant="tan"
-            checked={romanOn}
-            onToggle={() => setRomanOn((v) => !v)}
-            label={COACH_AI_CONSENT_COPY.title}
-            detail={COACH_AI_CONSENT_COPY.paragraph}
-            testID="create-account-roman"
-          />
-        ) : null}
-
         {keyboardOpen ? (
           <View style={styles.inlineFooter} testID="create-account-inline-footer">{footerContent}</View>
         ) : null}
@@ -1716,9 +1753,12 @@ const makeStyles = (colors: SemanticTokens) =>
     borderColor: colors.textPrimary,
     borderRadius: radius.button,
   },
+  googlePressed: { opacity: 0.2 }, // TouchableOpacity's default press look, kept
   googleG: { ...typography.bodyMd, marginRight: Spacing.sm, color: colors.textPrimary },
   googleButtonText: { ...typography.bodyMd, color: colors.textPrimary },
   providers: { gap: Spacing.sm },
+  coachTermsPlace: { marginBottom: Spacing.lg },
+  providersOff: { opacity: 0.4 },
   passwordRow: { flexDirection: 'row', alignItems: 'center' },
   passwordInput: { flex: 1 },
   eyeBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },

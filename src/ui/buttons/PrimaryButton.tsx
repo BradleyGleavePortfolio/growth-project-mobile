@@ -36,6 +36,8 @@ export interface PrimaryButtonProps {
   tone?: 'forest' | 'cream';
   /** A button that opens a section: screen readers hear whether it is open. */
   expanded?: boolean;
+  /** Still looks and reads disabled, but a press runs this (no haptic) to show what the button waits for. */
+  onDisabledPress?: () => void;
 }
 
 export function PrimaryButton({
@@ -51,12 +53,18 @@ export function PrimaryButton({
   style,
   tone = 'forest',
   expanded,
+  onDisabledPress,
 }: PrimaryButtonProps): React.ReactElement {
   const { semanticColors: sc } = useTheme();
   const inert = disabled || loading;
   const cream = tone === 'cream' && !disabled;
   const labelColor = disabled ? sc.textOnDisabled : cream ? sc.surface.forestBand : sc.textOnAccent;
+  const waiting = disabled && !loading && onDisabledPress !== undefined;
   const handlePress = (e: GestureResponderEvent) => {
+    if (waiting) {
+      onDisabledPress();
+      return;
+    }
     if (inert) return;
     if (haptic) void HapticService.softImpact();
     onPress(e);
@@ -64,7 +72,8 @@ export function PrimaryButton({
   return (
     <Pressable
       onPress={handlePress}
-      disabled={inert}
+      // Pressable's own `disabled` would block the press and overwrite the state read below.
+      disabled={waiting ? undefined : inert}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityHint={accessibilityHint}
