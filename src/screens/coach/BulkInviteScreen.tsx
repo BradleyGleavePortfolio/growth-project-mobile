@@ -302,11 +302,11 @@ export default function BulkInviteScreen() {
                 style={[styles.row, idx > 0 && styles.rowLine, { borderColor: sc.border }]}
                 testID={`bulk-result-${r.status}`}
               >
-                <View style={styles.rowMain}>
-                  <Text style={[typography.bodyMd, { color: sc.textPrimary }]}>{r.email}</Text>
-                  {name ? <Text style={muted}>{name}</Text> : null}
+                <Text style={[typography.bodyMd, { color: sc.textPrimary }]}>{r.email}</Text>
+                <View style={styles.rowMeta}>
+                  <ResultPill status={r.status} />
+                  {name ? <Text style={[muted, styles.rowName]}>{name}</Text> : null}
                 </View>
-                <ResultPill status={r.status} />
               </View>
             );
           })}
@@ -382,22 +382,22 @@ export default function BulkInviteScreen() {
               style={[styles.row, idx > 0 && styles.rowLine, { borderColor: sc.border }]}
               testID={r.valid ? 'bulk-row-valid' : 'bulk-row-invalid'}
             >
-              <View style={styles.rowMain}>
-                <Text style={[typography.bodyMd, { color: r.valid ? sc.textPrimary : colors.error }]}>{r.email}</Text>
-                {r.name ? <Text style={muted}>{r.name}</Text> : null}
-                {r.note ? <Text style={muted}>{r.note}</Text> : null}
+              <Text style={[typography.bodyMd, { color: r.valid ? sc.textPrimary : colors.error }]}>{r.email}</Text>
+              <View style={styles.rowMeta}>
+                <Text
+                  style={[
+                    typography.caption,
+                    styles.badge,
+                    r.valid
+                      ? { color: sc.textOnAccent, backgroundColor: sc.accent }
+                      : { color: colors.error, borderColor: colors.error, borderWidth: 1 },
+                  ]}
+                >
+                  {r.valid ? 'valid' : 'invalid'}
+                </Text>
+                {r.name ? <Text style={[muted, styles.rowName]}>{r.name}</Text> : null}
               </View>
-              <Text
-                style={[
-                  typography.caption,
-                  styles.badge,
-                  r.valid
-                    ? { color: sc.textOnAccent, backgroundColor: sc.accent }
-                    : { color: colors.error, borderColor: colors.error, borderWidth: 1 },
-                ]}
-              >
-                {r.valid ? 'valid' : 'invalid'}
-              </Text>
+              {r.note ? <Text style={muted}>{r.note}</Text> : null}
             </View>
           ))}
           {parsed.rows.length > PREVIEW_MAX && (
@@ -480,14 +480,19 @@ const styles = StyleSheet.create({
   upload: { minHeight: layout.buttonHeight, alignItems: 'center', justifyContent: 'center', borderStyle: 'dashed' },
   helper: { marginTop: 6 },
   card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.card, padding: 20, gap: 4 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  // Email on its own line (full width, so it wraps less), then the badge and the name, then the note.
+  row: { gap: 4, paddingVertical: 12 },
   rowLine: { borderTopWidth: StyleSheet.hairlineWidth },
-  rowMain: { flex: 1, gap: 2 },
+  rowMeta: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
+  rowName: { flexShrink: 1 },
   badge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: radius.chip, overflow: 'hidden' },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  failedActions: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  // Two buttons side by side, each as wide as its words; when both do not fit, each takes its own full-width line.
+  failedActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
   outline: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 0,
+    flexBasis: 'auto',
     minHeight: layout.touchMin + 4,
     borderWidth: 1,
     borderRadius: radius.button,
