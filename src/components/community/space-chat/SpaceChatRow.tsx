@@ -24,7 +24,7 @@ import SpaceVoiceNote from './SpaceVoiceNote';
 import SpaceRemovedPlaceholder, { type SpaceRemovedLine } from './removed/SpaceRemovedPlaceholder';
 import SpaceReplyQuote, { spokenQuote, type SpaceQuote } from './SpaceReplyQuote';
 import { HapticService } from '../../../ui/haptics/haptics.service';
-import { brand, colors, forestPop as fp, radius, spacing, typography, voiceShades } from '../../../theme/tokens';
+import { brand, colors, forestPop as fp, neutral, radius, spacing, typography, voiceShades } from '../../../theme/tokens';
 import type { SpaceMessage } from './spaceChatApi';
 import { REJECTED_WORDS, type PendingState } from './spaceChatOutbox';
 
@@ -272,7 +272,7 @@ const s = StyleSheet.create({
   voiceCard: { marginLeft: 46, marginRight: spacing.sm, marginTop: 6 },
   untucked: { marginTop: 0 },
   body: { fontFamily: 'Inter_400Regular', fontSize: 15, lineHeight: 22, color: fp.ink },
-  photo: { width: '100%', maxWidth: 280, borderRadius: radius.card, overflow: 'hidden', backgroundColor: fp.leaf, alignItems: 'center', justifyContent: 'center' },
+  photo: { width: '100%', maxWidth: 280, borderRadius: radius.card, overflow: 'hidden', backgroundColor: neutral[200], borderWidth: 1, borderColor: voiceShades.hairline, alignItems: 'center', justifyContent: 'center' },
   actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.xs },
   again: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: 44, paddingHorizontal: spacing.lg, borderRadius: radius.button, backgroundColor: fp.forest },
   againText: { ...typography.bodyMd, color: fp.onDeep },
