@@ -272,6 +272,14 @@ const REGISTRY: Surface[] = [
     how: 're-read on focus (a block is made on another screen, so coming back reads again); the server count leaves a closed chat out', proof: { by: 'state', id: 'focus-reread-coach-home' } },
   { file: 'screens/coach/lookup/ClientLookupScreen.tsx', kind: 'list', what: 'unread per client in the coach lookup',
     how: 're-read on focus; the server count leaves a closed chat out', proof: { by: 'state', id: 'focus-reread-lookup' } },
+  // FIX-940 (m#940 NUDGE-GATE-M): the client file's and the risk screen's nudge gate reads the unread counts only for
+  // closed_client_ids, to decide open or closed; it draws no member words and no count.
+  { file: 'screens/coach/client-detail/useNudgeGate.ts', kind: 'list', what: 'reads the coach unread counts only for closed_client_ids, to gate the nudge (draws no member words or counts)',
+    how: 'my block (block store), their block or a closed chat (closed_client_ids) and a refusal remembered this session all close it; unknown is closed; a pull reads again',
+    proof: { by: 'suite', file: 'screens/coach/__tests__/ClientFileNudgeGateNGM.test.tsx', titles: [
+      '$name: Send Nudge $nudge, closed line $line',
+      'a pull to refresh reads the pair again: an unblock on the server brings Send Nudge back',
+    ] } },
   // FR-911R2 (LO-911R2 B1): a KNOWN GAP row no longer stops the scan, so the files that draw a gap part are named; each
   // shows the part's gap (fixed in the part), and its row stops here so the navigators above it are not named for it.
   ...([
