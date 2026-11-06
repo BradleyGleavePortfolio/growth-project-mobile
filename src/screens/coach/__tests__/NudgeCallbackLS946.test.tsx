@@ -97,6 +97,39 @@ it('normal UI removes the real open modal when the conversation closes', async (
   expect(mockSendNudge).not.toHaveBeenCalled();
 });
 
+it('Cancel removes the form without sending and reopening retains this client draft', async () => {
+  await openFilledModal();
+  await fireEvent.press(screen.getByLabelText('Cancel'));
+  expect(screen.queryByLabelText('Nudge title')).toBeNull();
+  expect(mockSendNudge).not.toHaveBeenCalled();
+  await fireEvent.press(screen.getByLabelText('Send nudge notification'));
+  expect(screen.getByLabelText('Nudge title').props.value).toBe('Training reminder');
+  expect(screen.getByLabelText('Nudge message').props.value).toBe('How was training?');
+});
+
+it('a generic send failure keeps the actual editor and draft reachable', async () => {
+  await openFilledModal();
+  await fireEvent.press(screen.getByLabelText('Send nudge'));
+  expect(mockSendNudge).toHaveBeenCalledTimes(1);
+  expect(screen.getByText('probe send failed')).toBeTruthy();
+  expect(screen.getByLabelText('Nudge title').props.value).toBe('Training reminder');
+  expect(screen.getByLabelText('Nudge message').props.value).toBe('How was training?');
+  expect(screen.getByLabelText('Send nudge')).not.toBeDisabled();
+});
+
+it('a blocked-send refusal removes the real editor and remembers closure', async () => {
+  mockSendNudge.mockRejectedValue({
+    response: { status: 403, data: { code: 'messaging.blocked' } },
+  });
+  await openFilledModal();
+  await fireEvent.press(screen.getByLabelText('Send nudge'));
+  expect(mockSendNudge).toHaveBeenCalledTimes(1);
+  expect(screen.queryByLabelText('Nudge title')).toBeNull();
+  expect(screen.queryByLabelText('Send nudge notification')).toBeNull();
+  expect(screen.getByTestId('client-file-nudge-closed')).toBeTruthy();
+  expect(closedRefusals.has(ID)).toBe(true);
+});
+
 it('documents the inherited stale-callback edge without treating it as a live button', async () => {
   const { submit } = await openFilledModal();
   await act(async () => { closedRefusals.add(ID); });
