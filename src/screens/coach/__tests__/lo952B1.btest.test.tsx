@@ -4,8 +4,7 @@
  * reached. Same mocks as coachInboxStyleB.test.tsx.
  */
 import React from 'react';
-import { FlatList } from 'react-native';
-import { render, within } from '@testing-library/react-native';
+import { render } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 jest.mock('../../../theme/ThemeProvider', () => ({
@@ -58,8 +57,11 @@ it('B1: the drafts header and kind tiles sit inside the scrolling list, not abov
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const view = await render(<QueryClientProvider client={qc}><PendingAiDraftsScreen /></QueryClientProvider>);
   expect(await view.findByText('Roman has 3 drafts ready')).toBeTruthy();
-  const list = view.UNSAFE_getByType(FlatList);
-  expect(within(list).queryByTestId('pending-ai-drafts-kinds')).not.toBeNull();
-  expect(within(list).queryByText('Roman has 3 drafts ready')).not.toBeNull();
+  // The drafts FlatList's scroll view is the only node on this screen with a contentContainerStyle.
+  type Node = { parent: Node | null; props: Record<string, unknown> } | null;
+  const inList = (n: Node) => { for (let up = n?.parent ?? null; up; up = up.parent) if (up.props.contentContainerStyle) return true; return false; };
+  expect(inList(view.getAllByText('Approve')[0] as unknown as Node)).toBe(true); // control: the cards are in the list
+  expect(inList(view.getByTestId('pending-ai-drafts-kinds') as unknown as Node)).toBe(true);
+  expect(inList(view.getByText('Roman has 3 drafts ready') as unknown as Node)).toBe(true);
   qc.clear();
 });
