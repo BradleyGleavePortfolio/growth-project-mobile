@@ -1343,7 +1343,7 @@ export default function ActiveWorkoutScreen() {
             onOpenExerciseDetail={openExerciseDetail}
             colors={colors}
             styles={styles}
-            previous={previousSets(history, exercise.exerciseName)}
+            previous={previousSets(history, exercise.exerciseName, exercise.unit)}
             bodyWeight={!!bodyWeight[exercise.exerciseId]}
             isLast={exIdx === sessionExercises.length - 1}
             disabled={saving}

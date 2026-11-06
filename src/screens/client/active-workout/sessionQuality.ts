@@ -1,6 +1,6 @@
 import type { Exercise, SessionExercise, SessionSet } from './types';
 import { toServerMuscleGroup } from '../../../utils/workout/muscleGroup';
-import { setVolume, unitField } from '../../../utils/workout/exerciseUnit';
+import { setVolume, unitField, unitOf } from '../../../utils/workout/exerciseUnit';
 
 export interface LoggedExercise {
   exercise_name: string;
@@ -34,10 +34,16 @@ export interface LoggedWorkout {
 
 const nameKey = (name: string) => name.trim().toLowerCase();
 
-/** API returns newest first. Match names because saved workouts have no catalog id. */
-export function previousSets(history: LoggedWorkout[], name: string): SessionSet[] {
+/**
+ * API returns newest first. Match names because saved workouts have no catalog id.
+ * LS-928R2 B1: only a past exercise counted in today's unit is offered (a saved
+ * row with no asked_unit counts reps); reps and seconds are never converted.
+ */
+export function previousSets(history: LoggedWorkout[], name: string, unit?: unknown): SessionSet[] {
+  const today = unitOf({ unit });
   for (const workout of history) {
-    const exercise = workout.exercises?.find((e) => nameKey(e.exercise_name) === nameKey(name));
+    const exercise = workout.exercises?.find((e) => nameKey(e.exercise_name) === nameKey(name)
+      && unitOf({ unit: e.asked_unit }) === today);
     if (exercise?.sets_completed) {
       return Array.from({ length: exercise.sets_completed }, (_, i) => ({
         weight: exercise.weight_per_set[i] ?? 0,

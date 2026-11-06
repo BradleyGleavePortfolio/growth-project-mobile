@@ -8,7 +8,7 @@ import { setVolume } from '../utils/workout/exerciseUnit';
 import { catalogReadRetry, byIdQuery } from '../hooks/exerciseByIdQuery';
 import { isPhoneMadeId } from '../utils/workout/exerciseId';
 import { romanVoiceLog } from '../lib/roman/copy';
-import { loggedWorkoutExercises, loggedWorkoutEditPayload, workoutSummary } from '../screens/client/active-workout/sessionQuality';
+import { loggedWorkoutExercises, loggedWorkoutEditPayload, previousSets, workoutSummary } from '../screens/client/active-workout/sessionQuality';
 
 describe('B4 class: one set adds weight x reps to lb volume, a timed set adds none', () => {
   it.each([
@@ -105,5 +105,31 @@ describe('B2 class: a catalog read by id is retried once, never on an answer tha
     expect(queryKey).toEqual(['exercises', 'by-id', id]);
     if (kind === false) expect(retry).toBe(false);
     else expect(typeof retry).toBe('function');
+  });
+});
+
+describe('LS-928R2 B1 class: Previous offers only a past count in today\'s unit, never converted', () => {
+  const logged = (id: string, count: number, asked_unit?: string | null) => ({
+    id, exercises: [{
+      exercise_name: 'Farmer Carry', muscle_group: 'full_body', sets_completed: 1,
+      weight_per_set: [25], reps_per_set: [count], ...(asked_unit !== undefined ? { asked_unit } : {}),
+    }],
+  });
+  it.each([
+    ['seconds', [logged('new', 45, 'seconds')], [45]],
+    ['reps', [logged('new', 10, 'reps')], [10]],
+    [undefined, [logged('new', 10, 'reps')], [10]],
+    ['reps', [logged('new', 10)], [10]],
+    ['reps', [logged('new', 10, null)], [10]],
+    ['seconds', [logged('new', 10)], []],
+    ['seconds', [logged('new', 10, 'reps')], []],
+    ['reps', [logged('new', 45, 'seconds')], []],
+    [undefined, [logged('new', 45, 'seconds')], []],
+    ['seconds', [logged('new', 10, 'reps'), logged('old', 30, 'seconds')], [30]],
+    ['reps', [logged('new', 45, 'seconds'), logged('old', 8)], [8]],
+  ] as const)('today %p from %j -> %j', (unit, history, counts) => {
+    const sets = previousSets(history as never, 'farmer carry', unit);
+    expect(sets.map((set) => set.reps)).toEqual(counts);
+    sets.forEach((set) => expect(set).toEqual({ weight: 25, reps: set.reps, completed: false }));
   });
 });
