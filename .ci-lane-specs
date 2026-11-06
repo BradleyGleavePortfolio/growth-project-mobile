@@ -1,0 +1,9 @@
+src/api/__tests__/romanReport197.test.ts
+src/components/roman
+src/screens/roman
+src/components/messaging
+src/api/__tests__/messagesApi.test.ts
+src/api/__tests__/romanApi
+src/screens/client/__tests__
+src/screens/coach/__tests__/ClientMessages
+scripts/__tests__/routeContract.test.js
