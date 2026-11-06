@@ -62,7 +62,7 @@ function RecipeCard({ recipe, onPress }: { recipe: Recipe; onPress: () => void }
   const totalTime = Number.isFinite(recipe.prep_time_min) && Number.isFinite(recipe.cook_time_min)
     ? recipe.prep_time_min + recipe.cook_time_min : null;
   const nutrition = [
-    Number.isFinite(recipe.calories) ? `${Math.round(recipe.calories)} kcal` : '',
+    Number.isFinite(recipe.calories) ? `${Math.round(recipe.calories).toLocaleString('en-US')} kcal` : '',
     Number.isFinite(recipe.protein) ? `${Math.round(recipe.protein)} g protein` : '',
   ].filter(Boolean).join(' · ');
   const otherMacros = [

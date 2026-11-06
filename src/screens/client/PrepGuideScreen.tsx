@@ -61,6 +61,8 @@ interface PrepGuideData {
 }
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+// The app's kcal number (as copilot/pathChangeWords.ts kcalText, ProgressScreen): rounded, grouped "1,234" (ctx#457).
+const kcalText = (n: number) => Math.round(n).toLocaleString('en-US');
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 function formatWeekLabel(weekStart: string): string {
@@ -249,14 +251,14 @@ export default function PrepGuideScreen() {
                       <Text style={styles.recipeName}>{recipe.title}</Text>
                       <Text style={styles.recipeMetaText}>
                         {recipe.prep_time_min + recipe.cook_time_min} min · {recipe.servings} servings
-                        {big ? ` · ${Math.round(recipe.calories)}\u00a0kcal` : ''}
+                        {big ? ` · ${kcalText(recipe.calories)}\u00a0kcal` : ''}
                       </Text>
                       <Text style={styles.recipeAllergens}>{recipeAllergenSummary(recipe)}</Text>
                     </View>
                     {/* The kcal at the right (ctx#457), in the meta line at 130%. */}
                     {big ? null : (
                       <View style={styles.kcal}>
-                        <Text style={styles.kcalNum}>{Math.round(recipe.calories)}</Text>
+                        <Text style={styles.kcalNum}>{kcalText(recipe.calories)}</Text>
                         <Text style={styles.kcalUnit}>kcal</Text>
                       </View>
                     )}

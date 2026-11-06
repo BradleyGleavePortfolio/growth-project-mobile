@@ -109,7 +109,7 @@ it('the prep guide keeps Add all, the counts and the amounts at 130%', async () 
   expect(ui.getByRole('button', { name: 'Add all ingredients' })).toBeTruthy();
   expect(ui.getByRole('button', { name: `Open ${recipe.title}` })).toBeTruthy();
   // REFINE-929: at large text (the jest window has fontScale 2) the kcal joins the meta line (ctx#457 130%).
-  expect(ui.getByText(/· 1234 kcal/)).toBeTruthy();
+  expect(ui.getByText(/· 1,234 kcal/)).toBeTruthy();
   expect(ui.getByText(/2\.5 kg/)).toBeTruthy();
   expect(ui.getByText('Ingredients (1)')).toBeTruthy();
   expectNothingClamped(ui);
@@ -121,7 +121,7 @@ it('the recipe keeps Save, the long title and every per-serving number at 130%',
   await waitFor(() => expect(ui.getByRole('button', { name: 'Save recipe' })).toBeTruthy());
   expect(ui.getByRole('header', { name: recipe.title })).toBeTruthy();
   expect(ui.getByRole('button', { name: 'Go back' })).toBeTruthy();
-  for (const text of ['1234 kcal', '56 g', '140 g', '38 g', '60 min total', '4 servings', '15 min prep']) expect(ui.getByText(text)).toBeTruthy();
+  for (const text of ['1,234 kcal', '56 g', '140 g', '38 g', '60 min total', '4 servings', '15 min prep']) expect(ui.getByText(text)).toBeTruthy();
   expect(StyleSheet.flatten(ui.getByRole('button', { name: 'Save recipe' }).props.style).width).toBe(44);
   expectNothingClamped(ui);
 });

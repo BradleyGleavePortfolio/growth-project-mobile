@@ -50,7 +50,7 @@ function MacroCard({ label, value, unit }: {
   if (!Number.isFinite(value)) return null;
   return (
     <View style={styles.macroCard}>
-      <Text style={styles.macroValue}>{Math.round(value)} {unit}</Text>
+      <Text style={styles.macroValue}>{Math.round(value).toLocaleString('en-US')} {unit}</Text>
       <Text style={styles.macroLabel}>{label}</Text>
     </View>
   );
