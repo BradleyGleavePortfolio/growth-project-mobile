@@ -87,6 +87,10 @@ import CoachPackageEditScreen from '../screens/coach/payments/CoachPackageEditSc
 import type { CoachPackage } from '../api/packagesApi';
 import { fromBackend, toBackendUpdate } from '../api/packagesApi';
 import { SAVE_BEFORE_PUBLISH } from '../screens/coach/payments/CoachPackageEditScreen';
+import { featureFlags } from '../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_COACH_TABS_V2 off: Open Money goes to Money inside Settings here, the five-tab layout (with six tabs Money is its own tab).
+jest.replaceProperty(featureFlags, 'coachTabsV2', false);
 
 function pkg(overrides: Partial<CoachPackage> = {}): CoachPackage {
   return {

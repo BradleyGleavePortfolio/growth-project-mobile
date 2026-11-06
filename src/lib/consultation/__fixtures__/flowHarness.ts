@@ -53,7 +53,6 @@ export function makeApi(overrides: Partial<Record<keyof ConsultationApi, jest.Mo
     complete: jest.fn(async (): Promise<CompleteOutcome> => ({ kind: 'ok', data: RESULT })),
     // GET /me/ai-consent: not deployed by default (box 2 starts from the draft).
     getRomanConsent: jest.fn(async (): Promise<AiConsentOutcome> => ({ kind: 'unavailable', status: 404 })),
-    grantRomanConsent: jest.fn(async (): Promise<AiConsentOutcome> => ({ kind: 'ok', status: AI_ALLOWED })),
     withdrawRomanConsent: jest.fn(async (): Promise<AiConsentOutcome> => ({ kind: 'ok', status: aiStatus() })),
     ...overrides,
   };

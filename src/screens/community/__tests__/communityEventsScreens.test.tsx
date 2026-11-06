@@ -108,6 +108,10 @@ jest.mock('../../../hooks/useCommunityEvents', () => ({
 import CommunityEventDetailScreen from '../CommunityEventDetailScreen';
 import CoachCommunityEventsScreen from '../CoachCommunityEventsScreen';
 import type { CommunityEvent } from '../../../api/communityEventsApi';
+import { featureFlags } from '../../../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES off: this file is the open-link build (purchaseSurfaces.ts:315); the hidden iOS build allows attendance hosts only.
+jest.replaceProperty(featureFlags, 'iosHideNonP2PPurchases', false);
 
 function makeEvent(overrides: Partial<CommunityEvent> = {}): CommunityEvent {
   return {

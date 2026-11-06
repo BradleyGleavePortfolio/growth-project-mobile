@@ -67,6 +67,10 @@ jest.mock("../../../../components/coach/setup/CoachSetupChecklist", () => {
 
 import CoachHomeCards from "../../command-center/CoachHomeCards";
 import MoneyBack from "../MoneyBack";
+import { featureFlags } from "../../../../config/featureFlags";
+
+// Pins EXPO_PUBLIC_FF_COACH_TABS_V2 off: this file is Money inside Settings, the five-tab layout (with six tabs Money is its own tab).
+jest.replaceProperty(featureFlags, "coachTabsV2", false);
 
 const Tab = createBottomTabNavigator<CoachTabParamList>();
 const Stack = createNativeStackNavigator<SettingsStackParamList>();

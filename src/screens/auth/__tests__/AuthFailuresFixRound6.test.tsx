@@ -75,6 +75,10 @@ import CreateAccountScreen from '../CreateAccountScreen';
 import LoginScreen from '../LoginScreen';
 import { __resetSignupPolicyCacheForTests } from '../../../lib/signupPolicy';
 import { toAuthErrorDetail } from '../../../utils/authErrorDetail';
+import { featureFlags } from '../../../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_FIRST_RUN_V2 off: this file is the classic auth screens (AuthStyleB.tsx:15 swaps in Style B).
+jest.replaceProperty(featureFlags, 'firstRunV2', false);
 
 type Nav = { navigate: jest.Mock; replace: jest.Mock };
 const OFF = { invite_code_required: false, providers: ['email', 'apple', 'google'], role_choice: false };
@@ -107,6 +111,11 @@ async function renderSignup(role: 'client' | 'coach') {
   // Prototype ROLE (01): a row tap selects, Continue commits.
   await fireEvent.press(await ui.findByTestId(`role-choice-${role}`));
   await fireEvent.press(ui.getByTestId('role-choice-continue'));
+  // STORE-E4 (PERM-W4): the coach form's required box is ticked before signing up.
+  {
+    const coachTerms = (ui as unknown as { queryByTestId: (id: string) => unknown }).queryByTestId('create-account-coach-terms');
+    if (coachTerms) await fireEvent.press(coachTerms as never);
+  }
   return { nav, ...ui };
 }
 

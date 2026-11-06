@@ -18,6 +18,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { Share, StyleSheet } from 'react-native';
 import { SafeAreaInsetsContext, type EdgeInsets } from 'react-native-safe-area-context';
 import { layout, radius, typography } from '../../../theme/tokens';
+import { featureFlags } from '../../../config/featureFlags';
 
 const mockGetClients = jest.fn();
 const mockListInviteCodes = jest.fn();
@@ -119,6 +120,8 @@ async function mount(insets?: EdgeInsets, focused = true) {
 
 beforeEach(() => {
   jest.restoreAllMocks();
+  // Pins EXPO_PUBLIC_FF_COACH_CLIENT_LOOKUP off: this file is the classic Clients roster (ClientsListScreen.tsx:60 swaps in the lookup).
+  jest.replaceProperty(featureFlags, 'coachClientLookup', false);
   mockUseRealEmpty = false;
   mockListInviteCodes.mockReset();
   mockCopy.mockReset().mockResolvedValue(undefined);

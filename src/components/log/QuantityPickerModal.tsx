@@ -19,6 +19,7 @@ import { SearchResult, unitOptionsFor } from '../../utils/log/types';
 import { calcMacros, parseQuantityInput } from '../../utils/log/macros';
 import PortionRuler from './PortionRuler';
 import SheetGrip from './SheetGrip';
+import { fitTitle, fitUnitTabs, sheetRoom } from './portionFit';
 
 interface Props {
   visible: boolean;
@@ -84,6 +85,10 @@ export function QuantityPickerContent({
     : { calories: 0, protein: 0, carbs: 0, fat: 0 };
   const shown = (value: number) => Number.isFinite(value) ? String(Math.round(value)) : '—';
   const units = [...unitOptionsFor(selectedFood)].sort((a, b) => UNIT_ORDER.indexOf(a) - UNIT_ORDER.indexOf(b));
+  const screenSize = useWindowDimensions();
+  const room = sheetRoom(screenSize.width);
+  const title = fitTitle(selectedFood?.name ?? '', room, screenSize.fontScale || 1, typography.h1.letterSpacing);
+  const tabs = fitUnitTabs(units, room, screenSize.fontScale || 1);
   // No-break spaces keep each number with its unit when the line wraps (320 pt, 130% text).
   const summary = `${shown(previewMacros.calories)}\u00A0kcal, ${shown(previewMacros.protein)}\u00A0g protein, `
     + `${shown(previewMacros.carbs)}\u00A0g carbs, ${shown(previewMacros.fat)}\u00A0g fat.`;
@@ -99,13 +104,15 @@ export function QuantityPickerContent({
       >
         <SheetGrip />
         {mealLabel ? <QuietOverline style={styles.mealLine}>For {mealLabel}</QuietOverline> : null}
-        <Text style={styles.quantityFoodName} accessibilityRole="header">{selectedFood?.name}</Text>
+        <Text style={[styles.quantityFoodName, { fontSize: title.fontSize, lineHeight: title.lineHeight }]}
+          allowFontScaling={false} accessibilityRole="header" accessibilityLabel={selectedFood?.name}>{title.text}</Text>
         {selectedFood?.brand ? (
           <Text style={styles.quantityFoodBrand}>{selectedFood.brand}</Text>
         ) : null}
 
-        {/* FR-916R3 F2: the tabs wrap (as on main) so every unit shows at 320 pt and 130% text. */}
-        <View style={styles.unitTabs}>
+        {/* PORTION-WRAP-M: one row of tabs at every phone width and text size (portionFit); wraps only if a window is narrower than any phone. */}
+        <View style={[styles.unitTabs, { columnGap: tabs.gap, flexWrap: tabs.wrap ? 'wrap' : 'nowrap',
+          justifyContent: tabs.spread ? 'space-between' : 'flex-start', marginHorizontal: -tabs.bleed }]}>
           {units.map((u) => (
             <HapticPressable
               key={u}
@@ -114,10 +121,11 @@ export function QuantityPickerContent({
               accessibilityRole="tab"
               accessibilityLabel={`Portion unit ${u}`}
               accessibilityState={{ selected: selectedUnit === u }}
-              style={[styles.unitTab, selectedUnit === u && styles.unitTabActive]}
+              style={[styles.unitTab, { minWidth: tabs.minWidth, paddingHorizontal: tabs.padding }, selectedUnit === u && styles.unitTabActive]}
               onPress={() => onUnitChange(u)}
             >
-              <Text style={[styles.unitTabText, selectedUnit === u && styles.unitTabTextActive]}>{u}</Text>
+              <Text allowFontScaling={false} style={[styles.unitTabText, { fontSize: tabs.fontSize },
+                selectedUnit === u && styles.unitTabTextActive]}>{u}</Text>
             </HapticPressable>
           ))}
         </View>
@@ -191,16 +199,12 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   },
   unitTabs: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    columnGap: 8,
     marginTop: 4,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: sc.border,
   },
   unitTab: {
     minHeight: layout.touchMin,
-    minWidth: 64,
-    paddingHorizontal: 12,
     alignItems: 'center',
     justifyContent: 'center',
     borderBottomWidth: 2,
@@ -210,7 +214,6 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     borderBottomColor: gold[300],
   },
   unitTabText: {
-    fontSize: 16,
     color: colors.graphite,
   },
   unitTabTextActive: {

@@ -50,6 +50,10 @@ jest.mock('../../../components/coachless/CoachlessHomeSlot', () => () => null);
 
 import HomeScreen from '../HomeScreen';
 import { __resetMacroDisplayStoreForTests } from '../../../macros/macroDisplayStore';
+import { featureFlags } from '../../../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_CLIENT_HOME_RINGS off: this file is the classic Home grid (HomeScreen.tsx:369 swaps in the rings layout).
+jest.replaceProperty(featureFlags, 'clientHomeRings', false);
 
 beforeEach(async () => {
   jest.clearAllMocks();

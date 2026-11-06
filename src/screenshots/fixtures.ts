@@ -15,6 +15,7 @@
 
 import type { ClientTodayResponse } from '../api/mealTemplatesApi';
 import type { CurrentUser } from '../hooks/useCurrentUser';
+import type { ApiHabitLog } from '../hooks/useApi';
 import { bucketDateLocal } from '../utils/date';
 
 const DEMO_USER_ID = 'demo-user-screenshot';
@@ -305,10 +306,33 @@ export const DEMO_FASTING_HISTORY = (() => {
 
 // ─── /habits ─────────────────────────────────────────────────────────────────
 
+// The GET /habits row as the server sends it: HabitsService.getHabits spreads the
+// Prisma Habit row, whose column is `name` (ApiHabit, the Home tile's HabitRow).
+// A `title` here left `name` undefined and the Home habits tile threw on `.trim()`.
+const demoHabit = (id: string, name: string, sortOrder: number, targetValue: number | null = null) => ({
+  id,
+  user_id: DEMO_USER_ID,
+  name,
+  category: 'custom',
+  target_value: targetValue,
+  unit: null,
+  assigned_by_coach_id: null,
+  coach_note: null,
+  schedule_kind: 'daily' as const,
+  schedule_days: [] as number[],
+  times_per_week: null,
+  reminder_enabled: false,
+  reminder_time: null,
+  starts_on: null,
+  sort_order: sortOrder,
+  archived_at: null,
+  logs: [] as ApiHabitLog[],
+});
+
 export const DEMO_HABITS = [
-  { id: 'habit-water', title: 'Hydrate', target_per_day: 8, kind: 'count' as const },
-  { id: 'habit-walk', title: 'Walk after lunch', target_per_day: 1, kind: 'check' as const },
-  { id: 'habit-sleep', title: 'Lights out by 10:30', target_per_day: 1, kind: 'check' as const },
+  demoHabit('habit-water', 'Hydrate', 0, 8),
+  demoHabit('habit-walk', 'Walk after lunch', 1),
+  demoHabit('habit-sleep', 'Lights out by 10:30', 2),
 ];
 
 // ─── /community/feed ─────────────────────────────────────────────────────────

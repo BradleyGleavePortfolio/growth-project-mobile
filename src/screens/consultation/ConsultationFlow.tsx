@@ -61,17 +61,15 @@ import {
   clearAiWithdrawalPending,
   isLiveRomanGrant,
   runAiMarkerStep,
-  grantRomanWithRetry,
   markAiWithdrawalPending,
   readAiWithdrawalPending,
   romanBox2MemoryCopyOf,
   romanFamily,
   romanFamilyOf,
-  romanGrantBody,
   runAiLedgerWrite,
   withdrawRomanWithRetry,
 } from '../../lib/consultation/aiConsent';
-import { AI_GRANT_NOTICE, AI_GRANT_UNCONFIRMED_NOTICE, AI_WITHDRAW_NOTICE, welcomeBackLine } from '../../lib/consultation/copy';
+import { AI_WITHDRAW_NOTICE, welcomeBackLine } from '../../lib/consultation/copy';
 import { CONSULTATION_VERSION, screenById } from '../../lib/consultation/definitions';
 import {
   answersForSave,
@@ -128,8 +126,6 @@ import {
 export type ConsultationApi = Pick<typeof consultationApi, 'save' | 'getState' | 'complete'> & {
   /** Box 2 on P0 shows the ledger's state: GET /me/ai-consent (R2a). */
   getRomanConsent: typeof aiConsentApi.getStatus;
-  /** Box 2: POST /me/ai-consent/roman (R2a). */
-  grantRomanConsent: typeof aiConsentApi.grantRoman;
   /** Box 2 unticked again on a later visit to P0: DELETE /me/ai-consent/roman. */
   withdrawRomanConsent: typeof aiConsentApi.withdrawRoman;
   /**
@@ -151,7 +147,6 @@ const defaultApi: ConsultationApi = {
   getState: consultationApi.getState,
   complete: consultationApi.complete,
   getRomanConsent: aiConsentApi.getStatus,
-  grantRomanConsent: aiConsentApi.grantRoman,
   withdrawRomanConsent: aiConsentApi.withdrawRoman,
   sessionUserId: () => readUserCacheSync()?.id ?? null,
   getCoachSharingNotice: readFirstSignInCoachSharing,
@@ -790,49 +785,10 @@ export default function ConsultationFlow({
           return;
         }
         if (want) {
-          if (aiHeld.current) return; // sent by onSaveOk once box 1 lands
-          aiRequests.current += 1;
-          // Possibly on file from the moment it is sent (B-310-5).
-          aiAttempted.current = true;
-          persistAi();
-          // Each attempt, the retry included, needs the same signed-in user
-          // and yes still being the latest choice (B-310-5).
-          const result = await runAiLedgerWrite(() =>
-            grantRomanWithRetry(
-              (body) => api.grantRomanConsent(body, aiAsk.current),
-              () => aiLive(gen) && aiWant.current === true,
-              () => romanGrantBody(aiMemoryRef.current, aiFamily.current),
-            ),
-          );
-          if (!aiLive(gen)) return;
-          if (result === 'granted') {
-            aiAttempted.current = false;
-            setAiConfirmed(true);
-            return;
-          }
-          if (result !== 'unconfirmed') aiAttempted.current = false;
-          if (aiWant.current !== true) {
-            // A newer "no" is queued behind this step; it withdraws whatever this grant left.
-            showAi();
-            persistAi();
-            return;
-          }
-          if (result === 'unconfirmed') {
-            // May be on file: box 2 keeps showing the client's yes (never an
-            // unticked box over a live grant), the next launch tries again,
-            // and a later untick withdraws it.
-            showAi();
-            persistAi();
-            logger.warn('ConsultationFlow', 'optional AI choice not confirmed; kept as chosen');
-            noticeOnce('grant-unconfirmed', AI_GRANT_UNCONFIRMED_NOTICE);
-            return;
-          }
+          // STORE-E4 (owner #184-E5 / #184-E6 op 1): "Before we start" has one box and no box 2, so this
+          // flow never grants Roman's AI. A yes an older build left in the draft is dropped, unsent;
+          // Roman asks the first time the client opens it ("Before Roman answers", RomanConsentGate).
           setAiWant(null);
-          if (result === 'unavailable') return; // ledger off: skipped silently
-          logger.warn('ConsultationFlow', `optional AI choice not recorded (${result}); left for Settings`);
-          // W-CONSENT: a client with no coach is asked again once they join one (RomanJoinOfferHost), so
-          // a refusal (403 ROMAN_REQUIRES_COACH from a server that does not store it yet) stays quiet, unsaved.
-          if (!coachless) noticeOnce('grant', AI_GRANT_NOTICE);
           return;
         }
         // No: nothing can be on file (no confirmed grant, no grant attempted

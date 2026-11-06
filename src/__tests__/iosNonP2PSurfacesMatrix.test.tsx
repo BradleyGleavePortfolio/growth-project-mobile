@@ -20,7 +20,13 @@ jest.mock('../config/featureFlags', () => {
   return {
     ...actual,
     featureFlags: new Proxy(actual.featureFlags, {
-      get: (t, k) => (k === 'iosHideNonP2PPurchases' ? mockState.flag : (t as Record<string | symbol, unknown>)[k]),
+      // Pins EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK and EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK off: this matrix is the no-link posture.
+      get: (t, k) =>
+        k === 'iosHideNonP2PPurchases'
+          ? mockState.flag
+          : k === 'iosUsCreditPackLink' || k === 'androidCreditPackLink'
+            ? false
+            : (t as Record<string | symbol, unknown>)[k],
     }),
   };
 });

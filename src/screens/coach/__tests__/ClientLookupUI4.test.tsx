@@ -64,6 +64,9 @@ import { CoachTeamEntryContext } from '../../../navigation/coachTeamEntry';
 import { useCoachStore } from '../../../store/coachStore';
 import { useBlockedUsersStore } from '../../../store/blockedUsersStore';
 import { featureFlags } from '../../../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_COACH_TABS_V2 off: this file opens chats over the Clients list (coachInbox.ts:18 sends them to Messages when on).
+jest.replaceProperty(featureFlags, 'coachTabsV2', false);
 import { dayWord, groupByLetter, lastLoggedWord, lookupReason, needsYouSentence, parseLookupQuery, recentFromRoster } from '../../../utils/coach/clientLookup';
 import type { RosterClient } from '../../../utils/coach/clientRoster';
 import { needsAndSteady } from '../home-v11/useCoachHomeV11';
@@ -134,7 +137,14 @@ describe('UI-4 helpers', () => {
     expect(recentFromRoster(['moved', 'b'], roster).map((c) => c.id)).toEqual(['b']);
   });
   it('ships OFF: default false and not switched on in any eas.json profile', () => {
-    expect(featureFlags.coachClientLookup).toBe(false);
+    // Pins EXPO_PUBLIC_FF_COACH_CLIENT_LOOKUP off: this test checks the shipped default.
+    const saved = process.env.EXPO_PUBLIC_FF_COACH_CLIENT_LOOKUP;
+    delete process.env.EXPO_PUBLIC_FF_COACH_CLIENT_LOOKUP;
+    try {
+      jest.isolateModules(() => expect(require('../../../config/featureFlags').featureFlags.coachClientLookup).toBe(false));
+    } finally {
+      if (saved !== undefined) process.env.EXPO_PUBLIC_FF_COACH_CLIENT_LOOKUP = saved;
+    }
     const eas = fs.readFileSync(path.join(__dirname, '..', '..', '..', '..', 'eas.json'), 'utf8');
     expect(eas).not.toMatch(/EXPO_PUBLIC_FF_COACH_CLIENT_LOOKUP/);
   });

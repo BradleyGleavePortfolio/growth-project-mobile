@@ -131,7 +131,14 @@ beforeEach(async () => {
 });
 
 it('the flag is off by default, so the existing auth suites cover main', () => {
-  expect(jest.requireActual('../../../config/featureFlags').featureFlags.firstRunV2).toBe(false);
+  // Pins EXPO_PUBLIC_FF_FIRST_RUN_V2 off: this test checks the shipped default.
+  const saved = process.env.EXPO_PUBLIC_FF_FIRST_RUN_V2;
+  delete process.env.EXPO_PUBLIC_FF_FIRST_RUN_V2;
+  try {
+    jest.isolateModules(() => expect(jest.requireActual('../../../config/featureFlags').featureFlags.firstRunV2).toBe(false));
+  } finally {
+    if (saved !== undefined) process.env.EXPO_PUBLIC_FF_FIRST_RUN_V2 = saved;
+  }
 });
 
 it('Welcome: Get started opens Create account with mediumImpact; Log in opens Sign in', async () => {

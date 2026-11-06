@@ -16,6 +16,7 @@ jest.mock('expo-application', () => ({ nativeBuildVersion: '6' }));
 jest.mock('../secureStorage', () => ({ secureStorage: { getItem: jest.fn(() => Promise.resolve(null)) } }));
 
 import { Platform } from 'react-native';
+import { featureFlags } from '../../config/featureFlags';
 
 const axiosMock = jest.requireMock('axios') as {
   __instance: { interceptors: { request: { use: jest.Mock } } };
@@ -36,11 +37,14 @@ describe('purchase policy headers', () => {
   });
 
   it('iOS release binary build 6: p2p-only, with the native build', async () => {
+    // Pins EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK off: a US-link build sends p2p-and-ai-credits instead.
+    const pin = jest.replaceProperty(featureFlags, 'iosUsCreditPackLink', false);
     Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'ios' });
     g.__DEV__ = false;
     const cfg = await requestInterceptor({ headers: {} });
     expect(cfg.headers['X-Client-Platform']).toBe('ios');
     expect(cfg.headers['X-Client-Native-Build']).toBe('6');
+    pin.restore();
     expect(cfg.headers['X-Client-Purchase-Policy']).toBe('p2p-only');
   });
 
