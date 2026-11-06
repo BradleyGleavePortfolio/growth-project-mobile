@@ -11,7 +11,7 @@ import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { NavigationContext } from '@react-navigation/native';
-import { StatusBar, StyleSheet } from 'react-native';
+import { Platform, StatusBar, StyleSheet } from 'react-native';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { StatusBarBand, STATUS_BAR_BONE } from '../../../components/StatusBarBand';
 import { lightTokens, colors as palette } from '../../../theme/tokens';
@@ -257,6 +257,25 @@ it('Sign in (D10-BUILD-CLOSE, C7 Style B): Google\'s four-colour mark, not a typ
   const src = fs.readFileSync(path.join(__dirname, '..', 'LoginScreen.tsx'), 'utf8');
   for (const c of ['#EA4335', '#4285F4', '#FBBC05', '#34A853']) expect(src).toContain(`fill="${c}"`);
   expect(src).toMatch(/bTitle: \{ marginTop: Spacing\.sm, marginBottom: Spacing\.md \}/);
+});
+
+// LO-935R2 C1 (FIX-935R2, agent 199): off iOS there is no Apple button, so its empty slot must not sit in the
+// providers stack (its 12 pt gap put Google about 30 pt under the title; B_signin_android360 draws about 12).
+it.each([
+  ['android', false, 1],
+  ['ios', true, 2],
+] as Array<['android' | 'ios', boolean, number]>)('LO-935R2 C1: Sign in on %s stacks only the providers it shows', async (os, apple, kids) => {
+  const realOS = Platform.OS;
+  Platform.OS = os;
+  mockAppleOnDevice = apple;
+  try {
+    const view = await login(nav());
+    await view.findByLabelText('Continue with Google');
+    expect(view.getByTestId('login-providers').children).toHaveLength(kids);
+    if (apple) expect(await view.findByTestId('apple-button')).toBeTruthy();
+  } finally {
+    Platform.OS = realOS;
+  }
 });
 
 const fill = async (view: Awaited<ReturnType<typeof create>>) => {
