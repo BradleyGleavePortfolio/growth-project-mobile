@@ -420,13 +420,16 @@ export const communityApi = {
     ).then((r) => r.post);
   },
 
-  /** POST /community/posts/:postId/comments — add a top-level comment. */
-  addComment(postId: string, body: string): Promise<CommunityComment> {
+  /**
+   * POST /community/posts/:postId/comments — add a top-level comment. `idempotencyKey` is the draft's send-once key
+   * (Send again sends the same one).
+   */
+  addComment(postId: string, body: string, idempotencyKey?: string): Promise<CommunityComment> {
     return call(CommunityCommentResponseSchema, () =>
       api.post<unknown>(
         `/community/posts/${postId}/comments`,
         { body },
-        idempotentHeaders(),
+        idempotentHeaders(idempotencyKey),
       ),
     ).then((r) => r.comment);
   },

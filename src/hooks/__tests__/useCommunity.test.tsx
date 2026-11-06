@@ -141,7 +141,7 @@ describe('useAddComment — optimistic append + rollback', () => {
       wrapper: Wrapper,
     });
     await act(() => {
-      result.current.mutate('first reply');
+      result.current.mutate({ body: 'first reply', idempotencyKey: 'send-once-key-1' });
     });
     await waitFor(() => expect(result.current.isError).toBe(true));
     unsub();

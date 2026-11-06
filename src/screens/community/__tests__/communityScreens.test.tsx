@@ -281,7 +281,7 @@ describe('Community quiet reading and action parity', () => {
     expect(mockMutate).toHaveBeenCalledWith(expect.objectContaining({ postId: 'p-1', active: false }));
     await fireEvent.changeText(getByTestId('community-thread-composer-field'), 'Reply text');
     await fireEvent.press(getByTestId('community-thread-composer-send'));
-    expect(mockMutate).toHaveBeenCalledWith('Reply text');
+    expect(mockMutate).toHaveBeenCalledWith({ body: 'Reply text', idempotencyKey: expect.any(String) }); // SEND-ONCE-PHONE
   });
   it('uses neutral post confirmation and returns within 300ms', async () => {
     jest.useFakeTimers();
