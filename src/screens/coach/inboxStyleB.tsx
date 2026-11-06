@@ -38,12 +38,16 @@ export function draftKinds(rows: AiActionDraftRow[]): { total: number; kinds: Dr
   return { total: queue.length, kinds };
 }
 
+/** Roman's drafts the coach sees (the one visible-drafts rule in usePendingAiDrafts), by kind. */
+export function useRomanDrafts(enabled: boolean): { total: number; kinds: DraftKindCount[] } {
+  return draftKinds(usePendingAiDrafts({ enabled }).data?.drafts ?? []);
+}
+
 /** The drawn forest card: shown only while Stream 2 drafts wait; opens the Pending AI drafts screen. */
 export function RomanDraftsHero(): React.ReactElement | null {
   const isFocused = useIsFocused();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
-  const drafts = usePendingAiDrafts({ enabled: isFocused });
-  const { total: n, kinds } = draftKinds(drafts.data?.drafts ?? []);
+  const { total: n, kinds } = useRomanDrafts(isFocused);
   if (n === 0) return null;
   return (
     <View style={s.hero} testID="inbox-roman-drafts">
