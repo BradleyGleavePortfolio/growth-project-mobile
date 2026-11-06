@@ -139,6 +139,25 @@ it.each([
   await waitFor(() => expect(boxOf(r)).toBe(''));
 });
 
+it.each([
+  ['no answer', NO_ANSWER],
+  ['a cut stream', CUT_STREAM],
+])('LS-953 B2: retrying a quick-start chip after %s keeps its key while another draft is in the box', async (_label, failure) => {
+  wire = [failure, OK];
+  const r = await open();
+  await fireEvent.changeText(r.getByTestId(INPUT), 'My separate unfinished question');
+  await act(async () => { fireEvent.press(r.getByTestId('roman-quick-start-0')); });
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  expect(boxOf(r)).toBe('My separate unfinished question');
+  await act(async () => { fireEvent.press(r.getByTestId('roman-quick-start-0')); });
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  const first = sent(0);
+  const retry = sent(1);
+  expect(retry.content).toBe(first.content);
+  expect(retry.key).toBe(first.key);
+  expect(boxOf(r)).toBe('My separate unfinished question');
+});
+
 it('new words after a failed send are a new key', async () => {
   wire = [NO_ANSWER, OK];
   const r = await open();
