@@ -35,8 +35,10 @@
 import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { NavigationContext } from '@react-navigation/native';
 import { useChatDraft } from '../../lib/chatDrafts';
+import * as Clipboard from 'expo-clipboard';
 import {
   AccessibilityInfo,
+  Alert,
   FlatList,
   Keyboard,
   StyleSheet,
@@ -74,7 +76,12 @@ import { useRomanChat } from './useRomanChat';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachlessClient } from '../../hooks/useCoachlessClient';
 import { logger } from '../../utils/logger';
-import type { RomanMessage, RomanSurface } from '../../api/romanApi';
+import { reportMessage, type RomanMessage, type RomanSurface } from '../../api/romanApi';
+import type { ReportReason } from '../../api/messagesApi';
+import MessageActionSheet from '../../components/messaging/MessageActionSheet';
+import ReportMessageSheet from '../../components/messaging/ReportMessageSheet';
+import ReplyComposer from '../../components/messaging/ReplyComposer';
+import { isLocalRomanId, romanQuoteExcerpt, withRomanQuote } from '../../components/roman/romanReply';
 import { spacing, typography } from '../../theme/tokens';
 import RomanConversationsButton from '../../components/roman/RomanConversationsButton';
 import JoinCoachState, { ROMAN_LOCK_BODY, ROMAN_LOCK_TITLE, useClientNeedsCoach } from '../../components/coachless/JoinCoachState';
@@ -147,6 +154,11 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
   // typing indicator already honours (R3 P2-1). Defaults to motion-on so a
   // failed probe never strands the latest message off-screen.
   const [reduceMotion, setReduceMotion] = useState(false);
+  // ROMAN-HOLD-M (#197-D3): the held reply (menu open), the reply being
+  // answered (quote strip over the composer) and the reply being reported.
+  const [actionTarget, setActionTarget] = useState<RomanMessage | null>(null);
+  const [replyTarget, setReplyTarget] = useState<RomanMessage | null>(null);
+  const [reportTarget, setReportTarget] = useState<RomanMessage | null>(null);
 
   const listRef = useRef<FlatList<RomanMessage>>(null);
   // Last assistant message id we announced to assistive tech, so a re-render
@@ -261,7 +273,9 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
   const sendText = useCallback(
     async (text: string, fromChip: boolean) => {
       setAskAgainHint(false);
-      const outcome = await send(text);
+      // A typed reply carries its quote; a chip never does (chips hide while replying).
+      const quoted = !fromChip && replyTarget ? replyTarget : null;
+      const outcome = await send(quoted ? withRomanQuote(quoted.content, text) : text);
       // Clear the composer ONLY when the turn actually persisted; on a send
       // failure the draft is preserved so the user can retry without retyping
       // (brief §3 / F5 RomanSendOutcome). A chip never clears a typed draft;
@@ -271,9 +285,11 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
         if (outcome === 'send-failed') setDraft((d) => (d.trim() === '' ? text : d));
       } else if (outcome === 'sent') {
         setDraft('');
+        // Only the reply that went drops its quote; a failed send keeps both.
+        if (quoted) setReplyTarget((r) => (r?.id === quoted.id ? null : r));
       }
     },
-    [send],
+    [send, replyTarget],
   );
 
   const onSend = useCallback(async () => {
@@ -315,6 +331,44 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
     onRetrySend();
   }, [sendError, clearSendError, onRetrySend]);
 
+  // ROMAN-HOLD-M: hold one of Roman's replies for the people's chat menu.
+  const onHold = useCallback((m: RomanMessage) => {
+    if (m.role === 'assistant') setActionTarget(m);
+  }, []);
+
+  const onReply = useCallback(() => {
+    if (actionTarget) setReplyTarget(actionTarget);
+    setActionTarget(null);
+  }, [actionTarget]);
+
+  const onCopy = useCallback(async () => {
+    const held = actionTarget;
+    setActionTarget(null);
+    if (!held) return;
+    try {
+      await Clipboard.setStringAsync(held.content);
+    } catch (err) {
+      logger.warn('RomanChatScreen.copy', err);
+    }
+  }, [actionTarget]);
+
+  const onOpenReport = useCallback(() => {
+    if (actionTarget) setReportTarget(actionTarget);
+    setActionTarget(null);
+  }, [actionTarget]);
+
+  // A failure throws to the sheet, which keeps the pick and says so; sending
+  // again is safe: the server keeps one report per person and reply.
+  const onSubmitReport = useCallback(
+    async (payload: { reason: ReportReason; details?: string }) => {
+      if (!reportTarget) return;
+      await reportMessage(reportTarget.id, payload);
+      setReportTarget(null);
+      Alert.alert('Reported', 'Your report has been submitted.');
+    },
+    [reportTarget],
+  );
+
   // B30: the reply that arrives after a send fades in like reading.
   const freshId = useRomanReveal(messages, sending);
   const renderItem = useCallback(
@@ -323,10 +377,11 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
         message={item}
         reveal={item.id === freshId}
         reduceMotion={reduceMotion}
+        onLongPress={item.role === 'assistant' ? onHold : undefined}
         testID={`roman-message-${item.id}`}
       />
     ),
-    [freshId, reduceMotion],
+    [freshId, reduceMotion, onHold],
   );
 
   const header = (
@@ -374,7 +429,12 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
       onSend={onSend}
       sending={sending}
       accessory={
-        surface === 'client' ? (
+        replyTarget ? (
+          <ReplyComposer
+            target={{ id: replyTarget.id, body: romanQuoteExcerpt(replyTarget.content), authorLabel: 'Roman' }}
+            onCancel={() => setReplyTarget(null)}
+          />
+        ) : surface === 'client' ? (
           <RomanQuickStarts onPick={onPickChip} selected={pickedChip} disabled={sending} />
         ) : null
       }
@@ -503,6 +563,23 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
         {featureFlags.coachAiCredits && surface === 'coach' && sendError?.kind === 'poolEmpty' ? (
           <CreditPoolEmptyLinks inset={spacing.xl + 28 + spacing.sm} />
         ) : null}
+
+        {/* ROMAN-HOLD-M: the people's chat hold menu and report sheet, reused as they are. */}
+        <MessageActionSheet
+          visible={actionTarget != null}
+          messagePreview={actionTarget ? romanQuoteExcerpt(actionTarget.content) : undefined}
+          onReply={onReply}
+          onCopy={() => void onCopy()}
+          onReport={onOpenReport}
+          onClose={() => setActionTarget(null)}
+          canReport={actionTarget != null && !isLocalRomanId(actionTarget.id)}
+        />
+        <ReportMessageSheet
+          visible={reportTarget != null}
+          messagePreview={reportTarget ? romanQuoteExcerpt(reportTarget.content, 400) : ''}
+          onSubmit={onSubmitReport}
+          onClose={() => setReportTarget(null)}
+        />
 
       </View>
     </Screen>
