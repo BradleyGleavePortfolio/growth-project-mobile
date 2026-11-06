@@ -26,10 +26,8 @@ jest.mock('../../../api/communityChallengesApi', () => ({
   communityChallengesApi: {
     getChallenge: jest.fn(),
     listComments: jest.fn(),
-    getLeaderboard: jest.fn(),
     join: jest.fn(),
     updateProgress: jest.fn(),
-    setLeaderboardOptIn: jest.fn(),
     addComment: jest.fn(),
     reportComment: jest.fn(),
   },
@@ -61,7 +59,6 @@ beforeEach(() => {
   Object.values(api).forEach((fn) => (fn as jest.Mock).mockReset());
   jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(false);
   api.listComments.mockResolvedValue({ comments: [], next_cursor: null });
-  api.getLeaderboard.mockResolvedValue({ available: true, opted_in: false, rows: [], next_cursor: null });
   api.getChallenge.mockResolvedValue({
     challenge: {
       id: 'ch-1', workspace_id: 'ws-1', cohort_id: 'co-1', created_by_user_id: 'coach-1', title: 'March step challenge',
