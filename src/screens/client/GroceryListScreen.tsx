@@ -22,7 +22,7 @@ import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { typography, radius } from '../../theme/tokens';
 import { PrimaryButton, TextLink, Screen } from '../../ui';
 import { HapticService } from '../../ui/haptics/haptics.service';
-import { StyleCCheck, StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCNotice, StyleCPaper, useStyleCScreen } from '../../ui/layout/StyleCPage';
+import { StyleCCheck, StyleCDashes, StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCMastText, StyleCNotice, StyleCPaper, useStyleCScreen } from '../../ui/layout/StyleCPage';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface ListItem {
@@ -220,10 +220,14 @@ export default function GroceryListScreen() {
 
   return (
     <Screen edges={['top']} scroll={false} {...page} testID="grocery-prep-screen">
-      <StyleCMasthead title="Grocery list" onBack={() => navigation.goBack()} />
+      <StyleCMasthead title="Grocery list" onBack={() => navigation.goBack()}>
+        {/* The summary on the masthead, as on the Shopping list (ctx#457): one look for both lists. */}
+        {!isLoading && !isError && items.length > 0 ? (
+          <StyleCDashes total={items.length} done={checked.length} label={unchecked.length > 0 ? `${unchecked.length} to get.` : 'All items checked.'} />
+        ) : null}
+        {!isLoading && !isError && hasShoppingItems ? <StyleCMastText kind="muted">Includes items from your shopping list.</StyleCMastText> : null}
+      </StyleCMasthead>
       <StyleCPaper style={styles.paper}>
-      {!isLoading && !isError && items.length > 0 ? <Text style={[styles.summary, hasShoppingItems && styles.summaryWithNote]}>{unchecked.length > 0 ? `${unchecked.length} to get.` : 'All items checked.'}</Text> : null}
-      {!isLoading && !isError && hasShoppingItems ? <Text style={styles.note}>Includes items from your shopping list.</Text> : null}
 
       {/* Add item input */}
       <View style={styles.addRow}>
@@ -254,27 +258,27 @@ export default function GroceryListScreen() {
             onChangeText={setNewItemUnit}
             returnKeyType="done"
           />
+          <TouchableOpacity
+            accessibilityRole="button" accessibilityLabel="Add item"
+            style={[styles.addBtn, !newItemName.trim() && styles.addBtnDisabled]}
+            onPress={handleAdd}
+            disabled={!newItemName.trim() || addMutation.isPending}
+            activeOpacity={0.8}
+          >
+            {addMutation.isPending ? (
+              <ActivityIndicator size="small" color={colors.textOnPrimary} />
+            ) : (
+              <Ionicons name="add" size={22} color={colors.textOnPrimary} />
+            )}
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          accessibilityRole="button" accessibilityLabel="Add item"
-          style={[styles.addBtn, !newItemName.trim() && styles.addBtnDisabled]}
-          onPress={handleAdd}
-          disabled={!newItemName.trim() || addMutation.isPending}
-          activeOpacity={0.8}
-        >
-          {addMutation.isPending ? (
-            <ActivityIndicator size="small" color={colors.textOnPrimary} />
-          ) : (
-            <Ionicons name="add" size={22} color={colors.textOnPrimary} />
-          )}
-        </TouchableOpacity>
       </View>
 
       {/* List */}
       {isLoading ? (
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Loading grocery list…</Text>
-          <StyleCLoadingLines />
+          <StyleCLoadingLines lead="ring" />
         </View>
       ) : isError ? (
         <View style={styles.loadingContainer}>
@@ -332,35 +336,26 @@ export default function GroceryListScreen() {
 const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primary' | 'textPrimary' | 'textMuted' | 'textOnPrimary' | 'border' | 'error'>) =>
   StyleSheet.create({
   // Screen owns the inset top (forest via useStyleCScreen); the masthead and paper are Style C; the paper holds the list.
-  paper: { paddingTop: 24 },
-  summary: { ...typography.h2, color: colors.textPrimary, paddingHorizontal: 24, marginBottom: 24, fontVariant: ['tabular-nums'] },
-  summaryWithNote: { marginBottom: 4 },
-  note: { ...typography.bodySmall, color: colors.textMuted, paddingHorizontal: 24, marginBottom: 24 },
+  paper: { paddingTop: 22 },
   clearBtn: { marginTop: 12 },
 
-  addRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 24,
-    marginBottom: 12,
-    gap: 12,
-    alignItems: 'flex-end',
-  },
-  // Underlined fields (C_grocery), not boxes; the name takes its own line so Qty and Unit fit at 130%.
-  addInputs: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', columnGap: 12 },
+  addRow: { paddingHorizontal: 24, marginBottom: 12 },
+  // Underlined fields (C_grocery, ctx#457), not boxes: the name on its own line, then Qty, Unit and the round add.
+  addInputs: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', columnGap: 14 },
   nameInput: {
     fontFamily: typography.body.fontFamily,
     flexBasis: '100%',
     height: 48,
-    borderBottomWidth: 1,
+    borderBottomWidth: 1.5,
     borderColor: colors.textPrimary,
-    fontSize: 17,
+    fontSize: 18,
     color: colors.textPrimary,
   },
   qtyInput: {
     fontFamily: typography.body.fontFamily, fontVariant: ['tabular-nums'],
-    width: 72,
+    width: 52,
     height: 44,
-    borderBottomWidth: 1,
+    borderBottomWidth: 1.5,
     borderColor: colors.border,
     paddingHorizontal: 8,
     fontSize: 16,
@@ -369,10 +364,9 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
   },
   unitInput: {
     fontFamily: typography.body.fontFamily,
-    flex: 1,
-    minWidth: 0,
+    width: 70,
     height: 44,
-    borderBottomWidth: 1,
+    borderBottomWidth: 1.5,
     borderColor: colors.border,
     paddingHorizontal: 8,
     fontSize: 16,
@@ -382,13 +376,13 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
     width: 44,
     height: 44,
     backgroundColor: colors.primary,
-    borderRadius: radius.button,
+    borderRadius: radius.chip,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  addBtnDisabled: { opacity: 0.5 },
+  addBtnDisabled: { opacity: 0.42 },
 
-  loadingContainer: { paddingHorizontal: 24, paddingTop: 24, gap: 16 },
+  loadingContainer: { paddingHorizontal: 24, paddingTop: 14, gap: 16 },
   loadingText: { ...typography.bodySmall, color: colors.textMuted },
 
   listContent: { paddingHorizontal: 24, paddingBottom: 48 },
@@ -408,15 +402,16 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
     paddingHorizontal: 0,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    gap: 10,
+    gap: 6,
   },
   itemRowChecked: { opacity: 1 },
-  checkbox: { width: 44, height: 44, marginLeft: -8, alignItems: 'center', justifyContent: 'center' },
-  itemContent: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 12 },
-  itemName: { ...typography.h3, fontFamily: 'CormorantGaramond_400Regular', fontSize: 20, lineHeight: 26, color: colors.textPrimary, flexGrow: 1, flexShrink: 1, flexBasis: '55%' },
+  // ctx#457: the ring at the left edge, the serif name, the amount at the right on one line (never split), the cross at the edge.
+  checkbox: { width: 44, height: 44, marginLeft: -2, alignItems: 'flex-start', justifyContent: 'center' },
+  itemContent: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  itemName: { ...typography.h3, fontSize: 21, lineHeight: 26, paddingVertical: 10, color: colors.textPrimary, flex: 1 },
   itemNameChecked: { textDecorationLine: 'line-through', color: colors.textMuted },
-  itemMeta: { ...typography.body, color: colors.textMuted, fontVariant: ['tabular-nums'], textAlign: 'right', flexShrink: 0, marginLeft: 'auto' },
-  deleteBtn: { width: 44, height: 44, marginRight: -12, alignItems: 'center', justifyContent: 'center' },
+  itemMeta: { ...typography.body, fontSize: 15, lineHeight: 22, color: colors.textMuted, fontVariant: ['tabular-nums'], textAlign: 'right', flexShrink: 0, maxWidth: '50%' },
+  deleteBtn: { width: 44, height: 44, alignItems: 'flex-end', justifyContent: 'center' },
 
   });
 

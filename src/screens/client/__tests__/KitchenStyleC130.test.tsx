@@ -108,7 +108,8 @@ it('the prep guide keeps Add all, the counts and the amounts at 130%', async () 
   await waitFor(() => expect(ui.getByText('Add all')).toBeTruthy());
   expect(ui.getByRole('button', { name: 'Add all ingredients' })).toBeTruthy();
   expect(ui.getByRole('button', { name: `Open ${recipe.title}` })).toBeTruthy();
-  expect(ui.getByText('1234 kcal')).toBeTruthy();
+  // REFINE-929: at large text (the jest window has fontScale 2) the kcal joins the meta line (ctx#457 130%).
+  expect(ui.getByText(/· 1234 kcal/)).toBeTruthy();
   expect(ui.getByText(/2\.5 kg/)).toBeTruthy();
   expect(ui.getByText('Ingredients (1)')).toBeTruthy();
   expectNothingClamped(ui);

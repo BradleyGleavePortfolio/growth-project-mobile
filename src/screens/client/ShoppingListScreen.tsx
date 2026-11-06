@@ -20,7 +20,7 @@ import FadeInView from '../../components/FadeInView';
 import { useTheme } from '../../theme/ThemeProvider';
 import { PrimaryButton, TextLink, Screen } from '../../ui';
 import { HapticService } from '../../ui/haptics/haptics.service';
-import { StyleCCheck, StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCNotice, StyleCPaper, useStyleCScreen } from '../../ui/layout/StyleCPage';
+import { StyleCCheck, StyleCDashes, StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCNotice, StyleCPaper, useStyleCScreen } from '../../ui/layout/StyleCPage';
 import { makeListStyles as makeStyles } from './GroceryListScreen';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -198,9 +198,13 @@ export default function ShoppingListScreen() {
 
   return (
     <Screen edges={['top']} scroll={false} {...page} testID="grocery-prep-screen">
-      <StyleCMasthead title="Shopping list" onBack={() => navigation.goBack()} />
+      <StyleCMasthead title="Shopping list" onBack={() => navigation.goBack()}>
+        {/* The summary on the masthead with one dash per item, gold when checked (ctx#457 shopping). */}
+        {!isLoading && !isError && items.length > 0 ? (
+          <StyleCDashes total={items.length} done={checked.length} label={unchecked.length > 0 ? `${unchecked.length} to get.` : 'All items checked.'} />
+        ) : null}
+      </StyleCMasthead>
       <StyleCPaper style={styles.paper}>
-      {!isLoading && !isError && items.length > 0 ? <Text style={styles.summary}>{unchecked.length > 0 ? `${unchecked.length} to get.` : 'All items checked.'}</Text> : null}
 
       {/* Add item input */}
       <View style={styles.addRow}>
@@ -231,27 +235,27 @@ export default function ShoppingListScreen() {
             onChangeText={setNewItemUnit}
             returnKeyType="done"
           />
+          <TouchableOpacity
+            accessibilityRole="button" accessibilityLabel="Add item"
+            style={[styles.addBtn, !newItemName.trim() && styles.addBtnDisabled]}
+            onPress={handleAdd}
+            disabled={!newItemName.trim() || addMutation.isPending}
+            activeOpacity={0.8}
+          >
+            {addMutation.isPending ? (
+              <ActivityIndicator size="small" color={colors.textOnPrimary} />
+            ) : (
+              <Ionicons name="add" size={22} color={colors.textOnPrimary} />
+            )}
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          accessibilityRole="button" accessibilityLabel="Add item"
-          style={[styles.addBtn, !newItemName.trim() && styles.addBtnDisabled]}
-          onPress={handleAdd}
-          disabled={!newItemName.trim() || addMutation.isPending}
-          activeOpacity={0.8}
-        >
-          {addMutation.isPending ? (
-            <ActivityIndicator size="small" color={colors.textOnPrimary} />
-          ) : (
-            <Ionicons name="add" size={22} color={colors.textOnPrimary} />
-          )}
-        </TouchableOpacity>
       </View>
 
       {/* List */}
       {isLoading ? (
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Loading shopping list…</Text>
-          <StyleCLoadingLines />
+          <StyleCLoadingLines lead="ring" />
         </View>
       ) : isError ? (
         <View style={styles.loadingContainer}>

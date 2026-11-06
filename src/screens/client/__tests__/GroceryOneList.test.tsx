@@ -82,7 +82,8 @@ describe('Grocery is the one list (CF-ONE-LIST-128)', () => {
     expect(view.getByText('2 to get.')).toBeTruthy();
     expect(view.getByText('To get (2)')).toBeTruthy();
     expect(view.getByText('Checked (2)')).toBeTruthy();
-    expect(view.getByText(NOTE)).toHaveStyle({ color: lightTokens.textMuted, fontFamily: 'Inter_400Regular' });
+    // REFINE-929: the note sits on the forest masthead under the summary (ctx#457), in its muted light words.
+    expect(view.getByText(NOTE)).toHaveStyle({ color: lightTokens.textOnMastheadMuted, fontFamily: 'Inter_400Regular' });
     expect(view.getByText('Grocery list')).toBeTruthy();
     expect(listsApi.getList).toHaveBeenCalledWith('grocery');
     expect(listsApi.getList).toHaveBeenCalledWith('shopping');

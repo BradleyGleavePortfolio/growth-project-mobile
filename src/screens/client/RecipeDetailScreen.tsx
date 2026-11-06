@@ -151,7 +151,7 @@ export default function RecipeDetailScreen() {
     <Screen edges={['top']} scroll={false} {...page}>
     <ScrollView style={styles.page} contentContainerStyle={styles.content}>
       {/* C_recipe: back, save and the title on the masthead; the recipe on the paper. */}
-      <StyleCMasthead title={recipe.title} onBack={() => navigation.goBack()} backLabel="Go back" trailing={
+      <StyleCMasthead compact title={recipe.title} onBack={() => navigation.goBack()} backLabel="Go back" trailing={
         <TouchableOpacity
           style={styles.saveBtn}
           onPress={handleToggleSave}
@@ -271,7 +271,7 @@ export default function RecipeDetailScreen() {
 const makeStyles = (colors: SemanticTokens) =>
   StyleSheet.create({
   // Screen owns the inset top (forest via useStyleCScreen); the masthead scrolls with the recipe.
-  page: { flex: 1, backgroundColor: colors.bgSurface },
+  page: { flex: 1, backgroundColor: colors.surface.forestBand },
   content: { flexGrow: 1, backgroundColor: colors.surface.forestBand, paddingBottom: 0 },
   heroImage: {
     width: '100%',

@@ -23,12 +23,11 @@ import {
   useRecipeAllergenGuide,
 } from '../../lib/recipeAllergens';
 
-import EmptyState from '../../components/EmptyState';
 import AllergySafetyPrompt from '../../components/AllergySafetyPrompt';
 import { useTheme } from '../../theme/ThemeProvider';
 import { typography, radius, SemanticTokens } from '../../theme/tokens';
 import { PrimaryButton, Screen } from '../../ui';
-import { StyleCLoadingLines, StyleCMasthead, StyleCNotice, StyleCPaper, StyleCThumb, useStyleCScreen } from '../../ui/layout/StyleCPage';
+import { StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCNotice, StyleCPaper, StyleCThumb, useStyleCScreen } from '../../ui/layout/StyleCPage';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { patchUserCache } from '../../lib/userCache';
 import { track } from '../../lib/analytics';
@@ -321,13 +320,13 @@ export default function RecipesScreen() {
                 <PrimaryButton label="Try again" onPress={() => refetch()} disabled={isRefetching} haptic={false} />
               </View>
             ) : showingSaved && !search ? (
-              <EmptyState
+              <StyleCEmpty
                 icon="bookmark-outline"
                 title="No saved recipes"
                 subtitle="Recipes you save from a recipe page appear here."
               />
             ) : (
-              <EmptyState
+              <StyleCEmpty
                 icon="restaurant-outline"
                 title={search || activeTag !== 'All' ? 'No matches' : 'No recipes yet'}
                 subtitle={

@@ -97,7 +97,7 @@ it('empty lists show the line-drawing tile over the words on main', async () => 
   const g = await mount(GroceryListScreen);
   await waitFor(() => expect(g.getByText('Your grocery list is empty')).toBeTruthy());
   expect(g.getByTestId('stylec-thumb', { includeHiddenElements: true })).toBeTruthy();
-  g.unmount();
+  await g.unmount();
   const s = await mount(ShoppingListScreen);
   await waitFor(() => expect(s.getByText('Your shopping list is empty')).toBeTruthy());
   expect(s.getByTestId('stylec-thumb', { includeHiddenElements: true })).toBeTruthy();
