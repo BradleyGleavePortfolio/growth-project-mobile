@@ -25,6 +25,24 @@ const mockGet = jest.fn();
 jest.mock('../../../services/api', () => ({ __esModule: true, default: { get: (u: string) => mockGet(u) } }));
 const mockInbox = jest.fn();
 jest.mock('../../../api/messagingV2Api', () => ({ messagingV2Api: { getClientInbox: () => mockInbox() } }));
+// D10-BUILD-CLOSE: the client's own Roman history (list newest first, then the newest chat's messages newest first).
+const mockList = jest.fn();
+const mockRead = jest.fn();
+jest.mock('../../../api/romanChatsApi', () => ({
+  ROMAN_CHATS_MAX_LIMIT: 100,
+  romanChatsApi: { list: (...a: unknown[]) => mockList(...a), readMessages: (...a: unknown[]) => mockRead(...a) },
+}));
+const mockBindingCurrent = jest.fn(() => true);
+const mockCapture = jest.fn(async () => ({ subject: 'client-1', epoch: 1 }) as { subject: string; epoch: number } | null);
+jest.mock('../../../services/accountBinding', () => ({
+  captureAccountBinding: () => mockCapture(),
+  bindingIsCurrent: () => mockBindingCurrent(),
+}));
+const OFFLINE = { ok: false, failure: { reason: 'offline' } };
+const chats = (n: number, nextCursor: string | null = null) => ({ ok: true, value: { sessions: Array.from({ length: n }, (_, i) => ({ id: `rs${i}`, surface: 'client', dayKey: '2026-11-04', messageCount: 4, startedAt: '2026-11-04T18:00:00.000Z', lastActivityAt: '2026-11-04T18:00:00.000Z' })), nextCursor } });
+const ANSWER = "62 g, Jordan. Sam's dinner covers 45 g of it, so a Greek yoghurt this evening closes the rest.";
+const said = (o: Record<string, unknown> = {}) => ({ id: 'rm2', role: 'assistant', content: ANSWER, interrupted: false, createdAt: '2026-11-04T18:02:00.000Z', ...o });
+const asked = { id: 'rm1', role: 'user', content: 'How much protein is left?', interrupted: false, createdAt: '2026-11-04T18:01:00.000Z' };
 const mockFlags = { messaging_core_v2: true };
 jest.mock('../../../hooks/useFeatureFlags', () => ({ useFeatureFlags: () => ({ flags: mockFlags }) }));
 const mockReduce = jest.fn(() => false);
@@ -46,14 +64,17 @@ jest.mock('../../../components/ai/useOpenSupport', () => ({ useOpenSupport: () =
 jest.mock('@expo/vector-icons', () => ({
   Ionicons: ({ name }: { name: string }) => require('react').createElement(require('react-native').Text, { testID: `icon-${name}` }),
 }));
-/** Focus runs the effect; mockRefocus() is a blur and a focus again (the cleanup, then a fresh read). */
-let mockRefocus: () => void = () => undefined;
+/** Focus runs the effect; mockRefocus() is a blur and a focus again (the cleanup, then a fresh read) of every focus
+ * effect on the screen (D10-BUILD-CLOSE: the coach reads and the Roman history are two). */
+const mockFocused = new Set<() => void>();
+const mockRefocus = () => { mockFocused.forEach((again) => again()); };
 jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'),
   useFocusEffect: (cb: () => void | (() => void)) => jest.requireActual('react').useEffect(() => {
     let undo = cb();
-    mockRefocus = () => { if (typeof undo === 'function') undo(); undo = cb(); };
-    return () => { if (typeof undo === 'function') undo(); };
+    const again = () => { if (typeof undo === 'function') undo(); undo = cb(); };
+    mockFocused.add(again);
+    return () => { mockFocused.delete(again); if (typeof undo === 'function') undo(); };
   }, [cb]),
 }));
 
@@ -95,6 +116,10 @@ beforeEach(() => {
   mockFlags.messaging_core_v2 = true;
   mockSupportOn = true;
   http();
+  mockList.mockResolvedValue(OFFLINE);
+  mockRead.mockResolvedValue(OFFLINE);
+  mockBindingCurrent.mockReturnValue(true);
+  mockCapture.mockResolvedValue({ subject: 'client-1', epoch: 1 });
   mockInbox.mockResolvedValue({ items: [thread()], next_cursor: null, total_unread: 2 });
 });
 
@@ -414,4 +439,157 @@ describe('previewOf and romanLeft', () => {
     [null, null],
     ['<html>', null],
   ])('%#: %j -> %p', (d, want) => expect(romanLeft(d)).toBe(want));
+});
+
+describe('D10-BUILD-CLOSE: the Roman card on the list (C3 Style B, B_inbox and B_coachless)', () => {
+  const SRC = fs.readFileSync(path.join(__dirname, '..', 'MessagesInboxScreen.tsx'), 'utf8');
+  const page = (messages: unknown[], nextCursor: string | null = null) => ({ ok: true, value: { messages, nextCursor } });
+  const today = { id: 'rs-today', surface: 'client', dayKey: '2026-11-05', messageCount: 0, startedAt: '2026-11-05T09:00:00.000Z', lastActivityAt: '2026-11-05T09:00:00.000Z' };
+  const yesterday = { id: 'rs-yday', surface: 'client', dayKey: '2026-11-04', messageCount: 2, startedAt: '2026-11-04T18:00:00.000Z', lastActivityAt: '2026-11-04T18:02:00.000Z' };
+  // FIX-935R1: the owner moved quoting Roman's latest answer to v1.1 (op198/v1-1-messages-roman-line keeps the work),
+  // so LO-935 B1 and LS-935 B1 close with the quote. Every history shape those B-TESTs and the round before named
+  // now gives the same card: "Ask Roman anything.", the same label, and no Roman history read at all.
+  it.each([
+    ['a finished answer in the newest chat', chats(3), page([said(), asked])],
+    ['LO-935 B1: today\'s empty chat is newest', { ok: true, value: { sessions: [today, yesterday], nextCursor: null } }, page([said(), asked])],
+    ['LS-935 B1: a newly opened empty chat is newest', chats(2), page([])],
+    ['LS-935 B1: the newest chat holds only a cut-off answer', chats(2), page([said({ interrupted: true })])],
+    ['LS-935 B1: the answer sits past the first message page', chats(1), page([asked], 'older-turn')],
+    ['only a crisis reply', chats(1), page([said({ safetyActions: [{ kind: 'call', label: 'Call 988' }] }), asked])],
+    ['no chats yet', chats(0), page([])],
+    ['the history read fails', OFFLINE, OFFLINE],
+  ])('%s: the coached card says "Ask Roman anything." and reads no Roman history', async (_n, list, read) => {
+    mockList.mockResolvedValue(list);
+    mockRead.mockResolvedValue(read);
+    const { u } = await show();
+    expect(await u.findByLabelText(ROMAN_LABEL)).toBeTruthy();
+    await act(async () => { await Promise.resolve(); });
+    expect(u.getByTestId('inbox-roman-line').props.children).toBe('Ask Roman anything.');
+    expect(u.getByTestId('inbox-roman-line').props.numberOfLines).toBeUndefined();
+    expect(u.queryByText(ANSWER)).toBeNull();
+    expect(mockList).not.toHaveBeenCalled();
+    expect(mockRead).not.toHaveBeenCalled();
+    expect(u.queryByTestId('inbox-chats-count')).toBeNull();
+  });
+
+  it('the screen has no way left to read or quote a Roman message', () => {
+    expect(SRC).not.toMatch(/readMessages|romanLine|RomanMessage|fontScale|numberOfLines/);
+  });
+
+  describe('no coach', () => {
+    beforeEach(() => mockNeedsCoach.mockReturnValue(true));
+
+    it('the old-chats row leads with how many chats are kept, and says it; no chat is opened to count', async () => {
+      mockList.mockResolvedValue(chats(3));
+      const { u } = await show();
+      expect(await u.findByLabelText('Your conversations with Roman, 3')).toBeTruthy();
+      expect(u.getByTestId('inbox-chats-count').props.children).toBe(3);
+      expect(mockList).toHaveBeenCalledWith({ subject: 'client-1', epoch: 1 }, { limit: 100 });
+      expect(mockRead).not.toHaveBeenCalled();
+      expect(u.queryByText(ANSWER)).toBeNull();
+    });
+
+    it.each([
+      ['no chats', chats(0)],
+      ['more than one page (no guessed total)', chats(100, 'rs100')],
+      ['the read fails', OFFLINE],
+    ])('%s: no number, the row reads as before', async (_n, list) => {
+      mockList.mockResolvedValue(list);
+      const { u } = await show();
+      await act(async () => { await Promise.resolve(); });
+      expect(u.getByLabelText('Your conversations with Roman')).toBeTruthy();
+      expect(u.queryByTestId('inbox-chats-count')).toBeNull();
+    });
+
+    it('a count for a sign-in that has ended is never shown; a later failed read keeps the last good count', async () => {
+      mockList.mockResolvedValue(chats(3));
+      const { u } = await show();
+      expect(await u.findByLabelText('Your conversations with Roman, 3')).toBeTruthy();
+      mockList.mockResolvedValue(OFFLINE);
+      await act(async () => { mockRefocus(); });
+      await act(async () => { await Promise.resolve(); });
+      expect(u.getByTestId('inbox-chats-count').props.children).toBe(3);
+      mockBindingCurrent.mockReturnValue(false);
+      await act(async () => { mockRefocus(); });
+      await waitFor(() => expect(u.queryByTestId('inbox-chats-count')).toBeNull());
+      expect(u.getByLabelText('Your conversations with Roman')).toBeTruthy();
+    });
+
+    it('signed out (no credential): nothing is read', async () => {
+      mockCapture.mockResolvedValue(null);
+      const { u } = await show();
+      await act(async () => { await Promise.resolve(); });
+      expect(u.getByLabelText('Your conversations with Roman')).toBeTruthy();
+      expect(mockList).not.toHaveBeenCalled();
+    });
+
+    it('without Roman chat nothing is read', async () => {
+      mockRoman.mockReturnValue(false);
+      await show();
+      await act(async () => { await Promise.resolve(); });
+      expect(mockCapture).not.toHaveBeenCalled();
+      expect(mockList).not.toHaveBeenCalled();
+    });
+
+    // m#935 B2 (LO-935, LS-935): the drawn face, Cormorant Medium 22 on a 28 line, so it sits on one line at 390 pt.
+    it('B2: "Roman works with a coach" is set as drawn', async () => {
+      const { u } = await show();
+      expect(flat(u.getByTestId('inbox-roman-lock-title'))).toMatchObject({ fontFamily: 'CormorantGaramond_500Medium', fontSize: 22, lineHeight: 28, letterSpacing: 0 });
+    });
+
+    // m#935 B4 (LO-935, LS-935): Roman waits for a coach, so his portrait is the grey canonical crop at 75%.
+    it('B4: the no-coach portrait is grey and faded; the coached card keeps colour', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const grey = require('../../../../assets/roman/neutral-grey.png');
+      const { u } = await show();
+      const ring = u.getByTestId('inbox-roman-grey');
+      expect(flat(ring).opacity).toBe(0.75);
+      expect(u.getByTestId('inbox-roman-grey-face').props.source).toEqual(grey);
+      mockNeedsCoach.mockReturnValue(false);
+      const coached = await show();
+      expect(coached.u.queryByTestId('inbox-roman-grey')).toBeNull();
+    });
+
+    // m#935 LO-935 non-blocking: 10 pt apart with no side padding, as drawn, so "Contact support" fits at 360 pt.
+    it('the two coach buttons are spaced and padded as drawn', async () => {
+      const { u } = await show();
+      expect(flat(u.getByTestId('inbox-join'))).toMatchObject({ paddingHorizontal: 0, minHeight: 48 });
+      expect(flat(u.getByTestId('inbox-support'))).toMatchObject({ paddingHorizontal: 0, minHeight: 48 });
+      expect(SRC).toMatch(/actions: \{ flexDirection: 'row', flexWrap: 'wrap', gap: 10,/);
+    });
+  });
+});
+
+// LO-935R2 B1 (agent 199, review round 2): C3 Style B sets two of its big Cormorant numbers in lining figures (B_coachless
+// "3" before "Your conversations with Roman" and B_inbox "36 left today"). Cormorant Garamond's default figures are
+// old-style, so the "3" hangs below the line beside its label; the font's lnum feature gives the drawn ones. The gold
+// unread ring is drawn old-style and is pinned by LO-935R3 B1 below.
+describe('LO-935R2 B1: the big Cormorant numbers use lining figures, as drawn', () => {
+  it.each([
+    ['the no-coach chat count "3"', true, '3'],
+    ['"36 left today"', false, '36'],
+  ] as Array<[string, boolean, string]>)('LO-935R2 B1: %s is set in lining figures', async (_n, noCoach, digits) => {
+    mockNeedsCoach.mockReturnValue(noCoach);
+    mockList.mockResolvedValue(chats(3));
+    const { u } = await show();
+    const el = noCoach ? await u.findByTestId('inbox-chats-count') : (await u.findByLabelText(ROMAN_LABEL), await u.findByLabelText(COACH_LABEL), u.getByText(digits));
+    expect(String(el.props.children)).toBe(digits);
+    expect(flat(el).fontVariant).toEqual(expect.arrayContaining(['lining-nums']));
+  });
+});
+
+// LO-935R3 B1 (agent 199, review round 3): every C3 Style B inbox drawing (B_inbox ios390/android360 at 100 and 130)
+// draws the gold unread ring's "2" as Cormorant's old-style figure (x-height tall, height/width about 1.2, the font's
+// `two`), not the lining `two.lf` (about 1.75). "36 left today" and the no-coach "3" are drawn lining and stay so.
+describe('LO-935R3 B1: the unread ring keeps the drawn old-style figure', () => {
+  it('LO-935R3 B1: the unread ring "2" is not set in lining figures', async () => {
+    mockNeedsCoach.mockReturnValue(false);
+    mockList.mockResolvedValue(chats(3));
+    const { u } = await show();
+    await u.findByLabelText(ROMAN_LABEL);
+    await u.findByLabelText(COACH_LABEL);
+    const el = u.getByText('2');
+    expect(String(el.props.children)).toBe('2');
+    expect(flat(el).fontVariant ?? []).not.toContain('lining-nums');
+  });
 });

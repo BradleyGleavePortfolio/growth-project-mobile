@@ -29,8 +29,6 @@ export type AIGatewayFailClosedResponse =
   | AIGatewayDraftError;
 
 interface Props {
-  // The disabled/error response to render. Pass the raw response from
-  // aiGatewayClient — the component matches on `status` + `reason`.
   response: AIGatewayFailClosedResponse;
   // Optional retry handler. Shown only for `error` responses; disabled
   // responses are never retryable from the UI (operator action required).
