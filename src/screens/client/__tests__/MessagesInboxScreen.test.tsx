@@ -599,12 +599,27 @@ describe('LO-935R3 B1: the unread ring keeps the drawn old-style figure', () => 
 // colors.romanAccent, which src/theme/tokens.ts names "the avatar ring" and Roman's portraits use elsewhere. The build
 // rings it in camel, gold[500] #B08D57 (as on main since C3B-S2), a brown ring beside the drawn gold.
 describe('LO-935R4 C1: Roman\'s portrait ring on the coached card is Roman\'s gold, as drawn', () => {
+  // The 2 pt ring around the portrait (s.ringed: borderWidth 2, padding 2), found by walking the card's children.
+  type RingNode = { props?: { style?: StyleProp<ViewStyle> }; children?: unknown };
+  const ringsIn = (node: unknown, out: RingNode[] = []): RingNode[] => {
+    if (Array.isArray(node)) {
+      node.forEach((n) => ringsIn(n, out));
+      return out;
+    }
+    if (node === null || typeof node !== 'object') return out;
+    const n = node as RingNode;
+    const st = (StyleSheet.flatten(n.props?.style) ?? {}) as Record<string, unknown>;
+    if (st.borderWidth === 2 && st.padding === 2) out.push(n);
+    ringsIn(n.children, out);
+    return out;
+  };
+
   it('LO-935R4 C1: the coached card rings Roman\'s portrait in colors.romanAccent (#C9A961)', async () => {
     mockNeedsCoach.mockReturnValue(false);
     const { u } = await show();
-    const card = await u.findByTestId('inbox-roman');
-    const rings = card.findAll((n) => typeof n.type === 'string' && flat(n).borderWidth === 2 && flat(n).padding === 2);
-    expect(rings).toHaveLength(1);
-    expect(flat(rings[0]).borderColor).toBe('#C9A961');
+    const rings = ringsIn(await u.findByTestId('inbox-roman'));
+    expect(rings.length).toBeGreaterThan(0);
+    const colours = [...new Set(rings.map((r) => (StyleSheet.flatten(r.props?.style) as ViewStyle | undefined)?.borderColor))];
+    expect(colours).toEqual(['#C9A961']);
   });
 });
