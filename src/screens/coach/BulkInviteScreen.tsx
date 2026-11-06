@@ -385,7 +385,7 @@ export default function BulkInviteScreen() {
               <View style={styles.rowMain}>
                 <Text style={[typography.bodyMd, { color: r.valid ? sc.textPrimary : colors.error }]}>{r.email}</Text>
                 {r.name ? <Text style={muted}>{r.name}</Text> : null}
-                {r.note ? <Text style={muted} numberOfLines={2}>{r.note}</Text> : null}
+                {r.note ? <Text style={muted}>{r.note}</Text> : null}
               </View>
               <Text
                 style={[
