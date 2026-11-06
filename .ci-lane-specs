@@ -1,0 +1,4 @@
+src/components/community/__tests__
+src/screens/community/__tests__
+src/hooks/__tests__/useVoiceRecorder
+src/hooks/__tests__/useVoiceOutbox
