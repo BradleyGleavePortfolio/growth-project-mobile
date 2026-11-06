@@ -80,27 +80,45 @@ export function normaliseEmail(value: string): string {
   return value.trim().toLowerCase();
 }
 
+/** One pasted invite: the email plus the name and note the coach typed beside it. */
+export interface PastedInvite {
+  email: string;
+  name?: string;
+  note?: string;
+}
+
 /**
- * Tokenise a paste blob into candidate emails.
- *
- * Accepts newline, comma, semicolon, tab, or whitespace separators.
- * Deduplicates while preserving first-seen order. Does NOT validate.
+ * INVITE-ONE-M: read a paste one invite per line, as the retired paste
+ * screen did: the email, then an optional name and note after a comma or
+ * tab. The note runs to the end of the line, so its own commas stay. A line
+ * whose second word is also an email is a list (comma, semicolon or space
+ * separated) and gives one invite per word. Does NOT validate or dedupe.
  */
-export function tokeniseEmails(input: string): string[] {
-  if (!input) return [];
-  const tokens = input
-    .split(/[\s,;]+/u)
-    .map((t) => t.trim())
-    .filter((t) => t.length > 0);
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const t of tokens) {
-    const key = t.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(t);
+export function parseInviteLines(input: string): PastedInvite[] {
+  const out: PastedInvite[] = [];
+  for (const raw of (input ?? '').split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    const words = line.split(/[\s,;]+/u).filter(Boolean);
+    if (words.length > 1 && isValidEmail(words[1])) {
+      for (const email of words) out.push({ email });
+      continue;
+    }
+    const [email, afterEmail] = cutField(line);
+    const [name, note] = afterEmail === undefined ? [''] : cutField(afterEmail);
+    out.push({
+      email,
+      ...(name ? { name } : null),
+      ...(note?.trim() ? { note: note.trim() } : null),
+    });
   }
   return out;
+}
+
+/** Split at the first comma or tab: [field, rest of the line]. */
+function cutField(s: string): [string, string | undefined] {
+  const i = s.search(/[\t,]/);
+  return i < 0 ? [s.trim(), undefined] : [s.slice(0, i).trim(), s.slice(i + 1)];
 }
 
 /**
@@ -187,23 +205,25 @@ export const invitesApi = {
    * Up to 100 emails per request — over the cap throws synchronously
    * so the caller can show the validation error without a network round trip.
    *
-   * Backend contract: `{ rows: BulkInviteRowDto[] }`. The optional `message`
-   * is forwarded as `note` on every row.
+   * Backend contract: `{ rows: BulkInviteRowDto[] }`. Each row keeps its own
+   * name and note; the optional `message` is the note of every row without one.
    */
   bulkInvite: async (
-    emails: string[],
+    invitees: Array<string | BulkInviteRow>,
     message?: string,
   ): Promise<BulkInviteResponse> => {
-    if (emails.length === 0) {
+    if (invitees.length === 0) {
       throw new Error('At least one email is required');
     }
-    if (emails.length > MAX_BULK_EMAILS) {
+    if (invitees.length > MAX_BULK_EMAILS) {
       throw new Error(`Too many emails — max ${MAX_BULK_EMAILS} per request`);
     }
-    const note = message && message.trim().length > 0 ? message.trim() : undefined;
-    const rows: BulkInviteRow[] = emails.map((email) =>
-      note ? { email, note } : { email },
-    );
+    const shared = message && message.trim().length > 0 ? message.trim() : undefined;
+    const rows: BulkInviteRow[] = invitees.map((invitee) => {
+      const { email, name, note: own } = typeof invitee === 'string' ? { email: invitee } as BulkInviteRow : invitee;
+      const note = own || shared;
+      return { email, ...(name ? { name } : null), ...(note ? { note } : null) };
+    });
     const res = await api.post<BackendBulkInviteResponse>(
       '/coach/invite-codes/bulk',
       { rows },

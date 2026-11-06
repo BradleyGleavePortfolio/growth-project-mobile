@@ -29,11 +29,10 @@ describe('FU-COPY-126 dead rows and action-specific alerts', () => {
     },
   );
 
-  it('legacy invite failures never display technical exception text', () => {
-    const src = read('screens/coach/CoachBulkInviteScreen.tsx');
+  it('invite failures never display technical exception text', () => {
+    const src = read('screens/coach/BulkInviteScreen.tsx');
     expect(src).not.toContain('Unknown error');
     expect(src).not.toContain('err.message');
-    expect(src).toContain('Your pasted list is still here.');
     expect(src).toContain('Your email list is still here.');
   });
 });
