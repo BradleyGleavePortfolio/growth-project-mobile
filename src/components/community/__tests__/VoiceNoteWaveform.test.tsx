@@ -53,6 +53,34 @@ describe('VoiceNoteWaveform', () => {
     expect(strip.props.children[1]).toBeNull();
   });
 
+  it('reduces samples only below 1 pt each, and restores the GOAL on resize', async () => {
+    const { getByTestId } = await render(
+      <VoiceNoteWaveform peaks={[0.2, 0.8]} barCount={48} height={34} gap={2} />,
+    );
+    const strip = () => getByTestId('voice-waveform', { includeHiddenElements: true });
+    await fireEvent(strip(), 'layout', { nativeEvent: { layout: { width: 40, height: 34 } } });
+    expect(strip().props.children[0]).toHaveLength(40);
+    expect(StyleSheet.flatten(strip().props.style).gap).toBe(0);
+    await fireEvent(strip(), 'layout', { nativeEvent: { layout: { width: 246, height: 34 } } });
+    expect(strip().props.children[0]).toHaveLength(48);
+    expect(StyleSheet.flatten(strip().props.style)).toMatchObject({ height: 34, gap: 2 });
+    expect(StyleSheet.flatten(strip().props.children[0][0].props.style).borderWidth).toBe(1);
+  });
+
+  it.each([{ barCount: 34, barWidth: 4, gap: 3, height: 44 }, { barCount: 48, barWidth: 3, gap: 2, height: 34 }])(
+    'leaves fixed-width strips unchanged ($barCount bars at $barWidth pt)',
+    async (props) => {
+      const { getByTestId } = await render(<VoiceNoteWaveform peaks={[0.2, 0.8]} {...props} />);
+      const strip = getByTestId('voice-waveform', { includeHiddenElements: true });
+      expect(strip.props.onLayout).toBeUndefined();
+      expect(strip.props.children[0]).toHaveLength(props.barCount);
+      expect(StyleSheet.flatten(strip.props.style)).toMatchObject({ height: props.height, gap: props.gap });
+      expect(StyleSheet.flatten(strip.props.children[0][0].props.style)).toMatchObject({
+        width: props.barWidth, borderWidth: 1,
+      });
+    },
+  );
+
   it('draws the review playhead at the played fraction only when asked (GOAL 02)', async () => {
     const { getByTestId } = await render(
       <VoiceNoteWaveform peaks={[0.2, 0.8]} barCount={16} progress={0.25} playhead gap={3} />,
