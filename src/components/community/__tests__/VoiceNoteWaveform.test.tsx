@@ -32,8 +32,12 @@ describe('VoiceNoteWaveform', () => {
       const bars = strip().props.children[0];
       const styles = bars.map((bar: React.ReactElement<{ style: StyleProp<ViewStyle> }>) => StyleSheet.flatten(bar.props.style));
       expect(bars).toHaveLength(48);
-      const minimumWidth = styles.reduce((sum: number, bar: { width?: number; borderWidth: number }) =>
-        sum + Math.max(bar.width ?? 0, bar.borderWidth * 2), 0) + row.gap * (bars.length - 1);
+      // At 1x a positive subpixel border can rasterize to 1 px, not its style
+      // value. The web capture exposed the resulting 14 pt overflow at 320 pt.
+      const minimumWidth = styles.reduce((sum: number, bar: { width?: number; borderWidth: number }) => {
+        const rasterBorder = bar.borderWidth > 0 ? Math.max(1, Math.floor(bar.borderWidth)) : 0;
+        return sum + Math.max(bar.width ?? 0, rasterBorder * 2);
+      }, 0) + row.gap * (bars.length - 1);
       expect(minimumWidth).toBeLessThanOrEqual(slotWidth + 0.000001);
       expect(row.height).toBe(34);
       expect(row.gap).toBe(Math.min(2, (slotWidth - 48) / 47));
