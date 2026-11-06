@@ -337,7 +337,7 @@ const s = StyleSheet.create({
   dim: { opacity: 0.75 },
   // A badge, not a tap target (the whole card is): 40 pt as drawn, so a long first name keeps its line.
   unread: { minWidth: 40, minHeight: 40, borderWidth: 2, borderRadius: radius.chip, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center' },
-  unreadText: { ...typography.h3, fontVariant: ['lining-nums', 'tabular-nums'] },
+  unreadText: { ...typography.h3, fontVariant: ['tabular-nums'] },
   preview: { ...typography.body, fontSize: 17, lineHeight: 26 },
   left: { alignItems: 'flex-end', marginLeft: 'auto' },
   // Large text at 320 pt: "36 left today" moves under the name instead of splitting "Your assistant" mid-word.
