@@ -1,28 +1,24 @@
 /**
- * BulkInviteScreen — Email Pipeline v1.
+ * BulkInviteScreen: the coach's one way to invite clients by email
+ * (INVITE-ONE-M; the old paste screen CoachBulkInvite is retired into it).
  *
- * Coach-only. Two input modes:
- *   - Paste: multiline text input parsed against any whitespace / comma /
- *     semicolon separator, with invalid entries surfaced inline.
+ * Two input modes:
+ *   - Paste: one invite per line, the email then an optional name and note
+ *     after a comma or tab (parseInviteLines); a line of emails alone is a list.
  *   - CSV upload: pick a `.csv` via expo-document-picker, parse the first
  *     column (or an "email" header column if present).
  *
- * Submits to `POST /coach/invite-codes/bulk` (see `src/api/invites.ts`).
- * Renders a per-email status list after the response with affordances to
- * copy the failed list or retry just the failures.
- *
- * Companion to the v1 backend contract — coexists with the legacy
- * CoachBulkInviteScreen (Sprint B v2). The legacy screen is preserved for
- * now; this screen is the v1 successor and will replace it when the
- * legacy parse/submit pair is retired.
+ * Every row is previewed (email, name, note, valid or invalid) before
+ * sending. Submits to `POST /coach/invite-codes/bulk` with each row's name
+ * and note (see `src/api/invites.ts`), then lists each email's result with
+ * a copy of the failed list and a retry that puts the failed rows back,
+ * names and notes included. Style C (C7 C_create, the nearest drawing).
  */
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -30,6 +26,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
 import {
@@ -38,40 +36,49 @@ import {
   MAX_BULK_EMAILS,
   normaliseEmail,
   parseCsvEmails,
-  tokeniseEmails,
+  parseInviteLines,
+  type PastedInvite,
 } from '../../api/invites';
 import type {
   BulkInviteResult,
   BulkInviteResultStatus,
 } from '../../types/invites';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
+import { layout, radius, typography } from '../../theme/tokens';
+import { Screen } from '../../ui/layout/Screen';
+import { PrimaryButton } from '../../ui/buttons/PrimaryButton';
+import { HapticService } from '../../ui/haptics/haptics.service';
+import { Chips, Masthead, Notice } from './meals/mealUi';
 import { errorMessage } from '../../types/common';
 
 type InputMode = 'paste' | 'csv';
 
 const MESSAGE_MAX = 500;
 const CONFIRM_THRESHOLD = 50;
+/** The server's limits on one row (BulkInviteRowDto). */
+const NAME_MAX = 120;
+const NOTE_MAX = 500;
+/** Rows drawn in the preview; the rest are counted. */
+const PREVIEW_MAX = MAX_BULK_EMAILS;
 
-interface ParsedInput {
-  valid: string[];
-  invalid: string[];
+interface PreviewRow extends PastedInvite {
+  valid: boolean;
 }
 
-function parsePaste(raw: string): ParsedInput {
-  const tokens = tokeniseEmails(raw);
-  return splitValid(tokens);
+interface ParsedInput {
+  rows: PreviewRow[];
+  valid: PastedInvite[];
+  invalidCount: number;
 }
 
 /**
- * Sanitize an invalid row for display: strip control chars and shorten
- * to a hard cap. React Native `Text` is not HTML, but we still don't
- * want to surface raw `<script>` markers or 10kB pasted blobs in the
- * "invalid" preview list.
+ * Sanitize a row for display: strip control chars and shorten to a hard
+ * cap. React Native `Text` is not HTML, but we still don't want to surface
+ * raw control characters or 10kB pasted blobs in the preview list.
  */
-function sanitizeForDisplay(raw: string): string {
-  const MAX = 120;
+function sanitizeForDisplay(raw: string, max = 120): string {
   let out = '';
-  for (let i = 0; i < raw.length && out.length < MAX; i++) {
+  for (let i = 0; i < raw.length && out.length < max; i++) {
     const c = raw.charCodeAt(i);
     if (c < 0x20 || c === 0x7f) continue;
     out += raw[i];
@@ -79,26 +86,49 @@ function sanitizeForDisplay(raw: string): string {
   return out;
 }
 
-function splitValid(tokens: string[]): ParsedInput {
-  const valid: string[] = [];
-  const invalid: string[] = [];
+/** Validate and dedupe (first email wins), keeping every row for the preview. */
+function splitValid(invites: PastedInvite[]): ParsedInput {
+  const rows: PreviewRow[] = [];
+  const valid: PastedInvite[] = [];
   const seen = new Set<string>();
-  for (const t of tokens) {
-    if (isValidEmail(t)) {
-      const n = normaliseEmail(t);
-      if (seen.has(n)) continue;
-      seen.add(n);
-      valid.push(n);
+  for (const invite of invites) {
+    const ok =
+      isValidEmail(invite.email) &&
+      (invite.name?.length ?? 0) <= NAME_MAX &&
+      (invite.note?.length ?? 0) <= NOTE_MAX;
+    if (ok) {
+      const email = normaliseEmail(invite.email);
+      if (seen.has(email)) continue;
+      seen.add(email);
+      const row = { ...invite, email };
+      valid.push(row);
+      rows.push({ ...row, valid: true });
     } else {
-      invalid.push(sanitizeForDisplay(t));
+      rows.push({
+        email: sanitizeForDisplay(invite.email),
+        name: invite.name && sanitizeForDisplay(invite.name),
+        note: invite.note && sanitizeForDisplay(invite.note),
+        valid: false,
+      });
     }
   }
-  return { valid, invalid };
+  return { rows, valid, invalidCount: rows.length - valid.length };
+}
+
+function parsePaste(raw: string): ParsedInput {
+  return splitValid(parseInviteLines(raw));
+}
+
+/** A row back as a pasted line, so a retry keeps its name and note. */
+function toLine({ email, name, note }: PastedInvite): string {
+  if (note) return `${email}, ${name ?? ''}, ${note}`;
+  return name ? `${email}, ${name}` : email;
 }
 
 export default function BulkInviteScreen() {
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { semanticColors: sc, colors } = useTheme();
+  const navigation = useNavigation();
+  const scrollRef = useRef<ScrollView>(null);
 
   const [mode, setMode] = useState<InputMode>('paste');
   const [paste, setPaste] = useState('');
@@ -106,15 +136,18 @@ export default function BulkInviteScreen() {
   const [csvEmails, setCsvEmails] = useState<string[]>([]);
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [sendFailed, setSendFailed] = useState(false);
   const [pickingCsv, setPickingCsv] = useState(false);
   const [results, setResults] = useState<BulkInviteResult[] | null>(null);
+  const [lastSend, setLastSend] = useState<{ rows: PastedInvite[]; message: string } | null>(null);
 
   const parsed: ParsedInput = useMemo(() => {
-    if (mode === 'csv') return splitValid(csvEmails);
+    if (mode === 'csv') return splitValid(csvEmails.map((email) => ({ email })));
     return parsePaste(paste);
   }, [mode, paste, csvEmails]);
 
-  const overCap = parsed.valid.length > MAX_BULK_EMAILS;
+  const validCount = parsed.valid.length;
+  const overCap = validCount > MAX_BULK_EMAILS;
   const messageTooLong = message.length > MESSAGE_MAX;
 
   const onPickCsv = useCallback(async () => {
@@ -145,32 +178,35 @@ export default function BulkInviteScreen() {
 
   const doSubmit = useCallback(async () => {
     if (parsed.valid.length === 0) return;
+    const sent = { rows: parsed.valid, message: message.trim() };
     setSubmitting(true);
+    setSendFailed(false);
     try {
-      const res = await invitesApi.bulkInvite(
-        parsed.valid,
-        message.trim() ? message.trim() : undefined,
-      );
+      const res = await invitesApi.bulkInvite(sent.rows, sent.message || undefined);
+      void HapticService.success();
+      setLastSend(sent);
       setResults(res.results);
       // Clear the input on a successful send so the coach can start fresh.
       setPaste('');
       setCsvEmails([]);
       setCsvSummary(null);
       setMessage('');
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
     } catch (err) {
       console.error('BulkInviteScreen: bulk send failed', errorMessage(err));
-      Alert.alert('Could not send invites', 'Your email list is still here. Check your connection and try sending the invites again.');
+      void HapticService.error();
+      setSendFailed(true);
     } finally {
       setSubmitting(false);
     }
   }, [parsed.valid, message]);
 
   const onSubmit = useCallback(() => {
-    if (parsed.valid.length === 0) return;
+    if (validCount === 0) return;
     if (overCap) {
       Alert.alert(
         'Too many emails',
-        `Max ${MAX_BULK_EMAILS} per send. Remove ${parsed.valid.length - MAX_BULK_EMAILS} and try again.`,
+        `Max ${MAX_BULK_EMAILS} per send. Remove ${validCount - MAX_BULK_EMAILS} and try again.`,
       );
       return;
     }
@@ -178,9 +214,9 @@ export default function BulkInviteScreen() {
       Alert.alert('Message too long', `Max ${MESSAGE_MAX} characters.`);
       return;
     }
-    if (parsed.valid.length > CONFIRM_THRESHOLD) {
+    if (validCount > CONFIRM_THRESHOLD) {
       Alert.alert(
-        `Send ${parsed.valid.length} invites?`,
+        `Send ${validCount} invites?`,
         'Confirm before queuing the emails. This cannot be undone.',
         [
           { text: 'Cancel', style: 'cancel' },
@@ -190,11 +226,15 @@ export default function BulkInviteScreen() {
       return;
     }
     void doSubmit();
-  }, [parsed.valid.length, overCap, messageTooLong, doSubmit]);
+  }, [validCount, overCap, messageTooLong, doSubmit]);
 
   const failed = useMemo(
     () => (results ?? []).filter((r) => r.status === 'failed'),
     [results],
+  );
+  const sentRow = useMemo(
+    () => new Map((lastSend?.rows ?? []).map((r) => [r.email, r])),
+    [lastSend],
   );
 
   const onCopyFailed = useCallback(async () => {
@@ -206,137 +246,168 @@ export default function BulkInviteScreen() {
   const onRetryFailed = useCallback(() => {
     if (failed.length === 0) return;
     setMode('paste');
-    setPaste(failed.map((r) => r.email).join('\n'));
+    setPaste(failed.map((r) => toLine(sentRow.get(r.email) ?? { email: r.email })).join('\n'));
+    setMessage(lastSend?.message ?? '');
     setResults(null);
-  }, [failed]);
+  }, [failed, sentRow, lastSend]);
+
+  const onMode = useCallback((next: InputMode) => {
+    setMode(next);
+    setSendFailed(false);
+  }, []);
+
+  const field = [styles.field, { borderColor: sc.border, backgroundColor: sc.bgSurface, color: sc.textPrimary }];
+  const card = [styles.card, { borderColor: sc.border, backgroundColor: sc.bgSurface }];
+  const label = [typography.eyebrow, styles.label, { color: sc.textMuted }];
+  const muted = [typography.bodySmall, { color: sc.textMuted }];
+  const shown = parsed.rows.slice(0, PREVIEW_MAX);
 
   return (
-    <KeyboardAvoidingView
-      style={styles.screen}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    <Screen
+      edges={[]}
+      scrollRef={scrollRef}
+      contentStyle={styles.content}
+      footer={
+        <PrimaryButton
+          label={`Send ${validCount} invite${validCount === 1 ? '' : 's'}`}
+          accessibilityLabel={`Send ${validCount} invites`}
+          onPress={onSubmit}
+          loading={submitting}
+          disabled={validCount === 0 || overCap || messageTooLong}
+          testID="bulk-submit"
+        />
+      }
     >
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Invite clients by email</Text>
-        <Text style={styles.lede}>
-          Paste a list of emails or upload a CSV. Each invitee gets an email with a
-          unique link that opens this app and links them to you.
-        </Text>
+      <Masthead
+        title="Invite clients by email"
+        sub="Paste a list of emails or upload a CSV. Each invitee gets an email with a unique link that opens this app and links them to you."
+        onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
+      >
+        <Chips<InputMode>
+          label="Invite clients by email"
+          items={[['paste', 'Paste'], ['csv', 'Upload CSV']]}
+          value={mode}
+          onChange={onMode}
+        />
+      </Masthead>
 
-        {/* Mode picker */}
-        <View style={styles.modeRow}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Paste emails"
-            onPress={() => setMode('paste')}
-            style={[
-              styles.modeBtn,
-              mode === 'paste' && styles.modeBtnActive,
-            ]}
-            testID="bulk-mode-paste"
-          >
-            <Text
-              style={[
-                styles.modeBtnText,
-                mode === 'paste' && styles.modeBtnTextActive,
-              ]}
-            >
-              Paste
-            </Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Upload CSV"
-            onPress={() => setMode('csv')}
-            style={[
-              styles.modeBtn,
-              mode === 'csv' && styles.modeBtnActive,
-            ]}
-            testID="bulk-mode-csv"
-          >
-            <Text
-              style={[
-                styles.modeBtnText,
-                mode === 'csv' && styles.modeBtnTextActive,
-              ]}
-            >
-              Upload CSV
-            </Text>
-          </Pressable>
-        </View>
-
-        {mode === 'paste' ? (
-          <>
-            <Text style={styles.label}>Emails</Text>
-            <TextInput
-              accessibilityLabel="Paste emails"
-              value={paste}
-              onChangeText={setPaste}
-              multiline
-              numberOfLines={6}
-              placeholder={'alice@example.com\nbob@example.com\n...'}
-              placeholderTextColor={colors.textMuted}
-              style={styles.paste}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
-              testID="bulk-paste-input"
-            />
-          </>
-        ) : (
-          <>
-            <Text style={styles.label}>CSV file</Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Pick CSV file"
-              onPress={onPickCsv}
-              disabled={pickingCsv}
-              style={styles.uploadBtn}
-              testID="bulk-csv-pick"
-            >
-              {pickingCsv ? (
-                <ActivityIndicator color={colors.primary} />
-              ) : (
-                <Text style={styles.uploadBtnText}>
-                  {csvSummary ?? 'Choose .csv file'}
-                </Text>
-              )}
-            </Pressable>
-            <Text style={styles.helper}>
-              First column or the column named "email" is used. Headers are
-              detected automatically.
-            </Text>
-          </>
-        )}
-
-        {/* Parsed summary */}
-        {(parsed.valid.length > 0 || parsed.invalid.length > 0) && (
-          <View style={styles.summary} testID="bulk-parsed-summary">
-            <Text style={styles.summaryHead}>
-              {parsed.valid.length} valid
-              {parsed.invalid.length > 0
-                ? ` · ${parsed.invalid.length} invalid`
-                : ''}
-              {overCap ? ` · over cap (max ${MAX_BULK_EMAILS})` : ''}
-            </Text>
-            {parsed.invalid.length > 0 && (
-              <View style={styles.invalidList}>
-                {parsed.invalid.slice(0, 5).map((e, i) => (
-                  <Text key={`${e}-${i}`} style={styles.invalidItem}>
-                    {e}
-                  </Text>
-                ))}
-                {parsed.invalid.length > 5 && (
-                  <Text style={styles.invalidItem}>
-                    +{parsed.invalid.length - 5} more
-                  </Text>
-                )}
+      {results ? (
+        <View style={card} testID="bulk-results">
+          <Text accessibilityRole="header" style={[typography.h2, { color: sc.textPrimary }]}>Send summary</Text>
+          {results.map((r, idx) => {
+            const name = sentRow.get(r.email)?.name;
+            return (
+              <View
+                key={`${r.email}-${idx}`}
+                style={[styles.row, idx > 0 && styles.rowLine, { borderColor: sc.border }]}
+                testID={`bulk-result-${r.status}`}
+              >
+                <View style={styles.rowMain}>
+                  <Text style={[typography.bodyMd, { color: sc.textPrimary }]}>{r.email}</Text>
+                  {name ? <Text style={muted}>{name}</Text> : null}
+                </View>
+                <ResultPill status={r.status} />
               </View>
-            )}
-          </View>
-        )}
+            );
+          })}
+          {failed.length > 0 && (
+            <View style={styles.failedActions}>
+              <OutlineButton label="Copy failed list" a11y="Copy failed emails" onPress={onCopyFailed} testID="bulk-copy-failed" />
+              <OutlineButton label={`Retry ${failed.length}`} a11y="Retry failed emails" onPress={onRetryFailed} testID="bulk-retry-failed" />
+            </View>
+          )}
+        </View>
+      ) : null}
 
-        {/* Optional message */}
-        <Text style={styles.label}>Message (optional)</Text>
+      {mode === 'paste' ? (
+        <View>
+          <Text style={label}>Emails</Text>
+          <TextInput
+            accessibilityLabel="Paste emails"
+            value={paste}
+            onChangeText={(t) => { setPaste(t); setSendFailed(false); }}
+            multiline
+            numberOfLines={6}
+            placeholder={'alice@example.com, Alice\nbob@example.com\n...'}
+            placeholderTextColor={sc.textMuted}
+            style={[field, styles.paste]}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            testID="bulk-paste-input"
+          />
+          <Text style={[muted, styles.helper]}>
+            One per line, or comma / tab separated with optional name and note.
+          </Text>
+        </View>
+      ) : (
+        <View>
+          <Text style={label}>CSV file</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Pick CSV file"
+            onPress={onPickCsv}
+            disabled={pickingCsv}
+            style={({ pressed }) => [field, styles.upload, pressed && styles.pressed]}
+            testID="bulk-csv-pick"
+          >
+            {pickingCsv ? (
+              <ActivityIndicator color={sc.accent} />
+            ) : (
+              <Text style={[typography.bodyMd, { color: sc.textPrimary }]}>
+                {csvSummary ?? 'Choose .csv file'}
+              </Text>
+            )}
+          </Pressable>
+          <Text style={[muted, styles.helper]}>
+            First column or the column named "email" is used. Headers are
+            detected automatically.
+          </Text>
+        </View>
+      )}
+
+      {parsed.rows.length > 0 && (
+        <View style={card} testID="bulk-parsed-summary">
+          <Text accessibilityRole="header" style={[typography.h2, { color: sc.textPrimary }]}>
+            Parsed rows ({parsed.rows.length})
+          </Text>
+          <Text style={[typography.bodySmall, { color: overCap || parsed.invalidCount > 0 ? colors.error : sc.textMuted }]}>
+            {validCount} valid
+            {parsed.invalidCount > 0 ? ` · ${parsed.invalidCount} invalid` : ''}
+            {overCap ? ` · over cap (max ${MAX_BULK_EMAILS})` : ''}
+          </Text>
+          {shown.map((r, idx) => (
+            <View
+              key={`${r.email}-${idx}`}
+              style={[styles.row, idx > 0 && styles.rowLine, { borderColor: sc.border }]}
+              testID={r.valid ? 'bulk-row-valid' : 'bulk-row-invalid'}
+            >
+              <View style={styles.rowMain}>
+                <Text style={[typography.bodyMd, { color: r.valid ? sc.textPrimary : colors.error }]}>{r.email}</Text>
+                {r.name ? <Text style={muted}>{r.name}</Text> : null}
+                {r.note ? <Text style={muted} numberOfLines={2}>{r.note}</Text> : null}
+              </View>
+              <Text
+                style={[
+                  typography.caption,
+                  styles.badge,
+                  r.valid
+                    ? { color: sc.textOnAccent, backgroundColor: sc.accent }
+                    : { color: colors.error, borderColor: colors.error, borderWidth: 1 },
+                ]}
+              >
+                {r.valid ? 'valid' : 'invalid'}
+              </Text>
+            </View>
+          ))}
+          {parsed.rows.length > PREVIEW_MAX && (
+            <Text style={muted}>+{parsed.rows.length - PREVIEW_MAX} more</Text>
+          )}
+        </View>
+      )}
+
+      <View>
+        <Text style={label}>Message (optional)</Text>
         <TextInput
           accessibilityLabel="Optional message"
           value={message}
@@ -345,264 +416,93 @@ export default function BulkInviteScreen() {
           numberOfLines={3}
           maxLength={MESSAGE_MAX + 50}
           placeholder="Hey — joining me on TGP Fitness, here's your invite."
-          placeholderTextColor={colors.textMuted}
-          style={styles.messageInput}
+          placeholderTextColor={sc.textMuted}
+          style={[field, styles.message]}
           testID="bulk-message-input"
         />
-        <Text
-          style={[
-            styles.helper,
-            messageTooLong && { color: colors.error },
-          ]}
-        >
+        <Text style={[muted, styles.helper, messageTooLong && { color: colors.error }]}>
           {message.length}/{MESSAGE_MAX}
         </Text>
+      </View>
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Send ${parsed.valid.length} invites`}
-          onPress={onSubmit}
-          disabled={
-            submitting || parsed.valid.length === 0 || overCap || messageTooLong
-          }
-          style={[
-            styles.submitBtn,
-            (submitting || parsed.valid.length === 0 || overCap) &&
-              styles.submitBtnDisabled,
-          ]}
-          testID="bulk-submit"
-        >
-          {submitting ? (
-            <ActivityIndicator color={colors.textOnPrimary} />
-          ) : (
-            <Text style={styles.submitBtnText}>
-              Send {parsed.valid.length} invite
-              {parsed.valid.length === 1 ? '' : 's'}
-            </Text>
-          )}
-        </Pressable>
+      {sendFailed ? (
+        <View testID="bulk-send-failed" accessibilityLiveRegion="polite">
+          <Notice icon="cloud-offline-outline">
+            Could not send invites. Your email list is still here. Check your connection and try sending the invites again.
+          </Notice>
+        </View>
+      ) : null}
+    </Screen>
+  );
+}
 
-        {/* Results */}
-        {results && (
-          <View style={styles.results} testID="bulk-results">
-            <Text style={styles.resultsHead}>Send summary</Text>
-            {results.map((r, idx) => (
-              <View
-                key={`${r.email}-${idx}`}
-                style={styles.resultRow}
-                testID={`bulk-result-${r.status}`}
-              >
-                <Text style={styles.resultEmail}>{r.email}</Text>
-                <ResultPill status={r.status} />
-              </View>
-            ))}
-            {failed.length > 0 && (
-              <View style={styles.failedActions}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Copy failed emails"
-                  onPress={onCopyFailed}
-                  style={styles.secondaryBtn}
-                  testID="bulk-copy-failed"
-                >
-                  <Text style={styles.secondaryBtnText}>Copy failed list</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Retry failed emails"
-                  onPress={onRetryFailed}
-                  style={styles.secondaryBtn}
-                  testID="bulk-retry-failed"
-                >
-                  <Text style={styles.secondaryBtnText}>
-                    Retry {failed.length}
-                  </Text>
-                </Pressable>
-              </View>
-            )}
-          </View>
-        )}
-      </ScrollView>
-    </KeyboardAvoidingView>
+function OutlineButton({ label, a11y, onPress, testID }: { label: string; a11y: string; onPress: () => void; testID: string }) {
+  const { semanticColors: sc } = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={a11y}
+      onPress={onPress}
+      style={({ pressed }) => [styles.outline, { borderColor: sc.accent }, pressed && styles.pressed]}
+      testID={testID}
+    >
+      <Text style={[typography.bodyMd, { color: sc.accentText }]}>{label}</Text>
+    </Pressable>
   );
 }
 
 function ResultPill({ status }: { status: BulkInviteResultStatus }) {
-  const { colors } = useTheme();
+  const { semanticColors: sc, colors } = useTheme();
   const label =
     status === 'created' ? 'Sent' : status === 'reused' ? 'Reused' : 'Failed';
-  const bg =
-    status === 'created'
-      ? colors.success
-      : status === 'reused'
-        ? colors.primary
-        : colors.error;
+  const icon = status === 'failed' ? 'alert-circle-outline' : 'checkmark-circle-outline';
+  const ink = status === 'failed' ? colors.error : sc.accentText;
   return (
-    <View style={[pillStyles.pill, { backgroundColor: `${bg}22` }]}>
-      <Text style={[pillStyles.text, { color: bg }]}>{label}</Text>
+    <View style={styles.pill}>
+      <Ionicons name={icon} size={16} color={ink} />
+      <Text style={[typography.caption, { color: ink }]}>{label}</Text>
     </View>
   );
 }
 
-const pillStyles = StyleSheet.create({
-  pill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
+const styles = StyleSheet.create({
+  content: { gap: 16 },
+  label: { marginBottom: 8 },
+  field: {
+    borderWidth: 1,
+    borderRadius: radius.input,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    ...typography.body,
   },
-  text: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase' },
+  paste: { minHeight: 150, textAlignVertical: 'top' },
+  message: { minHeight: 90, textAlignVertical: 'top' },
+  upload: { minHeight: layout.buttonHeight, alignItems: 'center', justifyContent: 'center', borderStyle: 'dashed' },
+  helper: { marginTop: 6 },
+  card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.card, padding: 20, gap: 4 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  rowLine: { borderTopWidth: StyleSheet.hairlineWidth },
+  rowMain: { flex: 1, gap: 2 },
+  badge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: radius.chip, overflow: 'hidden' },
+  pill: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  failedActions: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  outline: {
+    flex: 1,
+    minHeight: layout.touchMin + 4,
+    borderWidth: 1,
+    borderRadius: radius.button,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  pressed: { opacity: 0.6 },
 });
-
-function makeStyles(colors: ThemeColors) {
-  return StyleSheet.create({
-    screen: { flex: 1, backgroundColor: colors.background },
-    content: { padding: 20, paddingBottom: 64 },
-    title: { fontSize: 22, fontWeight: '600', color: colors.textPrimary },
-    lede: {
-      fontSize: 14,
-      color: colors.textSecondary,
-      marginTop: 6,
-      marginBottom: 16,
-      lineHeight: 20,
-    },
-    modeRow: {
-      flexDirection: 'row',
-      gap: 8,
-      marginBottom: 16,
-    },
-    modeBtn: {
-      flex: 1,
-      paddingVertical: 10,
-      borderRadius: 999,
-      backgroundColor: colors.surface,
-      borderWidth: 1,
-      borderColor: colors.border,
-      alignItems: 'center',
-    },
-    modeBtnActive: {
-      backgroundColor: colors.primary,
-      borderColor: colors.primary,
-    },
-    modeBtnText: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: colors.textPrimary,
-    },
-    modeBtnTextActive: { color: colors.textOnPrimary },
-    label: {
-      fontSize: 12,
-      fontWeight: '500',
-      color: colors.textSecondary,
-      textTransform: 'uppercase',
-      marginTop: 12,
-      marginBottom: 6,
-    },
-    paste: {
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 8,
-      padding: 12,
-      color: colors.textPrimary,
-      minHeight: 140,
-      textAlignVertical: 'top',
-      backgroundColor: colors.surface,
-    },
-    uploadBtn: {
-      borderWidth: 1,
-      borderStyle: 'dashed',
-      borderColor: colors.border,
-      borderRadius: 8,
-      padding: 16,
-      alignItems: 'center',
-      backgroundColor: colors.surface,
-    },
-    uploadBtnText: {
-      fontSize: 14,
-      fontWeight: '500',
-      color: colors.textPrimary,
-    },
-    helper: {
-      fontSize: 12,
-      color: colors.textMuted,
-      marginTop: 4,
-    },
-    summary: {
-      marginTop: 12,
-      padding: 12,
-      borderRadius: 8,
-      backgroundColor: colors.surfaceElevated,
-    },
-    summaryHead: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: colors.textPrimary,
-    },
-    invalidList: { marginTop: 6, gap: 2 },
-    invalidItem: { fontSize: 12, color: colors.error },
-    messageInput: {
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 8,
-      padding: 12,
-      color: colors.textPrimary,
-      minHeight: 70,
-      textAlignVertical: 'top',
-      backgroundColor: colors.surface,
-    },
-    submitBtn: {
-      marginTop: 20,
-      backgroundColor: colors.primary,
-      borderRadius: 8,
-      paddingVertical: 14,
-      alignItems: 'center',
-    },
-    submitBtnDisabled: { opacity: 0.5 },
-    submitBtnText: {
-      color: colors.textOnPrimary,
-      fontSize: 15,
-      fontWeight: '600',
-    },
-    results: { marginTop: 24, gap: 8 },
-    resultsHead: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: colors.textPrimary,
-      marginBottom: 4,
-    },
-    resultRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingVertical: 10,
-      paddingHorizontal: 12,
-      borderRadius: 8,
-      backgroundColor: colors.surface,
-    },
-    resultEmail: { fontSize: 13, color: colors.textPrimary, flex: 1 },
-    failedActions: {
-      flexDirection: 'row',
-      gap: 8,
-      marginTop: 12,
-    },
-    secondaryBtn: {
-      flex: 1,
-      paddingVertical: 12,
-      borderRadius: 8,
-      backgroundColor: colors.surfaceElevated,
-      alignItems: 'center',
-    },
-    secondaryBtnText: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: colors.textPrimary,
-    },
-  });
-}
 
 // Exported for tests.
 export const __test = {
   parsePaste,
   splitValid,
+  toLine,
   MESSAGE_MAX,
   CONFIRM_THRESHOLD,
 };
