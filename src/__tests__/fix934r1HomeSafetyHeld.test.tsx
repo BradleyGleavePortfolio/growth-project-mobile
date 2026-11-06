@@ -24,7 +24,7 @@ jest.mock('../screens/coach/home-v11/DraftSheets', () => ({
 jest.mock('../ui/haptics/haptics.service', () => ({ HapticService: { lightImpact: jest.fn(), softImpact: jest.fn(), selection: jest.fn() } }));
 jest.mock('../config/featureFlags', () => ({ featureFlags: { clientPathCopilot: false } }));
 
-it.each(['error', 'loading'] as const)('roster %s: the gold safety lead, its tap and the roster state all show, with no count', async (rosterState) => {  const alert = { alert_id: 'safety', alert_type: 'roman_crisis_reply' as const, client_id: 'a', client_name: 'Avery', message: 'Safety', dismissed_at: null, created_at: '2026-11-05T10:00:00Z' };
+it.each(['error', 'loading', 'off'] as const)('roster %s: the gold safety lead, its tap and the roster state all show, with no count', async (rosterState) => {  const alert = { alert_id: 'safety', alert_type: 'roman_crisis_reply' as const, client_id: 'a', client_name: 'Avery', message: 'Safety', dismissed_at: null, created_at: '2026-11-05T10:00:00Z' };
   mockHook.mockReturnValue({
     data: {
       overview: { roster_size: 1, active_today: 0, check_in_rate_7day: 0, open_alerts: 1, at_risk_count: 0, win_streak_count: 0, unread_messages: 0, pending_actions: 0 },
@@ -42,7 +42,9 @@ it.each(['error', 'loading'] as const)('roster %s: the gold safety lead, its tap
   const go = jest.fn();
   const view = await render(<CoachHomeV11 onOpenNeedsYou={open} onOpenClients={go} onOpenStreaks={go} onOpenMoney={go} onOpenDrafts={go} onOpenNotifications={go} onOpenSettings={go} />);
   expect(view.queryByTestId('home-needs-safety')).not.toBeNull();
-  expect(!!view.queryByTestId(rosterState === 'error' ? 'home-needs-error' : 'home-needs-loading')).toBe(true);
+  if (rosterState !== 'off') {
+    expect(!!view.queryByTestId(rosterState === 'error' ? 'home-needs-error' : 'home-needs-loading')).toBe(true);
+  }
   expect([view.queryByText('Needs you'), view.queryByText(/^Needs you, \d/)].map(Boolean)).toEqual([true, false]);
   await fireEvent.press(view.getByTestId('home-needs'));
   expect(open).toHaveBeenCalled();

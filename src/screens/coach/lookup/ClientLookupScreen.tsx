@@ -69,6 +69,7 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   const endedSeq = useRef(0);
   const [ask, setAsk] = useState<DraftAsk | null>(null);
   const [unread, setUnread] = useState<UnreadByClient>({});
+  const [unreadState, setUnreadState] = useState<'loading' | 'ok' | 'error'>('loading');
   // NEEDS-YOU-M: the open alerts the Needs you list groups (every page of GET .../action-queue, readOpenAlerts, LO-934
   // B1), read only while the view is up; a failed re-read keeps the last good rows and says it failed (LS-934 B1).
   const [alerts, setAlerts] = useState<{ items: ActionQueueItem[] | null; state: 'loading' | 'ok' | 'error' }>({ items: null, state: 'loading' });
@@ -100,6 +101,7 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   const nudge = useLookupNudge(colors);
   const teamEntry = useContext(CoachTeamEntryContext); // COACHTABS: a Team Mode head coach opens Team here, as on today's list
   const archived = filterStatus === 'archived';
+  const needsView = route?.params?.view === 'needs';
 
   // The chip shows only on the 15+ (Search first) list, not Archived (owner 6352485746): no read for a list that can't show it.
   const wantEnded = useRef(false);
@@ -119,17 +121,21 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   }, [coachId]);
   const loadSide = useCallback(async () => {
     if (!coachId) return;
+    setUnreadState('loading');
     setRecentIds(await readRecentClientIds(coachId));
     const [u, a] = await Promise.allSettled([coachApi.getUnreadCounts(), coachApi.getClients('archived', undefined, ROSTER_PAGE_SIZE), loadEnded(), loadAlerts()]);
     // A failed unread read keeps the counts already shown. The archived count shows only when one page holds them all.
     if (u.status === 'fulfilled') setUnread((u.value?.data?.by_client as UnreadByClient) ?? {});
+    setUnreadState(u.status === 'fulfilled' ? 'ok' : 'error');
     const rows: unknown = a.status === 'fulfilled' ? a.value?.data : null;
     setArchivedCount(Array.isArray(rows) && rows.length < ROSTER_PAGE_SIZE ? rows.length : null);
   }, [coachId, loadEnded, loadAlerts]);
 
   useEffect(() => {
+    // Home's Needs you intent always uses the active roster, never the lookup's last Archived selection.
+    if (needsView && archived) { setFilterStatus('active'); return; }
     if (coachId) loadClients(coachId, filterStatus);
-  }, [coachId, filterStatus, loadClients]);
+  }, [coachId, filterStatus, loadClients, needsView, archived, setFilterStatus]);
   useEffect(() => {
     void loadSide();
     return navigation.addListener('focus', () => {
@@ -150,7 +156,6 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   if (!isLoading && !loadError && clients !== shownList.current) { shownList.current = clients; shownStatus.current = filterStatus; }
   // A failed refresh keeps the last count, but only for the list it counted (a failed switch to Archived shows none).
   const known = !isLoading && (!loadError || (roster.length > 0 && shownStatus.current === filterStatus));
-  const needsView = route?.params?.view === 'needs';
   wantAlerts.current = needsView;
   useEffect(() => {
     if (needsView) void loadAlerts(); // the Home's card opened the view after this focus's read
@@ -433,21 +438,21 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
       <HomeSheet list={null} ask={ask} onCloseList={() => setAsk(null)} onCloseAsk={() => setAsk(null)} onSent={() => void loadSide()} />
     </>
   );
-  if (needsView && !archived) {
+  if (needsView) {
     // NEEDS-YOU-M: variant B of NEEDS-YOU-R2, the Home card's grouping (needsYouAreas), so its numbers are the list's.
-    const rows = sortRoster(roster, 'recent').map((client) => ({ client, reason: needsYouReason(client, unread, blockedIds) }))
+    const rows = sortRoster(archived ? [] : roster, 'recent').map((client) => ({ client, reason: needsYouReason(client, unread, blockedIds) }))
       .filter((r) => r.reason.action !== null);
     return (
       <View style={s.screen}>
         <NeedsYouList
           areas={needsYouAreas(rows, unread, alerts.items, blockedIds)}
           rosterCount={roster.length}
-          loading={isLoading || !blockKnown || alerts.state === 'loading'}
-          error={loadError && roster.length === 0 ? loadError : null}
+          loading={archived || isLoading || !blockKnown || alerts.state === 'loading' || unreadState === 'loading'}
+          error={loadError || (unreadState === 'error' ? 'Clients did not load. Check the connection and try again.' : null)}
           alertsFailed={alerts.state === 'error'}
           refreshing={refreshing}
           onRefresh={() => void onRefresh()}
-          onRetry={() => { if (coachId) loadClients(coachId, filterStatus); void loadAlerts(); }}
+          onRetry={() => { if (coachId) loadClients(coachId, 'active'); void loadSide(); }}
           onBack={() => navigation.getParent()?.navigate('CommandCenter')}
           onOpenSafety={(i) => {
             if (!isSafetyAlert(i)) return;

@@ -124,7 +124,7 @@ export function useCoachHomeV11(sources: CoachHomeSources = coachHomeSources, re
     if (mine !== seq.current) return;
     if (u.status === 'fulfilled') setUnread(((u.value?.data as { by_client?: UnreadByClient } | undefined)?.by_client) ?? {});
     const failed = u.status === 'rejected' || useCoachStore.getState().loadError !== null;
-    setRosterState((s) => (failed ? (s === 'ok' ? 'ok' : 'error') : 'ok'));
+    setRosterState(failed ? 'error' : 'ok');
   }, [coachId]);
 
   const loadPath = useCallback(async (mine: number, retry = false) => {
@@ -201,7 +201,7 @@ export function useCoachHomeV11(sources: CoachHomeSources = coachHomeSources, re
   };
   // The query keeps its last good answer when a refetch fails, so the button stays while that answer stands. Roman's
   // card is 'ok' only once every read it counts has answered: a failed one is 'error', one on its way 'loading'.
-  const queueState: ReadState = drafts.data ? 'ok' : drafts.isError ? 'error' : 'loading';
+  const queueState: ReadState = drafts.isError ? 'error' : drafts.data ? 'ok' : 'loading';
   const pathState: ReadState = pathOn ? path.state : 'ok';
   const draftsState: ReadState = queueState === 'error' || pathState === 'error' ? 'error'
     : queueState === 'loading' || pathState === 'loading' ? 'loading' : 'ok';

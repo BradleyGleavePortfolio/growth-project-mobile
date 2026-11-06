@@ -21,7 +21,7 @@ import { dateOverline, heroAmount, monthOverline, paceLine, payoutWords, retenti
 import { hasMonthMoney } from '../command-center/CoachHomeSections';
 import { DayRing, EYEBROW, LinkRow, MiniTile, SEMI, styleA, useCardStyles } from './HomeParts';
 import { HomeSheet, reachOutAsk, type DraftAsk, type SheetList } from './DraftSheets';
-import { firstWord, pct, ringSpecs, ringsCaption, winLine, winsHeadline, type HomeWin } from './homeDay';
+import { firstWord, ringSpecs, ringsCaption, winLine, winsHeadline, type HomeWin } from './homeDay';
 import { useCoachHomeV11 } from './useCoachHomeV11';
 import { WinTurn, useWinFade, useWinTurn } from './WinTurn';
 import { usePlanEnded } from './planEndedData';
@@ -75,7 +75,6 @@ export default function CoachHomeV11(p: Props) {
   const bell = data.unreadNotifications;
   const rings = home?.rings ? ringSpecs(home.rings) : null;
   const retention = retentionPct(data.ltv);
-  const checkIns = o ? pct(o.check_in_rate_7day) : null;
   const monthOk = data.month.kind === 'ok' ? data.month.summary : null;
 
   const askWin = (w: HomeWin) => setAsk({ clientName: w.client_name, about: `A congratulations for ${firstWord(w.client_name)}: ${winLine(w)}.`, request: w.draft });
@@ -147,7 +146,6 @@ export default function CoachHomeV11(p: Props) {
   const tiles = o && roster > 0 ? (
     <View style={s.tiles} testID="home-tiles">
       {home ? <MiniTile value={formatCount(o.active_today)} label={`of ${rosterN} active today`} testID="home-tile-active" /> : null}
-      {checkIns ? <MiniTile value={checkIns} label="check-ins · last 7 days" testID="home-tile-checkins" /> : null}
       {retention ? <MiniTile value={retention} label="stayed · this month" testID="home-tile-stayed" /> : null}
     </View>
   ) : null;
@@ -175,7 +173,7 @@ export default function CoachHomeV11(p: Props) {
     ) : null;
     // LS-934 B2: a verified open safety alert never waits on the roster: its gold lead and the tap to the list stay,
     // with no count (the clients are not verified), and the roster's own loading or Try again sits under it.
-    if (gold && rosterHeld) {
+    if (gold && (rosterHeld || data.rosterState === 'off')) {
       const name = a.safety[0].client_name;
       return (
         <>
@@ -255,7 +253,7 @@ export default function CoachHomeV11(p: Props) {
         accessibilityLabel={`Approve Roman's drafts, ${n}`} testID="home-drafts"
         style={({ pressed }) => [s.approve, { backgroundColor: sc.accent }, pressed && s.pressed]}
       >
-        <Text style={[s.approveText, { color: sc.textOnAccent }]} numberOfLines={2} maxFontSizeMultiplier={1.3}>{"Approve Roman's drafts\u00a0→"}</Text>
+        <Text style={[s.approveText, { color: sc.textOnAccent }]} maxFontSizeMultiplier={1.3}>{"Approve Roman's drafts\u00a0→"}</Text>
         <View style={s.approveBadge}><Text style={s.approveBadgeText} maxFontSizeMultiplier={1.2}>{n}</Text></View>
       </Pressable>
     ) : null;

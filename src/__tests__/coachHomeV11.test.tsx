@@ -159,8 +159,11 @@ describe('coach Home, flag on, with home (b#1123) and on an older server without
     expect(v.getByText('12')).toBeTruthy();
     expect(v.getByText('wins this week')).toBeTruthy();
     expect(['w1', 'w2', 'w3', 'w4'].map((w) => !!v.queryByTestId(`home-win-${w}`))).toEqual([true, false, false, false]);
-    expect(Object.fromEntries(['home-tile-active', 'home-tile-checkins', 'home-tile-stayed', 'home-ring-check_ins', 'home-ring-replies', 'home-ring-reach_outs', 'home-wins-all'].map((id) => [id, label(v, id)]))).toEqual({
-      'home-tile-active': '21 of 30 active today', 'home-tile-checkins': '82% check-ins · last 7 days', 'home-tile-stayed': '95% stayed · this month',
+    expect(v.queryByTestId('home-tile-checkins')).toBeNull();
+    expect(v.getByText('REACH-OUTS').props.numberOfLines).toBeUndefined();
+    expect(v.getByText("Approve Roman's drafts\u00a0→").props.numberOfLines).toBeUndefined();
+    expect(Object.fromEntries(['home-tile-active', 'home-tile-stayed', 'home-ring-check_ins', 'home-ring-replies', 'home-ring-reach_outs', 'home-wins-all'].map((id) => [id, label(v, id)]))).toEqual({
+      'home-tile-active': '21 of 30 active today', 'home-tile-stayed': '95% stayed · this month',
       'home-ring-check_ins': 'Check-ins, 5 of 9', 'home-ring-replies': 'Replies, 1 of 1',
       'home-ring-reach_outs': 'Reach-outs, 2 of 5', 'home-wins-all': '12 wins this week. See all',
     });
@@ -320,7 +323,7 @@ describe('coach Home, flag on, with home (b#1123) and on an older server without
     mockGet.mockResolvedValue({ data: overview(30) });
     const v = await renderHome();
     expect(v.getByText('ACTIVE TODAY')).toBeTruthy();
-    expect(['home-hero-today', 'home-hero-wins', 'home-rings', 'home-tile-active', 'home-tile-checkins'].map((id) => !!v.queryByTestId(id))).toEqual([true, false, false, false, true]);
+    expect(['home-hero-today', 'home-hero-wins', 'home-rings', 'home-tile-active', 'home-tile-checkins'].map((id) => !!v.queryByTestId(id))).toEqual([true, false, false, false, false]);
   });
   it('leaves Stayed out when there is no real base', async () => {
     mockSources.ltv.mockResolvedValue({ active_client_count: 0, churn_rate_pct: 0, mrr_30d_ago_cents: 0 });
@@ -381,7 +384,7 @@ describe('coach Home at zero clients, at 1,000 and on failures', () => {
     const v = await renderHome();
     expect(['home-needs-error', 'home-drafts-error', 'home-month'].map((id) => !!v.queryByTestId(id))).toEqual([true, true, true]);
   });
-  it('says Needs you did not load when the unread counts fail, never "Nobody needs you", and keeps a good read (LS B1)', async () => {
+  it('says Needs you did not load on both first and cached unread failures, never "Nobody needs you" (LS B1)', async () => {
     mockStore.clients = [client('c3', 'Ben', 'Cole', { lastActiveOn: day(0), checkInsToReview: 0 })];
     mockUnreadCounts.mockRejectedValueOnce(new Error('down'));
     const v = await renderHome();
@@ -392,7 +395,8 @@ describe('coach Home at zero clients, at 1,000 and on failures', () => {
     mockUnreadCounts.mockRejectedValueOnce(new Error('down'));
     for (const f of [false, true]) { mockFocus.current = f; await act(async () => v.rerender(<CommandCenterScreen />)); } // away and back
     await waitFor(() => expect(mockUnreadCounts).toHaveBeenCalledTimes(3));
-    expect(label(v, 'home-needs')).toMatch(/^Needs you, 1\. Ben Cole/); // the failed refresh keeps the verified answer
+    expect(v.queryByTestId('home-needs-error')).toBeTruthy();
+    expect(v.queryByTestId('home-needs')).toBeNull(); // retained data is not a verified latest read
   });
   it('draws no Needs you count while the Clients list is on Archived', async () => {
     mockStore.filterStatus = 'archived';
