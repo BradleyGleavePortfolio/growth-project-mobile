@@ -56,7 +56,7 @@ import {
 import { BroadcastsEntry } from './broadcasts/BroadcastsEntry';
 import { CommunityReportsEntry } from './CommunityReportsEntry';
 import { CommunityEntry } from './CommunityEntry';
-import { InboxSkeleton, InboxTile, RomanDraftsHero, canSeeDrafts, inboxB } from './inboxStyleB';
+import { InboxSkeleton, InboxTile, RomanDraftsHero, canSeeDrafts, inboxB, useRomanDrafts } from './inboxStyleB';
 
 const FALLBACK_POLL_MS = 60000;
 const PAGE_LIMIT = 50;
@@ -136,6 +136,8 @@ export default function CoachInboxV2({ onFeatureDisabled }: CoachInboxV2Props) {
   );
 
   const searching = searchQuery.trim().length > 0;
+  // LO-952 C2: reads the drafts cache only (the card itself reads while focused)
+  const heroDrawn = useRomanDrafts(false).total > 0;
   // Search must cover the whole inbox, not only the loaded pages.
   useEffect(() => {
     if (searching && hasNextPage && !isFetchingNextPage) void fetchNextPage();
@@ -260,7 +262,8 @@ export default function CoachInboxV2({ onFeatureDisabled }: CoachInboxV2Props) {
   const loadError = error && !data ? toMessagingError(error) : null;
 
   const empty = isLoading ? (
-    <InboxSkeleton hero={canSeeDrafts(currentUser?.role)} />
+    // LO-952 C2: the ghost card only while the real one (cached drafts, in the list header) is not drawn
+    <InboxSkeleton hero={canSeeDrafts(currentUser?.role) && !searching && !heroDrawn} />
   ) : loadError ? (
     <View style={inboxB.errorCard}>
       <Text style={inboxB.errorTitle}>Inbox did not load</Text>
