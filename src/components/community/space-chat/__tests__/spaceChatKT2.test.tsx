@@ -102,6 +102,44 @@ describe('KT-2: the space chat data layer', () => {
     expect(result.current.readable('m1')).toBeUndefined();
   });
 
+  // FIX-942 (LS-942 B2): mid-visit, a reply and the sheet held and the messages still in the cache, a fresh read
+  // refused closes all three: each guard alone (isGone, held, readable) is what this asserts.
+  it.each([{ status: 403 }, { status: 404 }])('KT-2: a read refused with $status mid-visit (a ban, a departure, another workspace) ends reply mode and the sheet and leaves the cached messages unreadable', async ({ status }) => {
+    api.list.mockResolvedValueOnce({ messages: [msg('m1', 'ben')], next_before: null });
+    const { result } = await renderHook(() => useSpaceChat('space-1', 'viewer', false), { wrapper });
+    await waitFor(() => expect(result.current.messages).toHaveLength(1));
+    await act(async () => {
+      result.current.setReply({ id: 'm1', body: 'words of ben', authorLabel: 'Ben', authorId: 'ben' });
+      result.current.setHeld('m1');
+    });
+    expect([result.current.reply?.id, result.current.held?.id, result.current.readable('m1')?.id]).toEqual(['m1', 'm1', 'm1']);
+    api.list.mockRejectedValue({ status, code: 'community.cohort.no_access' });
+    await act(async () => { await result.current.list.refetch(); });
+    await waitFor(() => expect(result.current.noAccess).toBe(true));
+    expect(result.current.messages).toHaveLength(1);
+    expect(result.current.reply).toBeNull();
+    expect(result.current.held).toBeUndefined();
+    expect(result.current.readable('m1')).toBeUndefined();
+  });
+
+  // FIX-942 (LO-942 C2): a quote of a message the phone never held (an older page, not read yet) goes by who wrote it.
+  it('KT-2: a block also ends reply mode on, and empties a waiting reply to, a message of the blocked author the phone never held', async () => {
+    api.list.mockResolvedValue({ messages: [msg('m2', 'ben'), msg('m1', 'ana')], next_before: 'older' });
+    const { result } = await renderHook(() => useSpaceChat('space-1', 'viewer', false), { wrapper });
+    await waitFor(() => expect(result.current.messages).toHaveLength(2));
+    const older = { id: 'm0', body: 'older words of ana', authorLabel: 'Ana', authorId: 'ana' };
+    await act(async () => {
+      result.current.send('a reply to ana', older);
+      result.current.setReply(older);
+    });
+    expect(result.current.reply?.id).toBe('m0');
+    await act(async () => result.current.dropAuthor('ana'));
+    await waitFor(() => expect(result.current.reply).toBeNull());
+    const waiting = result.current.pending.find((r) => r.body === 'a reply to ana');
+    expect(waiting?.reply).toEqual({ id: 'm0', body: '', authorLabel: '', gone: true });
+    await act(async () => result.current.removeLocal(waiting?.localId ?? ''));
+  });
+
   it('KT-2: a text refused with 403 fails as closed (never sent again) and closes the space', async () => {
     api.list.mockResolvedValue({ messages: [msg('m1', 'ben')], next_before: null });
     api.send.mockRejectedValue({ status: 403, code: 'community.cohort.no_access' });

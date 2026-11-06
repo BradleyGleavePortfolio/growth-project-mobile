@@ -31,8 +31,9 @@
  *     the gap (delete its KNOWN GAP row so the rule is enforced from now on) or broke the harness (fix the harness).
  *   - "stale row": a registered file moved, or no longer reads or sends member content. Update or remove the row.
  * The composers are drawn in memberContentAccess.composers.test.tsx (the same registry rows, by file).
- * Space chat (m#871, m#879, m#887, m#897) is not on main: when it merges the scan names its screen and its hook
- *   (screens/community/CommunitySpaceChatScreen.tsx, components/community/space-chat/useSpaceChat.ts) until they are rows.
+ * Space chat (m#871, m#879, m#887, m#897): its data layer is the SPLIT-938C rows below (useSpaceChat, spaceChatOutbox,
+ *   useSpaceVoiceOutbox, spaceChatApi); its screen (screens/community/CommunitySpaceChatScreen.tsx) comes in a later part,
+ *   and the scan names it until it is a row.
  */
 import fs from 'fs';
 import path from 'path';
@@ -286,14 +287,16 @@ const REGISTRY: Surface[] = [
     const file = 'components/community/space-chat/__tests__/spaceChatKT2.test.tsx';
     const BLOCK = 'KT-2: a block drops the rows of the blocked author, and every quote of them, from the kept list at once';
     const READ = 'KT-2: a read refused with 403 (a ban, a departure, another workspace) closes the space and leaves nothing readable';
+    const READ_HELD = 'KT-2: a read refused with $status mid-visit (a ban, a departure, another workspace) ends reply mode and the sheet and leaves the cached messages unreadable';
+    const BLOCK_UNHELD = 'KT-2: a block also ends reply mode on, and empties a waiting reply to, a message of the blocked author the phone never held';
     const SEND = 'KT-2: a text refused with 403 fails as closed (never sent again) and closes the space';
     const WIRE = 'KT-2: 403 and 404 are no access; any other failure is not';
     return [
       { file: 'components/community/space-chat/useSpaceChat.ts', kind: 'list', what: 'one space\'s messages (text, voice, photo, quotes) and its read line',
-        how: 'the server leaves out blocks (both ways), bans and departed authors; my block (dropAuthor) takes the author\'s rows and every quote of them from every kept list at once; a read or send refused with 403 / 404 closes the space (noAccess: nothing readable, no sheet, no reply)',
-        proof: { by: 'suite', file, titles: [BLOCK, READ, SEND] } },
+        how: 'the server leaves out blocks (both ways), bans and departed authors; my block (dropAuthor) takes the author\'s rows and every quote of them (held this visit, or by who wrote it) from every kept list, reply mode and a waiting reply at once; a read or send refused with 403 / 404 closes the space, mid-visit too (noAccess: nothing readable, no sheet, no reply)',
+        proof: { by: 'suite', file, titles: [BLOCK, BLOCK_UNHELD, READ, READ_HELD, SEND] } },
       { file: 'components/community/space-chat/spaceChatOutbox.ts', kind: 'composer', what: 'the space chat text outbox (texts queued on the phone, sent one at a time)',
-        how: 'a 403 / 404 fails the row as closed (never sent again) and tells the open space; a text goes out only as the account that queued it; a sign-out wipes the queue',
+        how: 'a 403 / 404 fails the row as closed (never sent again) and tells the open space; a text goes out only as the account that queued it; a sign-out names the queued texts in its confirm, gives them one try as that account, then wipes the queue',
         proof: { by: 'suite', file, titles: [SEND] }, exports: ['spaceOutbox', 'startSpaceOutbox', 'setSpaceOutboxOnline'] },
       { file: 'components/community/space-chat/useSpaceVoiceOutbox.ts', kind: 'composer', what: 'the space chat\'s voice notes on the voice outbox (useVoiceOutbox)',
         how: 'holds only my own notes for this space and sends into this space only; the record entry is drawn only by the space chat while the space is open',
@@ -482,6 +485,9 @@ const LIST_PARTS = new Set(['FlatList', 'SectionList', 'FlashList']);
 const NOT_CONTENT: Record<string, string> = {
   'communityApi.getMe': 'my own workspace id and unread totals; the totals are the Community badge rows (useCommunityBadge, cache case badge-community-me)',
   'services/messageOutbox.ts:sendOutboxBeforeSignOut': 'sends at sign-out what a registered chat already queued; nothing is typed or drawn',
+  // FIX-942: the sign-out confirm's one try of the space texts and voice notes already queued (authActions).
+  'components/community/space-chat/spaceChatOutbox.ts:sendSpaceOutboxBeforeSignOut': 'sends at sign-out what the registered space chat already queued; nothing is typed or drawn',
+  'hooks/useVoiceOutbox.ts:sendVoiceOutboxBeforeSignOut': 'sends at sign-out what a registered voice composer already queued; nothing is typed or drawn',
   'hooks/useMessageOutbox.ts:useMessageOutboxDrain': 'sends in the background what a registered chat already queued; nothing is typed or drawn where it runs',
   communityEventsApi: 'coach-made events and my own RSVP (v2-3 events): no member\'s words or rows',
   communityClassroomApi: 'coach-made lessons (v3-2 classroom): no member\'s words or rows',
