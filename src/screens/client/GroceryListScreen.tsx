@@ -195,7 +195,7 @@ export default function GroceryListScreen() {
         </Text>
         {(item.quantity !== 1 || item.unit) ? (
           <Text style={styles.itemMeta}>
-            {item.quantity} {item.unit || 'unit'}
+            {item.quantity}{'\u00a0'}{item.unit || 'unit'}
           </Text>
         ) : null}
       </View>
@@ -410,7 +410,7 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
   itemContent: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
   itemName: { ...typography.h3, fontSize: 21, lineHeight: 26, paddingVertical: 10, color: colors.textPrimary, flex: 1 },
   itemNameChecked: { textDecorationLine: 'line-through', color: colors.textMuted },
-  itemMeta: { ...typography.body, fontSize: 15, lineHeight: 22, color: colors.textMuted, fontVariant: ['tabular-nums'], textAlign: 'right', flexShrink: 0, maxWidth: '50%' },
+  itemMeta: { ...typography.body, fontSize: 15, lineHeight: 22, color: colors.textMuted, fontVariant: ['tabular-nums'], textAlign: 'right', flexShrink: 0, maxWidth: '58%' },
   deleteBtn: { width: 44, height: 44, alignItems: 'flex-end', justifyContent: 'center' },
 
   });

@@ -175,7 +175,7 @@ export function StyleCLoadingLines({ rows = 4, label, lead }: { rows?: number; l
       {Array.from({ length: rows }, (_, i) => lead === 'ring' ? (
         <View key={i} style={s.ringRow}><View style={[s.check, { borderColor: sc.border }]} /><View style={[s.ringBar, fill]} /><View style={[s.ringAmt, fill]} /></View>
       ) : (
-        <View key={i} style={lead ? s.tileRow : undefined}>
+        <View key={i} style={lead ? [s.tileRow, { borderColor: sc.border }] : undefined}>
           {lead ? <View style={[s.tilePh, fill]} /> : null}
           <View style={[s.lineRow, s.grow]}><View style={[s.lineShort, fill]} /><View style={[s.lineLong, fill]} /></View>
         </View>
@@ -221,7 +221,7 @@ const s = StyleSheet.create({
   lines: { gap: 24, paddingVertical: 8 },
   lineRow: { gap: 10 },
   grow: { flex: 1 },
-  tileRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  tileRow: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingBottom: 14, borderBottomWidth: StyleSheet.hairlineWidth },
   tilePh: { width: 64, height: 64, borderRadius: radius.button },
   ringRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   ringBar: { flex: 1, maxWidth: '60%', height: 20, borderRadius: radius.button },

@@ -248,7 +248,7 @@ export default function PrepGuideScreen() {
                       <Text style={styles.recipeName}>{recipe.title}</Text>
                       <Text style={styles.recipeMetaText}>
                         {recipe.prep_time_min + recipe.cook_time_min} min · {recipe.servings} servings
-                        {big ? ` · ${Math.round(recipe.calories)} kcal` : ''}
+                        {big ? ` · ${Math.round(recipe.calories)}\u00a0kcal` : ''}
                       </Text>
                       <Text style={styles.recipeAllergens}>{recipeAllergenSummary(recipe)}</Text>
                     </View>
