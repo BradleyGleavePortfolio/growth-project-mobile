@@ -167,10 +167,28 @@ const REGISTRY: Surface[] = [
     proof: gap('screens/client/CommunityScreen.tsx:CommunityScreen', 'ban, departure',
       'the wins form asks no closed gate, so a banned or departed member can type and send a win (the server decides)',
       { lacks: /useConversationClosed|isClosedRefusal|useBlockedUsersStore/ }) },
+  // KT2-940 (LO-940R2 C1, 6675884966): m#940 (NUDGE-GATE-M) gated Send Nudge on the client file and the risk screen
+  // through useNudgeGate, so their KNOWN GAP rows were untrue; they are gated composers now, proved by their suites.
+  { file: 'screens/coach/ClientDetailScreen.tsx', kind: 'composer', what: 'a typed nudge (title and body) pushed to a client (coachApi.sendNudge)',
+    how: 'useNudgeGate(clientId): Send Nudge and the nudge form only while it says open; my block (block store), their block or a closed chat (closed_client_ids) and a refusal remembered this session close it and draw the closed line; unknown is closed; a refused send closes it (close(err)); a pull reads again',
+    proof: { by: 'suite', file: 'screens/coach/__tests__/ClientFileNudgeGateNGM.test.tsx', titles: [
+      '$name: Send Nudge $nudge, closed line $line',
+      'a pull to refresh reads the pair again: an unblock on the server brings Send Nudge back',
+    ] } },
+  { file: 'screens/coach/ClientDetailScreen.tsx', kind: 'composer', what: 'the same nudge: the gate keeps a refusal while the pair is unknown, and a refused send closes it',
+    how: 'useNudgeGate: an unknown pair (read out, offline, block list not read) stays closed and keeps the refusal; close(err) closes only on a blocked refusal',
+    proof: { by: 'suite', file: 'screens/coach/__tests__/NudgeGateRefusalFIX940.test.tsx', titles: [
+      '$name: still closed, no nudge, the refusal kept',
+      'the server answers closed: still closed, the refusal kept',
+      '$name: closes $closes',
+    ] } },
+  { file: 'screens/coach/ClientRiskDetailScreen.tsx', kind: 'composer', what: 'a fixed check-in nudge pushed to a client (coachApi.sendNudge)',
+    how: 'useNudgeGate(userId): \'Send check-in nudge\' only while it says open; my block, their block or a closed chat and a refusal remembered this session close it and draw the closed line; unknown is closed; a refused send closes it (close(err))',
+    proof: { by: 'suite', file: 'screens/coach/__tests__/ClientRiskNudgeGateNGM.test.tsx', titles: [
+      '$name: nudge $nudge, closed line $line',
+    ] } },
   ...([
-    ['screens/coach/ClientDetailScreen.tsx', 'ClientDetailScreen:sendNudge', 'a typed nudge (title and body)'],
     ['screens/coach/lookup/useLookupNudge.tsx', 'useLookupNudge', 'a typed nudge from the coach lookup'],
-    ['screens/coach/ClientRiskDetailScreen.tsx', 'ClientRiskDetailScreen:sendNudge', 'a fixed check-in nudge'],
   ] as const).map(([file, fn, what]): Surface => ({
     file, kind: 'composer', what: `${what} pushed to a client (coachApi.sendNudge)`, how: 'none: no closed gate before the send',
     proof: gap(`${file}:${fn}`, 'block (both ways), closed conversation',
@@ -289,8 +307,9 @@ const REGISTRY: Surface[] = [
     ['screens/coach/lookup/ClientLookupScreen.tsx', 'a typed nudge from the lookup (useLookupNudge)', ['screens/coach/lookup/useLookupNudge.tsx']],
     ['navigation/CommunityNavigator.tsx', 'the voice note composer route', ['screens/community/CommunityVoiceComposerScreen.tsx']],
     ['navigation/ClientNavigator.tsx', 'the wins route (CommunityScreen)', ['screens/client/CommunityScreen.tsx']],
-    ['navigation/CoachNavigator.tsx', 'the client detail and risk detail routes (a nudge)', ['screens/coach/ClientDetailScreen.tsx', 'screens/coach/ClientRiskDetailScreen.tsx']],
   ] as const).map(([file, what, parts]): Surface => ({ file, kind: 'composer', what, how: 'the part\'s own (its KNOWN GAP row)', proof: { by: 'via', parts: [...parts] } })),
+  // KT2-940: CoachNavigator's via row for the client detail and risk detail routes went with their KNOWN GAP rows: both
+  // screens are gated composers now (rows above), so their own rows stop the scan and the navigator draws no gap part.
   ...([
     ['navigation/CommunityNavigator.tsx', 'the community routes (today, a space, a post, a challenge, search, a voice note)', [
       'screens/community/CommunityTodayScreen.tsx', 'screens/community/CommunitySpaceScreen.tsx', 'screens/community/CommunityThreadScreen.tsx',
@@ -1846,7 +1865,8 @@ it('LO-911R4 outside: no case in this file writes a fixture under src/', () => {
 // ─── FIX-911R4 (LO-911R4 B1, class-first): every via row, every part ──────────────────────────────────────────────
 // A via row's parts read as empty only at its file's own root and in the exports the row stops (default and file-named,
 // or the row's exports), and in a local those reach. Any other export of a via file carries its parts' kinds on, so a
-// new screen that draws a gap part through it is named. One case per via row and part (all 11 rows, 18 parts).
+// new screen that draws a gap part through it is named. One case per via row and part (all 10 rows, 16 parts;
+// KT2-940: CoachNavigator's via row went when its two parts were gated).
 describe('FIX-911R4: a via row mutes its parts only at its root and in the exports it stops', () => {
   const ctx0 = scanCtx();
   const cases = REGISTRY.flatMap((s) => (s.proof.by === 'via' ? s.proof.parts.map((part) => [s.kind, s.file, part] as [Kind, string, string]) : []));
@@ -1859,7 +1879,7 @@ describe('FIX-911R4: a via row mutes its parts only at its root and in the expor
     return [s, `import React from 'react';\nimport { FIX911R4Wrap } from './${base}';\nexport default function FIX911R4Card() { return <FIX911R4Wrap />; }\n`] as const;
   };
   it('every via part is imported by a name the cases below draw', () => {
-    expect(cases.length).toBe(18);
+    expect(cases.length).toBe(16);
     expect(cases.filter(([, f, p]) => !localOf(f, p)).map(([k, f, p]) => `${k} ${f} ${p}`)).toEqual([]);
   });
   it.each(cases)('%s via %s: a new export drawing %s, drawn on a new screen, names that screen (the via file stays muted)', (kind, file, part) => {
