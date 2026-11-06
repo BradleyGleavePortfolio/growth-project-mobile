@@ -81,7 +81,7 @@ test('a question goes through Roman with the Copilot header; an answer that offe
   expect(s.queryByText('Why did my calories change this week?')).toBeNull();
   await act(async () => fireEvent.press(s.getByText('Explain my targets')));
   expect(open).toHaveBeenCalledWith('client');
-  expect(send).toHaveBeenCalledWith('sess-1', 'Explain my targets', { copilot: true });
+  expect(send).toHaveBeenCalledWith('sess-1', 'Explain my targets', { copilot: true, idempotencyKey: expect.any(String) });
   // Frame 04 (Sol B-851-G2): no serif lead and no facts tray; the suggestion card carries the source tags.
   expect(s.queryByTestId('copilot-lead')).toBeNull();
   expect(s.getByText('Friday works. Saturday trains other muscles.')).toBeTruthy();
@@ -117,7 +117,7 @@ test('a failed turn keeps the question and Try again asks it once more; no coach
   expect(s.getByText('Explain my targets')).toBeTruthy();
   send.mockResolvedValueOnce({ text: 'Here it is.', messageId: 'm4', interrupted: false, copilot: { sources: [], suggestion: null } } as never);
   await act(async () => fireEvent.press(s.getByText('Try again')));
-  expect(send).toHaveBeenNthCalledWith(2, 'sess-1', 'Explain my targets', { copilot: true });
+  expect(send).toHaveBeenNthCalledWith(2, 'sess-1', 'Explain my targets', { copilot: true, idempotencyKey: expect.any(String) });
   expect(s.getByText('Here it is.')).toBeTruthy();
   send.mockRejectedValueOnce(new RomanApiError('requiresCoach', 'no coach'));
   await act(async () => fireEvent.changeText(s.getByPlaceholderText('Ask Roman anything.'), 'And next week?'));
@@ -203,7 +203,7 @@ test.each([
   send.mockResolvedValueOnce(ANSWER('A fresh answer.'));
   await act(async () => fireEvent.press(s.getByText('Explain my targets')));
   expect(open).toHaveBeenCalledTimes(2);
-  expect(send).toHaveBeenLastCalledWith('sess-2', 'Explain my targets', { copilot: true });
+  expect(send).toHaveBeenLastCalledWith('sess-2', 'Explain my targets', { copilot: true, idempotencyKey: expect.any(String) });
   expect(s.getByText('A fresh answer.')).toBeTruthy();
   expect(s.getAllByTestId('copilot-turn')).toHaveLength(1);
 });
