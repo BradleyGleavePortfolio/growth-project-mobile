@@ -16,7 +16,8 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { forestPop as fp, layout, lightTokens, motion, typography } from '../../theme/tokens';
 import { Monogram, SpaceTree, useOpenSpaceTarget, useSpaceTree, type SpaceTarget } from './SpaceTree';
 
-export function SpaceListButton(): React.ReactElement {
+/** `icon`: the space chat's deep header passes 05b's drawn glyph (FX-871, FR-871); light headers keep the forest icon. */
+export function SpaceListButton({ icon }: { icon?: React.ReactNode } = {}): React.ReactElement {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -28,7 +29,7 @@ export function SpaceListButton(): React.ReactElement {
         style={s.trigger}
         testID="space-list-open"
       >
-        <Ionicons name="menu-outline" size={24} color={fp.forest} />
+        {icon ?? <Ionicons name="menu-outline" size={24} color={fp.forest} />}
       </HapticPressable>
       {open ? <SpaceDrawer onClose={() => setOpen(false)} /> : null}
     </>

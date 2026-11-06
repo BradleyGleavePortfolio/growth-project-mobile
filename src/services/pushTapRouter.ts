@@ -302,6 +302,18 @@ export function routePushTap(
       routeAppLink(path, false, notificationId);
       return;
     }
+    // LS-938R2 B1: a space link is richer than its kind's generic Community screen: the link first, and that screen
+    // when this build cannot open it (the space chat off, another role).
+    if (actionScreen === 'Community' && /^community\/cohorts\//.test(path)) {
+      if (session.kind === 'signedOut') return;
+      if (notificationId) {
+        if (seen.has(notificationId)) return;
+        rememberId(notificationId);
+      }
+      pending = { screen: actionScreen, params: decodePushParams(actionParams), path, ownerUserId: sessionUserId(session) };
+      flushPendingPushTap();
+      return;
+    }
   }
   if (!actionScreen || typeof actionScreen !== 'string' || !SCREEN_NAME.test(actionScreen)) return;
   if (notificationId) {

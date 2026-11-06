@@ -1040,6 +1040,32 @@ describe('Home stat cards route into the matching surfaces', () => {
 });
 
 describe('List states + interactions — loading, refresh, navigation', () => {
+  it('LS938 B2: an enabled text inbox row opens its space chat at the message', async () => {
+    const flags = jest.requireMock('../../../config/featureFlags').featureFlags;
+    const was = flags.communitySpaceChat;
+    flags.communitySpaceChat = true;
+    try {
+      mockState.inbox = {
+        data: { items: [inboxItem()], next_cursor: null },
+        isLoading: false,
+        isError: false,
+        isRefetching: false,
+        refetch: jest.fn(),
+      };
+      const { getByTestId } = await render(<CoachCommunityInboxScreen />);
+      await fireEvent.press(
+        getByTestId('coach-community-inbox-row-11111111-1111-1111-1111-111111111111'),
+      );
+      expect(mockNavigate).toHaveBeenCalledTimes(1);
+      expect(mockNavigate).toHaveBeenCalledWith('CommunitySpaceChat', {
+        cohortId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        messageId: '11111111-1111-1111-1111-111111111111',
+      });
+    } finally {
+      flags.communitySpaceChat = was;
+    }
+  });
+
   it('Inbox shows a loading indicator while fetching', async () => {
     mockState.inbox = { data: undefined, isLoading: true, isError: false };
     const { getByTestId } = await render(<CoachCommunityInboxScreen />);
@@ -1052,23 +1078,37 @@ describe('List states + interactions — loading, refresh, navigation', () => {
     expect(getByTestId('coach-community-cohorts-loading')).toBeTruthy();
   });
 
-  it('Cohorts row tap navigates to the cohort detail with its id and name', async () => {
-    mockState.cohorts = {
-      data: [cohort()],
-      isLoading: false,
-      isError: false,
-      isRefetching: false,
-      refetch: jest.fn(),
-    };
-    const { getByTestId } = await render(<CoachCommunityCohortsScreen />);
-    await fireEvent.press(
-      getByTestId('coach-community-cohort-row-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
-    );
-    expect(mockNavigate).toHaveBeenCalledWith('CoachCommunityCohortDetail', {
-      cohortId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-      cohortName: 'Spring block',
-    });
-  });
+  // UNIT-MERGE-UP: the row tap follows communitySpaceChat (m#871). Both values are set here, so the
+  // normal suite and the "All switches on" job check the same two routes.
+  const cohortRowId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+  it.each([
+    [false, 'CoachCommunityCohortDetail', { cohortId: cohortRowId, cohortName: 'Spring block' }],
+    [true, 'CommunitySpaceChat', { cohortId: cohortRowId }],
+  ])(
+    'Cohorts row tap with communitySpaceChat %s navigates to %s with the cohort',
+    async (on, route, params) => {
+      const flags = jest.requireMock('../../../config/featureFlags').featureFlags;
+      const was = flags.communitySpaceChat;
+      flags.communitySpaceChat = on;
+      try {
+        mockState.cohorts = {
+          data: [cohort()],
+          isLoading: false,
+          isError: false,
+          isRefetching: false,
+          refetch: jest.fn(),
+        };
+        const { getByTestId } = await render(<CoachCommunityCohortsScreen />);
+        await fireEvent.press(
+          getByTestId('coach-community-cohort-row-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
+        );
+        expect(mockNavigate).toHaveBeenCalledTimes(1);
+        expect(mockNavigate).toHaveBeenCalledWith(route, params);
+      } finally {
+        flags.communitySpaceChat = was;
+      }
+    },
+  );
 
   it('Cohorts cancel closes the create modal without a mutation', async () => {
     const { getByTestId, queryByTestId } = await render(<CoachCommunityCohortsScreen />);
@@ -1532,9 +1572,17 @@ describe('FX4-868 round 4 — offline from the phone, the caught-up page, whole 
       isRefetching: false,
       refetch: jest.fn(),
     };
-    const { getByText } = await render(<CoachCommunityInboxScreen />);
-    expect(getByText(LONG).props.numberOfLines).toBeUndefined();
-    expect(getByText('Post text').props.numberOfLines).toBe(2);
+    // FIX-938: a message row opens (and clamps) with the space chat on; this states it off.
+    const flags = jest.requireMock('../../../config/featureFlags').featureFlags;
+    const was = flags.communitySpaceChat;
+    flags.communitySpaceChat = false;
+    try {
+      const { getByText } = await render(<CoachCommunityInboxScreen />);
+      expect(getByText(LONG).props.numberOfLines).toBeUndefined();
+      expect(getByText('Post text').props.numberOfLines).toBe(2);
+    } finally {
+      flags.communitySpaceChat = was;
+    }
   });
 
   it('a photo row shows its caption, or "Photo" with none, and can be acknowledged', async () => {

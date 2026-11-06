@@ -6,7 +6,7 @@
  * space in place.
  */
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const mockNavigate = jest.fn();
@@ -67,6 +67,7 @@ jest.mock('../../../hooks/useCommunity', () => ({
   useCommunityMe: () => mockMe,
   useCommunityCohorts: () => mockCohorts,
   useCommunityWorkspace: (id: string | null) => ({ data: id ? { name: "Sam's Strength Club" } : undefined }),
+  communityKeys: { cohorts: () => ['community', 'cohorts'], me: () => ['community', 'me'] },
 }));
 jest.mock('../CommunityChallengesScreen', () => {
   const { Text } = require('react-native');
@@ -75,6 +76,7 @@ jest.mock('../CommunityChallengesScreen', () => {
 
 import CommunityHomeScreen from '../CommunityHomeScreen';
 import { SpaceListButton } from '../../../components/community/SpaceDrawer';
+import { CommunityCohortSummarySchema } from '../../../api/communityApi';
 
 const mount = (ui: React.ReactElement) =>
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{ui}</QueryClientProvider>);
@@ -204,6 +206,44 @@ describe('Space list drawer', () => {
     await fireEvent.changeText(screen.getByLabelText('Jump to a space or person'), 'sam');
     await fireEvent.press(await screen.findByTestId('space-row-coach'));
     expect(mockNavigate).toHaveBeenCalledWith('Home', { screen: 'Messages' });
+  });
+});
+
+describe('m#871 Sol B5: per-space unread counts (SC-BE2 unread_count)', () => {
+  it.each([[0, null], [3, '3'], [99, '99+']] as const)('%i unread: the badge reads %s on Home and in the drawer', async (n, shown) => {
+    mockCohorts = query({ cohorts: [{ id: 'c-everyone', name: 'Everyone', kind: 'chat', unread_count: n }] });
+    const check = () => (shown ? expect(within(screen.getByTestId('space-row-c-everyone-badge')).getByText(shown)).toBeTruthy()
+      : expect(screen.queryByTestId('space-row-c-everyone-badge')).toBeNull());
+    const view = await mount(<CommunityHomeScreen />);
+    check();
+    expect(screen.getByLabelText(shown ? `Everyone, ${shown} new` : 'Everyone')).toBeTruthy();
+    await view.unmount();
+    await mount(<SpaceListButton />);
+    await fireEvent.press(screen.getByLabelText('Open space list'));
+    check();
+  });
+
+  it('the cohort parser keeps a whole count and drops a bad or missing one without failing the list', () => {
+    const row = { id: '11111111-1111-4111-8111-111111111111', workspace_id: '22222222-2222-4222-8222-222222222222', name: 'Everyone', is_default: true, member_count: 3, my_role: 'client' };
+    expect(CommunityCohortSummarySchema.parse({ ...row, unread_count: 3 }).unread_count).toBe(3);
+    expect(CommunityCohortSummarySchema.parse({ ...row, unread_count: -1 }).unread_count).toBeUndefined();
+    expect(CommunityCohortSummarySchema.parse({ ...row, unread_count: 'x' }).unread_count).toBeUndefined();
+    expect(CommunityCohortSummarySchema.parse(row).unread_count).toBeUndefined();
+  });
+
+  it('FR-871R6 (Sol B879-6): a live ping that moves the space total reads the per-space counts again; the first answer and an unchanged total do not', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const spy = jest.spyOn(qc, 'invalidateQueries');
+    const ui = () => <QueryClientProvider client={qc}><CommunityHomeScreen /></QueryClientProvider>;
+    const counts = () => spy.mock.calls.filter(([f]) => JSON.stringify(f) === JSON.stringify({ queryKey: ['community', 'cohorts'] })).length;
+    const view = await render(ui());
+    expect(counts()).toBe(0);
+    mockMe = query({ feature_flag_state: 'enabled', workspace_id: 'ws-1', unread: { cohort_messages: 4, dm_messages: 1, mentions: 0 } });
+    await view.rerender(ui());
+    expect(counts()).toBe(0);
+    mockMe = query({ feature_flag_state: 'enabled', workspace_id: 'ws-1', unread: { cohort_messages: 5, dm_messages: 1, mentions: 0 } });
+    await view.rerender(ui());
+    await waitFor(() => expect(counts()).toBe(1));
   });
 });
 
