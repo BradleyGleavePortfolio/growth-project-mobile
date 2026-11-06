@@ -256,6 +256,15 @@ export function useAddComment(postId: string, authorUserId: string) {
   });
 }
 
+/**
+ * SEND-ONCE-PHONE (b#1228): what a member can send again carries its draft's Idempotency-Key, so Send again after a
+ * lost answer replays the first send's key and the server answers with the first row (lib/sendOnce.ts).
+ */
+export interface SendOnceBody {
+  body: string;
+  idempotencyKey: string;
+}
+
 /** Send a DM with an optimistic append + rollback. */
 export function useSendDm(
   workspaceId: string,
@@ -264,9 +273,9 @@ export function useSendDm(
 ) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: string) =>
-      communityApi.sendDm(workspaceId, recipientId, body),
-    onMutate: async (body) => {
+    mutationFn: ({ body, idempotencyKey }: SendOnceBody) =>
+      communityApi.sendDm(workspaceId, recipientId, body, idempotencyKey),
+    onMutate: async ({ body }) => {
       const key = communityKeys.dmMessages(workspaceId, recipientId);
       await qc.cancelQueries({ queryKey: key });
       const prev = qc.getQueryData<CommunityDmMessage[]>(key) ?? [];

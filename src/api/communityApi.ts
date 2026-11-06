@@ -334,9 +334,10 @@ export const CommunityDmMessageResponseSchema = z
   .object({ message: CommunityDmMessageSchema })
   .passthrough();
 
-function idempotentHeaders(): { headers: Record<string, string> } {
-  // R19 — client-generated key so a retried mutation deduplicates server-side.
-  return { headers: { 'Idempotency-Key': generateIdempotencyKey() } };
+function idempotentHeaders(key?: string): { headers: Record<string, string> } {
+  // R19 — client-generated key so a retried mutation deduplicates server-side. SEND-ONCE-PHONE: a write the member
+  // can send again passes its draft's key (lib/sendOnce.ts), so Send again replays it; without one, a new key.
+  return { headers: { 'Idempotency-Key': key ?? generateIdempotencyKey() } };
 }
 
 // ─── Endpoint hooks (read-only first, then mutations) ────────────────────────
@@ -489,18 +490,20 @@ export const communityApi = {
 
   /**
    * POST /community/workspaces/:workspaceId/dms/:recipientId/messages — send a
-   * DM. Idempotent (R19). Optimistic append + rollback lives in the screen hook.
+   * DM. Idempotent (R19): `idempotencyKey` is the draft's send-once key (Send again sends the same one).
+   * Optimistic append + rollback lives in the screen hook.
    */
   sendDm(
     workspaceId: string,
     recipientId: string,
     body: string,
+    idempotencyKey?: string,
   ): Promise<CommunityDmMessage> {
     return call(CommunityDmMessageResponseSchema, () =>
       api.post<unknown>(
         `/community/workspaces/${workspaceId}/dms/${recipientId}/messages`,
         { body },
-        idempotentHeaders(),
+        idempotentHeaders(idempotencyKey),
       ),
     ).then((r) => r.message);
   },

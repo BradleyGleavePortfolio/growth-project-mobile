@@ -173,7 +173,7 @@ describe('useSendDm — optimistic append + rollback', () => {
       wrapper: Wrapper,
     });
     await act(() => {
-      result.current.mutate('hello coach');
+      result.current.mutate({ body: 'hello coach', idempotencyKey: 'send-once-key-1' });
     });
     await waitFor(() => expect(result.current.isError).toBe(true));
     unsub();
@@ -215,7 +215,7 @@ describe('useSendDm — optimistic append + rollback', () => {
       wrapper: Wrapper,
     });
     await act(() => {
-      result.current.mutate('hello coach');
+      result.current.mutate({ body: 'hello coach', idempotencyKey: 'send-once-key-1' });
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     // The mutation never entered the error state, so the onError rollback path
