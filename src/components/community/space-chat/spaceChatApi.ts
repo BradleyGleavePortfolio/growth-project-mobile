@@ -1,0 +1,157 @@
+/**
+ * SC-M1 (agent 168): the space chat's server calls. Shapes from SC-BE1's CONTRACT (b#1135 @ 81ff66f3, comment
+ * 6348434182) and SC-BE2's CONTRACT (b#1137, comment 6352782763: the read line). Paths have no /api prefix (services/api adds the base).
+ *   GET  community/cohorts/:id/messages?before=&limit=  newest first, deleted and blocked (either way) left out, except a
+ *                                                       coach's removal (b#1165: deleted + removed_by); 404/403 = no access
+ *   POST community/cohorts/:id/messages { body }        Idempotency-Key reused on every retry and Try again; FX-IDEM (b#1144,
+ *                                                       CONTRACT 6370303541) answers a resend with the first message
+ *        + parent_message_id (SC-M3)                     a text reply (SC-BE1): a reply to a reply joins its thread's first
+ *                                                       message; a parent gone or out of sight is the same 404 as no access.
+ *                                                       Reads carry `parent` (its quote); the POST answer does not
+ *   DELETE community/messages/:id                       own text message
+ *   GET/POST community/cohorts/:id/read                  SC-BE2; any failure (404 before it ships) hides the line
+ *   POST community/voice-notes/:id/heard                 VOICE-BE (backend community-voice.controller markHeard): the
+ *                                                       viewer played a voice note to the end -> { voice_note_id, heard_at }
+ *   GET/POST community/voice-consent                    VOICE-BE: was the 08a first-use card shown to the caller ->
+ *                                                       { seen, seen_at }; POST records it (idempotent). Ported from m#858.
+ */
+import { z } from 'zod';
+import api, { type BoundRequestConfig } from '../../../services/api';
+import { call } from '../../../api/apiCall';
+import { boundRequestSignal, type AccountBinding } from '../../../services/accountBinding';
+
+const SenderSchema = z
+  .object({ id: z.string(), name: z.string(), avatar_url: z.string().nullable().optional(), is_coach: z.boolean() })
+  .passthrough();
+const VoiceSchema = z
+  .object({
+    id: z.string(),
+    duration_ms: z.number(),
+    waveform_peaks: z.array(z.number()).nullable().optional(),
+  })
+  .passthrough();
+/** SC-BE3 (LS-938R2 B2): a photo row's picture, a short-lived signed URL (null when storage cannot sign it) and its size. */
+const ImageSchema = z.object({ url: z.string().nullable(), width: z.number(), height: z.number() }).passthrough();
+/** b#1165 CONTRACT 6405215872 section 2: who removed a row (the space's coach, or the platform owner shown as the coach). */
+const RemovedBySchema = z.object({ role: z.string(), user_id: z.string(), name: z.string() }).passthrough();
+/** SC-BE1: on a reply, the message it answers as this viewer may see it, or `gone` alone (deleted, removed, blocked either
+ *  way, its author left). A shape this build cannot read is no quote, never a failed page. */
+const ParentSchema = z
+  .object({
+    id: z.string(), gone: z.boolean(), kind: z.string().nullish(), sender_name: z.string().nullish(),
+    snippet: z.string().nullish(), voice_duration_ms: z.number().nullish(),
+  })
+  .passthrough();
+type SpaceParent = z.infer<typeof ParentSchema>;
+const LenientParent = z.custom<SpaceParent | null | undefined>(() => true).transform((v): SpaceParent | null | undefined => {
+  if (v == null) return v;
+  const read = ParentSchema.safeParse(v);
+  return read.success ? read.data : null;
+});
+export const SpaceMessageSchema = z
+  .object({
+    id: z.string(),
+    cohort_id: z.string(),
+    sender_user_id: z.string(),
+    body: z.string().nullable(),
+    // A plain string so a kind this build does not know never fails the page (it is not drawn).
+    kind: z.string(),
+    created_at: z.string(),
+    deleted: z.boolean().optional(),
+    parent_message_id: z.string().nullable().optional(),
+    voice_note: VoiceSchema.nullable().optional(),
+    image: ImageSchema.nullable().optional(),
+    sender: SenderSchema.optional(),
+    // Only on a row the coach removed (deleted: true): it keeps its place as a placeholder. Absent on live rows and on an
+    // author's own delete; an older server that never sends them keeps today's behaviour (the row is left out).
+    removed_at: z.string().nullish(),
+    removed_by: RemovedBySchema.nullish(),
+    parent: LenientParent,
+  })
+  .passthrough();
+export type SpaceMessage = z.infer<typeof SpaceMessageSchema>;
+
+const PageSchema = z
+  .object({ messages: z.array(SpaceMessageSchema), next_before: z.string().nullable() })
+  .passthrough();
+export type SpaceMessagePage = z.infer<typeof PageSchema>;
+const SentSchema = z.object({ message: SpaceMessageSchema }).passthrough();
+const ReadSchema = z
+  .object({ last_read_at: z.string().nullable(), last_read_message_id: z.string().nullable() })
+  .passthrough();
+export type SpaceRead = z.infer<typeof ReadSchema>;
+const HeardSchema = z.object({ voice_note_id: z.string(), heard_at: z.string() }).passthrough();
+const AnySchema = z.unknown();
+const ConsentSchema = z.object({ seen: z.boolean(), seen_at: z.string().nullable() }).passthrough();
+export type VoiceConsent = z.infer<typeof ConsentSchema>;
+
+export const SPACE_PAGE_LIMIT = 30;
+export const SPACE_MESSAGE_MAX = 4000;
+
+/** FIX-938 B3: who a queued text goes out as: its sign-in's binding and the session generation it was read at. */
+export interface SpacePublisher { binding: AccountBinding; session: number }
+
+export const spaceChatApi = {
+  list(cohortId: string, before?: string | null): Promise<SpaceMessagePage> {
+    return call(
+      PageSchema,
+      () => api.get<unknown>(`/community/cohorts/${cohortId}/messages`, {
+        params: { limit: SPACE_PAGE_LIMIT, ...(before ? { before } : {}) },
+      }),
+      'space_chat',
+    );
+  },
+  // FIX-938 B3: `by` is the publisher the text was queued under (spaceChatOutbox). The request interceptor checks its
+  // session generation and its binding against the credential it reads (services/api.ts readTokenForRequest,
+  // assertBindingMatches), and the next auth change cancels the request, as a voice note's hops do.
+  send(cohortId: string, body: string, idempotencyKey: string, parentMessageId: string | undefined, by: SpacePublisher): Promise<SpaceMessage> {
+    const bound = boundRequestSignal(by.binding);
+    return call(
+      SentSchema,
+      () => api.post<unknown>(`/community/cohorts/${cohortId}/messages`, parentMessageId ? { body, parent_message_id: parentMessageId } : { body }, {
+        headers: { 'Idempotency-Key': idempotencyKey },
+        accountBinding: by.binding,
+        _sessionGeneration: by.session,
+        signal: bound.signal,
+      } as BoundRequestConfig),
+      'space_chat',
+    ).then((r) => r.message).finally(bound.done);
+  },
+  remove(messageId: string): Promise<void> {
+    return call(AnySchema, () => api.delete<unknown>(`/community/messages/${messageId}`), 'space_chat').then(
+      () => undefined,
+    );
+  },
+  getRead(cohortId: string): Promise<SpaceRead> {
+    return call(ReadSchema, () => api.get<unknown>(`/community/cohorts/${cohortId}/read`), 'space_chat');
+  },
+  markRead(cohortId: string, messageId: string): Promise<void> {
+    return call(
+      AnySchema,
+      () => api.post<unknown>(`/community/cohorts/${cohortId}/read`, { message_id: messageId }),
+      'space_chat',
+    ).then(() => undefined);
+  },
+  markHeard(voiceNoteId: string): Promise<string> {
+    return call(
+      HeardSchema,
+      () => api.post<unknown>(`/community/voice-notes/${voiceNoteId}/heard`, {}),
+      'space_chat',
+    ).then((r) => r.heard_at);
+  },
+  getVoiceConsent(): Promise<VoiceConsent> {
+    return call(ConsentSchema, () => api.get<unknown>('/community/voice-consent'), 'space_chat');
+  },
+  recordVoiceConsent(): Promise<VoiceConsent> {
+    return call(ConsentSchema, () => api.post<unknown>('/community/voice-consent'), 'space_chat');
+  },
+};
+
+/**
+ * The server will not show this space (or this route) to the viewer: 404 (unknown space, or no read route yet) or 403
+ * (SC-BE2's CONTRACT 6352782763: a non-member, another workspace, or a ban is 403 `community.cohort.no_access`).
+ */
+export function isNoAccess(err: unknown): boolean {
+  const status = !!err && typeof err === 'object' ? (err as { status?: number }).status : undefined;
+  return status === 404 || status === 403;
+}

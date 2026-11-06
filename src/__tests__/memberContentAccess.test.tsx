@@ -31,8 +31,9 @@
  *     the gap (delete its KNOWN GAP row so the rule is enforced from now on) or broke the harness (fix the harness).
  *   - "stale row": a registered file moved, or no longer reads or sends member content. Update or remove the row.
  * The composers are drawn in memberContentAccess.composers.test.tsx (the same registry rows, by file).
- * Space chat (m#871, m#879, m#887, m#897) is not on main: when it merges the scan names its screen and its hook
- *   (screens/community/CommunitySpaceChatScreen.tsx, components/community/space-chat/useSpaceChat.ts) until they are rows.
+ * Space chat (m#871, m#879, m#887, m#897): its data layer is the SPLIT-938C rows below (useSpaceChat, spaceChatOutbox,
+ *   useSpaceVoiceOutbox, spaceChatApi); its screen (screens/community/CommunitySpaceChatScreen.tsx) comes in a later part,
+ *   and the scan names it until it is a row.
  */
 import fs from 'fs';
 import path from 'path';
@@ -298,6 +299,33 @@ const REGISTRY: Surface[] = [
       '$name: Send Nudge $nudge, closed line $line',
       'a pull to refresh reads the pair again: an unblock on the server brings Send Nudge back',
     ] } },
+  // SPLIT-938C (m#938 space chat, part 1): the space chat's data layer. The hook and the text outbox apply the rules and
+  // stop here; the wire (spaceChatApi) stops nothing, so every file that reads or sends through it is named.
+  ...((): Surface[] => {
+    const file = 'components/community/space-chat/__tests__/spaceChatKT2.test.tsx';
+    const BLOCK = 'KT-2: a block drops the rows of the blocked author, and every quote of them, from the kept list at once';
+    const READ = 'KT-2: a read refused with 403 (a ban, a departure, another workspace) closes the space and leaves nothing readable';
+    const READ_HELD = 'KT-2: a read refused with $status mid-visit (a ban, a departure, another workspace) ends reply mode and the sheet and leaves the cached messages unreadable';
+    const BLOCK_UNHELD = 'KT-2: a block also ends reply mode on, and empties a waiting reply to, a message of the blocked author the phone never held';
+    const SEND = 'KT-2: a text refused with 403 fails as closed (never sent again) and closes the space';
+    const WIRE = 'KT-2: 403 and 404 are no access; any other failure is not';
+    return [
+      { file: 'components/community/space-chat/useSpaceChat.ts', kind: 'list', what: 'one space\'s messages (text, voice, photo, quotes) and its read line',
+        how: 'the server leaves out blocks (both ways), bans and departed authors; my block (dropAuthor) takes the author\'s rows and every quote of them (held this visit, or by who wrote it) from every kept list, reply mode and a waiting reply at once; a read or send refused with 403 / 404 closes the space, mid-visit too (noAccess: nothing readable, no sheet, no reply)',
+        proof: { by: 'suite', file, titles: [BLOCK, BLOCK_UNHELD, READ, READ_HELD, SEND] } },
+      // FIX-942 (LO-942 N2): the row claims only what SEND proves; the account binding is proven in
+      // spaceChatOutbox.account.test.ts and LO938R2SameAccountLogin, the sign-out in LO942 / LS942SpaceSignOut.
+      { file: 'components/community/space-chat/spaceChatOutbox.ts', kind: 'composer', what: 'the space chat text outbox (texts queued on the phone, sent one at a time)',
+        how: 'a 403 / 404 fails the row as closed (never sent again) and tells the open space',
+        proof: { by: 'suite', file, titles: [SEND] }, exports: ['spaceOutbox', 'startSpaceOutbox', 'setSpaceOutboxOnline'] },
+      { file: 'components/community/space-chat/useSpaceVoiceOutbox.ts', kind: 'composer', what: 'the space chat\'s voice notes on the voice outbox (useVoiceOutbox)',
+        how: 'holds only my own notes for this space and sends into this space only; the record entry is drawn only by the space chat while the space is open',
+        proof: { by: 'suite', file, titles: ['KT-2: the space voice outbox holds only my notes for this space, and sends into this space only'] } },
+      ...(['list', 'composer'] as const).map((kind): Surface => ({ file: 'components/community/space-chat/spaceChatApi.ts', kind,
+        what: 'the space chat wire (messages read, send, delete)', how: 'the server leaves out blocks (both ways), bans and departed authors and refuses a send with 403 / 404 (isNoAccess), which the hook and the outbox turn into a closed space; the row stops nothing (exports: [], LS-942 N1), so every caller is named on its own',
+        proof: { by: 'suite', file, titles: [WIRE] }, exports: [] })),
+    ];
+  })(),
   // FR-911R2 (LO-911R2 B1): a KNOWN GAP row no longer stops the scan, so the files that draw a gap part are named; each
   // shows the part's gap (fixed in the part), and its row stops here so the navigators above it are not named for it.
   ...([
