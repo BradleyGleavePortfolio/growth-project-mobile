@@ -4,12 +4,13 @@
  * the phone lines where its key lives and travels, and a proof at the wire: the real screen, hook and API call send
  * once and get no answer, then Send again / Publish again / Retry sends the same words. Both requests must carry the
  * same v4 Idempotency-Key header (never a body field), and new words must carry a new one. A resend that makes a new
- * key, or sends none, turns its row red by name. The shape check pins the table to the server's five phone writes.
+ * key, or sends none, turns its row red by name. The shape check pins the table to the server's five phone writes;
+ * other phone paths that resend one of them (Copilot's Try again) get a row of their own.
  * Only the wire is stubbed: `services/api` posts (community) and `fetch` (Roman); reads answer through spies.
  */
 import React from 'react';
 import { AccessibilityInfo, Alert } from 'react-native';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, renderHook, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const mockDisk = new Map<string, string>();
@@ -76,6 +77,7 @@ const CommunityComposerScreen = require('../screens/community/CommunityComposerS
 const CommunityThreadScreen = require('../screens/community/CommunityThreadScreen').default;
 const CommunityChallengeDetailScreen = require('../screens/community/CommunityChallengeDetailScreen').default;
 const RomanChatScreen = require('../screens/roman/RomanChatScreen').default;
+const { useCopilotAsk } = require('../screens/client/copilot/useCopilotAsk');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const WS = '11111111-1111-1111-1111-111111111111';
@@ -248,6 +250,30 @@ const SEND_ONCE_PHONE_TABLE: Row[] = [
   },
 ];
 
+/**
+ * Other phone paths that resend one of the five writes (class-first): each must keep the same key too. Copilot asks
+ * through Roman's own send (the same server row), from its own hook; its Try again passes the turn's id.
+ */
+type OtherPath = { write: string; resend: string; phone: string[]; proof: () => Promise<Sent[]> };
+const OTHER_RESEND_PATHS: OtherPath[] = [
+  {
+    write: 'POST /roman/sessions/:id/messages',
+    resend: 'Try again (Copilot)',
+    phone: [
+      'src/screens/client/copilot/useCopilotAsk.ts ask (one key per question while a failure leaves it open)',
+      'src/api/romanApi.ts sendMessage (the key as the Idempotency-Key header; body { content })',
+    ],
+    proof: async () => {
+      const { result } = await renderHook(() => useCopilotAsk());
+      await act(async () => { await result.current.ask('Same words'); });
+      const turn = result.current.turns[0];
+      await act(async () => { await result.current.ask(turn.question, turn.id); });
+      await act(async () => { await result.current.ask('Other words'); });
+      return romanTurns();
+    },
+  },
+];
+
 const realFetch = global.fetch;
 beforeEach(async () => {
   mockPost.mockReset().mockRejectedValue(NO_ANSWER); // every community write: no answer
@@ -300,7 +326,22 @@ describe('SEND-ONCE-PHONE table: the five writes the member can send again', () 
       'POST /roman/sessions/:id/messages',
     ]);
     SEND_ONCE_PHONE_TABLE.forEach((row) => expect(row.phone.length).toBeGreaterThan(0));
+    const writes = SEND_ONCE_PHONE_TABLE.map((row) => row.write);
+    OTHER_RESEND_PATHS.forEach((path) => expect(writes).toContain(path.write));
   });
+
+  it.each(OTHER_RESEND_PATHS.map((path) => [path.write, path.resend, path] as const))(
+    '%s: %s after no answer sends the same key; new words send a new one',
+    async (_write, _resend, path) => {
+      const [first, again, other] = await path.proof();
+      [first, again, other].forEach((req) => expect(req.key).toEqual(expect.stringMatching(UUID)));
+      expect(first.body).toEqual({ content: 'Same words' });
+      expect(again.body).toEqual({ content: 'Same words' });
+      expect(other.body).toEqual({ content: 'Other words' });
+      expect(again.key).toBe(first.key); // a resend that makes a new key fails here
+      expect(other.key).not.toBe(first.key);
+    },
+  );
 
   it.each(SEND_ONCE_PHONE_TABLE.map((row) => [row.write, row.resend, row] as const))(
     '%s: %s after no answer sends the same key; new words send a new one',
