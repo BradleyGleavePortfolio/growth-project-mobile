@@ -338,6 +338,14 @@ it('Create account keeps the code action and field when the policy does not answ
   expect(view.getByTestId('invite-code-input')).toBeTruthy();
 });
 
+// LO-935R5C C1 (agent 200, outside the fix commits; on main too): C7 B_create and BJ_create_link draw Google's
+// four-colour mark on Create account, as Sign in has it; CreateAccountScreen.tsx:1493 still types a "G".
+it('LO-935R5C C1: Create account Style B shows Google\'s four-colour mark, not a typed G', async () => {
+  const view = await create(nav(), { invite_code: 'TGP-R8N3VW5' });
+  await view.findByLabelText('Continue with Google');
+  expect(view.queryByText('G')).toBeNull();
+});
+
 it('Create account from a join link keeps the code and today\'s signup-with-code request', async () => {
   const view = await create(nav(), { invite_code: 'TGP-R8N3VW5' });
   expect((await view.findByTestId('invite-code-input')).props.value).toBe('TGP-R8N3VW5');
