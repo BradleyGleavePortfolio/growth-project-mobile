@@ -308,6 +308,24 @@ const REGISTRY: Surface[] = [
           'KT-2: a row the coach removed draws its one line only: no words, no player, no menu and no lookup of the note',
           'KT-2: a voice note whose lookup is refused (403 / 404) draws no New mark and nothing to play, only Try again',
         ] } },
+      // Part 3: the box, the mic and the people. Both composers hand their words or recording only to their space
+      // (onSend: useSpaceChat and the space voice outbox, above).
+      { file: 'components/community/space-chat/SpaceChatComposer.tsx', kind: 'composer', what: 'the space chat box (typed text and replies)',
+        how: 'keeps its words per space and hands them only to its space (onSend: useSpaceChat.send, which refuses a closed space); a text refused as closed never comes back into the box',
+        proof: { by: 'suite', file: 'components/community/space-chat/__tests__/spaceChatComposeKT2.test.tsx', titles: [
+          'KT-2: the space chat box keeps its words per space and hands them only to its own space (onSend)',
+          'KT-2: a text the space refused as closed never comes back into the box',
+        ] } },
+      { file: 'components/community/space-chat/SpaceChatMic.tsx', kind: 'composer', what: 'the space chat mic (VoiceRecordSheet for a voice note)',
+        how: 'no recorder before the first-use card is answered; a recording goes only to its space (onSend: the space voice outbox)',
+        proof: { by: 'suite', file: 'components/community/space-chat/__tests__/spaceChatComposeKT2.test.tsx', titles: [
+          'KT-2: the mic opens no recorder until the first-use card is answered, and hands a recording only to its space (onSend)',
+        ] } },
+      { file: 'components/community/space-chat/spaceMembers.ts', kind: 'list', what: 'the people of one space (names and roles) for Space info',
+        how: 'the server leaves out blocks (both ways) and answers 404 to anyone who cannot read the space; asked only while the sheet is open and the server let the viewer in; kept in memory only',
+        proof: { by: 'suite', file: 'components/community/space-chat/__tests__/spaceMembersKT2.test.tsx', titles: [
+          'KT-2: the people of a space are asked for only while enabled (the server let me in), and never kept on the disk',
+        ] }, exports: ['useSpaceMembers', 'listSpaceMembers'] },
     ];
   })(),
   // FR-911R2 (LO-911R2 B1): a KNOWN GAP row no longer stops the scan, so the files that draw a gap part are named; each
@@ -499,6 +517,8 @@ const NOT_CONTENT: Record<string, string> = {
   'coachCommunityApi.getCohorts': 'coach admin: the coach\'s own spaces (names)',
   'coachCommunityApi.getCohortDetail': 'coach admin: a space and its roster, which the coach needs to invite or remove a member',
   'coachCommunityApi.getCoachEmptyStates': 'which empty states to draw (flags only)',
+  // SPLIT-938C (m#938 part 3): the space chat mic asks this before its first recording.
+  'spaceChatApi.getVoiceConsent': 'my own first-use answer for space voice notes (seen the card or not): a flag, no member\'s words or rows',
 };
 
 const notContent = (o: Origin) =>
