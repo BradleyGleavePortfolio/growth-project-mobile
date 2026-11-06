@@ -173,7 +173,7 @@ export default function NeedsYouList(p: NeedsYouListProps) {
           </View> : null}
         </> : null}
         {p.loading ? <QuietLoading label="Loading who needs you" rows={5} testID="needs-loading" />
-          : <QuietError message={p.error ?? 'Alerts did not load. Pull down to try again.'} onRetry={p.onRetry} testID={p.error ? 'needs-error' : 'needs-alerts-error'} />}
+          : p.error ? <QuietError message={p.error} onRetry={p.onRetry} testID="needs-error" /> : null}
       </>
     );
   } else if (a.total === 0) {
@@ -254,7 +254,7 @@ export default function NeedsYouList(p: NeedsYouListProps) {
         ) : null}
       </View>
       <View style={s.page}>
-        {p.alertsFailed && (p.loading || p.error) ? <Text style={s.note} testID="needs-alerts-error">Alerts did not load. Pull down to try again.</Text> : null}
+        {p.alertsFailed ? <QuietError message="Alerts did not load. Pull down to try again." onRetry={p.onRetry} testID="needs-alerts-error" /> : null}
         {body}
       </View>
     </ScrollView>
@@ -280,7 +280,6 @@ const s = StyleSheet.create({
   halfText: { ...typography.bodyMd, fontFamily: SEMI, fontSize: 16, color: styleA.onDeep, flexShrink: 1, textAlign: 'center' },
   halfTextOn: { color: forestPop.deep },
   page: { paddingHorizontal: layout.gutter, paddingTop: 6 },
-  note: { ...typography.bodySmall, color: styleA.grey, marginTop: 12 },
   sect: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 18, marginBottom: 8 },
   sectText: { ...EYEBROW, color: styleA.ink },
   pinned: { ...typography.bodySmall, fontSize: 13, color: styleA.grey, marginRight: 4 },
