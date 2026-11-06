@@ -559,3 +559,21 @@ describe('D10-BUILD-CLOSE: the Roman card on the list (C3 Style B, B_inbox and B
     });
   });
 });
+
+// LO-935R2 B1 (agent 199, review round 2): C3 Style B sets its big Cormorant numbers in lining figures (B_coachless "3"
+// before "Your conversations with Roman", B_inbox "36 left today" and the gold unread ring). Cormorant Garamond's default
+// figures are old-style, so the "3" hangs below the line beside its label; the font's lnum feature gives the drawn ones.
+describe('LO-935R2 B1: the big Cormorant numbers use lining figures, as drawn', () => {
+  it.each([
+    ['the no-coach chat count "3"', true, '3'],
+    ['"36 left today"', false, '36'],
+    ['the unread ring "2"', false, '2'],
+  ] as Array<[string, boolean, string]>)('LO-935R2 B1: %s is set in lining figures', async (_n, noCoach, digits) => {
+    mockNeedsCoach.mockReturnValue(noCoach);
+    mockList.mockResolvedValue(chats(3));
+    const { u } = await show();
+    const el = noCoach ? await u.findByTestId('inbox-chats-count') : (await u.findByLabelText(ROMAN_LABEL), await u.findByLabelText(COACH_LABEL), u.getByText(digits));
+    expect(String(el.props.children)).toBe(digits);
+    expect(flat(el).fontVariant).toEqual(expect.arrayContaining(['lining-nums']));
+  });
+});
