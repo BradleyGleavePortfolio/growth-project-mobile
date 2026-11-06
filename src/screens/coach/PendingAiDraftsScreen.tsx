@@ -31,6 +31,7 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
@@ -248,6 +249,13 @@ function DraftCard({
     ? `client ${draft.subject_user_id.slice(0, 8)}`
     : 'client';
   const a11yBase = `${capabilityLabel(capability)} for ${subjectLabel}`;
+  // FIX-952R1: with larger text the badge goes under the title, so a narrow phone never splits "suggestion" mid-word.
+  const badgeBelow = useWindowDimensions().fontScale > 1;
+  const badge = (
+    <View style={[styles.aiBadge, badgeBelow && styles.aiBadgeBelow]}>
+      <Text style={styles.aiBadgeText}>AI draft</Text>
+    </View>
+  );
   return (
     <View
       style={styles.card}
@@ -266,10 +274,9 @@ function DraftCard({
         <View style={styles.cardHeaderTextWrap}>
           <Text style={styles.cardTitle}>{capabilityLabel(capability)}</Text>
           <Text style={styles.cardSubtitle}>For {subjectLabel}</Text>
+          {badgeBelow ? badge : null}
         </View>
-        <View style={styles.aiBadge}>
-          <Text style={styles.aiBadgeText}>AI draft</Text>
-        </View>
+        {badgeBelow ? null : badge}
       </View>
 
       <View style={styles.cardPreviewWrap}>
@@ -372,6 +379,7 @@ function makeStyles() {
     cardTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 17, lineHeight: 22, fontWeight: '600', color: B.ink },
     cardSubtitle: { ...typography.bodySmall, color: B.muted, marginTop: 2 },
     aiBadge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: radius.pill, backgroundColor: B.chip },
+    aiBadgeBelow: { alignSelf: 'flex-start', marginTop: 6 },
     aiBadgeText: { fontFamily: 'Inter_600SemiBold', fontSize: 13, lineHeight: 18, fontWeight: '600', color: B.deep },
 
     cardPreviewWrap: { marginTop: 10 },
