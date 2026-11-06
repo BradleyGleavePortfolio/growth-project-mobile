@@ -108,10 +108,12 @@ it('Home marks a retained roster failed when its latest read fails', async () =>
 
 it.each([0, 2])('cached %i drafts never override a failed latest read', async (count) => {
   mockDrafts.mockReturnValue({
-    data: { drafts: Array.from({ length: count }, (_, i) => ({ id: String(i), draft_type: 'workout' })) },
+    data: { drafts: Array.from({ length: count }, (_, i) => ({ id: String(i), capability: 'draft.assign_workout' })) },
     isError: true, refetch: jest.fn(),
   });
   const { result } = await renderHook(() => useCoachHomeV11(coachHomeSources, overview, true));
   await waitFor(() => expect(result.current.data.rosterState).toBe('ok'));
   expect(result.current.data.draftsState).toBe('error');
+  expect(result.current.data.draftsWaiting).toBe(count);
+  expect(result.current.data.draftKinds.workouts).toBe(count);
 });
