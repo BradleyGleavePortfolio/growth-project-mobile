@@ -156,7 +156,7 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
               {kinds.kinds.map((k) => (
                 <View key={k.label} style={styles.kindTile} accessible accessibilityLabel={`${k.count} ${k.label}`}>
                   <Text style={styles.kindCount} maxFontSizeMultiplier={1.3}>{k.count}</Text>
-                  <Text style={styles.kindLabel} numberOfLines={2}>{k.label}</Text>
+                  <Text style={styles.kindLabel}>{k.label}</Text>
                 </View>
               ))}
             </View>
@@ -350,11 +350,11 @@ function makeStyles() {
     header: { paddingHorizontal: 24, paddingBottom: 16, gap: 6 },
     back: { width: 44, height: 44, marginLeft: -10, alignItems: 'center', justifyContent: 'center' },
     eyebrow: { fontFamily: 'Inter_600SemiBold', fontSize: 13, lineHeight: 18, fontWeight: '600', letterSpacing: 1.6, textTransform: 'uppercase', color: B.muted },
-    headerTitle: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 34, lineHeight: 43, fontWeight: '400', color: B.ink },
+    headerTitle: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 34, lineHeight: 43, fontWeight: '400', fontVariant: ['lining-nums'], color: B.ink },
     headerSubtitle: { ...typography.body, color: B.muted },
-    kindRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
-    kindTile: { flex: 1, backgroundColor: B.tile, borderRadius: radius.card, paddingVertical: 14, paddingHorizontal: 14, gap: 2 },
-    kindCount: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 34, lineHeight: 43, color: B.deep },
+    kindRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 10 },
+    kindTile: { flexGrow: 1, flexShrink: 0, backgroundColor: B.tile, borderRadius: radius.card, paddingVertical: 14, paddingHorizontal: 14, gap: 2 },
+    kindCount: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 38, lineHeight: 48, fontVariant: ['lining-nums'], color: B.deep },
     kindLabel: { fontFamily: 'Inter_600SemiBold', fontSize: 15, lineHeight: 20, fontWeight: '600', color: B.body },
 
     listContainer: { paddingHorizontal: 24, paddingBottom: 32 },

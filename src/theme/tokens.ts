@@ -553,6 +553,8 @@ export const coachInboxB = {
   muted: lightTokens.textMuted,
   goldEdge: gold[700],
   line: 'rgba(44,74,54,0.18)',
+  ghost: '#E8DFCF',
+  ghostHero: '#D9DED6',
 } as const;
 
 /** Path Copilot status tints (style A board, owner #162-1): leaf = sent / approved, gold = waiting, still = kept / expired. */

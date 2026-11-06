@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,7 @@ import { useBlockedUsersStore } from '../../store/blockedUsersStore';
 import { coachApi } from '../../services/api';
 import { subscribeToMessages } from '../../services/realtime';
 import { useTheme } from '../../theme/ThemeProvider';
-import { coachInboxB } from '../../theme/tokens';
+import { coachInboxB, layout } from '../../theme/tokens';
 import { Screen } from '../../ui';
 import { EmptyStateNoClients, EmptyStateNoResults } from '../../ui/empty-states';
 import { useFeatureFlags } from '../../hooks/useFeatureFlags';
@@ -50,7 +50,6 @@ export default function MessagesScreen() {
 
 function LegacyCoachMessages() {
   const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(), []);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const currentUser = useCurrentUser();
   const { clients, loadClients } = useCoachStore();
@@ -128,7 +127,7 @@ function LegacyCoachMessages() {
 
   return (
     <Screen edges={['top']} scroll={false} contentStyle={styles.bare} style={inboxB.page} testID="coach-messages">
-      <View style={inboxB.header}>
+      <View style={styles.header}>
         <View style={inboxB.headerRow}>
           <Text style={inboxB.title}>Messages</Text>
           <View style={inboxB.headerEntries}>
@@ -144,10 +143,29 @@ function LegacyCoachMessages() {
         )}
       </View>
 
+      <View style={styles.searchContainer}>
+        <View style={[inboxB.search, searchQuery.length > 0 && inboxB.searchOn]}>
+          <Ionicons name="search" size={20} color={coachInboxB.muted} />
+          <TextInput
+            style={inboxB.searchInput}
+            placeholder="Search clients..."
+            placeholderTextColor={coachInboxB.muted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            accessibilityLabel="Search clients"
+          />
+          {searchQuery.length > 0 ? (
+            <Pressable onPress={() => setSearchQuery('')} accessibilityRole="button" accessibilityLabel="Clear search" hitSlop={12} style={inboxB.clear}>
+              <Ionicons name="close-circle" size={20} color={coachInboxB.muted} />
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
+
       <FlatList
         data={list}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={inboxB.listContent}
+        contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         refreshControl={
@@ -158,27 +176,7 @@ function LegacyCoachMessages() {
             colors={[colors.primary]}
           />
         }
-        ListHeaderComponent={
-          <View style={inboxB.listHead}>
-            {canSeeDrafts(currentUser?.role) ? <RomanDraftsHero /> : null}
-            <View style={inboxB.search}>
-              <Ionicons name="search" size={20} color={coachInboxB.muted} />
-              <TextInput
-                style={inboxB.searchInput}
-                placeholder="Search clients..."
-                placeholderTextColor={coachInboxB.muted}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                accessibilityLabel="Search clients"
-              />
-              {searchQuery.length > 0 ? (
-                <Pressable onPress={() => setSearchQuery('')} accessibilityRole="button" accessibilityLabel="Clear search" hitSlop={12} style={inboxB.clear}>
-                  <Ionicons name="close-circle" size={20} color={coachInboxB.muted} />
-                </Pressable>
-              ) : null}
-            </View>
-          </View>
-        }
+        ListHeaderComponent={canSeeDrafts(currentUser?.role) && !searchQuery.trim() ? <View style={styles.heroWrap}><RomanDraftsHero /></View> : null}
         ListEmptyComponent={
           searchQuery
             ? <EmptyStateNoResults query={searchQuery} onClearSearch={() => setSearchQuery('')} />
@@ -208,8 +206,11 @@ function LegacyCoachMessages() {
   );
 }
 
-const makeStyles = () =>
-  StyleSheet.create({
+const styles = StyleSheet.create({
   // Screen (src/ui) owns the top: insets.top + 12; the header adds 12 like the Clients and Settings tabs (B13 B28).
   bare: { paddingHorizontal: 0, paddingBottom: 0 },
-  });
+  header: { paddingHorizontal: layout.gutter, paddingTop: 12, marginBottom: 12 },
+  searchContainer: { paddingHorizontal: layout.gutter, marginBottom: 12, gap: 12 },
+  listContent: { paddingHorizontal: layout.gutter, paddingBottom: 100 },
+  heroWrap: { marginBottom: 12 },
+});

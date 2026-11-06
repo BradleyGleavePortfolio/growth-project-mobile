@@ -9,11 +9,10 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useIsFocused, useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
-import { coachInboxB as B, layout, radius } from '../../theme/tokens';
+import { coachInboxB as B, radius } from '../../theme/tokens';
 import { usePendingAiDrafts } from '../../hooks/usePendingAiDrafts';
 import { isStream2Capability, type AiActionDraftRow } from '../../api/types/coachAiExecution';
 import RomanAvatar from '../../components/roman/RomanAvatar';
-import { Skeleton } from '../../ui/skeletons/Skeleton';
 
 const SERIF = 'CormorantGaramond_400Regular';
 
@@ -48,10 +47,8 @@ export function RomanDraftsHero(): React.ReactElement | null {
   if (n === 0) return null;
   return (
     <View style={s.hero} testID="inbox-roman-drafts">
-      <View style={s.heroHead}>
-        <View style={s.ring}><RomanAvatar crop="neutral" size={44} /></View>
-        <Text style={s.heroTitle} maxFontSizeMultiplier={1.3}>{`Roman has ${n} ${n === 1 ? 'draft' : 'drafts'} ready`}</Text>
-      </View>
+      <View style={s.ring}><RomanAvatar crop="neutral" size={44} /></View>
+      <Text style={s.heroTitle} maxFontSizeMultiplier={1.3}>{`Roman has ${n} ${n === 1 ? 'draft' : 'drafts'} ready`}</Text>
       <View style={s.heroChips}>
         {kinds.map((k) => (
           <View key={k.label} style={s.heroChip}>
@@ -104,7 +101,7 @@ export function InboxTile(p: InboxTileProps): React.ReactElement {
       <View style={s.mono}><Text style={s.monoText} maxFontSizeMultiplier={1.2}>{initialsOf(p.name)}</Text></View>
       <View style={s.tileBody}>
         <View style={s.topLine}>
-          <Text style={s.name} numberOfLines={1}>{p.name}</Text>
+          <Text style={s.name} numberOfLines={2}>{p.name}</Text>
           {p.pinned ? <Ionicons name="pin" size={14} color={B.muted} accessibilityLabel="Pinned" /> : null}
           {p.muted ? <Ionicons name="notifications-off-outline" size={14} color={B.muted} accessibilityLabel="Muted" /> : null}
           {p.time ? <Text style={s.time}>{p.time}</Text> : null}
@@ -120,18 +117,13 @@ export function InboxTile(p: InboxTileProps): React.ReactElement {
   );
 }
 
-/** The drawn loading state: tile shapes, no words. */
-export function InboxSkeleton({ rows = 5 }: { rows?: number }): React.ReactElement {
+/** The drawn loading state: plain shapes, no words (Roman's card shape only for a coach who sees drafts). */
+export function InboxSkeleton({ rows = 5, hero = false }: { rows?: number; hero?: boolean }): React.ReactElement {
   return (
     <View testID="inbox-loading" accessibilityLabel="Loading" accessible>
+      {hero ? <View style={s.ghostHero} /> : null}
       {Array.from({ length: rows }, (_, i) => (
-        <View key={i} style={[s.tile, s.tileGhost]}>
-          <Skeleton width={36} height={36} borderRadius={radius.chip} />
-          <View style={s.tileBody}>
-            <Skeleton width="45%" height={16} borderRadius={radius.control} />
-            <Skeleton width="85%" height={14} borderRadius={radius.control} />
-          </View>
-        </View>
+        <View key={i} style={s.ghostTile} />
       ))}
     </View>
   );
@@ -140,13 +132,10 @@ export function InboxSkeleton({ rows = 5 }: { rows?: number }): React.ReactEleme
 /** Shared page styles for the two inbox screens (each screen keeps its own search field: memberContentAccess EXEMPT rows). */
 export const inboxB = StyleSheet.create({
   page: { backgroundColor: B.page },
-  header: { paddingHorizontal: layout.gutter, paddingTop: 12, marginBottom: 12 },
   headerRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   headerEntries: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
   title: { fontFamily: SERIF, fontSize: 34, lineHeight: 43, fontWeight: '400', color: B.ink },
   summary: { fontFamily: 'Inter_400Regular', fontSize: 15, lineHeight: 21, color: B.muted, marginTop: 2 },
-  listContent: { paddingHorizontal: layout.gutter, paddingBottom: 100 },
-  listHead: { gap: 12, marginBottom: 12 },
   filters: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   chip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 18, borderRadius: radius.chip, borderWidth: 1, borderColor: B.line, backgroundColor: B.chip },
   chipOn: { backgroundColor: B.deep, borderColor: B.deep },
@@ -158,7 +147,8 @@ export const inboxB = StyleSheet.create({
   retry: { marginTop: 8, minHeight: 48, borderRadius: radius.button, borderWidth: 1.5, borderColor: B.deep, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 },
   retryText: { fontFamily: 'Inter_600SemiBold', fontSize: 16, fontWeight: '600', color: B.deep },
   search: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48, backgroundColor: B.chip, borderRadius: radius.input, borderWidth: 1, borderColor: B.line, paddingHorizontal: 14 },
-  searchInput: { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 16, color: B.ink, paddingVertical: 10 },
+  searchOn: { borderColor: B.deep, borderWidth: 1.5 },
+  searchInput: { flex: 1, minHeight: 44, fontFamily: 'Inter_400Regular', fontSize: 16, color: B.ink, paddingVertical: 10 },
   clear: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', marginRight: -10 },
   allRead: { backgroundColor: B.tile, borderRadius: radius.card, padding: 20, fontFamily: 'Inter_400Regular', fontSize: 16, lineHeight: 23, color: B.body },
 });
@@ -166,22 +156,22 @@ export const inboxB = StyleSheet.create({
 const s = StyleSheet.create({
   pressed: { opacity: 0.85 },
   hero: { backgroundColor: B.deep, borderRadius: radius.sheet, padding: 20, gap: 16 },
-  heroHead: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  ring: { borderWidth: 2, borderColor: B.goldEdge, borderRadius: radius.chip, padding: 2 },
-  heroTitle: { flex: 1, fontFamily: SERIF, fontSize: 28, lineHeight: 35, fontWeight: '400', color: B.onDeep },
+  ring: { alignSelf: 'flex-start', borderWidth: 2, borderColor: B.goldEdge, borderRadius: radius.chip, padding: 2 },
+  heroTitle: { fontFamily: SERIF, fontSize: 30, lineHeight: 38, fontWeight: '400', fontVariant: ['lining-nums'], color: B.onDeep, marginTop: -4 },
   heroChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   heroChip: { borderRadius: radius.chip, borderWidth: 1, borderColor: B.onDeepMuted, paddingHorizontal: 12, paddingVertical: 6 },
   heroChipText: { fontFamily: 'Inter_500Medium', fontSize: 15, lineHeight: 20, color: B.onDeep },
   heroBtn: { minHeight: 54, borderRadius: radius.button, backgroundColor: B.onDeep, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, paddingVertical: 12 },
   heroBtnText: { fontFamily: 'Inter_600SemiBold', fontSize: 17, lineHeight: 22, fontWeight: '600', color: B.deep, textAlign: 'center' },
   tile: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: B.tile, borderRadius: radius.card, paddingVertical: 16, paddingHorizontal: 14, marginBottom: 10 },
-  tileGhost: { minHeight: 84 },
+  ghostTile: { height: 72, borderRadius: radius.card, backgroundColor: B.ghost, marginBottom: 10 },
+  ghostHero: { height: 200, borderRadius: radius.sheet, backgroundColor: B.ghostHero, marginBottom: 10 },
   mono: { width: 36, height: 36, borderRadius: radius.chip, backgroundColor: B.deep, alignItems: 'center', justifyContent: 'center' },
   monoText: { fontFamily: SERIF, fontSize: 16, lineHeight: 20, color: B.onDeep },
   tileBody: { flex: 1, gap: 4 },
   topLine: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   name: { flexShrink: 1, fontFamily: 'Inter_600SemiBold', fontSize: 17, lineHeight: 22, fontWeight: '600', color: B.ink },
-  time: { marginLeft: 'auto', fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 19, color: B.muted },
+  time: { marginLeft: 'auto', flexShrink: 0, fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 19, color: B.muted },
   preview: { fontFamily: 'Inter_400Regular', fontSize: 16, lineHeight: 22, color: B.body },
   italic: { fontStyle: 'italic' },
   pill: { alignSelf: 'flex-start', marginTop: 4, minWidth: 32, borderRadius: radius.chip, backgroundColor: B.chip, paddingHorizontal: 12, paddingVertical: 4, alignItems: 'center' },
