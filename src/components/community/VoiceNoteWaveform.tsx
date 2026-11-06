@@ -101,9 +101,9 @@ export default function VoiceNoteWaveform({
               // Fixed bars carry no flex at all: on react-native-web `flex: 0` is CSS `0 1 0%`, which drops
               // the width to the border (a 2 pt bar in the web preview); a plain width holds on both.
               barWidth ? [styles.fixedBar, { width: barWidth }] : styles.bar,
-              // A 1 pt border on each side otherwise forces even a flex bar
-              // to be >= 2 pt, overflowing narrow card slots.
-              !barWidth && fittedBarWidth !== undefined && { borderWidth: Math.min(1, fittedBarWidth / 2) },
+              // Subpixel borders can still rasterize to 1 px on each side.
+              // Drop only narrow-bar outlines so all samples fit at 1x too.
+              !barWidth && fittedBarWidth !== undefined && { borderWidth: fittedBarWidth < 2 ? 0 : 1 },
               {
                 height: Math.max(4, Math.round(height * scale)),
                 backgroundColor: played ? t.played : t.unplayed,
