@@ -3,7 +3,7 @@
 //  (c) a kcal figure is grouped the way the app shows kcal elsewhere ("1,234", copilot/pathChangeWords.ts kcalText).
 // The prep and recipe detail kcal are asserted in KitchenStyleC130; the prep reach in LO929R2.prepReach.btest.
 import React from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { render, screen, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StyleCDashes } from '../../../ui/layout/StyleCPage';
@@ -24,7 +24,7 @@ jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 
 import RecipesScreen from '../RecipesScreen';
 
-const flat = (style: unknown) => StyleSheet.flatten(style as never) ?? {};
+const flat = (style: unknown): ViewStyle => StyleSheet.flatten(style as StyleProp<ViewStyle>) ?? {};
 const MASTHEAD_AT_320 = 320 - 2 * layout.gutter;
 
 describe.each([11, 12, 20])('the progress strip with %i items', (total) => {
