@@ -1,0 +1,6 @@
+src/components/log
+src/screens/client
+src/utils/log
+src/__tests__/workoutDayRule.test.ts
+src/__tests__/memberContentAccess.test.tsx
+src/__tests__/memberContentAccess.composers.test.tsx
