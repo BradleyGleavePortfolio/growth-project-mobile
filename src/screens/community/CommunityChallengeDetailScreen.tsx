@@ -375,8 +375,9 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
   });
 
   const commentMutation = useMutation({
-    mutationFn: (body: string) =>
-      communityChallengesApi.addComment(challengeId, body),
+    // SEND-ONCE-PHONE: the composer's draft key travels with the words, so Send again replays it.
+    mutationFn: ({ body, idempotencyKey }: { body: string; idempotencyKey: string }) =>
+      communityChallengesApi.addComment(challengeId, body, idempotencyKey),
     onMutate: () => setActionError(null),
     onSuccess: () => {
       void queryClient.invalidateQueries({
@@ -899,8 +900,8 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
 
       {closed ? <ConversationClosedLine testID="community-challenge-closed" /> : !open ? null : <ComposerInput
         ref={composerRef}
-        onSubmit={async (body) => {
-          await commentMutation.mutateAsync(body);
+        onSubmit={async (body, idempotencyKey) => {
+          await commentMutation.mutateAsync({ body, idempotencyKey });
         }}
         maxLength={COMMENT_MAX}
         sending={commentMutation.isPending}
