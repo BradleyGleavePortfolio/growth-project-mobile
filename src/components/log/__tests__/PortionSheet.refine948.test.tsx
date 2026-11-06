@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { fireEvent, render, screen, within } from '@testing-library/react-native';
 import { QuantityPickerContent } from '../QuantityPickerModal';
 import SheetGrip from '../SheetGrip';
@@ -64,6 +64,8 @@ describe.each([320, 390])('FIX-948R1 drawing values at %i pt', (width) => {
     });
     const units = ['g', 'oz', 'serving', 'cup', 'tbsp', 'tsp'];
     const fit = fitUnitTabs(units, sheetRoom(width), fontScale);
+    const row = screen.getAllByRole('tab')[0].parent!.parent!.parent!;
+    expect(flat(row)).toMatchObject({ marginTop: 6, borderBottomWidth: 1 });
     screen.getAllByRole('tab').forEach((tab, index) => {
       expect(flat(tab)).toMatchObject({ minHeight: 44, minWidth: fit.minWidth, paddingHorizontal: fit.padding });
       expect(flat(within(tab).getByText(units[index]))).toMatchObject({
@@ -73,6 +75,12 @@ describe.each([320, 390])('FIX-948R1 drawing values at %i pt', (width) => {
     });
     expect(flat(screen.getAllByRole('tab')[0])).toMatchObject({ borderBottomWidth: 2, borderBottomColor: gold[300] });
   });
+});
+
+it('does not double the final 10 pt gap when the after-plate line is last', async () => {
+  await render(<QuantityPickerContent {...props} selectedFood={{ ...food, serving_size: undefined }} />);
+  expect(flat(screen.getByTestId('portion-after-plate')).marginBottom).toBe(10);
+  expect(flat(screen.getByTestId('quantity-log-food')).marginTop).toBe(0);
 });
 
 it('uses a local 36 by 5 grip, with 14 pt before the overline, without changing other food sheets', async () => {
@@ -93,7 +101,7 @@ it.each([272, 342])('draws 58 pt charcoal ticks, 18/82 percent fade stops and a 
   expect(flat(screen.getByTestId('portion-ruler-needle'))).toMatchObject({
     width: 2.5, height: 58, left: width / 2 - 1.25, backgroundColor: colors.forest,
   });
-  const ticks = within(ruler).UNSAFE_getAllByType(View).filter((node) => flat(node)?.width === 1);
+  const ticks = ruler.findAll((node) => node.type === 'View' && flat(node).width === 1);
   expect(ticks.length).toBeGreaterThan(10);
   ticks.forEach((tick) => {
     const style = flat(tick);
