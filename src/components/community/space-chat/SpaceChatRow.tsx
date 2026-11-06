@@ -112,7 +112,7 @@ function MessageBody(p: SpaceChatRowProps & { folded: boolean }): React.ReactEle
   );
 }
 /** The photo's spoken word: the inbox's approved one (owner 10-26, UPDATE 2; coachCommunityApi PHOTO_PREVIEW). */
-const PHOTO_WORD = 'Photo';
+export const PHOTO_WORD = 'Photo';
 
 const STATE_WORD: Record<'sending' | 'waiting' | 'failed', string> = { sending: 'Sending…', waiting: 'Waiting to send', failed: 'Not sent' };
 

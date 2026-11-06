@@ -216,6 +216,11 @@
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
     },
+    "EXPO_PUBLIC_FF_COMMUNITY_SPACE_CHAT": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
     "EXPO_PUBLIC_FF_COMMUNITY_TAB": {
       "kind": "flag",
       "default": "off",

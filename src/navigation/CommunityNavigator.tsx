@@ -32,6 +32,7 @@ import CommunityTabScreen from '../screens/community/CommunityTabScreen';
 import CommunityHomeScreen from '../screens/community/CommunityHomeScreen';
 import CommunityTodayScreen from '../screens/community/CommunityTodayScreen';
 import CommunitySpaceScreen from '../screens/community/CommunitySpaceScreen';
+import CommunitySpaceChatScreen from '../screens/community/CommunitySpaceChatScreen';
 import CommunityThreadScreen from '../screens/community/CommunityThreadScreen';
 import CommunityEventDetailScreen from '../screens/community/CommunityEventDetailScreen';
 import CommunityDmListScreen from '../screens/community/CommunityDmListScreen';
@@ -76,10 +77,13 @@ function CommunityNavigatorStack(): React.ReactElement {
         contentStyle: { backgroundColor: colors.bone },
       }}
     >
-      {/* C6-M1S: the Forest Pop Community Home replaces today's shell while communityHomeV2 is on. */}
-      <CommunityStack.Screen name="CommunityTab" component={featureFlags.communityHomeV2 ? CommunityHomeScreen : CommunityTabScreen} />
+      {/* C6-M1S: the Forest Pop Community Home replaces today's shell while communityHomeV2 is on. FX-871 (Sol B1, m#871):
+          communitySpaceChat selects it too, so every space opens through SpaceTree's one opener as a chat (today's shell
+          shows a space inline and its Today page opens the old space page). */}
+      <CommunityStack.Screen name="CommunityTab" component={featureFlags.communityHomeV2 || featureFlags.communitySpaceChat ? CommunityHomeScreen : CommunityTabScreen} />
       <CommunityStack.Screen name="CommunityToday" component={CommunityTodayScreen} />
       <CommunityStack.Screen name="CommunitySpace" component={CommunitySpaceScreen} />
+      {featureFlags.communitySpaceChat ? <CommunityStack.Screen name="CommunitySpaceChat" component={CommunitySpaceChatScreen} /> : null}
       <CommunityStack.Screen name="CommunityThread" component={CommunityThreadScreen} />
       {featureFlags.communityEvents && (
         <CommunityStack.Screen name="CommunityEventDetail" component={CommunityEventDetailScreen} />

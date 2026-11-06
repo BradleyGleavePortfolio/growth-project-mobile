@@ -34,6 +34,7 @@ import CoachCommunityHomeScreen from '../screens/community/CoachCommunityHomeScr
 import CoachCommunityInboxScreen from '../screens/community/CoachCommunityInboxScreen';
 import CoachCommunityCohortsScreen from '../screens/community/CoachCommunityCohortsScreen';
 import CoachCommunityCohortDetailScreen from '../screens/community/CoachCommunityCohortDetailScreen';
+import CommunitySpaceChatScreen from '../screens/community/CommunitySpaceChatScreen';
 import CoachCommunityPostDetailScreen from '../screens/community/CoachCommunityPostDetailScreen';
 import CoachCommunityModerationScreen from '../screens/community/CoachCommunityModerationScreen';
 import CoachCommunityEventsScreen from '../screens/community/CoachCommunityEventsScreen';
@@ -145,6 +146,7 @@ function CoachCommunityNavigatorStack(): React.ReactElement {
           headerStyle: { backgroundColor: tokenColors.bone },
         }}
       />
+      {featureFlags.communitySpaceChat ? <CoachCommunityStack.Screen name="CommunitySpaceChat" component={CommunitySpaceChatScreen} options={{ headerShown: false }} /> : null}
       <CoachCommunityStack.Screen
         name="CoachCommunityPostDetail"
         component={CoachCommunityPostDetailScreen}
