@@ -403,17 +403,19 @@ export const communityApi = {
 
   /**
    * POST /community/workspaces/:workspaceId/posts — create a Lab/Hall post.
-   * Idempotent (R19). Optimistic insert + rollback lives in the screen hook.
+   * Idempotent (R19): `idempotencyKey` is the draft's send-once key (Publish again sends the same one).
+   * Optimistic insert + rollback lives in the screen hook.
    */
   createPost(
     workspaceId: string,
     input: { title: string; body: string },
+    idempotencyKey?: string,
   ): Promise<CommunityPost> {
     return call(CommunityPostResponseSchema, () =>
       api.post<unknown>(
         `/community/workspaces/${workspaceId}/posts`,
-        input,
-        idempotentHeaders(),
+        { title: input.title, body: input.body }, // the key travels only as the header (strict DTOs)
+        idempotentHeaders(idempotencyKey),
       ),
     ).then((r) => r.post);
   },

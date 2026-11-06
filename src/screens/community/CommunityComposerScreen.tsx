@@ -114,13 +114,15 @@ export default function CommunityComposerScreen(): React.ReactElement {
       return;
     }
     createPost.mutate(
-      { title: trimmedTitle, body: trimmedBody },
+      // A post's words are its title and body together: a change to either is a new draft, a new key.
+      { title: trimmedTitle, body: trimmedBody, idempotencyKey: sendKey.keyFor(JSON.stringify([trimmedTitle, trimmedBody])) },
       {
         onSuccess: () => {
+          sendKey.sent();
           setConfirmation('Post published.');
           setTimeout(() => navigation.goBack(), 300);
         },
-        onError: showSendError,
+        onError: (err) => { sendKey.failed(err); showSendError(err); },
       },
     );
   };

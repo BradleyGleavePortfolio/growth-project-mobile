@@ -196,8 +196,8 @@ export function isOptimisticId(id: string): boolean {
 export function useCreatePost(workspaceId: string, authorUserId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { title: string; body: string }) =>
-      communityApi.createPost(workspaceId, input),
+    mutationFn: ({ title, body, idempotencyKey }: { title: string; body: string; idempotencyKey: string }) =>
+      communityApi.createPost(workspaceId, { title, body }, idempotencyKey),
     onMutate: async (input) => {
       const key = communityKeys.posts(workspaceId);
       await qc.cancelQueries({ queryKey: key });

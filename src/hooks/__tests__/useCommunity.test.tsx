@@ -107,7 +107,7 @@ describe('useCreatePost — optimistic insert + rollback', () => {
     });
 
     await act(() => {
-      result.current.mutate({ title: 'Hi', body: 'there' });
+      result.current.mutate({ title: 'Hi', body: 'there', idempotencyKey: 'send-once-key-1' });
     });
 
     await waitFor(() => expect(result.current.isError).toBe(true));

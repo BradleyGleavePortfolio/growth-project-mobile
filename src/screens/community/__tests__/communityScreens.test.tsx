@@ -307,7 +307,7 @@ describe('Composer — submit wiring', () => {
     await fireEvent.changeText(getByTestId('community-composer-body'), 'My body');
     await fireEvent.press(getByTestId('community-composer-submit'));
     expect(mockMutate).toHaveBeenCalledWith(
-      { title: 'My title', body: 'My body' },
+      { title: 'My title', body: 'My body', idempotencyKey: expect.any(String) }, // SEND-ONCE-PHONE: the draft's key
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
   });
@@ -336,7 +336,7 @@ describe('Composer — submit wiring', () => {
     await fireEvent.changeText(getByTestId('community-composer-body'), 'hello');
     await fireEvent.press(getByTestId('community-composer-submit'));
     expect(mockMutate).toHaveBeenCalledWith(
-      'hello',
+      { body: 'hello', idempotencyKey: expect.any(String) }, // SEND-ONCE-PHONE: the draft's key
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
   });
