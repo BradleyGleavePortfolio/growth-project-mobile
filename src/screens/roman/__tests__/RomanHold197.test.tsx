@@ -144,6 +144,8 @@ it('a report that fails offline says so, keeps the pick, and Submit Report sends
   await act(async () => { fireEvent.press(r.getByLabelText('Spam')); });
   await act(async () => { fireEvent.press(r.getByLabelText('Submit report')); });
   expect(r.getByText('Sending your report could not be confirmed. Check your connection, then try again.')).toBeTruthy();
+  // KT-11: the line is announced (and scrolled into view) rather than left below the fold.
+  expect(r.getByTestId('report-sheet-error').props.accessibilityRole).toBe('alert');
   expect(Alert.alert).not.toHaveBeenCalled();
   await act(async () => { fireEvent.press(r.getByLabelText('Submit report')); });
   expect(api.post).toHaveBeenCalledTimes(2);

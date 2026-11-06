@@ -581,6 +581,7 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
           messagePreview={reportTarget ? romanQuoteExcerpt(reportTarget.content, 400) : ''}
           onSubmit={onSubmitReport}
           onClose={() => setReportTarget(null)}
+          revealError
         />
 
       </View>
