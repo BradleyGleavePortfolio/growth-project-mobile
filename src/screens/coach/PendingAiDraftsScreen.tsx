@@ -134,35 +134,41 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
   const renderable = allRows.filter((r) => isStream2Capability(r.capability));
   const isMutating = approveMutation.isPending || rejectMutation.isPending;
   const kinds = draftKinds(allRows);
+  // LO-952 C1: the headline counts every card the list shows, the plan changes too; the tiles stay the drafts' kinds.
+  const ready = kinds.total + (path.data?.length ?? 0);
+  const bare = renderable.length === 0 && !query.isLoading && !path.isLoading && !hasPath && !pathFailed;
+  // LS-952 B1, LO-952 B1: the header and kind tiles scroll with the cards (a 320 pt screen at 130% text keeps room for
+  // them). The screen keeps insets.top so a scrolled card stops below the clock; the header adds 8 as before.
+  const header = (
+    <View style={[styles.header, bare && styles.headerSides]}>
+      {navigation.canGoBack() ? (
+        <Pressable onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Back" hitSlop={8} style={styles.back}>
+          <Ionicons name="chevron-back" size={26} color={B.ink} />
+        </Pressable>
+      ) : null}
+      <Text style={ready > 0 ? styles.eyebrow : styles.headerTitle}>Pending AI drafts</Text>
+      {ready > 0 ? (
+        <Text style={styles.headerTitle} maxFontSizeMultiplier={1.3}>{`Roman has ${ready} ${ready === 1 ? 'draft' : 'drafts'} ready`}</Text>
+      ) : null}
+      <Text style={styles.headerSubtitle}>
+        Review what the AI proposed before it reaches your clients.
+      </Text>
+      {kinds.kinds.length > 0 ? (
+        <View style={styles.kindRow} testID="pending-ai-drafts-kinds">
+          {kinds.kinds.map((k) => (
+            <View key={k.label} style={styles.kindTile} accessible accessibilityLabel={`${k.count} ${k.label}`}>
+              <Text style={styles.kindCount} maxFontSizeMultiplier={1.3}>{k.count}</Text>
+              <Text style={styles.kindLabel}>{k.label}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
 
   return (
     <ErrorBoundary>
-      <View style={styles.root} testID="pending-ai-drafts-screen">
-        <View style={[styles.header, { paddingTop: 8 + insets.top }]}>
-          {navigation.canGoBack() ? (
-            <Pressable onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Back" hitSlop={8} style={styles.back}>
-              <Ionicons name="chevron-back" size={26} color={B.ink} />
-            </Pressable>
-          ) : null}
-          <Text style={kinds.total > 0 ? styles.eyebrow : styles.headerTitle}>Pending AI drafts</Text>
-          {kinds.total > 0 ? (
-            <Text style={styles.headerTitle} maxFontSizeMultiplier={1.3}>{`Roman has ${kinds.total} ${kinds.total === 1 ? 'draft' : 'drafts'} ready`}</Text>
-          ) : null}
-          <Text style={styles.headerSubtitle}>
-            Review what the AI proposed before it reaches your clients.
-          </Text>
-          {kinds.kinds.length > 0 ? (
-            <View style={styles.kindRow} testID="pending-ai-drafts-kinds">
-              {kinds.kinds.map((k) => (
-                <View key={k.label} style={styles.kindTile} accessible accessibilityLabel={`${k.count} ${k.label}`}>
-                  <Text style={styles.kindCount} maxFontSizeMultiplier={1.3}>{k.count}</Text>
-                  <Text style={styles.kindLabel}>{k.label}</Text>
-                </View>
-              ))}
-            </View>
-          ) : null}
-        </View>
-
+      <View style={[styles.root, { paddingTop: insets.top }]} testID="pending-ai-drafts-screen">
         <FlatList
           data={renderable}
           // The Copilot editors' number pad has no Done key: lift content over it, first tap lands, drag dismisses.
@@ -180,11 +186,7 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
               disabled={isMutating}
             />
           )}
-          contentContainerStyle={
-            renderable.length === 0 && !query.isLoading && !path.isLoading && !hasPath && !pathFailed
-              ? styles.emptyContainer
-              : styles.listContainer
-          }
+          contentContainerStyle={bare ? styles.emptyContainer : styles.listContainer}
           refreshControl={
             <RefreshControl
               refreshing={query.isFetching}
@@ -195,8 +197,8 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
               tintColor={colors.primary}
             />
           }
-          ListHeaderComponent={<PathChangeDrafts query={path} showError={!query.isError} />}
-          ListEmptyComponent={
+          ListHeaderComponent={<>{header}<PathChangeDrafts query={path} showError={!query.isError} /></>}
+          ListEmptyComponent={<View style={styles.emptyFill}>{
             // QA-COACH-STATES-131: the shared skeleton and the calm error.
             query.isError ? (
               <QuietError
@@ -215,7 +217,7 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
                 body="Ask the AI to draft something from a client's detail screen."
               />
             )
-          }
+          }</View>}
           testID="pending-ai-drafts-list"
         />
       </View>
@@ -345,9 +347,10 @@ export type { AiActionDraftRow };
 
 function makeStyles() {
   return StyleSheet.create({
-    // K2 Style B (owner #196-D10): the drawn cream page and tiles, colours from coachInboxB.
+    // K2 Style B (owner #196-D10): the drawn tiles and cards on the app page (owner #197-E6), colours from coachInboxB.
     root: { flex: 1, backgroundColor: B.page },
-    header: { paddingHorizontal: 24, paddingBottom: 16, gap: 6 },
+    header: { paddingTop: 8, paddingBottom: 16, gap: 6 },
+    headerSides: { paddingHorizontal: 24 },
     back: { width: 44, height: 44, marginLeft: -10, alignItems: 'center', justifyContent: 'center' },
     eyebrow: { fontFamily: 'Inter_600SemiBold', fontSize: 13, lineHeight: 18, fontWeight: '600', letterSpacing: 1.6, textTransform: 'uppercase', color: B.muted },
     headerTitle: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 34, lineHeight: 43, fontWeight: '400', fontVariant: ['lining-nums'], color: B.ink },
@@ -358,7 +361,9 @@ function makeStyles() {
     kindLabel: { fontFamily: 'Inter_600SemiBold', fontSize: 15, lineHeight: 20, fontWeight: '600', color: B.body },
 
     listContainer: { paddingHorizontal: 24, paddingBottom: 32 },
-    emptyContainer: { flexGrow: 1, justifyContent: 'center' },
+    emptyContainer: { flexGrow: 1 },
+    // The empty and error states stay in the middle of the room under the header.
+    emptyFill: { flexGrow: 1, justifyContent: 'center' },
 
     card: { backgroundColor: B.tile, borderRadius: radius.card, padding: spacing.md, marginBottom: 12 },
     cardHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
