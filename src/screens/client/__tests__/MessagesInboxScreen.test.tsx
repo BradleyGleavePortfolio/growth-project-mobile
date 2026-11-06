@@ -593,3 +593,30 @@ describe('LO-935R3 B1: the unread ring keeps the drawn old-style figure', () => 
     expect(flat(el).fontVariant ?? []).not.toContain('lining-nums');
   });
 });
+
+// LO-935R4 C1, rechecked at the main merge for LS-935R5. This is the previously documented
+// non-blocking shade difference outside the fix commits, not an earlier B-TEST.
+describe('LO-935R4 C1: Roman\'s portrait ring on the coached card is Roman\'s gold, as drawn', () => {
+  type RingNode = { props?: { style?: StyleProp<ViewStyle> }; children?: unknown };
+  const ringsIn = (node: unknown, out: RingNode[] = []): RingNode[] => {
+    if (Array.isArray(node)) {
+      node.forEach((n) => ringsIn(n, out));
+      return out;
+    }
+    if (node === null || typeof node !== 'object') return out;
+    const n = node as RingNode;
+    const st = (StyleSheet.flatten(n.props?.style) ?? {}) as Record<string, unknown>;
+    if (st.borderWidth === 2 && st.padding === 2) out.push(n);
+    ringsIn(n.children, out);
+    return out;
+  };
+
+  it('LO-935R4 C1: the coached card rings Roman\'s portrait in colors.romanAccent (#C9A961)', async () => {
+    mockNeedsCoach.mockReturnValue(false);
+    const { u } = await show();
+    const rings = ringsIn(await u.findByTestId('inbox-roman'));
+    expect(rings.length).toBeGreaterThan(0);
+    const colours = [...new Set(rings.map((r) => (StyleSheet.flatten(r.props?.style) as ViewStyle | undefined)?.borderColor))];
+    expect(colours).toEqual(['#C9A961']);
+  });
+});
