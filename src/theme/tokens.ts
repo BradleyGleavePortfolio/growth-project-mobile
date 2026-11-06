@@ -536,6 +536,25 @@ export const forestPop = {
 } as const;
 export type ForestPopRole = keyof typeof forestPop;
 
+/**
+ * Coach inbox and Roman's drafts, K2 Style B (planning/MOCKUP3/K2/style-b, owner #196-D10: "BUILD THE PICKED
+ * STYLES AND SCREENS"). Exact drawing shades; the page is the drawn cream, not the bone page. Contrast pairs in
+ * theme/__tests__/coachInboxB.test.ts.
+ */
+export const coachInboxB = {
+  page: '#F5EFE4',
+  tile: colors.cream,
+  chip: lightTokens.bgSurface,
+  deep: colors.forest,
+  onDeep: lightTokens.textOnAccent,
+  onDeepMuted: brand[100],
+  ink: colors.ink,
+  body: colors.charcoal,
+  muted: lightTokens.textMuted,
+  goldEdge: gold[700],
+  line: 'rgba(44,74,54,0.18)',
+} as const;
+
 /** Path Copilot status tints (style A board, owner #162-1): leaf = sent / approved, gold = waiting, still = kept / expired. */
 export const pathTint = { leaf: '#EEF4E0', gold: gold[100], still: neutral[200] } as const;
 

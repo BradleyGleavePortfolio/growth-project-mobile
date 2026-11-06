@@ -33,10 +33,10 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useIsFocused } from '@react-navigation/native';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTheme, type ThemeColors } from '../../theme/ThemeProvider';
-import { typography, radius, spacing } from '../../theme/tokens';
+import { coachInboxB as B, typography, radius, spacing } from '../../theme/tokens';
 import ErrorBoundary from '../../components/ErrorBoundary';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import {
@@ -54,6 +54,7 @@ import { coachAiExecutionApi } from '../../api/coachAiExecutionApi';
 import { QuietError, QuietLoading, loadFailureMessage } from '../../ui/states/QuietStates';
 import { PATH_DRAFTS_KEY, PathChangeDrafts, usePathChangeDrafts } from './copilot/PathChangeDrafts';
 import { useScreenInsets } from '../../ui/layout/Screen';
+import { draftKinds } from './inboxStyleB';
 
 /** Roles allowed to see + decide AI drafts. Mirrors backend
  *  `@Roles('coach', 'owner')` on the gateway list/decide endpoints. */
@@ -61,8 +62,9 @@ const ALLOWED_ROLES = new Set(['coach', 'owner']);
 
 export default function PendingAiDraftsScreen(): React.ReactElement {
   const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const styles = useMemo(() => makeStyles(), []);
   const isFocused = useIsFocused();
+  const navigation = useNavigation();
   const queryClient = useQueryClient();
   const user = useCurrentUser();
   // The stack draws no header here: the title clears the status bar itself.
@@ -131,15 +133,34 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
   // in their own surface.
   const renderable = allRows.filter((r) => isStream2Capability(r.capability));
   const isMutating = approveMutation.isPending || rejectMutation.isPending;
+  const kinds = draftKinds(allRows);
 
   return (
     <ErrorBoundary>
       <View style={styles.root} testID="pending-ai-drafts-screen">
-        <View style={[styles.header, { paddingTop: 16 + insets.top }]}>
-          <Text style={styles.headerTitle}>Pending AI drafts</Text>
+        <View style={[styles.header, { paddingTop: 8 + insets.top }]}>
+          {navigation.canGoBack() ? (
+            <Pressable onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Back" hitSlop={8} style={styles.back}>
+              <Ionicons name="chevron-back" size={26} color={B.ink} />
+            </Pressable>
+          ) : null}
+          <Text style={kinds.total > 0 ? styles.eyebrow : styles.headerTitle}>Pending AI drafts</Text>
+          {kinds.total > 0 ? (
+            <Text style={styles.headerTitle} maxFontSizeMultiplier={1.3}>{`Roman has ${kinds.total} ${kinds.total === 1 ? 'draft' : 'drafts'} ready`}</Text>
+          ) : null}
           <Text style={styles.headerSubtitle}>
             Review what the AI proposed before it reaches your clients.
           </Text>
+          {kinds.kinds.length > 0 ? (
+            <View style={styles.kindRow} testID="pending-ai-drafts-kinds">
+              {kinds.kinds.map((k) => (
+                <View key={k.label} style={styles.kindTile} accessible accessibilityLabel={`${k.count} ${k.label}`}>
+                  <Text style={styles.kindCount} maxFontSizeMultiplier={1.3}>{k.count}</Text>
+                  <Text style={styles.kindLabel} numberOfLines={2}>{k.label}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
         </View>
 
         <FlatList
@@ -154,7 +175,6 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
               draft={item}
               capability={item.capability as CoachAiDraftCapability}
               styles={styles}
-              colors={colors}
               onApprove={onApprove}
               onReject={onReject}
               disabled={isMutating}
@@ -209,7 +229,6 @@ interface DraftCardProps {
   draft: AiActionDraftRow;
   capability: CoachAiDraftCapability;
   styles: ReturnType<typeof makeStyles>;
-  colors: ThemeColors;
   onApprove: (draftId: string) => void;
   onReject: (draftId: string) => void;
   disabled: boolean;
@@ -219,7 +238,6 @@ function DraftCard({
   draft,
   capability,
   styles,
-  colors,
   onApprove,
   onReject,
   disabled,
@@ -240,7 +258,7 @@ function DraftCard({
           <Ionicons
             name={iconForCapability(capability)}
             size={18}
-            color={colors.primary}
+            color={B.onDeep}
           />
         </View>
         <View style={styles.cardHeaderTextWrap}>
@@ -325,121 +343,46 @@ export type { AiActionDraftRow };
 
 // ─── styles ───────────────────────────────────────────────────────────────
 
-function makeStyles(colors: ThemeColors) {
+function makeStyles() {
   return StyleSheet.create({
-    root: { flex: 1, backgroundColor: colors.background },
-    header: {
-      paddingHorizontal: 20,
-      paddingTop: 16,
-      paddingBottom: 12,
-      backgroundColor: colors.background,
-    },
-    headerTitle: { ...typography.h2, color: colors.textPrimary },
-    headerSubtitle: {
-      ...typography.body,
-      color: colors.textSecondary,
-      marginTop: 4,
-    },
+    // K2 Style B (owner #196-D10): the drawn cream page and tiles, colours from coachInboxB.
+    root: { flex: 1, backgroundColor: B.page },
+    header: { paddingHorizontal: 24, paddingBottom: 16, gap: 6 },
+    back: { width: 44, height: 44, marginLeft: -10, alignItems: 'center', justifyContent: 'center' },
+    eyebrow: { fontFamily: 'Inter_600SemiBold', fontSize: 13, lineHeight: 18, fontWeight: '600', letterSpacing: 1.6, textTransform: 'uppercase', color: B.muted },
+    headerTitle: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 34, lineHeight: 43, fontWeight: '400', color: B.ink },
+    headerSubtitle: { ...typography.body, color: B.muted },
+    kindRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
+    kindTile: { flex: 1, backgroundColor: B.tile, borderRadius: radius.card, paddingVertical: 14, paddingHorizontal: 14, gap: 2 },
+    kindCount: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 34, lineHeight: 43, color: B.deep },
+    kindLabel: { fontFamily: 'Inter_600SemiBold', fontSize: 15, lineHeight: 20, fontWeight: '600', color: B.body },
 
-    listContainer: { paddingHorizontal: 16, paddingBottom: 32 },
+    listContainer: { paddingHorizontal: 24, paddingBottom: 32 },
     emptyContainer: { flexGrow: 1, justifyContent: 'center' },
 
-    card: {
-      backgroundColor: colors.surface,
-      borderRadius: radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      padding: spacing.md,
-      marginBottom: spacing.md,
-    },
-    cardHeaderRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing.sm,
-    },
-    cardHeaderIconWrap: {
-      width: 32,
-      height: 32,
-      borderRadius: radius.lg,
-      backgroundColor: colors.background,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
+    card: { backgroundColor: B.tile, borderRadius: radius.card, padding: spacing.md, marginBottom: 12 },
+    cardHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    cardHeaderIconWrap: { width: 36, height: 36, borderRadius: radius.chip, backgroundColor: B.deep, alignItems: 'center', justifyContent: 'center' },
     cardHeaderTextWrap: { flex: 1 },
-    cardTitle: { ...typography.bodyMd, color: colors.textPrimary },
-    cardSubtitle: {
-      ...typography.bodySmall,
-      color: colors.textMuted,
-      marginTop: 2,
-    },
-    aiBadge: {
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-      borderRadius: radius.pill,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-    },
-    aiBadgeText: {
-      ...typography.caption,
-      color: colors.textMuted,
-    },
+    cardTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 17, lineHeight: 22, fontWeight: '600', color: B.ink },
+    cardSubtitle: { ...typography.bodySmall, color: B.muted, marginTop: 2 },
+    aiBadge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: radius.pill, backgroundColor: B.chip },
+    aiBadgeText: { fontFamily: 'Inter_600SemiBold', fontSize: 13, lineHeight: 18, fontWeight: '600', color: B.deep },
 
-    cardPreviewWrap: {
-      marginTop: 12,
-      paddingTop: 12,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.border,
-    },
-    previewBody: {
-      ...typography.body,
-      color: colors.textPrimary,
-    },
+    cardPreviewWrap: { marginTop: 10 },
+    previewBody: { fontFamily: 'Inter_400Regular', fontSize: 16, lineHeight: 22, color: B.body },
 
-    cardActionRow: {
-      flexDirection: 'row',
-      justifyContent: 'flex-end',
-      gap: spacing.sm,
-      marginTop: 16,
-    },
-    btn: {
-      paddingVertical: 10,
-      paddingHorizontal: 18,
-      borderRadius: radius.lg,
-      alignItems: 'center',
-      justifyContent: 'center',
-      minWidth: 96,
-    },
-    btnReject: {
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      backgroundColor: colors.background,
-    },
-    btnRejectText: {
-      ...typography.bodyMd,
-      color: colors.textPrimary,
-    },
-    btnApprove: { backgroundColor: colors.primary },
-    btnApproveText: {
-      ...typography.bodyMd,
-      color: colors.textOnPrimary,
-    },
+    cardActionRow: { flexDirection: 'row', justifyContent: 'flex-end', flexWrap: 'wrap', gap: spacing.sm, marginTop: 14 },
+    btn: { minHeight: 44, paddingVertical: 10, paddingHorizontal: 18, borderRadius: radius.button, alignItems: 'center', justifyContent: 'center', minWidth: 96 },
+    btnReject: { borderWidth: 1, borderColor: B.line, backgroundColor: B.chip },
+    btnRejectText: { ...typography.bodyMd, color: B.ink },
+    btnApprove: { backgroundColor: B.deep },
+    btnApproveText: { ...typography.bodyMd, color: B.onDeep },
     btnDisabled: { opacity: 0.5 },
 
-    emptyState: {
-      alignItems: 'center',
-      paddingHorizontal: 32,
-    },
+    emptyState: { alignItems: 'center', paddingHorizontal: 32 },
     emptyIcon: { marginBottom: 12 },
-    emptyTitle: {
-      ...typography.h3,
-      color: colors.textPrimary,
-      textAlign: 'center',
-    },
-    emptyBody: {
-      ...typography.body,
-      color: colors.textSecondary,
-      textAlign: 'center',
-      marginTop: 8,
-    },
+    emptyTitle: { ...typography.h3, color: B.ink, textAlign: 'center' },
+    emptyBody: { ...typography.body, color: B.body, textAlign: 'center', marginTop: 8 },
   });
 }
