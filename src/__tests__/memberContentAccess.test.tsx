@@ -31,8 +31,9 @@
  *     the gap (delete its KNOWN GAP row so the rule is enforced from now on) or broke the harness (fix the harness).
  *   - "stale row": a registered file moved, or no longer reads or sends member content. Update or remove the row.
  * The composers are drawn in memberContentAccess.composers.test.tsx (the same registry rows, by file).
- * Space chat (m#871, m#879, m#887, m#897) is not on main: when it merges the scan names its screen and its hook
- *   (screens/community/CommunitySpaceChatScreen.tsx, components/community/space-chat/useSpaceChat.ts) until they are rows.
+ * Space chat (m#871, m#879, m#887, m#897): its data layer is the SPLIT-938C rows below (useSpaceChat, spaceChatOutbox,
+ *   useSpaceVoiceOutbox, spaceChatApi); its screen (screens/community/CommunitySpaceChatScreen.tsx) comes in a later part,
+ *   and the scan names it until it is a row.
  */
 import fs from 'fs';
 import path from 'path';
@@ -167,10 +168,28 @@ const REGISTRY: Surface[] = [
     proof: gap('screens/client/CommunityScreen.tsx:CommunityScreen', 'ban, departure',
       'the wins form asks no closed gate, so a banned or departed member can type and send a win (the server decides)',
       { lacks: /useConversationClosed|isClosedRefusal|useBlockedUsersStore/ }) },
+  // KT2-940 (LO-940R2 C1, 6675884966): m#940 (NUDGE-GATE-M) gated Send Nudge on the client file and the risk screen
+  // through useNudgeGate, so their KNOWN GAP rows were untrue; they are gated composers now, proved by their suites.
+  { file: 'screens/coach/ClientDetailScreen.tsx', kind: 'composer', what: 'a typed nudge (title and body) pushed to a client (coachApi.sendNudge)',
+    how: 'useNudgeGate(clientId): Send Nudge and the nudge form only while it says open; my block (block store), their block or a closed chat (closed_client_ids) and a refusal remembered this session close it and draw the closed line; unknown is closed; a refused send closes it (close(err)); a pull reads again',
+    proof: { by: 'suite', file: 'screens/coach/__tests__/ClientFileNudgeGateNGM.test.tsx', titles: [
+      '$name: Send Nudge $nudge, closed line $line',
+      'a pull to refresh reads the pair again: an unblock on the server brings Send Nudge back',
+    ] } },
+  { file: 'screens/coach/ClientDetailScreen.tsx', kind: 'composer', what: 'the same nudge: the gate keeps a refusal while the pair is unknown, and a refused send closes it',
+    how: 'useNudgeGate: an unknown pair (read out, offline, block list not read) stays closed and keeps the refusal; close(err) closes only on a blocked refusal',
+    proof: { by: 'suite', file: 'screens/coach/__tests__/NudgeGateRefusalFIX940.test.tsx', titles: [
+      '$name: still closed, no nudge, the refusal kept',
+      'the server answers closed: still closed, the refusal kept',
+      '$name: closes $closes',
+    ] } },
+  { file: 'screens/coach/ClientRiskDetailScreen.tsx', kind: 'composer', what: 'a fixed check-in nudge pushed to a client (coachApi.sendNudge)',
+    how: 'useNudgeGate(userId): \'Send check-in nudge\' only while it says open; my block, their block or a closed chat and a refusal remembered this session close it and draw the closed line; unknown is closed; a refused send closes it (close(err))',
+    proof: { by: 'suite', file: 'screens/coach/__tests__/ClientRiskNudgeGateNGM.test.tsx', titles: [
+      '$name: nudge $nudge, closed line $line',
+    ] } },
   ...([
-    ['screens/coach/ClientDetailScreen.tsx', 'ClientDetailScreen:sendNudge', 'a typed nudge (title and body)'],
     ['screens/coach/lookup/useLookupNudge.tsx', 'useLookupNudge', 'a typed nudge from the coach lookup'],
-    ['screens/coach/ClientRiskDetailScreen.tsx', 'ClientRiskDetailScreen:sendNudge', 'a fixed check-in nudge'],
   ] as const).map(([file, fn, what]): Surface => ({
     file, kind: 'composer', what: `${what} pushed to a client (coachApi.sendNudge)`, how: 'none: no closed gate before the send',
     proof: gap(`${file}:${fn}`, 'block (both ways), closed conversation',
@@ -286,20 +305,24 @@ const REGISTRY: Surface[] = [
     const file = 'components/community/space-chat/__tests__/spaceChatKT2.test.tsx';
     const BLOCK = 'KT-2: a block drops the rows of the blocked author, and every quote of them, from the kept list at once';
     const READ = 'KT-2: a read refused with 403 (a ban, a departure, another workspace) closes the space and leaves nothing readable';
+    const READ_HELD = 'KT-2: a read refused with $status mid-visit (a ban, a departure, another workspace) ends reply mode and the sheet and leaves the cached messages unreadable';
+    const BLOCK_UNHELD = 'KT-2: a block also ends reply mode on, and empties a waiting reply to, a message of the blocked author the phone never held';
     const SEND = 'KT-2: a text refused with 403 fails as closed (never sent again) and closes the space';
     const WIRE = 'KT-2: 403 and 404 are no access; any other failure is not';
     return [
       { file: 'components/community/space-chat/useSpaceChat.ts', kind: 'list', what: 'one space\'s messages (text, voice, photo, quotes) and its read line',
-        how: 'the server leaves out blocks (both ways), bans and departed authors; my block (dropAuthor) takes the author\'s rows and every quote of them from every kept list at once; a read or send refused with 403 / 404 closes the space (noAccess: nothing readable, no sheet, no reply)',
-        proof: { by: 'suite', file, titles: [BLOCK, READ, SEND] } },
+        how: 'the server leaves out blocks (both ways), bans and departed authors; my block (dropAuthor) takes the author\'s rows and every quote of them (held this visit, or by who wrote it) from every kept list, reply mode and a waiting reply at once; a read or send refused with 403 / 404 closes the space, mid-visit too (noAccess: nothing readable, no sheet, no reply)',
+        proof: { by: 'suite', file, titles: [BLOCK, BLOCK_UNHELD, READ, READ_HELD, SEND] } },
+      // FIX-942 (LO-942 N2): the row claims only what SEND proves; the account binding is proven in
+      // spaceChatOutbox.account.test.ts and LO938R2SameAccountLogin, the sign-out in LO942 / LS942SpaceSignOut.
       { file: 'components/community/space-chat/spaceChatOutbox.ts', kind: 'composer', what: 'the space chat text outbox (texts queued on the phone, sent one at a time)',
-        how: 'a 403 / 404 fails the row as closed (never sent again) and tells the open space; a text goes out only as the account that queued it; a sign-out wipes the queue',
+        how: 'a 403 / 404 fails the row as closed (never sent again) and tells the open space',
         proof: { by: 'suite', file, titles: [SEND] }, exports: ['spaceOutbox', 'startSpaceOutbox', 'setSpaceOutboxOnline'] },
       { file: 'components/community/space-chat/useSpaceVoiceOutbox.ts', kind: 'composer', what: 'the space chat\'s voice notes on the voice outbox (useVoiceOutbox)',
         how: 'holds only my own notes for this space and sends into this space only; the record entry is drawn only by the space chat while the space is open',
         proof: { by: 'suite', file, titles: ['KT-2: the space voice outbox holds only my notes for this space, and sends into this space only'] } },
       ...(['list', 'composer'] as const).map((kind): Surface => ({ file: 'components/community/space-chat/spaceChatApi.ts', kind,
-        what: 'the space chat wire (messages read, send, delete)', how: 'the server leaves out blocks (both ways), bans and departed authors and refuses a send with 403 / 404 (isNoAccess), which the hook and the outbox turn into a closed space',
+        what: 'the space chat wire (messages read, send, delete)', how: 'the server leaves out blocks (both ways), bans and departed authors and refuses a send with 403 / 404 (isNoAccess), which the hook and the outbox turn into a closed space; the row stops nothing (exports: [], LS-942 N1), so every caller is named on its own',
         proof: { by: 'suite', file, titles: [WIRE] }, exports: [] })),
       // Part 2: the rows. A row is drawn only for a message useSpaceChat hands the screen (above).
       { file: 'components/community/space-chat/SpaceVoiceNote.tsx', kind: 'list', what: 'one space voice row\'s note (communityVoiceApi.getOne, for its playable copy)',
@@ -319,8 +342,9 @@ const REGISTRY: Surface[] = [
     ['screens/coach/lookup/ClientLookupScreen.tsx', 'a typed nudge from the lookup (useLookupNudge)', ['screens/coach/lookup/useLookupNudge.tsx']],
     ['navigation/CommunityNavigator.tsx', 'the voice note composer route', ['screens/community/CommunityVoiceComposerScreen.tsx']],
     ['navigation/ClientNavigator.tsx', 'the wins route (CommunityScreen)', ['screens/client/CommunityScreen.tsx']],
-    ['navigation/CoachNavigator.tsx', 'the client detail and risk detail routes (a nudge)', ['screens/coach/ClientDetailScreen.tsx', 'screens/coach/ClientRiskDetailScreen.tsx']],
   ] as const).map(([file, what, parts]): Surface => ({ file, kind: 'composer', what, how: 'the part\'s own (its KNOWN GAP row)', proof: { by: 'via', parts: [...parts] } })),
+  // KT2-940: CoachNavigator's via row for the client detail and risk detail routes went with their KNOWN GAP rows: both
+  // screens are gated composers now (rows above), so their own rows stop the scan and the navigator draws no gap part.
   ...([
     ['navigation/CommunityNavigator.tsx', 'the community routes (today, a space, a post, a challenge, search, a voice note)', [
       'screens/community/CommunityTodayScreen.tsx', 'screens/community/CommunitySpaceScreen.tsx', 'screens/community/CommunityThreadScreen.tsx',
@@ -1876,7 +1900,8 @@ it('LO-911R4 outside: no case in this file writes a fixture under src/', () => {
 // ─── FIX-911R4 (LO-911R4 B1, class-first): every via row, every part ──────────────────────────────────────────────
 // A via row's parts read as empty only at its file's own root and in the exports the row stops (default and file-named,
 // or the row's exports), and in a local those reach. Any other export of a via file carries its parts' kinds on, so a
-// new screen that draws a gap part through it is named. One case per via row and part (all 11 rows, 18 parts).
+// new screen that draws a gap part through it is named. One case per via row and part (all 10 rows, 16 parts;
+// KT2-940: CoachNavigator's via row went when its two parts were gated).
 describe('FIX-911R4: a via row mutes its parts only at its root and in the exports it stops', () => {
   const ctx0 = scanCtx();
   const cases = REGISTRY.flatMap((s) => (s.proof.by === 'via' ? s.proof.parts.map((part) => [s.kind, s.file, part] as [Kind, string, string]) : []));
@@ -1889,7 +1914,7 @@ describe('FIX-911R4: a via row mutes its parts only at its root and in the expor
     return [s, `import React from 'react';\nimport { FIX911R4Wrap } from './${base}';\nexport default function FIX911R4Card() { return <FIX911R4Wrap />; }\n`] as const;
   };
   it('every via part is imported by a name the cases below draw', () => {
-    expect(cases.length).toBe(18);
+    expect(cases.length).toBe(16);
     expect(cases.filter(([, f, p]) => !localOf(f, p)).map(([k, f, p]) => `${k} ${f} ${p}`)).toEqual([]);
   });
   it.each(cases)('%s via %s: a new export drawing %s, drawn on a new screen, names that screen (the via file stays muted)', (kind, file, part) => {
