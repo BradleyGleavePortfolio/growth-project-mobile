@@ -51,8 +51,11 @@ export function RomanDraftsHero(): React.ReactElement | null {
   if (n === 0) return null;
   return (
     <View style={s.hero} testID="inbox-roman-drafts">
-      <View style={s.ring}><RomanAvatar crop="neutral" size={44} /></View>
-      <Text style={s.heroTitle} maxFontSizeMultiplier={1.3}>{`Roman has ${n} ${n === 1 ? 'draft' : 'drafts'} ready`}</Text>
+      {/* LS-952 C1: the portrait sits beside the headline, as the drawing's portrait row does, so the card stays compact */}
+      <View style={s.heroTop}>
+        <View style={s.ring}><RomanAvatar crop="neutral" size={44} /></View>
+        <Text style={s.heroTitle} maxFontSizeMultiplier={1.3}>{`Roman has ${n} ${n === 1 ? 'draft' : 'drafts'} ready`}</Text>
+      </View>
       <View style={s.heroChips}>
         {kinds.map((k) => (
           <View key={k.label} style={s.heroChip}>
@@ -152,20 +155,22 @@ export const inboxB = StyleSheet.create({
   retryText: { fontFamily: 'Inter_600SemiBold', fontSize: 16, fontWeight: '600', color: B.deep },
   search: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48, backgroundColor: B.chip, borderRadius: radius.input, borderWidth: 1, borderColor: B.line, paddingHorizontal: 14 },
   searchOn: { borderColor: B.deep, borderWidth: 1.5 },
-  searchInput: { flex: 1, minHeight: 44, fontFamily: 'Inter_400Regular', fontSize: 16, color: B.ink, paddingVertical: 10 },
+  // LS-952 C2: minWidth 0 lets the field give way to the clear control (a web input keeps its own width otherwise)
+  searchInput: { flex: 1, minWidth: 0, minHeight: 44, fontFamily: 'Inter_400Regular', fontSize: 16, color: B.ink, paddingVertical: 10 },
   clear: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', marginRight: -10 },
   allRead: { backgroundColor: B.tile, borderRadius: radius.card, padding: 20, fontFamily: 'Inter_400Regular', fontSize: 16, lineHeight: 23, color: B.body },
 });
 
 const s = StyleSheet.create({
   pressed: { opacity: 0.85 },
-  hero: { backgroundColor: B.deep, borderRadius: radius.sheet, padding: 20, gap: 16 },
-  ring: { alignSelf: 'flex-start', borderWidth: 2, borderColor: B.goldEdge, borderRadius: radius.chip, padding: 2 },
-  heroTitle: { fontFamily: SERIF, fontSize: 30, lineHeight: 38, fontWeight: '400', fontVariant: ['lining-nums'], color: B.onDeep, marginTop: -4 },
+  hero: { backgroundColor: B.deep, borderRadius: radius.sheet, padding: 20, gap: 14 },
+  heroTop: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  ring: { flexShrink: 0, borderWidth: 2, borderColor: B.goldEdge, borderRadius: radius.chip, padding: 2 },
+  heroTitle: { flex: 1, fontFamily: SERIF, fontSize: 30, lineHeight: 38, fontWeight: '400', fontVariant: ['lining-nums'], color: B.onDeep },
   heroChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   heroChip: { borderRadius: radius.chip, borderWidth: 1, borderColor: B.onDeepMuted, paddingHorizontal: 12, paddingVertical: 6 },
   heroChipText: { fontFamily: 'Inter_500Medium', fontSize: 15, lineHeight: 20, color: B.onDeep },
-  heroBtn: { minHeight: 54, borderRadius: radius.button, backgroundColor: B.onDeep, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, paddingVertical: 12 },
+  heroBtn: { minHeight: 52, borderRadius: radius.button, backgroundColor: B.onDeep, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, paddingVertical: 12 },
   heroBtnText: { fontFamily: 'Inter_600SemiBold', fontSize: 17, lineHeight: 22, fontWeight: '600', color: B.deep, textAlign: 'center' },
   tile: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: B.tile, borderRadius: radius.card, paddingVertical: 16, paddingHorizontal: 14, marginBottom: 10 },
   ghostTile: { height: 72, borderRadius: radius.card, backgroundColor: B.ghost, marginBottom: 10 },
