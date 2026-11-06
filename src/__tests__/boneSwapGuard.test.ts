@@ -88,29 +88,10 @@ describe('bone swap guard (#166-2)', () => {
     expect(findOldBone(`'${NEW_BONE}'`)).toEqual([]);
   });
 
-  // Owner #196-D10 ("BUILD THE PICKED STYLES AND SCREENS - THE BUILT ONES IN THE TOOTHPASTE COLOR ARE HORRIBLE"):
-  // the coach inbox and Roman's drafts take the K2 Style B drawing's page, which is the old bone. One token line
-  // only, marked in place; every other use still fails.
-  const EXEMPT_FILE = path.join('src', 'theme', 'tokens.ts');
-  const EXEMPT_MARK = 'bone-guard exemption: owner #196-D10, K2 Style B page';
-  const withoutExempt = (file: string, text: string) =>
-    path.relative(REPO_ROOT, file) === EXEMPT_FILE
-      ? text.split(/\r?\n/).map((l) => (l.includes(EXEMPT_MARK) && /^\s*page: '#[0-9A-F]{6}', \/\//i.test(l) ? '' : l)).join('\n')
-      : text;
-
-  it('the K2 Style B exemption is one line, the coach inbox page token', () => {
-    const lines = fs.readFileSync(path.join(REPO_ROOT, EXEMPT_FILE), 'utf8').split(/\r?\n/);
-    const marked = lines.filter((l) => l.includes(EXEMPT_MARK));
-    expect(marked).toHaveLength(1);
-    expect(findOldBone(marked[0])).toEqual(['line 1']);
-    const at = lines.indexOf(marked[0]);
-    expect(lines.slice(Math.max(0, at - 3), at).join('\n')).toContain('export const coachInboxB = {');
-  });
-
   it('no file under src/ uses the old bone', () => {
     const offenders: string[] = [];
     for (const file of walk(SRC_ROOT, [])) {
-      const hits = findOldBone(withoutExempt(file, fs.readFileSync(file, 'utf8')));
+      const hits = findOldBone(fs.readFileSync(file, 'utf8'));
       if (hits.length > 0) {
         offenders.push(`${path.relative(REPO_ROOT, file)} (${hits.join(', ')})`);
       }

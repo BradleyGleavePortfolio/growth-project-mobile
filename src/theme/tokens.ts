@@ -538,11 +538,12 @@ export type ForestPopRole = keyof typeof forestPop;
 
 /**
  * Coach inbox and Roman's drafts, K2 Style B (planning/MOCKUP3/K2/style-b, owner #196-D10: "BUILD THE PICKED
- * STYLES AND SCREENS"). Exact drawing shades; the page is the drawn cream, not the bone page. Contrast pairs in
+ * STYLES AND SCREENS"). Exact drawing shades for the tiles, cards and monograms; the page is the app page, not the
+ * drawn cream (owner #197-E6: "#196-D13 - we keep the toothpaste color for v1"). Contrast pairs in
  * theme/__tests__/coachInboxB.test.ts.
  */
 export const coachInboxB = {
-  page: '#F5EFE4', // bone-guard exemption: owner #196-D10, K2 Style B page (boneSwapGuard.test.ts)
+  page: lightTokens.bgPrimary,
   tile: colors.cream,
   chip: lightTokens.bgSurface,
   deep: colors.forest,

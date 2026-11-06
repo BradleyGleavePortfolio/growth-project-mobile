@@ -1,7 +1,7 @@
 /**
  * D10-BUILD-INBOX (owner #196-D10, K2 Style B): the coach Messages tab shows Roman's drafts card only while Stream 2
- * drafts wait, its button opens the Pending AI drafts screen, the page is the drawn cream (not the bone page), and
- * the drafts screen counts drafts by kind.
+ * drafts wait, its button opens the Pending AI drafts screen, the page is the app page (owner #197-E6), and the
+ * drafts screen counts drafts by kind.
  */
 import React from 'react';
 import { StyleSheet } from 'react-native';
@@ -87,12 +87,12 @@ it('never reads drafts for a non-coach session', async () => {
   expect(mockDrafts).not.toHaveBeenCalled();
 });
 
-it('sits on the drawn cream page, not the bone page', async () => {
+it('sits on the app page (owner #197-E6)', async () => {
   mockDrafts.mockReturnValue({ data: { drafts: [] } });
   const view = await render(<MessagesScreen />);
   const bg = StyleSheet.flatten((await view.findByTestId('coach-messages')).props.style).backgroundColor;
   expect(bg).toBe(coachInboxB.page);
-  expect(String(bg).toUpperCase()).not.toBe('#F7FAF7');
+  expect(String(bg).toUpperCase()).toBe('#F7FAF7');
 });
 
 it('the drafts screen says how many wait, counts them by kind, and Back goes back', async () => {
