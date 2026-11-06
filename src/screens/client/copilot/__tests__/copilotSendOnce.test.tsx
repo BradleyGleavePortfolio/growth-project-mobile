@@ -37,8 +37,8 @@ const sent = (n: number): { question: string; key: string } => {
   return { question, key: opts.idempotencyKey as string };
 };
 
-const mount = () => renderHook(() => useCopilotAsk(deps));
-type Hook = ReturnType<typeof mount>['result'];
+const mount = async () => renderHook(() => useCopilotAsk(deps));
+type Hook = Awaited<ReturnType<typeof mount>>['result'];
 const ask = async (result: Hook, text: string, retryId?: string) => {
   let outcome: string | undefined;
   await act(async () => { outcome = await result.current.ask(text, retryId); });
@@ -55,7 +55,7 @@ it.each([
   ['a timeout', TIMEOUT],
   ['a 5xx', SERVER_DOWN],
 ])('Try again after %s sends the same question with the same key', async (_label, err) => {
-  const { result } = mount();
+  const { result } = await mount();
   send.mockRejectedValueOnce(err);
   expect(await ask(result, 'Why did my calories change?')).toBe('failed');
   const turn = result.current.turns[0];
@@ -67,7 +67,7 @@ it.each([
   ['a cut stream', CUT_STREAM],
   ['a stream with no done frame', NO_DONE_FRAME],
 ])('asking the same words again after %s (the question may be stored) sends the same key', async (_label, err) => {
-  const { result } = mount();
+  const { result } = await mount();
   send.mockRejectedValueOnce(err);
   expect(await ask(result, 'Why did my calories change?')).toBe('stored');
   expect(await ask(result, 'Why did my calories change?')).toBe('sent');
@@ -75,7 +75,7 @@ it.each([
 });
 
 it('new words after a failure make a new key', async () => {
-  const { result } = mount();
+  const { result } = await mount();
   send.mockRejectedValueOnce(NO_ANSWER);
   await ask(result, 'Why did my calories change?');
   await ask(result, 'Why did my target change?');
@@ -84,7 +84,7 @@ it('new words after a failure make a new key', async () => {
 });
 
 it('an answer ends the key: the same words asked again are a new question with a new key', async () => {
-  const { result } = mount();
+  const { result } = await mount();
   await ask(result, 'How was my week?');
   await ask(result, 'How was my week?');
   expect(sent(1).key).not.toBe(sent(0).key);
@@ -94,7 +94,7 @@ it.each([
   ['a 400 / 409 refusal', REFUSED],
   ['a coded no-reply frame', NO_REPLY_FRAME],
 ])('after %s the next send of the same words makes a new key', async (_label, err) => {
-  const { result } = mount();
+  const { result } = await mount();
   send.mockRejectedValueOnce(err);
   await ask(result, 'Why did my calories change?');
   const turn = result.current.turns[0];
