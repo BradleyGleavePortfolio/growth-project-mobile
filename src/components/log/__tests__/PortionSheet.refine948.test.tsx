@@ -49,13 +49,15 @@ describe.each([320, 390])('FIX-948R1 drawing values at %i pt', (width) => {
     expect(unit).toBeDefined();
     expect(flat(unit!)).toMatchObject({ fontFamily: 'Inter_400Regular', fontSize: 16, color: lightTokens.textMuted });
     expect(flat(screen.getByTestId('portion-summary'))).toMatchObject({
-      fontSize: 14, lineHeight: 20.02, color: lightTokens.textMuted, marginTop: 4, marginBottom: 4,
+      fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20.02,
+      color: lightTokens.textMuted, marginTop: 4, marginBottom: 4,
     });
     expect(flat(screen.getByTestId('portion-after-plate'))).toMatchObject({
-      fontSize: 14, lineHeight: 20.02, color: lightTokens.textPrimary, marginTop: 0, marginBottom: 10,
+      fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20.02,
+      color: lightTokens.textPrimary, marginTop: 0, marginBottom: 10,
     });
     expect(flat(screen.getByText('1 serving = 100 g'))).toMatchObject({
-      fontSize: 14, lineHeight: 20.02, color: lightTokens.textMuted, marginTop: 4,
+      fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20.02, color: lightTokens.textMuted, marginTop: 4,
     });
     expect(flat(screen.getByTestId('quantity-log-food'))).toMatchObject({ marginTop: 10, marginBottom: 0 });
     expect(flat(screen.getByText('For Lunch'))).toMatchObject({
