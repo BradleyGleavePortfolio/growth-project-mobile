@@ -201,7 +201,7 @@ describe('Coach Tools section wires the previously-disconnected routes', () => {
 
   it('InviteCodesScreen has a bulk-invite button and redeemer drilldown', () => {
     const src = readSrc('screens/coach/InviteCodesScreen.tsx');
-    expect(src).toContain("navigate('CoachBulkInvite')");
+    expect(src).toContain("navigate('BulkInvite')");
     expect(src).toContain("'InviteCodeRedeemers'");
   });
 });
