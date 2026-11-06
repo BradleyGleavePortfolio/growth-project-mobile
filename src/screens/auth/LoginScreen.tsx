@@ -509,11 +509,15 @@ export default function LoginScreen({ navigation, route }: Props) {
         }
       >
         <Headline style={styles.bTitle}>Sign in to your account</Headline>
-        <View style={f.providers}>
-          <View pointerEvents={appleLoading ? 'none' : 'auto'}>
-            <AppleSignInButton onPress={() => handleAppleLogin()} label="SIGN_IN" cornerRadius={radius.button} style={{ height: layout.buttonHeight }} onAvailable={() => setAppleShown(true)} />
-            {appleLoading ? <ActivityIndicator color={colors.textPrimary} style={styles.appleSpinner} /> : null}
-          </View>
+        <View style={f.providers} testID="login-providers">
+          {/* Sign in with Apple is iOS only (AppleSignInButton draws nothing elsewhere), so off iOS its empty slot
+              would add the stack's 12 pt gap above Google (LO-935R2 C1; B_signin_android360 draws none). */}
+          {Platform.OS === 'ios' ? (
+            <View pointerEvents={appleLoading ? 'none' : 'auto'}>
+              <AppleSignInButton onPress={() => handleAppleLogin()} label="SIGN_IN" cornerRadius={radius.button} style={{ height: layout.buttonHeight }} onAvailable={() => setAppleShown(true)} />
+              {appleLoading ? <ActivityIndicator color={colors.textPrimary} style={styles.appleSpinner} /> : null}
+            </View>
+          ) : null}
           {googleEnabled ? (
             <TouchableOpacity style={[f.googleButton, googleLoading && styles.buttonDisabled]} onPress={() => handleGoogleLogin()} disabled={googleLoading}
               accessibilityRole="button" accessibilityLabel="Continue with Google" accessibilityState={{ disabled: googleLoading, busy: googleLoading }}>
