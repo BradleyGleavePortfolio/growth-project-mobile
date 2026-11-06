@@ -59,7 +59,7 @@ export default function NeedsYouList(p: NeedsYouListProps) {
   const rowHit = (r: NeedsClientRow) => !q || matchesRosterSearch(r.client, q);
   const now = p.now ?? new Date();
   const safetyOpen = a.safety.length > 0;
-  const held = p.loading || !!p.error; // the clients are not verified yet (LS-934 B2)
+  const held = p.loading || !!p.error || p.alertsFailed; // no complete total until every counted read answers
 
   const avatar = (text: string, gold = false) => (
     <View style={[s.avatar, gold && s.avatarGold]}><Text style={s.avatarText} maxFontSizeMultiplier={1.3}>{text}</Text></View>
@@ -166,7 +166,7 @@ export default function NeedsYouList(p: NeedsYouListProps) {
         {group('Safety', a.safety, safetyRow, { safety: true })}
         {group('Alerts', a.alerts, alertRow)}
         {p.loading ? <QuietLoading label="Loading who needs you" rows={5} testID="needs-loading" />
-          : <QuietError message={p.error ?? ''} onRetry={p.onRetry} testID="needs-error" />}
+          : <QuietError message={p.error ?? 'Alerts did not load. Pull down to try again.'} onRetry={p.onRetry} testID={p.error ? 'needs-error' : 'needs-alerts-error'} />}
       </>
     );
   } else if (a.total === 0) {
@@ -227,7 +227,7 @@ export default function NeedsYouList(p: NeedsYouListProps) {
           <View style={s.grow} />
           {a.total > 0 ? <Text style={s.eyebrow} maxFontSizeMultiplier={1.3}>MOST URGENT FIRST</Text> : null}
         </View>
-        {/* LS-934 B2: while the clients are loading or failed, no count, roster size, search or switch the roster has not verified. */}
+        {/* No count, roster size, search or switch until every counted read is verified. */}
         <Text style={s.title} accessibilityRole="header" testID="needs-title">{held ? 'Needs you' : `Needs you, ${a.total}`}</Text>
         {held ? null : <Text style={s.sub}>{`Alerts and clients from your ${p.rosterCount}, grouped by what they need`}</Text>}
         {a.total > 0 && !held ? (
@@ -247,7 +247,7 @@ export default function NeedsYouList(p: NeedsYouListProps) {
         ) : null}
       </View>
       <View style={s.page}>
-        {p.alertsFailed ? <Text style={s.note} testID="needs-alerts-error">Alerts did not load. Pull down to try again.</Text> : null}
+        {p.alertsFailed && (p.loading || p.error) ? <Text style={s.note} testID="needs-alerts-error">Alerts did not load. Pull down to try again.</Text> : null}
         {body}
       </View>
     </ScrollView>

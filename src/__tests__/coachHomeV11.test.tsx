@@ -527,11 +527,12 @@ describe('Needs you in the client-wins style (NEEDS-YOU-M, GOAL planning/MOCKUP3
     await waitFor(() => expect(label(v, 'home-needs')).toBe('Needs you, 3. Hana Kim, Crossed into the red risk band, and 2 more. Attention 2, Routine 1'));
     expect(v.queryByTestId('home-needs-ring')).toBeNull();
   });
-  it('says the alerts did not load, and still counts the clients', async () => {
+  it('says the alerts did not load without claiming a complete Needs count', async () => {
     mockSources.actionQueue.mockRejectedValue(new Error('down'));
     const v = await renderHome();
     await waitFor(() => expect(v.getByTestId('home-needs-alerts-error')).toBeTruthy());
-    expect(label(v, 'home-needs')).toMatch(/^Needs you, 2\. /);
+    expect(v.queryByTestId('home-needs')).toBeNull();
+    expect(v.queryByText(/^Needs you, \d/)).toBeNull();
   });
   it("puts workout-change approvals in Roman's drafts as a tile, counted there once and never in Needs you", async () => {
     mockFlags.clientPathCopilot = true;

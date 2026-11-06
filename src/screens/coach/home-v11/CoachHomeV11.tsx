@@ -171,9 +171,15 @@ export default function CoachHomeV11(p: Props) {
     ) : data.rosterState === 'loading' ? (
       <View style={cs.card}><QuietLoading label="Loading who needs you" rows={1} testID="home-needs-loading" /></View>
     ) : null;
-    // LS-934 B2: a verified open safety alert never waits on the roster: its gold lead and the tap to the list stay,
-    // with no count (the clients are not verified), and the roster's own loading or Try again sits under it.
-    if (gold && (rosterHeld || data.rosterState === 'off')) {
+    const alertsHeld = data.alertsState === 'error' ? (
+      <View style={cs.card}><QuietError layout="inline" message="Alerts did not load. Pull down to try again." onRetry={() => void reload(false)} testID="home-needs-alerts-error" /></View>
+    ) : data.alertsState === 'loading' ? (
+      <View style={cs.card}><QuietLoading label="Loading who needs you" rows={1} testID="home-needs-loading" /></View>
+    ) : null;
+    const held = rosterHeld || alertsHeld;
+    // A verified safety alert never waits on another counted read: its gold lead and tap stay without a partial
+    // total, while each failed read's existing error/retry stays visible under it.
+    if (gold && (held || data.rosterState === 'off')) {
       const name = a.safety[0].client_name;
       return (
         <>
@@ -189,13 +195,11 @@ export default function CoachHomeV11(p: Props) {
             <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </Pressable>
           {rosterHeld}
+          {data.alertsState === 'error' || !rosterHeld ? alertsHeld : null}
         </>
       );
     }
-    if (rosterHeld) return rosterHeld;
-    if (data.alertsState === 'loading') {
-      return <View style={cs.card}><QuietLoading label="Loading who needs you" rows={1} testID="home-needs-loading" /></View>;
-    }
+    if (held) return <>{rosterHeld}{data.alertsState === 'error' || !rosterHeld ? alertsHeld : null}</>;
     if (o && roster === 0 && !gold) {
       return (
         <View style={[cs.card, s.needs]} testID="home-needs">
@@ -232,7 +236,6 @@ export default function CoachHomeV11(p: Props) {
               {'Attention '}<Text style={s.bold}>{a.attention}</Text>{'    Routine '}<Text style={s.bold}>{a.routineCount}</Text>
             </Text>
           ) : null}
-          {data.alertsState === 'error' ? <Text style={[cs.muted, s.small]} testID="home-needs-alerts-error">Alerts did not load. Pull down to try again.</Text> : null}
         </View>
         <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
       </Pressable>
