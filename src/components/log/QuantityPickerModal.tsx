@@ -211,8 +211,8 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   },
   quantityFoodName: {
     ...typography.h1,
-    fontSize: 30,
-    lineHeight: 38,
+    fontSize: 24,
+    lineHeight: 30,
     color: sc.textPrimary,
   },
   quantityFoodBrand: {
