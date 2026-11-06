@@ -23,6 +23,15 @@ const food = (id: string, foodName: string, calories: number, extra: Partial<Foo
   id, userId: 'user', coachId: '', date: '2026-11-05', mealType: 'breakfast', foodName, calories,
   protein: 5, carbs: 20, fat: 3, quantity: 1, unit: 'serving', createdAt: '2026-11-05T08:00:00', ...extra,
 });
+// FIX-930R2 (LO-930R2 B1): a fixed clock, never the real date. The first day (C_first) shows only on today, so the
+// clock is pinned to the fixtures' 2026-11-05 (local noon); only Date is faked, timers stay real.
+beforeAll(() => {
+  jest.useFakeTimers({ now: new Date('2026-11-05T12:00:00'), doNotFake: ['nextTick', 'setImmediate', 'clearImmediate',
+    'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'queueMicrotask', 'hrtime', 'performance',
+    'requestAnimationFrame', 'cancelAnimationFrame', 'requestIdleCallback', 'cancelIdleCallback'] });
+});
+afterAll(() => jest.useRealTimers());
+
 const props = { onDateChange: jest.fn(), onLogPlanned: jest.fn(), onRepeat: jest.fn(), onSomethingElse: jest.fn(), onEditFood: jest.fn() };
 async function show(o: { coached?: boolean; foodLogs?: FoodLog[]; eaten?: { calories: number; protein: number };
   targets?: { calories: number; protein: number } | null }) {

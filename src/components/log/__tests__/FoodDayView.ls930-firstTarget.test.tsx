@@ -17,6 +17,15 @@ jest.mock('../../../services/api', () => ({
   logApi: { getDaily: async () => ({ data: { entries: [] } }) },
 }));
 
+// FIX-930R2 (LO-930R2 B1): a fixed clock, never the real date. The first day (C_first) shows only on today, so the
+// clock is pinned to the fixtures' 2026-11-05 (local noon); only Date is faked, timers stay real.
+beforeAll(() => {
+  jest.useFakeTimers({ now: new Date('2026-11-05T12:00:00'), doNotFake: ['nextTick', 'setImmediate', 'clearImmediate',
+    'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'queueMicrotask', 'hrtime', 'performance',
+    'requestAnimationFrame', 'cancelAnimationFrame', 'requestIdleCallback', 'cancelIdleCallback'] });
+});
+afterAll(() => jest.useRealTimers());
+
 it.each([false, true])('LS-930 B1: first day keeps a real target when above it, coached=%s', async (coached) => {
   const noop = jest.fn();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });

@@ -16,6 +16,15 @@ jest.mock('../../../services/api', () => ({
   logApi: { getDaily: async () => ({ data: { entries: [] } }) },
 }));
 
+// FIX-930R2 (LO-930R2 B1): a fixed clock, never the real date. The first day (C_first) shows only on today, so the
+// clock is pinned to the fixtures' 2026-11-05 (local noon); only Date is faked, timers stay real.
+beforeAll(() => {
+  jest.useFakeTimers({ now: new Date('2026-11-05T12:00:00'), doNotFake: ['nextTick', 'setImmediate', 'clearImmediate',
+    'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'queueMicrotask', 'hrtime', 'performance',
+    'requestAnimationFrame', 'cancelAnimationFrame', 'requestIdleCallback', 'cancelIdleCallback'] });
+});
+afterAll(() => jest.useRealTimers());
+
 const oats: FoodLog = {
   id: 'oats', userId: 'user', coachId: '', date: '2026-11-05', mealType: 'breakfast',
   foodName: 'Rolled oats', calories: 150, protein: 5, carbs: 27, fat: 3,
