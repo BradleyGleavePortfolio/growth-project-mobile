@@ -145,6 +145,22 @@ export default function PrepGuideScreen() {
 
   return (
     <Screen edges={['top']} scroll={false} {...page} testID="grocery-prep-screen">
+      {/* FIX-929R3: the masthead scrolls with the recipes (as RecipeDetail), so at 320 pt and 130% text the summary,
+          week and prep days never fill the screen above the pinned Add all; what main scrolled scrolls again. */}
+      <ScrollView
+        testID="list-scroll"
+        style={styles.content}
+        contentContainerStyle={styles.contentFlow}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            testID="list-refresh"
+            refreshing={isRefetching}
+            onRefresh={refetch}
+            tintColor={sc.textOnAccent}
+          />
+        }
+      >
       <StyleCMasthead title="Prep guide" onBack={() => navigation.goBack()}>
         {shown ? (
           <StyleCMastText>
@@ -193,22 +209,7 @@ export default function PrepGuideScreen() {
           </>
         ) : null}
       </StyleCMasthead>
-      <StyleCPaper style={styles.bare}>
-
-      <ScrollView
-        testID="list-scroll"
-        style={styles.content}
-        contentContainerStyle={styles.contentInner}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            testID="list-refresh"
-            refreshing={isRefetching}
-            onRefresh={refetch}
-            tintColor={colors.primary}
-          />
-        }
-      >
+      <StyleCPaper scrolls style={styles.contentInner}>
         {isLoading ? (
           <View style={styles.loadingContainer}>
             <Text style={styles.loadingText}>Loading your prep guide…</Text>
@@ -288,10 +289,11 @@ export default function PrepGuideScreen() {
             </FadeInView>
           </>
         )}
+      </StyleCPaper>
       </ScrollView>
       {/* Add all: one full-width button pinned under the list (ctx#457), the same confirm and words as before. */}
       {shown ? (
-        <View style={[styles.foot, { paddingBottom: bottomInset + 12 }]}>
+        <View style={[styles.foot, { backgroundColor: sc.bgPrimary, paddingBottom: bottomInset + 12 }]}>
           <TouchableOpacity
             accessibilityRole="button" accessibilityLabel="Add all ingredients"
             accessibilityState={{ disabled: addToGroceryMutation.isPending || shown.aggregated_ingredients.length === 0, busy: addToGroceryMutation.isPending }}
@@ -311,7 +313,6 @@ export default function PrepGuideScreen() {
           </TouchableOpacity>
         </View>
       ) : null}
-    </StyleCPaper>
     <StyleCSheet
       visible={added != null}
       icon="cart-outline"
@@ -329,8 +330,7 @@ export default function PrepGuideScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primary' | 'textPrimary' | 'textMuted' | 'textSecondary' | 'textOnPrimary' | 'border' | 'primaryPale'>) =>
   StyleSheet.create({
-  // Screen owns the inset top (forest via useStyleCScreen); the masthead and paper are Style C.
-  bare: { paddingTop: 12 },
+  // Screen owns the inset top (forest via useStyleCScreen); the masthead and paper scroll together (FIX-929R3).
   // The week selector on the forest masthead (ctx#457 prep-week): light words, the current week in a gold pill.
   weekSelector: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: -10, marginTop: 14 },
   weekArrow: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
@@ -342,7 +342,9 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
   },
 
   content: { flex: 1 },
-  contentInner: { paddingHorizontal: 24, paddingTop: 22, paddingBottom: 24, gap: 26 },
+  contentFlow: { flexGrow: 1 },
+  // The paper's padding (34 = the 12 + 22 it had over the list before); it grows to the foot when the list is short.
+  contentInner: { paddingHorizontal: 24, paddingTop: 34, paddingBottom: 24, gap: 26 },
 
   errorBlock: { paddingTop: 12, gap: 16 },
   loadingContainer: { paddingTop: 12, gap: 16 },
