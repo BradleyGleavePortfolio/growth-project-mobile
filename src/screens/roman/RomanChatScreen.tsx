@@ -331,7 +331,9 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
     onRetrySend();
   }, [sendError, clearSendError, onRetrySend]);
 
-  // ROMAN-HOLD-M: hold one of Roman's replies for the people's chat menu.
+  // ROMAN-HOLD-M: hold one of Roman's replies for the people's chat menu. Client room only:
+  // the coach's own Roman room is unchanged (a coach-visible change is the owner's call).
+  const canHold = surface === 'client';
   const onHold = useCallback((m: RomanMessage) => {
     if (m.role === 'assistant') setActionTarget(m);
   }, []);
@@ -377,11 +379,11 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
         message={item}
         reveal={item.id === freshId}
         reduceMotion={reduceMotion}
-        onLongPress={item.role === 'assistant' ? onHold : undefined}
+        onLongPress={canHold && item.role === 'assistant' ? onHold : undefined}
         testID={`roman-message-${item.id}`}
       />
     ),
-    [freshId, reduceMotion, onHold],
+    [freshId, reduceMotion, onHold, canHold],
   );
 
   const header = (

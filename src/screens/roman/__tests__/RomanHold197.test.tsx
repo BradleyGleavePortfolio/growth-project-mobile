@@ -3,7 +3,8 @@
  * replies in the real RomanChatScreen opens the people's chat menu (Reply, Copy, Report Message).
  * Reply quotes the reply into the next message to Roman; Report sends POST
  * /roman/messages/:id/report with the people's chat reasons; a failed report says so and sends
- * again on the next tap. Client and coach surfaces. The menu is the in-app Android sheet here
+ * again on the next tap. Client room only: the coach's own Roman room is unchanged (no
+ * coach-visible change, job promotion trigger). The menu is the in-app Android sheet here
  * (the iOS native sheet is MessageActionSheet.test's).
  */
 import React from 'react';
@@ -76,9 +77,9 @@ const hold = async (r: R, id = 'r-1') => {
   await act(async () => { fireEvent(r.getByTestId(`roman-message-${id}-reply`), 'longPress'); });
 };
 
-describe.each(['client', 'coach'] as const)('%s: hold a Roman reply', (surface) => {
+describe.each(['client'] as const)('%s: hold a Roman reply', (surface) => {
   beforeEach(() => {
-    mockUser = surface === 'coach' ? { id: 'coach-1', firstName: 'Jordan' } : { id: 'client-1', firstName: 'Maya' };
+    mockUser = { id: 'client-1', firstName: 'Maya' };
   });
 
   it('opens the people\'s chat menu with Reply, Copy and Report Message', async () => {
@@ -184,4 +185,16 @@ it('a sent reply shows its quote as a strip, not as "> " text', async () => {
   expect(r.getByLabelText('Replying to: Keep Thursday easy')).toBeTruthy();
   expect(r.getByLabelText('You said: Can I do it indoors?')).toBeTruthy();
   expect(r.queryByText(/^> /)).toBeNull();
+});
+
+it('the coach\'s own Roman room is unchanged: holding a reply opens no menu', async () => {
+  mockUser = { id: 'coach-1', firstName: 'Jordan' };
+  const r = await open('coach');
+  const reply = r.getByTestId('roman-message-r-1-reply');
+  expect(reply.props.accessibilityHint).toBeUndefined();
+  await hold(r);
+  expect(r.queryByLabelText('Report Message')).toBeNull();
+  expect(r.queryByLabelText('Reply')).toBeNull();
+  expect(api.post).not.toHaveBeenCalled();
+  mockUser = { id: 'client-1', firstName: 'Maya' };
 });
