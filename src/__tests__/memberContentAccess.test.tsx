@@ -1921,3 +1921,33 @@ describe('FIX-911R4: a via row mutes its parts only at its root and in the expor
     expect(classify(h, ht, ctx2).composer).toBe(false);
   });
 });
+
+// LS-946 review-only proof: new suite rows must stop only their proved exports.
+// All added source text is an in-memory fixture, never a runtime file write.
+describe('LS946: new gated-screen rows preserve independent composer discovery', () => {
+  const files = [
+    ['screens/coach/ClientDetailScreen.tsx', '../../services/api'],
+    ['screens/coach/ClientRiskDetailScreen.tsx', '../../services/api'],
+    ['navigation/CoachNavigator.tsx', '../services/api'],
+  ] as const;
+  const fixture = (file: string, named: boolean) => {
+    const base = path.posix.basename(file).replace(/\.tsx?$/, '');
+    const host = `${path.posix.dirname(file)}/LS946IndependentHost.tsx`;
+    const imported = named ? `{ LS946IndependentNudge }` : base;
+    const expr = named ? 'LS946IndependentNudge()' : `<${base} />`;
+    return [host, `import React from 'react';\nimport ${imported} from './${base}';\nexport default function LS946IndependentHost() { return ${expr}; }\n`] as const;
+  };
+
+  it.each(files)('%s: an independent new send export still names its new caller', (file, api) => {
+    const text = `${read(file)}\nimport { coachApi as LS946Api } from '${api}';\n` +
+      "export function LS946IndependentNudge() { return LS946Api.sendNudge('review-only', { title: 'Review', body: 'Fixture' }); }\n";
+    const [host, source] = fixture(file, true);
+    const ctx = scanCtx({ [file]: text, [host]: source });
+    expect(classify(host, source, ctx).composer).toBe(true);
+  });
+
+  it.each(files)('%s: control, the existing default export does not re-name its proved composer', (file) => {
+    const [host, source] = fixture(file, false);
+    expect(classify(host, source, scanCtx({ [host]: source })).composer).toBe(false);
+  });
+});
