@@ -593,3 +593,18 @@ describe('LO-935R3 B1: the unread ring keeps the drawn old-style figure', () => 
     expect(flat(el).fontVariant ?? []).not.toContain('lining-nums');
   });
 });
+
+// LO-935R4 C1 (agent 199, review round 4, outside the fix commits): every C3 Style B inbox drawing (B_inbox
+// ios390/android360 at 100 and 130) rings Roman's portrait on the coached card in Roman's gold #C9A961, the token
+// colors.romanAccent, which src/theme/tokens.ts names "the avatar ring" and Roman's portraits use elsewhere. The build
+// rings it in camel, gold[500] #B08D57 (as on main since C3B-S2), a brown ring beside the drawn gold.
+describe('LO-935R4 C1: Roman\'s portrait ring on the coached card is Roman\'s gold, as drawn', () => {
+  it('LO-935R4 C1: the coached card rings Roman\'s portrait in colors.romanAccent (#C9A961)', async () => {
+    mockNeedsCoach.mockReturnValue(false);
+    const { u } = await show();
+    const card = await u.findByTestId('inbox-roman');
+    const rings = card.findAll((n) => typeof n.type === 'string' && flat(n).borderWidth === 2 && flat(n).padding === 2);
+    expect(rings).toHaveLength(1);
+    expect(flat(rings[0]).borderColor).toBe('#C9A961');
+  });
+});
