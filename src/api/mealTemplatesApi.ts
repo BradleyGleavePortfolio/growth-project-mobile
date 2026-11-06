@@ -86,6 +86,8 @@ export interface DailyMealPlanSlot {
   meal_template_id: string;
   slot_label: SlotLabel;
   order: number;
+  /** C2-C0 (backend 96f20061): the coach's planned time, local "HH:MM" on the 24-hour clock; null when none. */
+  time_of_day?: string | null;
   meal_template: MealTemplate;
 }
 

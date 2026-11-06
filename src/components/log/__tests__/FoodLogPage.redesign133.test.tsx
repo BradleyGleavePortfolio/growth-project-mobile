@@ -28,7 +28,8 @@ describe('Food log page redesign (REDO-FOOD-133)', () => {
       for (const banned of [/TouchableOpacity/, /\bColors\b/, /borderRadius:\s*\d/, /SafeAreaView/]) expect([file, banned.test(source)]).toEqual([file, false]);
     }
     const log = fs.readFileSync(path.join(SRC, 'screens/client/LogScreen.tsx'), 'utf8');
-    expect(log).toMatch(/<Screen\s+edges=\{\['top'\]\}/);
+    // FOOD-DAY-STYLEC-M: the Style C day's forest masthead owns the top inset; the classic log keeps ['top'].
+    expect(log).toMatch(/<Screen\s+(\/\/[^\n]*\n\s*)?edges=\{styleCDay \? \[\] : \['top'\]\}/);
     expect(log).not.toMatch(/paddingTop:\s*60/);
   });
 

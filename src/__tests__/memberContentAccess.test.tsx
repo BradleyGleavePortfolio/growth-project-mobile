@@ -280,6 +280,36 @@ const REGISTRY: Surface[] = [
       '$name: Send Nudge $nudge, closed line $line',
       'a pull to refresh reads the pair again: an unblock on the server brings Send Nudge back',
     ] } },
+  // SPLIT-938C (m#938 space chat, part 1): the space chat's data layer. The hook and the text outbox apply the rules and
+  // stop here; the wire (spaceChatApi) stops nothing, so every file that reads or sends through it is named.
+  ...((): Surface[] => {
+    const file = 'components/community/space-chat/__tests__/spaceChatKT2.test.tsx';
+    const BLOCK = 'KT-2: a block drops the rows of the blocked author, and every quote of them, from the kept list at once';
+    const READ = 'KT-2: a read refused with 403 (a ban, a departure, another workspace) closes the space and leaves nothing readable';
+    const SEND = 'KT-2: a text refused with 403 fails as closed (never sent again) and closes the space';
+    const WIRE = 'KT-2: 403 and 404 are no access; any other failure is not';
+    return [
+      { file: 'components/community/space-chat/useSpaceChat.ts', kind: 'list', what: 'one space\'s messages (text, voice, photo, quotes) and its read line',
+        how: 'the server leaves out blocks (both ways), bans and departed authors; my block (dropAuthor) takes the author\'s rows and every quote of them from every kept list at once; a read or send refused with 403 / 404 closes the space (noAccess: nothing readable, no sheet, no reply)',
+        proof: { by: 'suite', file, titles: [BLOCK, READ, SEND] } },
+      { file: 'components/community/space-chat/spaceChatOutbox.ts', kind: 'composer', what: 'the space chat text outbox (texts queued on the phone, sent one at a time)',
+        how: 'a 403 / 404 fails the row as closed (never sent again) and tells the open space; a text goes out only as the account that queued it; a sign-out wipes the queue',
+        proof: { by: 'suite', file, titles: [SEND] }, exports: ['spaceOutbox', 'startSpaceOutbox', 'setSpaceOutboxOnline'] },
+      { file: 'components/community/space-chat/useSpaceVoiceOutbox.ts', kind: 'composer', what: 'the space chat\'s voice notes on the voice outbox (useVoiceOutbox)',
+        how: 'holds only my own notes for this space and sends into this space only; the record entry is drawn only by the space chat while the space is open',
+        proof: { by: 'suite', file, titles: ['KT-2: the space voice outbox holds only my notes for this space, and sends into this space only'] } },
+      ...(['list', 'composer'] as const).map((kind): Surface => ({ file: 'components/community/space-chat/spaceChatApi.ts', kind,
+        what: 'the space chat wire (messages read, send, delete)', how: 'the server leaves out blocks (both ways), bans and departed authors and refuses a send with 403 / 404 (isNoAccess), which the hook and the outbox turn into a closed space',
+        proof: { by: 'suite', file, titles: [WIRE] }, exports: [] })),
+      // Part 2: the rows. A row is drawn only for a message useSpaceChat hands the screen (above).
+      { file: 'components/community/space-chat/SpaceVoiceNote.tsx', kind: 'list', what: 'one space voice row\'s note (communityVoiceApi.getOne, for its playable copy)',
+        how: 'read only for a row useSpaceChat still holds (a block, a ban or a departure takes the row there); a row the coach removed draws no player and reads nothing; a refused lookup draws Try again, never the note',
+        proof: { by: 'suite', file: 'components/community/space-chat/__tests__/spaceChatRowsKT2.test.tsx', titles: [
+          'KT-2: a row the coach removed draws its one line only: no words, no player, no menu and no lookup of the note',
+          'KT-2: a voice note whose lookup is refused (403 / 404) draws no New mark and nothing to play, only Try again',
+        ] } },
+    ];
+  })(),
   // FR-911R2 (LO-911R2 B1): a KNOWN GAP row no longer stops the scan, so the files that draw a gap part are named; each
   // shows the part's gap (fixed in the part), and its row stops here so the navigators above it are not named for it.
   ...([
