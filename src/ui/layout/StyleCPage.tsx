@@ -71,7 +71,9 @@ export function StyleCMastText({ children, kind = 'sub', style }: { children: Re
 }
 
 /** List progress on the masthead (ctx#457 shopping): one dash per item, gold for each checked one, then the summary.
- *  Past 12 items the 12 dashes fill in proportion. The words carry the meaning; the dashes are decorative. */
+ *  Past 12 items the 12 dashes fill in proportion. The words carry the meaning; the dashes are decorative.
+ *  FIX-929R3: the strip never runs past the gutter: the row and each dash may shrink (22 pt at most), so 12 dashes
+ *  fit the 272 pt masthead at 320 pt (about 18 pt each); the summary takes the next line when they do not fit beside it. */
 export function StyleCDashes({ total, done, label }: { total: number; done: number; label: string }) {
   const sc = useTheme().semanticColors;
   const n = Math.min(total, 12);
@@ -196,8 +198,8 @@ const s = StyleSheet.create({
   mastEye: { marginTop: 20 },
   flat: { marginTop: 0 },
   prog: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginTop: 10 },
-  dashes: { flexDirection: 'row', gap: 5 },
-  dash: { width: 22, height: 4, borderRadius: radius.chip },
+  dashes: { flexDirection: 'row', gap: 5, flexShrink: 1, minWidth: 0 },
+  dash: { width: 22, flexShrink: 1, minWidth: 0, height: 4, borderRadius: radius.chip },
   scrim: { flex: 1 },
   sheet: { alignItems: 'center', borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, paddingHorizontal: layout.gutter, paddingTop: 10 },
   grab: { width: 40, height: 5, borderRadius: radius.chip, marginBottom: 22 },
