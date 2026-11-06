@@ -77,6 +77,9 @@ export default function ClientRiskDetailScreen() {
       await coachApi.sendNudge(userId, { title: NUDGE_TITLE, body: NUDGE_BODY });
       setNudgeSent(true);
     } catch (err) {
+      // FIX-940 (LO-T2B B1): the server says the pair is closed: the gate remembers it and the closed line replaces the
+      // nudge (no Alert). Other errors keep today's Alert.
+      if (nudgeGate.close(err)) return;
       Alert.alert(
         'Could not send nudge',
         err instanceof Error ? err.message : 'Please try again.',
@@ -84,7 +87,7 @@ export default function ClientRiskDetailScreen() {
     } finally {
       setNudging(false);
     }
-  }, [nudgeGate.open, nudgeSent, nudging, userId]);
+  }, [nudgeGate.open, nudgeGate.close, nudgeSent, nudging, userId]);
 
   if (!isAuthorized) {
     return (

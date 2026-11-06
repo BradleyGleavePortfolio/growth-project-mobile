@@ -23,6 +23,8 @@ export interface NudgeGate {
   by: ClosedBy;
   /** Read closed_client_ids again (pull to refresh). */
   reload: () => Promise<void>;
+  /** FIX-940 (LO-T2B B1): hand it a failed send; true (and closed, remembered for the session) when it means closed. */
+  close: (err: unknown) => boolean;
 }
 
 export function useNudgeGate(clientId: string): NudgeGate {
@@ -52,7 +54,8 @@ export function useNudgeGate(clientId: string): NudgeGate {
   const known = blockList.known && read?.key === key;
   const pair: NudgePair = !known ? null
     : blockList.blockedIds.includes(clientId) ? 'me' : read?.ids.has(clientId) ? 'them' : 'open';
-  const gate = useConversationClosed(clientId, [], pair != null, pair === 'me' || pair === 'them');
+  // FIX-940 (LO-T2B C1): an unknown pair says nothing (undefined), so it never clears a refusal remembered this session.
+  const gate = useConversationClosed(clientId, [], pair != null, pair == null ? undefined : pair !== 'open');
   const by = useClosedBy(clientId, gate.closed, { pair: true, mine: pair === 'me' });
-  return { pair, open: gate.open, closed: gate.closed, by, reload };
+  return { pair, open: gate.open, closed: gate.closed, by, reload, close: gate.close };
 }

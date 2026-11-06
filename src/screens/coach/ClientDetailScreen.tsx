@@ -175,6 +175,12 @@ function ClientFile({ navigation, route }: Props) {
       // Toast-like transient banner — auto-hide.
       setTimeout(() => setNudgeSuccess(false), 2500);
     } catch (err) {
+      // FIX-940 (LO-T2B B1): the server says the pair is closed: the editor goes (the draft stays), the gate remembers
+      // the refusal and the Summary draws the chat's closed line where Send Nudge was. Other errors keep their text.
+      if (nudgeGate.close(err)) {
+        setShowNudgeModal(false);
+        return;
+      }
       setNudgeError(errorMessage(err, 'Failed to send nudge.'));
     } finally {
       setNudgeSending(false);
