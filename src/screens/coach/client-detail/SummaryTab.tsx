@@ -26,6 +26,7 @@ export function SummaryTab({
   nudgeSuccess,
   onOpenMessages,
   onOpenNudge,
+  nudgeClosed,
   onOpenMacrosReview,
   onOpenWorkoutBuilder,
   onOpenAskAi,
@@ -41,7 +42,10 @@ export function SummaryTab({
   clientName: string;
   nudgeSuccess: boolean;
   onOpenMessages: () => void;
-  onOpenNudge: () => void;
+  /** NUDGE-GATE-M: omitted (no Send Nudge) unless the server has answered that this pair is open. */
+  onOpenNudge?: () => void;
+  /** NUDGE-GATE-M: the chat's closed line, drawn under the actions when a block either way closes the pair. */
+  nudgeClosed?: React.ReactNode;
   onOpenMacrosReview: () => void;
   onOpenWorkoutBuilder: () => void;
   /**
@@ -150,15 +154,17 @@ export function SummaryTab({
           <Ionicons name="chatbubble-outline" size={18} color={colors.primary} />
           <Text style={styles.actionPillText}>Messages</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.actionPill}
-          onPress={onOpenNudge}
-          accessibilityRole="button"
-          accessibilityLabel="Send nudge notification"
-        >
-          <Ionicons name="notifications-outline" size={18} color={colors.primary} />
-          <Text style={styles.actionPillText}>Send Nudge</Text>
-        </TouchableOpacity>
+        {onOpenNudge ? (
+          <TouchableOpacity
+            style={styles.actionPill}
+            onPress={onOpenNudge}
+            accessibilityRole="button"
+            accessibilityLabel="Send nudge notification"
+          >
+            <Ionicons name="notifications-outline" size={18} color={colors.primary} />
+            <Text style={styles.actionPillText}>Send Nudge</Text>
+          </TouchableOpacity>
+        ) : null}
         <TouchableOpacity
           style={styles.actionPill}
           onPress={onOpenMacrosReview}
@@ -193,6 +199,7 @@ export function SummaryTab({
           </TouchableOpacity>
         ) : null}
       </View>
+      {nudgeClosed ?? null}
       {nudgeSuccess && (
         <View style={styles.successBanner} accessibilityLiveRegion="polite">
           <Ionicons name="checkmark-circle" size={16} color={colors.success} />

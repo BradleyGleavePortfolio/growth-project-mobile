@@ -3,7 +3,7 @@
  * The template id picks the body; copy, options and validation all come
  * from `lib/consultation/definitions.ts`.
  */
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Alert, Linking, Text, View } from 'react-native';
 import * as Localization from 'expo-localization';
 import { PRIVACY_POLICY_URL } from '../../config/env';
@@ -31,9 +31,7 @@ import {
   validateScreen,
 } from '../../lib/consultation/engine';
 import {
-  AI_CHOICE_UNKNOWN_LINE,
-  AI_WITHDRAW_UNCONFIRMED_LINE,
-  consentScreenCopy,
+  oneBoxConsentScreenCopy,
   P8_COPY,
 } from '../../lib/consultation/copy';
 import {
@@ -63,9 +61,8 @@ export interface QuestionScreenProps {
   onAnswer: (key: string, value: AnswerValue | undefined, opts?: { advance?: boolean }) => void;
   /** Continue / Skip: move to the next screen. */
   /**
-   * `aiChoice` is box 2 of P0 (optional Roman and AI): true / false when the
-   * client tapped box 2 on this visit (their explicit latest choice), null
-   * when they left it as shown. Other screens omit it.
+   * `aiChoice` was box 2 of P0 (optional Roman and AI). Since STORE-E4 P0 has
+   * one box and sends null; every other screen omits it.
    */
   onNext: (patch?: Answers, aiChoice?: boolean | null) => void;
   onBack: (() => void) | null;
@@ -151,6 +148,7 @@ export default function QuestionScreen(props: QuestionScreenProps) {
       question={f(screen.question) ?? ''}
       long={screen.longQuestion}
       why={f(screen.why)}
+      centered={screen.template === 'consent'}
     />
   );
 
@@ -349,6 +347,7 @@ function BodyFrame({ props, header, children, footer }: { props: QuestionScreenP
       onFinishLater={props.onFinishLater}
       pauseLabel={props.screen.pause}
       footer={footer}
+      title={props.screen.template === 'consent' ? fillCopy(props.screen.question, props.ctx) : undefined}
       testID={`consult-screen-${props.screen.id}`}
     >
       {header}
@@ -533,7 +532,7 @@ function GoalWeightBody(props: BodyProps) {
 // Opus C-3: no "Nothing has been sent" here; chapter saves may already have
 // landed when the server moves to a newer agreement.
 /** Shown next to a disabled P0 Continue (box 1 may be below the fold). */
-export const CONSENT_TICK_HINT = 'Tick the first box above to continue.';
+export const CONSENT_TICK_HINT = 'Tick the box to continue.'; // HINT-1 (owner 185-W4)
 
 const CONSENT_ERROR_COPY = {
   version_mismatch:
@@ -552,38 +551,25 @@ export function openPrivacyPolicy(): void {
 
 function ConsentBody(props: BodyProps) {
   const { answers, onNext, header, consent: state, ctx } = props;
-  // Owner 62: a client with no coach sees (and records) the coach-free text.
-  const copy = consentScreenCopy(!!ctx?.coachless, !!state?.aiCrisis, !!state?.aiHealth);
-  // Only a record matching this build's copy version counts (Sol A-03):
-  // stale or malformed records render box 1 unticked.
+  // STORE-E4 (owner #184-E5 / #184-E6 op 1): one box (PERM-W1; owner 62: a client with no coach sees and
+  // records the coach-free row) and the PERM-W2 footer. No box 2: Roman's AI is asked the first time
+  // the client opens Roman ("Before Roman answers"), so this screen never sends an AI choice.
+  const copy = oneBoxConsentScreenCopy(!!ctx?.coachless);
+  // Only a record of a version this build knows counts (Sol A-03): stale or
+  // malformed records render the box unticked. An older agreement stays as it is.
   const already = isConsentAnswerCurrent(answers.P0);
   const [checked, setChecked] = useState(already);
-  // Box 2 is optional and unticked by default (D2). It shows the client's
-  // latest choice while the ledger is catching up, otherwise the confirmed
-  // ledger state (Opus B-310-2, B-310-3): a confirmed result from earlier,
-  // the draft after a restart, or GET /me/ai-consent when it answers. A late
-  // answer never overrides what the client has just tapped, and only a tap
-  // on this visit counts as a new choice: an untouched box keeps what it
-  // showed.
-  const aiShown = !!state?.aiAllowed;
-  const aiReady = state?.aiReady !== false;
-  const [aiChecked, setAiChecked] = useState(aiShown);
-  const aiTouched = useRef(false);
-  useEffect(() => {
-    if (!aiTouched.current) setAiChecked(aiShown);
-  }, [aiShown]);
   const error = state?.error ?? null;
-  const aiMemory = state?.aiMemory ?? null;
   const consent = useMemo<ConsentAnswer>(
     () => ({
       agreed: true,
-      copy_version: aiMemory ? copy.memoryVersion : copy.version,
+      copy_version: copy.version,
       agreed_at: new Date().toISOString(),
-      text_sha256: aiMemory ? copy.memorySha256 : copy.sha256,
+      text_sha256: copy.sha256,
     }),
-    // agreed_at is taken when box 1 is ticked; the version follows the box 2 text shown.
+    // agreed_at is taken when the box is ticked.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [checked, aiMemory, copy.version, copy.memoryVersion],
+    [checked, copy.version],
   );
   const blocked = error === 'version_mismatch';
   return (
@@ -598,8 +584,8 @@ function ConsentBody(props: BodyProps) {
             style={[s.mutedSmall, { marginBottom: 12 }]}
             testID="consent-coach-sharing"
           />
-          {/* SHOTS-134B 6: on a 360x800 phone box 1 sits below the fold, so a
-              disabled Continue says why. Not part of the consent text or its hash. */}
+          {/* SHOTS-134B 6: on a 360x800 phone the box sits below the fold, so a
+              disabled Continue says why. Not part of the agreement text or its hash. */}
           {!checked && !blocked ? (
             <Text style={[s.mutedSmall, { marginBottom: 12 }]} accessibilityLiveRegion="polite" testID="consent-tick-hint">
               {CONSENT_TICK_HINT}
@@ -608,58 +594,27 @@ function ConsentBody(props: BodyProps) {
           <PrimaryButton
             label={props.screen.cta ?? 'Continue'}
             disabled={!checked || blocked}
-            accessibilityHint={checked ? undefined : 'Tick the first box to continue'}
-            onPress={() => onNext({ P0: already ? answers.P0 : consent }, aiTouched.current ? aiChecked : null)}
+            accessibilityHint={checked ? undefined : 'Tick the box to continue'}
+            onPress={() => onNext({ P0: already ? answers.P0 : consent }, null)}
             testID="consult-continue"
           />
         </>
       }
     >
       {copy.paragraphs.map((p) => (
-        <Text key={p} style={[s.small, { marginBottom: 12 }]}>{p}</Text>
+        <View key={p} style={s.discloseCard}>
+          <Text style={s.small}>{p}</Text>
+        </View>
       ))}
       <Checkbox
         checked={checked}
         onToggle={() => setChecked((c) => !c)}
-        label={copy.box1Label}
+        label={copy.boxLabel}
         testID="consent-checkbox"
       />
-      {/* W-CONSENT: a client with no coach is asked too, with why Roman waits for a coach. */}
-      {copy.romanTitle ? (
-        <>
-          <Headline level="h2" style={{ marginTop: 28 }} testID="consent-roman-title">
-            {copy.romanTitle}
-          </Headline>
-          <Text style={[s.body, { marginTop: 8 }]} testID="consent-roman-lead">{copy.romanLead}</Text>
-        </>
-      ) : null}
-      <Text style={[s.small, { marginTop: copy.romanTitle ? 12 : 20, marginBottom: 12 }]} testID="consent-ai-paragraph">
-        {aiMemory ? aiMemory.paragraph.text : copy.aiParagraph}
-      </Text>
-      <Checkbox
-        checked={aiChecked}
-        onToggle={() => {
-          aiTouched.current = true;
-          setAiChecked((c) => !c);
-        }}
-        label={copy.box2Label}
-        disabled={!aiReady}
-        hint={aiReady ? undefined : 'Checking your saved choice'}
-        testID="consent-ai-checkbox"
-      />
-      {state?.aiUnknown && !aiTouched.current ? (
-        <Text style={[s.mutedSmall, { marginTop: 8 }]} accessibilityLiveRegion="polite" testID="consent-ai-unknown">
-          {AI_CHOICE_UNKNOWN_LINE}
-        </Text>
-      ) : null}
-      {state?.aiUnconfirmed && !aiChecked ? (
-        <Text style={[s.mutedSmall, { marginTop: 8 }]} accessibilityLiveRegion="polite" testID="consent-ai-unconfirmed">
-          {AI_WITHDRAW_UNCONFIRMED_LINE}
-        </Text>
-      ) : null}
       <Text style={[s.mutedSmall, { marginTop: 16 }]} testID="consent-footer">{copy.footer}</Text>
-      {/* C-8 (operator 2026-10-01): the Privacy Policy, below the two boxes.
-          Not part of the consent text or its hash; opening it sends nothing. */}
+      {/* C-8 (operator 2026-10-01): the Privacy Policy, below the box.
+          Not part of the agreement text or its hash; opening it sends nothing. */}
       <TextLink label="Privacy Policy" onPress={openPrivacyPolicy} testID="consent-privacy-link" role="link" />
       {error ? (
         <Text style={s.errorNote} accessibilityLiveRegion="polite" testID="consent-error">

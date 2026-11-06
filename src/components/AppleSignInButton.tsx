@@ -8,7 +8,7 @@
  * fires its own native press, so we just surface the press handler.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { Platform, StyleProp, ViewStyle } from 'react-native';
+import { AccessibilityState, Platform, StyleProp, ViewStyle } from 'react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { isAppleAuthAvailable } from '../utils/appleAuth';
 
@@ -22,6 +22,8 @@ interface Props {
   /** Called once when the button shows (iOS with Sign in with Apple), so a
    *  screen can place an "or" divider only under a real button. */
   onAvailable?: () => void;
+  /** Read by screen readers, e.g. disabled while the coach's box is unticked (the press still runs). */
+  accessibilityState?: AccessibilityState;
 }
 
 export default function AppleSignInButton({
@@ -30,6 +32,7 @@ export default function AppleSignInButton({
   cornerRadius = 8,
   style,
   onAvailable,
+  accessibilityState,
 }: Props) {
   const [available, setAvailable] = useState(false);
   const onAvailableRef = useRef(onAvailable);
@@ -69,6 +72,7 @@ export default function AppleSignInButton({
       cornerRadius={cornerRadius}
       style={[{ width: '100%', height: 48 }, style]}
       onPress={onPress}
+      accessibilityState={accessibilityState}
     />
   );
 }
