@@ -33,6 +33,19 @@ it.each(['quiet', 'fresh', 'routine'] as const)('alert failure retains the verif
   expect(v.getByTestId('needs-title').props.children).toBe('Needs you');
   expect(v.queryByTestId('needs-search')).toBeNull();
   expect(v.queryByTestId('needs-switch-attention')).toBeNull();
+  expect(v.getByTestId('needs-alerts-error')).toBeTruthy();
+  expect(v.getByTestId('needs-act-v1')).toBeTruthy();
+  const ids: string[] = [];
+  const collect = (node: unknown): void => {
+    if (Array.isArray(node)) node.forEach(collect);
+    else if (node && typeof node === 'object') {
+      const element = node as { props?: { testID?: unknown }; children?: unknown[] };
+      if (typeof element.props?.testID === 'string') ids.push(element.props.testID);
+      element.children?.forEach(collect);
+    }
+  };
+  collect(v.toJSON());
+  expect(ids.indexOf('needs-alerts-error')).toBeLessThan(ids.indexOf('needs-act-v1'));
   await fireEvent.press(v.getByText('Maya Lee'));
   expect(open).toHaveBeenCalledWith(client);
   await fireEvent.press(v.getByText('Try again'));
