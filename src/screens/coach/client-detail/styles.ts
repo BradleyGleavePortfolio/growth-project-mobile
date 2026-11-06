@@ -142,6 +142,8 @@ export const makeStyles = (colors: ThemeColors) =>
     textTransform: 'uppercase',
     color: colors.primary,
   },
+  // NUDGE-GATE-M: the chat's closed line under the actions, in Send nudge's place (as m#933's peek draws it).
+  nudgeClosedLine: { marginBottom: 12, borderRadius: radius.button },
   successBanner: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -86,6 +86,8 @@ const inbox = (muted: boolean) => ({
 });
 
 beforeEach(() => {
+  // Pins EXPO_PUBLIC_FF_C3_STYLE_B off: this file is main's thread; Style B has MessagesScreenStyleB.test.tsx.
+  jest.replaceProperty(featureFlags, 'c3StyleB', false);
   jest.clearAllMocks();
   mockProfileGet.mockResolvedValue({ data: {} });
   mockList.mockResolvedValue({

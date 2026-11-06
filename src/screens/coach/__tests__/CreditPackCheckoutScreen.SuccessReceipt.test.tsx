@@ -160,6 +160,10 @@ jest.mock('../../../components/HapticPressable', () => {
 });
 
 import CreditPackCheckoutScreen from '../CreditPackCheckoutScreen';
+import { featureFlags } from '../../../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES off: this file is the in-app checkout sheet (purchaseSurfaces.ts:133); hidden builds open the link outside.
+jest.replaceProperty(featureFlags, 'iosHideNonP2PPurchases', false);
 
 // ---------------------------------------------------------------------------
 // Helper: drive the screen into its `success` phase via the WebView mock.

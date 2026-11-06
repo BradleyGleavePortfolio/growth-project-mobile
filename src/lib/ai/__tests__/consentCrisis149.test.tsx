@@ -108,7 +108,7 @@ async function toP0(api: ConsultationApi, coachless = false) {
   await waitFor(() => r.getByTestId('consult-screen-W1'));
   await fireEvent.press(r.getByTestId('consult-continue'));
   await waitFor(() => r.getByTestId('consult-screen-P0'));
-  return Object.assign(r, { paragraph: () => r.getByTestId('consent-ai-paragraph').props.children });
+  return r;
 }
 
 const SRC = path.join(__dirname, '..', '..', '..');
@@ -158,26 +158,10 @@ const ROWS: { row: string; check: (on: boolean) => void | Promise<void> }[] = [
         memoryVersion: on ? 'consult-consent-v14' : 'consult-consent-v12',
         memorySha256: on ? PIN.p0v14 : copy.CONSENT_MEMORY_COPY_SHA256,
       });
-      expect(source('screens/consultation/QuestionScreen.tsx')).toContain('consentScreenCopy(!!ctx?.coachless, !!state?.aiCrisis, !!state?.aiHealth)'); // CONSENT-M adds the Health-notes screens
-    },
-  },
-  {
-    row: 'P0 box 2: always asks crisis_alert (no flag read before the age step), shows the server text, records consult-consent-v14 and grants client-ai-v9',
-    check: async (on) => {
-      const api = makeApi({ getRomanConsent: ledger(true, on) });
-      const r = await toP0(api);
-      await waitFor(() => expect(r.paragraph()).toBe(on ? B_V9 : B_V7));
-      expect(api.getRomanConsent).toHaveBeenCalledWith({ crisis: true });
-      await fireEvent.press(r.getByTestId('consent-checkbox'));
-      await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
-      await fireEvent.press(r.getByTestId('consult-continue'));
-      await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledTimes(1));
-      expect(api.grantRomanConsent.mock.calls[0][0]).toMatchObject(
-        on ? { version: 'client-ai-v9', copy_sha256: PIN.v9 } : { version: 'client-ai-v7', copy_sha256: copy.AI_CONSENT_MEMORY_COPY_SHA256 },
-      );
-      expect(api.save.mock.calls[0][0].answers.P0).toMatchObject(
-        on ? { copy_version: 'consult-consent-v14', text_sha256: PIN.p0v14 } : { copy_version: 'consult-consent-v12', text_sha256: copy.CONSENT_MEMORY_COPY_SHA256 },
-      );
+      // STORE-E4 (owner #184-E5 op 1): P0 shows the one box and no AI paragraph; the two-box copies above stay
+      // pinned because records written on them keep counting (isConsentAnswerCurrent).
+      expect(source('screens/consultation/QuestionScreen.tsx')).toContain('oneBoxConsentScreenCopy(!!ctx?.coachless)');
+      expect(source('screens/consultation/QuestionScreen.tsx')).not.toMatch(/consentScreenCopy\(|AI_CONSENT_PARAGRAPH\b|withSafetyException\(/);
     },
   },
   {
@@ -256,9 +240,12 @@ const ROWS: { row: string; check: (on: boolean) => void | Promise<void> }[] = [
         memoryVersion: on ? 'consult-consent-v15-coach-free' : 'consult-consent-v13-coach-free',
       });
       const api = makeApi({ getRomanConsent: ledger(true, on) });
+      // STORE-E4: "Before we start" no longer shows the AI paragraph (Roman asks the first time it opens, in the
+      // sheet below, which reads the coach-free copy from the server).
       const r = await toP0(api, true);
-      await waitFor(() => expect(r.paragraph()).toBe(on ? B_V9 : B_V7));
-      expect(api.getRomanConsent).toHaveBeenCalledWith({ crisis: true });
+      await waitFor(() => expect(api.getRomanConsent).toHaveBeenCalledWith({ crisis: true }));
+      expect(r.queryByTestId('consent-ai-paragraph')).toBeNull();
+      expect(r.queryByTestId('consent-ai-checkbox')).toBeNull();
       mockUser = { id: 'u1' };
       const sheet = { getStatus: jest.fn(async (): Promise<AiConsentOutcome> => ({ kind: 'unavailable', status: 503 })), grantRoman: jest.fn() };
       await render(withFlag(on, <AiConsentSheet visible onGranted={jest.fn()} onClose={jest.fn()} api={sheet} sessionUserId={() => 'u1'} />));
@@ -286,7 +273,6 @@ const ROWS: { row: string; check: (on: boolean) => void | Promise<void> }[] = [
         'lib/consultation/copy.ts',
         'lib/romanCrisisSentence.ts',
         'screens/TrustCenterScreen.tsx',
-        'screens/consultation/QuestionScreen.tsx',
         'screens/settings/RomanAiConsentScreen.tsx',
         'screens/settings/RomanConversationsScreen.tsx',
         'screens/trustCenterSharing.ts',
@@ -296,11 +282,11 @@ const ROWS: { row: string; check: (on: boolean) => void | Promise<void> }[] = [
       for (const t of [ROMAN_CHATS_COPY.confirmAllBody, "Allow or withdraw Roman and your coach's AI tools using your information", `${trustCoachLine({ kind: 'unread' })}`]) {
         expect(withSafetyException(t, true)).toBe(t);
       }
-      // Ledger readers: the three that show its text ask by the flag; the gate and the join offer read only liveness
-      // (a live v8 / v9 grant reads its own copies under any ask) and open the sheet; the drain only withdraws.
+      // Ledger readers: the three that show its text ask by the flag; the gate reads only liveness (a live v8 / v9
+      // grant reads its own copies under any ask) and opens the sheet; the drain only withdraws. STORE-E4 retired
+      // the after-join offer (RomanJoinOfferHost).
       expect(filesWith(/api\/aiConsentApi'/)).toEqual([
         'components/ai/AiConsentSheet.tsx',
-        'components/ai/RomanJoinOfferHost.tsx',
         'components/roman/RomanConsentGate.tsx',
         'hooks/useAiWithdrawalDrain.ts',
         'lib/consultation/aiConsent.ts',
@@ -308,7 +294,7 @@ const ROWS: { row: string; check: (on: boolean) => void | Promise<void> }[] = [
         'screens/consultation/QuestionScreen.tsx',
         'screens/settings/RomanAiConsentScreen.tsx',
       ]);
-      for (const host of ['components/ai/RomanJoinOfferHost.tsx', 'components/roman/RomanConsentGate.tsx']) {
+      for (const host of ['components/roman/RomanConsentGate.tsx']) {
         expect(source(host)).toMatch(/isLiveRomanGrant\(out\.status\)[\s\S]*<AiConsentSheet/);
       }
     },

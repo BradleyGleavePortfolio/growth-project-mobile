@@ -128,6 +128,21 @@ export const CONSULT_CONSENT_HEALTH_COPY_VERSIONS = [
 ] as const;
 
 /**
+ * STORE-E4 (agent 185; owner #184-E5 / #184-E6 op 1, PERM-W1 / PERM-W2): the one-box "Before we start" this
+ * build shows. Paragraphs 1-3 of v11 / v12-coach-free, the PERM-W1 box (coach-free: without " and my coach")
+ * and the PERM-W2 footer; no paragraph 4, no box 2 (Roman's AI is asked the first time Roman opens). Every
+ * version above still counts when stored (nobody is asked again). Backend: b#1188 (accepts both; the save
+ * that stamps one records the plan renewal offers yes).
+ */
+export const CONSULT_CONSENT_ONE_BOX_COPY_VERSION = 'consult-consent-v19' as const;
+export const CONSULT_CONSENT_ONE_BOX_COACH_FREE_COPY_VERSION = 'consult-consent-v18-coach-free' as const;
+/** An agreement to one of these includes the community guidelines: Community does not ask again. */
+export const CONSULT_CONSENT_ONE_BOX_COPY_VERSIONS: readonly string[] = [
+  CONSULT_CONSENT_ONE_BOX_COPY_VERSION,
+  CONSULT_CONSENT_ONE_BOX_COACH_FREE_COPY_VERSION,
+];
+
+/**
  * W-BRAND-AGREEMENT (owner op 1: people who already agreed keep their record): the eight screens before
  * TGP Fitness. A stored agreement of one still counts in this build (nobody is asked again, as
  * #CRISIS-OLD-CONSENT op 1), and the server keeps accepting them.

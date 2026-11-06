@@ -28,7 +28,8 @@ jest.mock('../theme/ThemeProvider', () => {
 jest.mock('../ui/skeletons/Skeleton', () => ({ SkeletonScreen: () => null }));
 jest.mock('../config/featureFlags', () => {
   const actual = jest.requireActual('../config/featureFlags');
-  return { ...actual, featureFlags: { ...actual.featureFlags, deliverables: true } };
+  // Pins EXPO_PUBLIC_FF_CLIENT_BILLING_V2 off: this file is the classic plans screen, not the Style C one.
+  return { ...actual, featureFlags: { ...actual.featureFlags, deliverables: true, clientBillingV2: false } };
 });
 const mockNavigate = jest.fn();
 const mockGoBack = jest.fn();

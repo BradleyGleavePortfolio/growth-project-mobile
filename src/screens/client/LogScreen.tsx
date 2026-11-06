@@ -147,6 +147,10 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
 
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchRequest = useRef(0);
+  // FOOD-DAY-STYLEC-M (C_portion, C2-S-33): "Log food" closes the add sheet; "Add another food" keeps it open.
+  // 'classic' (switch off) is main's: open after an online save, closed after an offline one. FIX-930R1
+  // (LS-930 B3): the online and offline saves both read this one choice, so Add another stays open offline too.
+  const addSheetAfterLog = useRef<'close' | 'keep' | 'classic'>('classic');
 
   // Show "Searching 1M+ foods..." after 3 seconds of searching
   useEffect(() => {
@@ -206,7 +210,9 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
   const [sheetLink, setSheetLink] = useState<PlanLink | undefined>(undefined);
   // UI-3d: only the Food tab's Extras "Add" (no link) lets the client switch the meal in the sheet.
   const [mealChoice, setMealChoice] = useState(false);
-  const openAddFood = useCallback(async (mealType: MealType, link?: PlanLink, choose = false) => {
+  // FIX-930R2 (LS-930R2 B2): `manual` opens the same sheet on its manual entry form (the first day's Enter manually);
+  // its Back still returns to search, and every other open starts on search.
+  const openAddFood = useCallback(async (mealType: MealType, link?: PlanLink, choose = false, manual = false) => {
     setSheetLink(link);
     setMealChoice(choose);
     searchRequest.current += 1;
@@ -219,7 +225,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
     setSearchResults([]);
     setDidYouMean([]);
     setSearchError(null);
-    setManualMode(false);
+    setManualMode(manual);
     setRecentTab('recent');
     setAddedFoodName(null);
     resetManualFields();
@@ -347,7 +353,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
         void notifyPendingFoodLogs();
         setQuantityModalVisible(false);
         setSelectedFood(null);
-        setModalVisible(false);
+        if (addSheetAfterLog.current !== 'keep') setModalVisible(false);
         Alert.alert(
           'Saved offline',
           `${selectedFood.name} will sync to your log when you reconnect.`,
@@ -373,6 +379,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
       setAddedFoodName(selectedFood.name);
       setSavedMessage(`${selectedFood.name} added to ${MEAL_SECTIONS.find((s) => s.type === activeMealType)?.label}.`);
       onSaved?.();
+      if (addSheetAfterLog.current === 'close') setModalVisible(false);
     } catch (err) {
       console.error('LogScreen: handleConfirmLog failed', err);
       // Phase 11 / Track 3: error haptic on failed API action
@@ -662,6 +669,8 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
 
   const remaining = macroTargets ? macroTargets.calories - dailyTotals.calories : null;
   const showDayLoading = !hasLoadedDay && (isLoading || !loadError);
+  // UI-3 / FOOD-DAY-STYLEC-M: behind featureFlags.foodPlanChecklist the day shows as the C2 Style C coach's page.
+  const styleCDay = featureFlags.foodPlanChecklist && !!currentUser;
 
   const onRefresh = useCallback(async () => {
     if (!currentUser) return;
@@ -715,7 +724,8 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
   return (
     <>
       <Screen
-        edges={['top']}
+        // FOOD-DAY-STYLEC-M: the Style C day's forest masthead runs to the top edge and owns the top inset.
+        edges={styleCDay ? [] : ['top']}
         testID="log-screen"
         contentStyle={styles.content}
         refreshControl={
@@ -729,20 +739,21 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
       >
         {/* UI-3: behind featureFlags.foodPlanChecklist the day's plan checklist shows first; with no plan, this Food log. */}
         <FoodDayGate
-          on={featureFlags.foodPlanChecklist && !!currentUser}
+          on={styleCDay}
           coached={!!currentUser?.coach_id}
           selectedDate={selectedDate}
           foodLogs={foodLogs}
           eaten={{ calories: dailyTotals.calories, protein: dailyTotals.protein }}
           targets={macroTargets ? { calories: macroTargets.calories, protein: macroTargets.protein } : null}
           ready={hasLoadedDay && !loadError}
+          dayLoading={showDayLoading}
           saving={foodSaving}
           notes={notesNode}
           water={waterNode}
           onDateChange={handleDateChange}
           onLogPlanned={(slot) => void logPlanned(slot)}
           onRepeat={(slot) => void repeatMealTo(slot.usual?.meal ?? null, slot.mealType, { fillsUsualMeal: true })}
-          onSomethingElse={(meal, link) => void openAddFood(meal, link, !link)}
+          onSomethingElse={(meal, link, manual) => void openAddFood(meal, link, !link, manual)}
           onEditFood={handleEditFood}
         >
         <Overline>Food log</Overline>
@@ -853,8 +864,11 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
             selectedUnit={selectedUnit}
             onQuantityChange={setQuantityInput}
             onUnitChange={setSelectedUnit}
-            onConfirm={handleConfirmLog}
+            onConfirm={() => { addSheetAfterLog.current = styleCDay ? 'close' : 'classic'; void handleConfirmLog(); }}
             saving={foodSaving}
+            dayLeft={styleCDay && macroTargets && macroTargets.calories > 0
+              ? { kcal: macroTargets.calories - dailyTotals.calories, protein: macroTargets.protein - dailyTotals.protein } : undefined}
+            onAddAnother={styleCDay ? () => { addSheetAfterLog.current = 'keep'; void handleConfirmLog(); } : undefined}
             onCancel={() => {
               setQuantityModalVisible(false);
               setSelectedFood(null);

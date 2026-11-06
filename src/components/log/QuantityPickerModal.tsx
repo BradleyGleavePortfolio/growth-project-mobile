@@ -19,6 +19,7 @@ import { SearchResult, unitOptionsFor } from '../../utils/log/types';
 import { calcMacros, parseQuantityInput } from '../../utils/log/macros';
 import PortionRuler from './PortionRuler';
 import SheetGrip from './SheetGrip';
+import { fitTitle, fitUnitTabs, sheetRoom } from './portionFit';
 
 interface Props {
   visible: boolean;
@@ -38,6 +39,13 @@ interface Props {
   blocked?: boolean;
   /** The meal this food goes to ("For Lunch"); the coach picker passes its slot name ("For Pre-workout"). */
   mealLabel?: string;
+  /**
+   * FOOD-DAY-STYLEC-M (C2 C_portion, C2-S-32): what the day has left before this plate (target minus eaten).
+   * Passed only by the Food tab behind featureFlags.foodPlanChecklist; without it no "After this plate" line.
+   */
+  dayLeft?: { kcal: number; protein: number } | null;
+  /** C2-S-33: "Add another food" logs this plate and keeps the add sheet open; it takes Cancel's place. */
+  onAddAnother?: () => void;
 }
 
 export default function QuantityPickerModal({ visible, ...props }: Props) {
@@ -73,6 +81,8 @@ export function QuantityPickerContent({
   notice,
   blocked = false,
   mealLabel,
+  dayLeft,
+  onAddAnother,
 }: Omit<Props, 'visible'>) {
   const quantity = parseQuantityInput(quantityInput);
   const { semanticColors: sc } = useTheme();
@@ -84,9 +94,21 @@ export function QuantityPickerContent({
     : { calories: 0, protein: 0, carbs: 0, fat: 0 };
   const shown = (value: number) => Number.isFinite(value) ? String(Math.round(value)) : '—';
   const units = [...unitOptionsFor(selectedFood)].sort((a, b) => UNIT_ORDER.indexOf(a) - UNIT_ORDER.indexOf(b));
+  const screenSize = useWindowDimensions();
+  const room = sheetRoom(screenSize.width);
+  const title = fitTitle(selectedFood?.name ?? '', room, screenSize.fontScale || 1, typography.h1.letterSpacing);
+  const tabs = fitUnitTabs(units, room, screenSize.fontScale || 1);
   // No-break spaces keep each number with its unit when the line wraps (320 pt, 130% text).
   const summary = `${shown(previewMacros.calories)}\u00A0kcal, ${shown(previewMacros.protein)}\u00A0g protein, `
     + `${shown(previewMacros.carbs)}\u00A0g carbs, ${shown(previewMacros.fat)}\u00A0g fat.`;
+  // C2-S-32: the plate as the summary shows it (rounded) taken from what the day has left. Once the plate passes
+  // the target there is no drawn sentence, so no line; protein still to go never reads below 0.
+  const plateKcal = Math.round(previewMacros.calories);
+  const afterKcal = dayLeft ? Math.round(dayLeft.kcal) - plateKcal : -1;
+  const afterProtein = dayLeft ? Math.max(0, Math.round(dayLeft.protein) - Math.round(previewMacros.protein)) : 0;
+  const afterPlate = dayLeft && quantity != null && Number.isFinite(plateKcal) && afterKcal >= 0
+    ? `After this plate: ${afterKcal.toLocaleString('en-US')} kcal left and ${afterProtein.toLocaleString('en-US')} g protein to go.`
+    : null;
 
   return (
     <KeyboardAvoidingView
@@ -99,13 +121,15 @@ export function QuantityPickerContent({
       >
         <SheetGrip />
         {mealLabel ? <QuietOverline style={styles.mealLine}>For {mealLabel}</QuietOverline> : null}
-        <Text style={styles.quantityFoodName} accessibilityRole="header">{selectedFood?.name}</Text>
+        <Text style={[styles.quantityFoodName, { fontSize: title.fontSize, lineHeight: title.lineHeight }]}
+          allowFontScaling={false} accessibilityRole="header" accessibilityLabel={selectedFood?.name}>{title.text}</Text>
         {selectedFood?.brand ? (
           <Text style={styles.quantityFoodBrand}>{selectedFood.brand}</Text>
         ) : null}
 
-        {/* FR-916R3 F2: the tabs wrap (as on main) so every unit shows at 320 pt and 130% text. */}
-        <View style={styles.unitTabs}>
+        {/* PORTION-WRAP-M: one row of tabs at every phone width and text size (portionFit); wraps only if a window is narrower than any phone. */}
+        <View style={[styles.unitTabs, { columnGap: tabs.gap, flexWrap: tabs.wrap ? 'wrap' : 'nowrap',
+          justifyContent: tabs.spread ? 'space-between' : 'flex-start', marginHorizontal: -tabs.bleed }]}>
           {units.map((u) => (
             <HapticPressable
               key={u}
@@ -114,10 +138,11 @@ export function QuantityPickerContent({
               accessibilityRole="tab"
               accessibilityLabel={`Portion unit ${u}`}
               accessibilityState={{ selected: selectedUnit === u }}
-              style={[styles.unitTab, selectedUnit === u && styles.unitTabActive]}
+              style={[styles.unitTab, { minWidth: tabs.minWidth, paddingHorizontal: tabs.padding }, selectedUnit === u && styles.unitTabActive]}
               onPress={() => onUnitChange(u)}
             >
-              <Text style={[styles.unitTabText, selectedUnit === u && styles.unitTabTextActive]}>{u}</Text>
+              <Text allowFontScaling={false} style={[styles.unitTabText, { fontSize: tabs.fontSize },
+                selectedUnit === u && styles.unitTabTextActive]}>{u}</Text>
             </HapticPressable>
           ))}
         </View>
@@ -139,6 +164,7 @@ export function QuantityPickerContent({
           onChange={(next) => onQuantityChange(String(next))} />
 
         {quantity != null ? <Text style={styles.summary} testID="portion-summary">{summary}</Text> : null}
+        {afterPlate ? <Text style={styles.afterPlate} testID="portion-after-plate">{afterPlate}</Text> : null}
         {selectedFood?.serving_size ? (
           <Text style={styles.servingSizeInfo}>1 serving = {selectedFood.serving_size}</Text>
         ) : null}
@@ -158,7 +184,12 @@ export function QuantityPickerContent({
           testID="quantity-log-food"
           style={styles.quantityLogButton}
         />
-        <TextLink label="Cancel" tone="accent" disabled={saving} onPress={onCancel} />
+        {onAddAnother ? (
+          <TextLink label="Add another food" tone="accent" disabled={saving || quantity == null || blocked} onPress={onAddAnother}
+            testID="quantity-add-another" />
+        ) : (
+          <TextLink label="Cancel" tone="accent" disabled={saving} onPress={onCancel} />
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -191,16 +222,12 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   },
   unitTabs: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    columnGap: 8,
     marginTop: 4,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: sc.border,
   },
   unitTab: {
     minHeight: layout.touchMin,
-    minWidth: 64,
-    paddingHorizontal: 12,
     alignItems: 'center',
     justifyContent: 'center',
     borderBottomWidth: 2,
@@ -210,7 +237,6 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     borderBottomColor: gold[300],
   },
   unitTabText: {
-    fontSize: 16,
     color: colors.graphite,
   },
   unitTabTextActive: {
@@ -245,6 +271,14 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     lineHeight: 22,
     color: colors.graphite,
     marginTop: 12,
+    fontVariant: ['lining-nums', 'tabular-nums'],
+  },
+  // C_portion: the after-this-plate line sits under the summary in ink, at the summary's size (C_portion draws both lines as one meta size).
+  afterPlate: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: sc.textPrimary,
+    marginTop: 4,
     fontVariant: ['lining-nums', 'tabular-nums'],
   },
   servingSizeInfo: {

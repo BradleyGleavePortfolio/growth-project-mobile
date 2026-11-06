@@ -70,10 +70,19 @@ beforeEach(() => {
 
 describe('Train course banner', () => {
   it('is off in every build, and with the flag off Train asks for nothing', async () => {
-    expect(featureFlags.learnCourses).toBe(false);
+    // Pins EXPO_PUBLIC_FF_LEARN_COURSES off: this test checks the shipped default and the flag-off Train.
+    const saved = process.env.EXPO_PUBLIC_FF_LEARN_COURSES;
+    delete process.env.EXPO_PUBLIC_FF_LEARN_COURSES;
+    try {
+      jest.isolateModules(() => expect(jest.requireActual('../../../../config/featureFlags').featureFlags.learnCourses).toBe(false));
+    } finally {
+      if (saved !== undefined) process.env.EXPO_PUBLIC_FF_LEARN_COURSES = saved;
+    }
+    const pin = jest.replaceProperty(featureFlags, 'learnCourses', false);
     await show(CourseBanner);
     expect(screen.queryByTestId('course-banner')).toBeNull();
     expect(get).not.toHaveBeenCalled();
+    pin.restore();
   });
 
   describe('flag on', () => {

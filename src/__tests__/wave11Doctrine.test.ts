@@ -10,6 +10,18 @@
 
 import { aiDisclaimer, AI_BADGES, FORBIDDEN_AI_CLAIMS } from '../lib/aiHonestyCopy';
 import { featureFlags } from '../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_COMMUNITY_VOICE_NOTES off: 'stays OFF by default' checks the shipped default.
+const shippedDefault = (key: string): typeof featureFlags => {
+  const saved = process.env[key];
+  delete process.env[key];
+  let flags = featureFlags;
+  jest.isolateModules(() => {
+    flags = require('../config/featureFlags').featureFlags;
+  });
+  if (saved !== undefined) process.env[key] = saved;
+  return flags;
+};
 import {
   fetchAdminControlRoom,
   fetchClientPathCopilot,
@@ -47,7 +59,7 @@ describe('featureFlags defaults (production)', () => {
   // defaults are exercised by build-time env vars; tests ensure no flag is
   // accidentally hard-coded `true`.
   it('communityVoiceNotes stays OFF by default (no false promises)', () => {
-    expect(featureFlags.communityVoiceNotes).toBe(false);
+    expect(shippedDefault('EXPO_PUBLIC_FF_COMMUNITY_VOICE_NOTES').communityVoiceNotes).toBe(false);
   });
 
   it('every flag is a boolean', () => {

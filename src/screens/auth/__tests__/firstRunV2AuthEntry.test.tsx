@@ -11,10 +11,10 @@ import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { NavigationContext } from '@react-navigation/native';
-import { StatusBar, StyleSheet } from 'react-native';
+import { Platform, StatusBar, StyleSheet } from 'react-native';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { StatusBarBand, STATUS_BAR_BONE } from '../../../components/StatusBarBand';
-import { lightTokens } from '../../../theme/tokens';
+import { lightTokens, colors as palette } from '../../../theme/tokens';
 
 const mockApi = {
   getSignupPolicy: jest.fn(),
@@ -82,6 +82,13 @@ const HIDDEN = { includeHiddenElements: true };
 const nav = () => ({ navigate: jest.fn(), replace: jest.fn(), goBack: jest.fn(), canGoBack: jest.fn(() => false) });
 type Nav = ReturnType<typeof nav>;
 const login = (n: Nav) => render(<LoginScreen navigation={n as never} route={{ key: 'l', name: 'Login' } as never} />);
+it('LS-935 B3: Sign in back button has the drawn cream fill and no outline', async () => {
+  const view = await login(nav());
+  expect(StyleSheet.flatten(view.getByTestId('login-back-back').props.style)).toMatchObject({
+    backgroundColor: palette.cream,
+    borderWidth: 0,
+  });
+});
 const create = (n: Nav, params?: { invite_code?: string }) =>
   render(<CreateAccountScreen navigation={n as never} route={params ? { params } : undefined} />);
 let focused = true;
@@ -124,7 +131,14 @@ beforeEach(async () => {
 });
 
 it('the flag is off by default, so the existing auth suites cover main', () => {
-  expect(jest.requireActual('../../../config/featureFlags').featureFlags.firstRunV2).toBe(false);
+  // Pins EXPO_PUBLIC_FF_FIRST_RUN_V2 off: this test checks the shipped default.
+  const saved = process.env.EXPO_PUBLIC_FF_FIRST_RUN_V2;
+  delete process.env.EXPO_PUBLIC_FF_FIRST_RUN_V2;
+  try {
+    jest.isolateModules(() => expect(jest.requireActual('../../../config/featureFlags').featureFlags.firstRunV2).toBe(false));
+  } finally {
+    if (saved !== undefined) process.env.EXPO_PUBLIC_FF_FIRST_RUN_V2 = saved;
+  }
 });
 
 it('Welcome: Get started opens Create account with mediumImpact; Log in opens Sign in', async () => {
@@ -239,6 +253,36 @@ it('Sign in: Google keeps "or", the existing-account question and its call', asy
   expect(mockGoogle).not.toHaveBeenCalled();
   await fireEvent.press(view.getByText('Sign in to existing account'));
   await waitFor(() => expect(mockGoogle).toHaveBeenCalledWith());
+});
+
+it('Sign in (D10-BUILD-CLOSE, C7 Style B): Google\'s four-colour mark, not a typed G, and the providers 16 pt under the title', async () => {
+  const view = await login(nav());
+  const google = await view.findByLabelText('Continue with Google');
+  expect(view.getByTestId('login-google-mark', HIDDEN)).toBeTruthy();
+  expect(view.queryByText('G')).toBeNull();
+  expect(google).toBeTruthy();
+  const src = fs.readFileSync(path.join(__dirname, '..', 'LoginScreen.tsx'), 'utf8');
+  for (const c of ['#EA4335', '#4285F4', '#FBBC05', '#34A853']) expect(src).toContain(`fill="${c}"`);
+  expect(src).toMatch(/bTitle: \{ marginTop: Spacing\.sm, marginBottom: Spacing\.md \}/);
+});
+
+// LO-935R2 C1 (FIX-935R2, agent 199): off iOS there is no Apple button, so its empty slot must not sit in the
+// providers stack (its 12 pt gap put Google about 30 pt under the title; B_signin_android360 draws about 12).
+it.each([
+  ['android', false, 1],
+  ['ios', true, 2],
+] as Array<['android' | 'ios', boolean, number]>)('LO-935R2 C1: Sign in on %s stacks only the providers it shows', async (os, apple, kids) => {
+  const realOS = Platform.OS;
+  Platform.OS = os;
+  mockAppleOnDevice = apple;
+  try {
+    const view = await login(nav());
+    await view.findByLabelText('Continue with Google');
+    expect(view.getByTestId('login-providers').children).toHaveLength(kids);
+    if (apple) expect(await view.findByTestId('apple-button')).toBeTruthy();
+  } finally {
+    Platform.OS = realOS;
+  }
 });
 
 const fill = async (view: Awaited<ReturnType<typeof create>>) => {

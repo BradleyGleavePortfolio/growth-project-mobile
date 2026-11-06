@@ -27,7 +27,8 @@ jest.mock("../../../../services/api", () => ({
   __esModule: true,
   default: { get: (...a: unknown[]) => mockGet(...a), post: jest.fn() },
 }));
-jest.mock("../../../../services/sentry", () => ({ captureError: jest.fn() }));
+// All switches on: a mounted screen reads useCurrentUser, which sets the Sentry user (useCurrentUser.ts:78).
+jest.mock("../../../../services/sentry", () => ({ captureError: jest.fn(), setSentryUser: jest.fn() }));
 jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn() }));
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
 jest.mock("../../../../hooks/useNetworkStatus", () => ({
@@ -57,6 +58,10 @@ jest.mock("../../../../config/purchaseSurfaces", () => ({
 import CoachHomeCards from "../../command-center/CoachHomeCards";
 import MoneyScreen from "../MoneyScreen";
 import MoneyAIPool from "../MoneyAIPool";
+import { featureFlags } from "../../../../config/featureFlags";
+
+// Pins EXPO_PUBLIC_FF_COACH_TABS_V2 off: this file is Money inside Settings, the five-tab layout (with six tabs Money is its own tab).
+jest.replaceProperty(featureFlags, "coachTabsV2", false);
 
 const BUDGET: CoachAIBudgetResponse = {
   period_start: "2026-10-01T00:00:00Z", period_end: "2026-11-01T00:00:00Z",

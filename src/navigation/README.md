@@ -8,6 +8,13 @@ C8V2-2B adds no route. With clientProgressV2 on, More > Progress keeps its back-
 header in the masthead forest with light text and status bar (`backOnlyHeader(title,
 onMasthead)`), so the bar and the page read as one surface.
 
+STYLE-MEALPLAN-M adds no route. `backOnlyHeader(title, onMasthead)` also takes a colour:
+a string paints the bar in that ground with light text. The three C2 Style C plan routes
+in More (`Fast`, `ClientMacros`, `ClientDailyMealPlan`) pass `PLAN_BAND`
+(`surface.forestBand`, the plan masthead's forest), so the back chevron sits on the same
+forest as the page. `true` keeps Progress's masthead forest, and `false` (Habits,
+CoachSharing, Timeline) keeps the bone bar with ink text.
+
 Day One cards enter the existing Food / Home > Habits / You > Progress loggers without marking completion. `ClientNavigator.onDay1Saved` forwards only focused, successful saves; `RootNavigator` matches and consumes the selected type for the committed user, then shows `Day1WinScreen(savedWin)` for the server note while retaining the mounted navigator. `day1NoteVisible` temporarily hides the open food sheet, without clearing its meal, search or success feedback. Continue reveals that same logger without re-arming completion. See `screens/client/first-win/README.md`.
 
 Coach tab labels use the same one-line Inter tokens and fitting props as client tabs. Labels come from each route's existing title so no string override bypasses the shared renderer. The label reclaims the bottom-tab button's 5 pt side inset. Every button keeps the native tab role; Messages announces the visible unread badge, and iOS labels retain the tab position. Tab order, destinations, feature gates and selection haptics are unchanged.

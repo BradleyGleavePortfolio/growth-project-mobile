@@ -3,12 +3,16 @@
 // ScrollView with no scroll bar, 64 pt minimum each plus an 8 pt gap (6 x 64 + 5 x 8 = 424 pt), wider
 // than the sheet's content at every phone width (320 pt - 2 x 24 pt gutter = 272 pt; 430 pt = 382 pt),
 // so tsp (and at 320-390 pt tbsp, at 320 pt part of "cup") is off the edge with nothing to say it is there.
+// PORTION-WRAP-M: the window is now mocked to a 320 pt phone at 130% text, where the one-row tabs must still fit.
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { render, screen } from '@testing-library/react-native';
 import { QuantityPickerContent } from '../log/QuantityPickerModal';
 import { layout } from '../../theme';
 import type { SearchResult } from '../../utils/log/types';
+
+const mockWindow = { width: 320, height: 568, scale: 2, fontScale: 1.3 };
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({ __esModule: true, default: () => mockWindow }));
 
 const flat = (s: unknown) => (StyleSheet.flatten(s as any) ?? {}) as Record<string, any>;
 
@@ -39,7 +43,7 @@ it('LO-916R3 B1: every unit tab of a volume food fits on a 320 pt phone (none hi
     node = node.parent;
   }
   const minRow = tabs.reduce((n, t) => n + (flat(t.props.style).minWidth ?? 0), 0) + gap * (tabs.length - 1);
-  const room = 320 - 2 * layout.gutter;
+  const room = 320 - 2 * layout.gutter + 16; // PORTION-WRAP-M: six tabs at 320 pt borrow 8 pt of each gutter
   const hidden = !wraps && minRow > room;
   expect({ sideways, wraps, minRow, room, hidden }).toEqual(expect.objectContaining({ hidden: false }));
 });

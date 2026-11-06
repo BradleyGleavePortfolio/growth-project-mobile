@@ -355,7 +355,14 @@ describe('B1: the Your plans line follows the plans', () => {
 
 describe('flag and tab', () => {
   it('youTabV2 is off by default; on, MoreIndex is You and the tab reader says You', () => {
-    expect(jest.requireActual('../../../config/featureFlags').featureFlags.youTabV2).toBe(false);
+    // Pins EXPO_PUBLIC_FF_YOU_TAB_V2 off: this test checks the shipped default.
+    const saved = process.env.EXPO_PUBLIC_FF_YOU_TAB_V2;
+    delete process.env.EXPO_PUBLIC_FF_YOU_TAB_V2;
+    try {
+      jest.isolateModules(() => expect(jest.requireActual('../../../config/featureFlags').featureFlags.youTabV2).toBe(false));
+    } finally {
+      if (saved !== undefined) process.env.EXPO_PUBLIC_FF_YOU_TAB_V2 = saved;
+    }
     expect(NAV).toContain('name="MoreIndex"    component={featureFlags.youTabV2 ? YouScreen : MoreScreen}');
     expect(NAV).toContain("tabBarAccessibilityLabel: featureFlags.youTabV2 ? 'You' : 'Profile and more'");
   });

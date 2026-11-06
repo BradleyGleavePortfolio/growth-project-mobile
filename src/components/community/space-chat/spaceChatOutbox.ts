@@ -1,0 +1,265 @@
+/**
+ * FX-871 (agent 169; Sol B4 and Opus B4 on m#871): the space chat outbox. Texts the viewer sent stay here until the
+ * server list carries them: sending, waiting (written offline), failed (Try again reuses the same Idempotency-Key,
+ * Delete drops it) or sent (the server took it; it stays, with no Delete, until the list carries it). The rows are
+ * kept on the device per signed-in user (cacheStorage, so a sign-out wipes them), and the outbox runs from the first
+ * space chat or Community Home of the session until sign-out: back online, waiting rows go out one at a time, oldest
+ * first, whichever page is open. After an app restart they go out once the outbox starts again.
+ * A refusal keeps only its class on the row, never the error (FR-871R6, m#871 Sol B871-2 / Opus B3): `rejected` (422
+ * community.content.rejected: the composer takes the text back to rephrase) or `closed` (403 / 404: the page closes).
+ * SC-M3 (agent 184): a reply keeps the message it answers (`reply`: its id and the quote drawn until the list has it).
+ * FR-909 (LS-909 B1, LO-909 B1): once that message goes (removed, deleted, its author blocked, the space closed) the
+ * row keeps only its id: the quoted words leave the row and the device (`forget`).
+ * FIX-938 (LS-938 B3): a text goes out only as the account that queued it. The outbox pins that account's credential
+ * subject when it starts for a user, and every send carries its publisher: the binding of its sign-in (subject and auth
+ * epoch, services/accountBinding.ts) and the session generation it was read at (services/sessionFence.ts). The request
+ * interceptor checks both against the credential it reads (services/api.ts), as a voice note's hops do.
+ */
+import { useMemo, useSyncExternalStore } from 'react';
+import NetInfo from '@react-native-community/netinfo';
+import { cacheStorage } from '../../../storage/mmkv';
+import { authEvents } from '../../../utils/authEvents';
+import { registerSignOutQueue } from '../../../services/signOutQueues';
+import { generateIdempotencyKey } from '../../../utils/idempotency';
+import { isEffectivelyOnline } from '../../../hooks/useNetworkStatus';
+import { describeCommunityFailure } from '../../../api/communityErrors';
+import { CONTENT_REJECTED_CODE, communityErrorCode } from '../../../api/communitySafetyApi';
+import { bindingIsCurrent, captureAccountBinding, isAccountChangedError } from '../../../services/accountBinding';
+import { sessionGeneration, sessionWritesSettled } from '../../../services/sessionFence';
+import { isNoAccess, spaceChatApi, type SpacePublisher } from './spaceChatApi';
+import type { ReplyTarget } from '../../messaging/ReplyComposer';
+
+/** SC-M3: what a reply answers. FR-909: its author and time, so a block or a removal finds it; `gone` once it went. */
+export interface SpaceReplyTarget extends ReplyTarget { authorId?: string; at?: string; gone?: boolean }
+
+export type PendingState = 'sending' | 'waiting' | 'failed' | 'sent';
+/** Why the server refused a send: its words (422 content rejected), or the person is no longer let in (403 / 404). */
+export type Refusal = 'rejected' | 'closed';
+export interface PendingRow {
+  localId: string; key: string; cohortId: string; body: string; createdAt: string; state: PendingState; serverId?: string;
+  reason?: Refusal;
+  /** SC-M3: the message this text answers, with the quote the row shows until the server list carries it. */
+  reply?: SpaceReplyTarget;
+}
+
+export const SPACE_OUTBOX_PREFIX = 'space_outbox_';
+let uid: string | null = null;
+let rows: PendingRow[] = [];
+let online = false;
+// Each sign-in (and sign-out) starts a new generation; a send still out for an earlier one never touches the rows.
+let gen = 0;
+let running = -1;
+let flushing: Promise<void> = Promise.resolve();
+let loaded: Promise<void> = Promise.resolve();
+// FIX-938 B3: the account this generation's texts were queued by (its credential subject, pinned once) and the publisher
+// of its current sign-in. Another account's credential never binds; a new sign-in of the same account does.
+let account: string | null = null;
+let bound: SpacePublisher | null = null;
+let stopNet: (() => void) | null = null;
+const subs = new Set<() => void>();
+const onSent = new Set<(cohortId: string) => void>();
+const onRefused = new Set<(cohortId: string) => void>();
+/** The approved words for a text refused for its words: the thread's and the DMs' (communityErrors, by code). */
+export const REJECTED_WORDS = describeCommunityFailure({ response: { status: 422, data: { code: CONTENT_REJECTED_CODE } } }, 'send_message');
+const refusal = (err: unknown): Refusal | undefined =>
+  (communityErrorCode(err) === CONTENT_REJECTED_CODE ? 'rejected' : isNoAccess(err) ? 'closed' : undefined);
+
+function set(next: PendingRow[]): void {
+  rows = next;
+  if (uid) {
+    const k = `${SPACE_OUTBOX_PREFIX}${uid}`;
+    const keep = rows.filter((r) => r.state !== 'sent');
+    void Promise.resolve()
+      .then(() => (keep.length ? cacheStorage.set(k, JSON.stringify(keep)) : cacheStorage.delete(k)))
+      .catch(() => undefined);
+  }
+  subs.forEach((fn) => fn());
+}
+const patch = (localId: string, change: Partial<PendingRow>) =>
+  set(rows.map((r) => (r.localId === localId ? { ...r, ...change } : r)));
+
+/** The sign-in a text of generation `g` goes out under: the pinned account's, or none (nothing is sent). */
+async function publisher(g: number): Promise<SpacePublisher | null> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (bound && bindingIsCurrent(bound.binding) && bound.session === sessionGeneration()) return bound;
+    await sessionWritesSettled();
+    const session = sessionGeneration();
+    const binding = await captureAccountBinding();
+    if (gen !== g) return null;
+    if (!binding || session !== sessionGeneration()) continue;
+    account ??= binding.subject;
+    if (binding.subject !== account) return null;
+    bound = { binding, session };
+  }
+  return bound && bindingIsCurrent(bound.binding) && bound.session === sessionGeneration() ? bound : null;
+}
+
+/** One send at a time, oldest first, so a space reads in the order the texts were written; resolves when it ends. */
+function flush(): Promise<void> {
+  if (running !== gen) flushing = drain();
+  return flushing;
+}
+async function drain(): Promise<void> {
+  if (running === gen || !online || !uid) return;
+  const g = gen;
+  running = g;
+  try {
+    for (;;) {
+      const next = rows.filter((r) => r.state === 'waiting').sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
+      if (!next || !online || gen !== g) break;
+      patch(next.localId, { state: 'sending' });
+      const under = await publisher(g);
+      if (gen !== g) break;
+      if (!under) {
+        patch(next.localId, { state: 'waiting' });
+        break;
+      }
+      try {
+        const sent = await spaceChatApi.send(next.cohortId, next.body, next.key, next.reply?.id, under);
+        if (gen !== g) break;
+        patch(next.localId, { state: 'sent', serverId: sent.id });
+        onSent.forEach((fn) => fn(next.cohortId));
+      } catch (err) {
+        if (gen !== g) break;
+        // B3: its sign-in ended on the way (the send was called back, or never left): it goes again under the next
+        // sign-in of the same account, with the same Idempotency-Key.
+        if (!bindingIsCurrent(under.binding) || isAccountChangedError((err as { cause?: unknown })?.cause)) {
+          bound = null;
+          patch(next.localId, { state: 'waiting' });
+          continue;
+        }
+        // Lost the connection on the way: it waits for the next reconnect; any answer from the server is a failure.
+        const dropped = (err as { kind?: string })?.kind === 'network' && !online;
+        const reason = dropped ? undefined : refusal(err);
+        patch(next.localId, { state: dropped ? 'waiting' : 'failed', reason });
+        // SC-M3: a reply's 404 can be its message gone (the server answers both alike): Not sent here, and the next
+        // read of the list says whether the space closed.
+        if (reason === 'closed' && !next.reply) onRefused.forEach((fn) => fn(next.cohortId));
+      }
+    }
+  } finally {
+    if (running === g) running = -1;
+  }
+}
+
+export function setSpaceOutboxOnline(next: boolean): void {
+  online = next;
+  if (next) void flush();
+}
+
+function reset(): void {
+  uid = null;
+  gen += 1;
+  account = null;
+  bound = null;
+  set([]);
+  void Promise.resolve()
+    .then(() => cacheStorage.getAllKeys())
+    .then((keys) => Promise.all(keys.filter((k) => k.startsWith(SPACE_OUTBOX_PREFIX)).map((k) => cacheStorage.delete(k))))
+    .catch(() => undefined);
+}
+// Only a sign-out wipes the queue. 'login' is the same account re-reading its session (AddCoachCode, a house
+// package, a plan renewal), so it keeps the queue (LO-938R2 B1); a real sign-in emits no name, and startSpaceOutbox
+// rebinds to the new account and its own saved queue.
+try {
+  authEvents.on('logout', reset);
+} catch {
+  // A test double without named events; a real sign-out still wipes the cache store.
+}
+
+const valid = (r: Partial<PendingRow>): r is PendingRow =>
+  typeof r?.localId === 'string' && typeof r.key === 'string' && typeof r.cohortId === 'string' &&
+  typeof r.body === 'string' && typeof r.createdAt === 'string' &&
+  (r.reply === undefined || (typeof r.reply?.id === 'string' && typeof r.reply.body === 'string' && typeof r.reply.authorLabel === 'string'));
+const REFUSALS: readonly unknown[] = ['rejected', 'closed'];
+
+/** Starts (or keeps) the outbox for the signed-in user: reads the kept rows and follows the connection. */
+export function startSpaceOutbox(userId: string | null): void {
+  if (!userId || uid === userId) return;
+  uid = userId;
+  gen += 1;
+  const g = gen;
+  account = null;
+  bound = null;
+  void publisher(g).catch(() => undefined);
+  rows = [];
+  subs.forEach((fn) => fn());
+  loaded = cacheStorage.getStringAsync(`${SPACE_OUTBOX_PREFIX}${userId}`).then((raw) => {
+    if (gen !== g || !raw) return;
+    const kept = (JSON.parse(raw) as Partial<PendingRow>[]).filter(valid)
+      .map((r): PendingRow => (r.state === 'failed'
+        ? { ...r, reason: REFUSALS.includes(r.reason) ? r.reason : undefined }
+        : { ...r, state: 'waiting', serverId: undefined, reason: undefined }));
+    set([...kept, ...rows.filter((r) => !kept.some((k) => k.localId === r.localId))]);
+    void flush();
+  }).catch(() => undefined);
+  if (!stopNet) {
+    stopNet = NetInfo.addEventListener((s) =>
+      setSpaceOutboxOnline(isEffectivelyOnline({ isOnline: !!s.isConnected, isInternetReachable: s.isInternetReachable ?? null })));
+  }
+}
+
+/**
+ * FIX-942 (LO-942 B1, LS-942 B3): the sign-out confirm (services/signOutQueues) counts this account's
+ * texts still only on this phone: waiting, failed (refused too) and on their way. It starts this account's outbox.
+ */
+async function spaceOutboxLength(userId: string): Promise<number> {
+  startSpaceOutbox(userId);
+  await loaded;
+  return rows.filter((r) => r.state !== 'sent').length;
+}
+/** The sign-out's one try: every text the server has not refused goes again, oldest first, as this account. */
+async function sendSpaceOutboxBeforeSignOut(userId: string): Promise<void> {
+  await spaceOutboxLength(userId);
+  set(rows.map((r) => (r.state === 'failed' && !r.reason ? { ...r, state: 'waiting' } : r)));
+  const s = await NetInfo.fetch();
+  online = isEffectivelyOnline({ isOnline: !!s.isConnected, isInternetReachable: s.isInternetReachable ?? null });
+  await flush();
+}
+registerSignOutQueue('space-texts', { count: spaceOutboxLength, send: sendSpaceOutboxBeforeSignOut });
+
+export const spaceOutbox = {
+  add(cohortId: string, body: string, reply?: SpaceReplyTarget): void {
+    const k = generateIdempotencyKey();
+    set([...rows, { localId: k, key: k, cohortId, body, createdAt: new Date().toISOString(), state: 'waiting', ...(reply ? { reply } : {}) }]);
+    void flush();
+  },
+  retry(localId: string): void {
+    patch(localId, { state: 'waiting', reason: undefined });
+    void flush();
+  },
+  /**
+   * Only a row the server never took leaves (waiting, not sent). One on its way stays (its send cannot be called back),
+   * and so does one the server took (FR-871R7, m#879 Sol B879-3: everyone sees it); the server row's Delete is the real one.
+   */
+  discard(localId: string): void {
+    set(rows.filter((r) => r.localId !== localId || r.state === 'sending' || r.state === 'sent'));
+  },
+  /** FR-909: the rows whose answered message went keep its id only (no words in memory or on the device). */
+  forget(gone: (r: PendingRow) => boolean): void {
+    const hit = (r: PendingRow) => !!r.reply && !r.reply.gone && gone(r);
+    if (rows.some(hit)) set(rows.map((r) => (hit(r) && r.reply ? { ...r, reply: { id: r.reply.id, body: '', authorLabel: '', gone: true } } : r)));
+  },
+  /** A sent row leaves once the server list carries it. */
+  settle(serverIds: Set<string>): void {
+    if (rows.some((r) => r.serverId && serverIds.has(r.serverId))) set(rows.filter((r) => !(r.serverId && serverIds.has(r.serverId))));
+  },
+  onSent(fn: (cohortId: string) => void): () => void {
+    onSent.add(fn);
+    return () => { onSent.delete(fn); };
+  },
+  /** A send the server refused with 403 / 404: the person is no longer let into that space. */
+  onRefused(fn: (cohortId: string) => void): () => void {
+    onRefused.add(fn);
+    return () => { onRefused.delete(fn); };
+  },
+};
+
+const subscribe = (fn: () => void) => { subs.add(fn); return () => { subs.delete(fn); }; };
+const snapshot = () => rows;
+
+/** This space's outbox rows, in the order they were written. */
+export function useSpaceOutbox(cohortId: string): PendingRow[] {
+  const all = useSyncExternalStore(subscribe, snapshot, snapshot);
+  return useMemo(() => all.filter((r) => r.cohortId === cohortId), [all, cohortId]);
+}

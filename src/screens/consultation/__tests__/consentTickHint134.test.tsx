@@ -45,7 +45,7 @@ it('says why Continue is disabled, sits in the pinned footer, and goes once box 
   await waitFor(() => r.getByTestId('consult-screen-P0'));
   const hint = r.getByTestId('consent-tick-hint');
   expect(hint.props.children).toBe(CONSENT_TICK_HINT);
-  expect(CONSENT_TICK_HINT).toBe('Tick the first box above to continue.');
+  expect(CONSENT_TICK_HINT).toBe('Tick the box to continue.');
   expect(r.getByTestId('consult-continue').props.accessibilityState?.disabled).toBe(true);
   // In the pinned footer with Continue, not in the scrolled agreement text.
   const inFooter = (start: ReturnType<typeof r.getByTestId>) => {

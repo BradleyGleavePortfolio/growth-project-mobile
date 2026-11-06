@@ -38,6 +38,10 @@ import MetricDetailScreen, {
   starterGoalFor,
 } from '../MetricDetailScreen';
 import { layout, lightTokens } from '../../../../theme/tokens';
+import { featureFlags } from '../../../../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_HEALTH_PAGES off: this file is the classic Metric detail (MetricDetailScreen.tsx:183 swaps in MetricDetailV2).
+jest.replaceProperty(featureFlags, 'healthPages', false);
 
 type Flat = ViewStyle & TextStyle;
 const flat = (node: { props: { style?: unknown } }): Flat =>

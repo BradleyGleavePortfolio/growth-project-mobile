@@ -11,7 +11,7 @@
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import * as Clipboard from 'expo-clipboard';
-import AiRefusalNotice from '../AiRefusalNotice';
+import AiRefusalNotice, { consentSheetVariantFor } from '../AiRefusalNotice';
 import { AI_CONSENT_SHEET_COPY, type AiConsentSheetApi } from '../AiConsentSheet';
 import { openSupportFrom, type SupportNav } from '../useOpenSupport';
 import type { AiConsentAsk, AiConsentOutcome, AiConsentStatusResponse } from '../../../api/aiConsentApi';
@@ -77,6 +77,43 @@ describe('AiRefusalNotice — client consent_required', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     resetAiLedgerWritesForTests();
+  });
+
+  it('LS-E4 B2: a first Roman ask reached through the refusal fallback opens with PERM-W3', async () => {
+    const api = fakeApi({ kind: 'ok', status: status() });
+    const r = await render(
+      <AiRefusalNotice
+        refusal={{ kind: 'consent_required' }}
+        audience="client"
+        surface="roman"
+        consentApi={api}
+        consentSessionUserId={sessionUserId}
+        testID="first-roman-fallback"
+      />,
+    );
+    await fireEvent.press(r.getByTestId('first-roman-fallback-allow'));
+    await waitFor(() => r.getByTestId('first-roman-fallback-consent-sheet-paragraph'));
+    expect(api.grantRoman).not.toHaveBeenCalled();
+    expect(r.getByText(AI_CONSENT_SHEET_COPY.beforeAnswerLead)).toBeTruthy();
+    // SHEET-1 (owner 185-W4): the lead already names Settings > Privacy, so the closing line is gone here.
+    expect(r.queryByText(AI_CONSENT_SHEET_COPY.changeLater)).toBeNull();
+  });
+
+  it('FR-E4M: only Roman asks open "Before Roman answers"; the guide and insight sheets keep their own', async () => {
+    expect(consentSheetVariantFor('roman')).toBe('beforeAnswer');
+    for (const surface of ['guide', 'insight'] as const) {
+      expect(consentSheetVariantFor(surface)).toBe('default');
+      const api = fakeApi({ kind: 'ok', status: status() });
+      const r = await render(
+        <AiRefusalNotice refusal={{ kind: 'consent_required' }} audience="client" surface={surface} consentApi={api} consentSessionUserId={sessionUserId} testID="g" />,
+      );
+      await fireEvent.press(r.getByTestId('g-allow'));
+      await waitFor(() => r.getByTestId('g-consent-sheet-paragraph'));
+      expect(r.queryByTestId('g-consent-sheet-lead')).toBeNull();
+      expect(r.queryByText(AI_CONSENT_SHEET_COPY.beforeAnswerTitle)).toBeNull();
+      expect(r.getByText(AI_CONSENT_SHEET_COPY.changeLater)).toBeTruthy();
+      await r.unmount();
+    }
   });
 
   it('Allow AI help -> server copy -> grant with version, sha256 and platform -> retries the request', async () => {

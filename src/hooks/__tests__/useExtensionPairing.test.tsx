@@ -38,6 +38,7 @@ jest.mock('../useCurrentUser', () => ({
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PAIRING_REASON_COPY, useExtensionPairing } from '../useExtensionPairing';
+import { featureFlags } from '../../config/featureFlags';
 import { extensionPairApi } from '../../api/extensionPairApi';
 import { AnalyticsEvents } from '../../analytics/events';
 import {
@@ -124,6 +125,8 @@ describe('useExtensionPairing — flag-off / no-slug fail closed', () => {
   });
 
   it('defaults to the OFF kill switch (featureFlags.extensionImport is false in test env)', async () => {
+    // Pins EXPO_PUBLIC_FF_EXTENSION_IMPORT off: this test is the switch-off path.
+    jest.replaceProperty(featureFlags, 'extensionImport', false);
     const { result } = await renderHook(() => useExtensionPairing('truecoach'));
     await act(async () => {
       result.current.start();

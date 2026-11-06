@@ -24,9 +24,12 @@ import { useRoute, RouteProp } from '@react-navigation/native';
 import RiskDot from '../../components/RiskDot';
 import FactorRow from '../../components/FactorRow';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { radius } from '../../theme/tokens';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { ptmApi, ClientPtmResponse } from '../../services/ptmApi';
 import { coachApi } from '../../services/api';
+import { ConversationClosedLine } from '../../components/messaging/ConversationClosed';
+import { useNudgeGate } from './client-detail/useNudgeGate';
 
 type RouteParams = { ClientRiskDetail: { userId: string; clientName?: string } };
 
@@ -46,6 +49,8 @@ export default function ClientRiskDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [nudging, setNudging] = useState(false);
   const [nudgeSent, setNudgeSent] = useState(false);
+  // NUDGE-GATE-M: the nudge only for an open pair, as m#933's peek; a block either way shows the chat's closed line.
+  const nudgeGate = useNudgeGate(userId);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -66,12 +71,15 @@ export default function ClientRiskDetailScreen() {
   }, [isAuthorized, load]);
 
   const onNudge = useCallback(async () => {
-    if (nudging || nudgeSent) return;
+    if (nudging || nudgeSent || !nudgeGate.open) return;
     setNudging(true);
     try {
       await coachApi.sendNudge(userId, { title: NUDGE_TITLE, body: NUDGE_BODY });
       setNudgeSent(true);
     } catch (err) {
+      // FIX-940 (LO-T2B B1): the server says the pair is closed: the gate remembers it and the closed line replaces the
+      // nudge (no Alert). Other errors keep today's Alert.
+      if (nudgeGate.close(err)) return;
       Alert.alert(
         'Could not send nudge',
         err instanceof Error ? err.message : 'Please try again.',
@@ -79,7 +87,7 @@ export default function ClientRiskDetailScreen() {
     } finally {
       setNudging(false);
     }
-  }, [nudgeSent, nudging, userId]);
+  }, [nudgeGate.open, nudgeGate.close, nudgeSent, nudging, userId]);
 
   if (!isAuthorized) {
     return (
@@ -148,21 +156,30 @@ export default function ClientRiskDetailScreen() {
         </View>
       )}
 
-      <HapticPressable
-        intent="medium"
-        style={[
-          styles.nudgeBtn,
-          (nudging || nudgeSent) && styles.nudgeBtnDisabled,
-        ]}
-        onPress={onNudge}
-        disabled={nudging || nudgeSent}
-        accessibilityRole="button"
-        accessibilityLabel="Send check-in nudge"
-      >
-        <Text style={styles.nudgeText}>
-          {nudgeSent ? 'Nudge sent' : nudging ? 'Sending…' : 'Send check-in nudge'}
-        </Text>
-      </HapticPressable>
+      {nudgeGate.closed ? (
+        <ConversationClosedLine
+          by={nudgeGate.by}
+          name={clientName ?? data.user.name}
+          style={styles.nudgeClosedLine}
+          testID="risk-nudge-closed"
+        />
+      ) : nudgeGate.open ? (
+        <HapticPressable
+          intent="medium"
+          style={[
+            styles.nudgeBtn,
+            (nudging || nudgeSent) && styles.nudgeBtnDisabled,
+          ]}
+          onPress={onNudge}
+          disabled={nudging || nudgeSent}
+          accessibilityRole="button"
+          accessibilityLabel="Send check-in nudge"
+        >
+          <Text style={styles.nudgeText}>
+            {nudgeSent ? 'Nudge sent' : nudging ? 'Sending…' : 'Send check-in nudge'}
+          </Text>
+        </HapticPressable>
+      ) : null}
 
       <Text style={styles.sectionTitle}>Why</Text>
       {sortedFactors.length === 0 ? (
@@ -268,6 +285,11 @@ const makeStyles = (colors: ThemeColors) =>
       borderRadius: 0,
       backgroundColor: colors.primary,
       alignItems: 'center',
+      marginBottom: 24,
+    },
+    // NUDGE-GATE-M: the chat's closed line in the nudge's place (as m#933's peek draws it).
+    nudgeClosedLine: {
+      borderRadius: radius.button,
       marginBottom: 24,
     },
     nudgeBtnDisabled: {

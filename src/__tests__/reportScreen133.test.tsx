@@ -11,6 +11,10 @@ import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { logApi, weightApi } from '../services/api';
 import { layout } from '../theme/tokens';
 import ReportScreen from '../screens/client/ReportScreen';
+import { featureFlags } from '../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_CLIENT_PROGRESS_V2 off: this file is the classic Weekly report (ReportScreen.tsx:25 swaps in Week in review).
+jest.replaceProperty(featureFlags, 'clientProgressV2', false);
 
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('../theme/ThemeProvider', () => ({

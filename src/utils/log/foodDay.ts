@@ -30,6 +30,8 @@ export interface DaySlot {
   /** UI-3c: the plan this meal is under (its name, and its place in the day's plans for its dot), set only with two or more plans. */
   plan?: string;
   planNo?: number;
+  /** FOOD-DAY-STYLEC-M: the coach's time for this plan meal ("HH:MM", DailyMealPlanSlot.time_of_day); none on a usual day. */
+  time?: string | null;
 }
 
 export interface FoodDay {
@@ -99,6 +101,7 @@ export function buildPlanDay(plans: DailyMealPlan[], logs: FoodLog[]): FoodDay {
         foods: (t.items ?? []).map((f) => ({ name: f.name, portion: f.portion ?? (f.grams != null ? `${f.grams} g` : '') })),
         logs: mine,
         status,
+        time: s.time_of_day ?? null,
         ...(s.plan ? { plan: s.plan, planNo: s.i } : {}),
       };
     }),
