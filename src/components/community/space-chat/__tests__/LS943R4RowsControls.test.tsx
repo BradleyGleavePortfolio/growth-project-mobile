@@ -53,7 +53,8 @@ it.each([
   const parent = { id: 'parent', kind, snippet, sender_name: 'Ana', voice_duration_ms: ms, gone: false } as SpaceMessage['parent'];
   // The same three branches used by CommunitySpaceChatScreen.tsx:216-229 in part 4.
   const preview = kind === 'voice' ? voiceLine(ms ?? 0) : kind === 'image' ? photoLine(snippet) : firstLine(snippet);
-  const pending = quoteOfTarget({ messageId: 'parent', authorId: 'u-ana', authorLabel: 'Ana', body: preview } as SpaceReplyTarget);
+  const target: SpaceReplyTarget = { id: 'parent', authorId: 'u-ana', authorLabel: 'Ana', body: preview };
+  const pending = quoteOfTarget(target);
   const sent = quoteOf(parent);
   expect(sent).not.toBeNull();
   expect(pending).toMatchObject({ gone: false, name: 'Ana', text: expected });
@@ -71,7 +72,8 @@ it.each([
 });
 
 it('LS943R4: gone pending and server quotes discard words, have the same spoken line, and cannot jump', async () => {
-  const pending = quoteOfTarget({ messageId: 'p', authorLabel: 'Ana', body: 'no longer readable', gone: true } as SpaceReplyTarget);
+  const target: SpaceReplyTarget = { id: 'p', authorId: 'u-ana', authorLabel: 'Ana', body: 'no longer readable', gone: true };
+  const pending = quoteOfTarget(target);
   const sent = quoteOf({ id: 'p', gone: true, sender_name: 'Ana', snippet: 'no longer readable' } as SpaceMessage['parent']);
   expect(pending).toEqual({ gone: true });
   expect(sent).toEqual(pending);
@@ -89,8 +91,8 @@ it.each([[-0.5, 0], [0, 0], [0.375, 38], [1, 100], [1.5, 100]])(
     const r = await render(<QueryClientProvider client={qc}><SpaceVoiceNote voice={VOICE} coach={false} mine offline={false} localUri="file:///local.m4a" send="sending" progress={progress} /></QueryClientProvider>);
     const bar = r.getByTestId('space-chat-voice-progress-v-ctrl');
     expect(bar.props.accessibilityValue).toEqual({ min: 0, max: 100, now: expected });
-    const fill = bar.children[0] as { props: { style: { width?: string }[] } };
-    expect(StyleSheet.flatten(fill.props.style).width).toBe(`${expected}%`);
+    const fillStyle = StyleSheet.flatten(bar.props.children.props.style) as { width?: string };
+    expect(fillStyle.width).toBe(`${expected}%`);
     expect(getOne).not.toHaveBeenCalled();
     await r.unmount();
     qc.clear();
