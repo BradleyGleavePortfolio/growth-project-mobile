@@ -86,6 +86,12 @@ it('does not double the final 10 pt gap when the after-plate line is last', asyn
   expect(flat(screen.getByTestId('quantity-log-food')).marginTop).toBe(0);
 });
 
+it('uses the drawing meta rule default figures, without extra tabular width', async () => {
+  await render(<QuantityPickerContent {...props} />);
+  expect(flat(screen.getByTestId('portion-summary')).fontVariant).toBeUndefined();
+  expect(flat(screen.getByTestId('portion-after-plate')).fontVariant).toBeUndefined();
+});
+
 it('uses a local 36 by 5 grip, with 14 pt before the overline, without changing other food sheets', async () => {
   await render(<QuantityPickerContent {...props} />);
   const grip = screen.getByTestId('sheet-grip', { includeHiddenElements: true });
@@ -96,19 +102,19 @@ it('uses a local 36 by 5 grip, with 14 pt before the overline, without changing 
   expect(flat(shared.getByTestId('sheet-grip', { includeHiddenElements: true }))).toMatchObject({ width: 40, height: 5 });
 });
 
-it.each([272, 342])('draws 58 pt charcoal ticks, 18/82 percent fade stops and a centered 2.5 pt forest needle at %i pt', async (width) => {
+it.each([272, 342])('draws 58 pt ticks inside the unchanged 72 pt target, with 18/82 fade stops and a 2.5 pt needle at %i pt', async (width) => {
   await render(<QuantityPickerContent {...props} />);
   const ruler = screen.getByTestId('portion-ruler');
   await fireEvent(ruler, 'layout', { nativeEvent: { layout: { width, height: 58, x: 0, y: 0 } } });
-  expect(flat(ruler)).toMatchObject({ height: 58, marginTop: 8, marginBottom: 6 });
+  expect(flat(ruler)).toMatchObject({ height: 72, marginTop: 0, marginBottom: 0 });
   expect(flat(screen.getByTestId('portion-ruler-needle'))).toMatchObject({
-    width: 2.5, height: 58, left: width / 2 - 1.25, backgroundColor: colors.forest,
+    width: 2.5, height: 72, top: 0, left: width / 2 - 1.25, backgroundColor: colors.forest,
   });
   const ticks = ruler.queryAll((node) => flat(node).width === 1);
   expect(ticks.length).toBeGreaterThan(10);
   ticks.forEach((tick) => {
     const style = flat(tick);
-    expect(style).toMatchObject({ height: 58, top: 0, width: 1, backgroundColor: colors.charcoal });
+    expect(style).toMatchObject({ height: 58, top: 8, width: 1, backgroundColor: colors.charcoal });
     const expected = 0.55 * Math.max(0, Math.min(1, style.left / (width * 0.18), (width - style.left) / (width * 0.18)));
     expect(style.opacity).toBeCloseTo(expected);
   });
