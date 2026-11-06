@@ -64,7 +64,8 @@ describe.each([320, 390])('FIX-948R1 drawing values at %i pt', (width) => {
     });
     const units = ['g', 'oz', 'serving', 'cup', 'tbsp', 'tsp'];
     const fit = fitUnitTabs(units, sheetRoom(width), fontScale);
-    const row = screen.getAllByRole('tab')[0].parent!.parent!.parent!;
+    let row = screen.getAllByRole('tab')[0].parent!;
+    while (row.parent && flat(row).columnGap === undefined) row = row.parent;
     expect(flat(row)).toMatchObject({ marginTop: 6, borderBottomWidth: 1 });
     screen.getAllByRole('tab').forEach((tab, index) => {
       expect(flat(tab)).toMatchObject({ minHeight: 44, minWidth: fit.minWidth, paddingHorizontal: fit.padding });
@@ -101,7 +102,7 @@ it.each([272, 342])('draws 58 pt charcoal ticks, 18/82 percent fade stops and a 
   expect(flat(screen.getByTestId('portion-ruler-needle'))).toMatchObject({
     width: 2.5, height: 58, left: width / 2 - 1.25, backgroundColor: colors.forest,
   });
-  const ticks = ruler.findAll((node) => node.type === 'View' && flat(node).width === 1);
+  const ticks = ruler.queryAll((node) => flat(node).width === 1);
   expect(ticks.length).toBeGreaterThan(10);
   ticks.forEach((tick) => {
     const style = flat(tick);

@@ -18,7 +18,6 @@ import { PrimaryButton, TextLink } from '../../ui';
 import { SearchResult, unitOptionsFor } from '../../utils/log/types';
 import { calcMacros, parseQuantityInput } from '../../utils/log/macros';
 import PortionRuler from './PortionRuler';
-import SheetGrip from './SheetGrip';
 import { fitTitle, fitUnitTabs, sheetRoom } from './portionFit';
 
 interface Props {
@@ -119,7 +118,9 @@ export function QuantityPickerContent({
         contentContainerStyle={styles.quantityModalContent}
         keyboardShouldPersistTaps="handled"
       >
-        <SheetGrip />
+        <View style={styles.gripWrap} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+          <View testID="sheet-grip" style={styles.grip} />
+        </View>
         {mealLabel ? <QuietOverline style={styles.mealLine}>For {mealLabel}</QuietOverline> : null}
         <Text style={[styles.quantityFoodName, { fontSize: title.fontSize, lineHeight: title.lineHeight }]}
           allowFontScaling={false} accessibilityRole="header" accessibilityLabel={selectedFood?.name}>{title.text}</Text>
@@ -141,7 +142,7 @@ export function QuantityPickerContent({
               style={[styles.unitTab, { minWidth: tabs.minWidth, paddingHorizontal: tabs.padding }, selectedUnit === u && styles.unitTabActive]}
               onPress={() => onUnitChange(u)}
             >
-              <Text allowFontScaling={false} style={[styles.unitTabText, { fontSize: tabs.fontSize },
+              <Text allowFontScaling={false} style={[styles.unitTabText, { fontSize: Math.min(15 * (screenSize.fontScale || 1), tabs.fontSize) },
                 selectedUnit === u && styles.unitTabTextActive]}>{u}</Text>
             </HapticPressable>
           ))}
@@ -182,7 +183,8 @@ export function QuantityPickerContent({
           loading={saving}
           onPress={onConfirm}
           testID="quantity-log-food"
-          style={styles.quantityLogButton}
+        style={[styles.quantityLogButton, afterPlate && !selectedFood?.serving_size
+          && !['cup', 'tbsp', 'tsp'].includes(selectedUnit) && !notice ? styles.afterPlateButton : undefined]}
         />
         {onAddAnother ? (
           <TextLink label="Add another food" tone="accent" disabled={saving || quantity == null || blocked} onPress={onAddAnother}
@@ -204,9 +206,21 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     paddingHorizontal: layout.gutter,
     paddingBottom: 40,
   },
+  gripWrap: {
+    alignItems: 'center',
+    paddingTop: 10,
+    paddingBottom: 14,
+  },
+  grip: {
+    width: 36,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: sc.border,
+  },
   mealLine: {
-    color: colors.graphite,
-    marginTop: 8,
+    fontFamily: 'Inter_600SemiBold',
+    color: sc.textMuted,
+    marginTop: 0,
     marginBottom: 2,
   },
   quantityFoodName: {
@@ -222,8 +236,8 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   },
   unitTabs: {
     flexDirection: 'row',
-    marginTop: 4,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginTop: 6,
+    borderBottomWidth: 1,
     borderBottomColor: sc.border,
   },
   unitTab: {
@@ -237,7 +251,8 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     borderBottomColor: gold[300],
   },
   unitTabText: {
-    color: colors.graphite,
+    fontFamily: typography.bodyMd.fontFamily,
+    color: sc.textMuted,
   },
   unitTabTextActive: {
     fontFamily: typography.bodyMd.fontFamily,
@@ -247,48 +262,54 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'center',
-    marginTop: 20,
+    marginTop: 10,
   },
   quantityInput: {
     minWidth: 48,
     minHeight: layout.buttonHeight,
     paddingVertical: 0,
     paddingHorizontal: 4,
-    fontFamily: typography.display.fontFamily,
-    fontSize: 56,
-    lineHeight: 70,
+    fontFamily: typography.h3.fontFamily,
+    fontSize: 48,
+    lineHeight: 60,
     color: sc.textPrimary,
     textAlign: 'center',
-    fontVariant: ['lining-nums', 'tabular-nums'],
+    fontVariant: ['oldstyle-nums', 'tabular-nums'],
   },
   amountUnit: {
-    fontSize: 18,
-    color: colors.graphite,
+    fontFamily: typography.body.fontFamily,
+    fontSize: 16,
+    color: sc.textMuted,
     marginLeft: 6,
   },
   summary: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: colors.graphite,
-    marginTop: 12,
+    fontSize: 14,
+    lineHeight: 20.02,
+    color: sc.textMuted,
+    marginTop: 4,
+    marginBottom: 4,
     fontVariant: ['lining-nums', 'tabular-nums'],
   },
   // C_portion: the after-this-plate line sits under the summary in ink, at the summary's size (C_portion draws both lines as one meta size).
   afterPlate: {
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 14,
+    lineHeight: 20.02,
     color: sc.textPrimary,
-    marginTop: 4,
+    marginTop: 0,
+    marginBottom: 10,
     fontVariant: ['lining-nums', 'tabular-nums'],
   },
   servingSizeInfo: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.graphite,
+    fontSize: 14,
+    lineHeight: 20.02,
+    color: sc.textMuted,
     marginTop: 4,
   },
   quantityLogButton: {
-    marginTop: 24,
-    marginBottom: 8,
+    marginTop: 10,
+    marginBottom: 0,
+  },
+  afterPlateButton: {
+    marginTop: 0,
   },
 });
