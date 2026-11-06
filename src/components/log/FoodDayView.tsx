@@ -333,7 +333,7 @@ export default function FoodDayView(p: FoodDayViewProps) {
           </HapticPressable>
           <View style={s.timeline}>
             {firstItems.map((it) => (it.kind === 'now' ? nowRow(s, it.min, () => p.onSomethingElse(nextFirst(counted)))
-              : it.kind === 'extra' ? extraRow(s, it.log, reduced, p.onEditFood)
+              : it.kind === 'extra' ? extraRow(s, it.log, reduced, p.onEditFood, false)
                 : it.kind === 'workout' ? workoutRow(s, it.name, it.min) : firstMeal(it.slot, it.min)))}
           </View>
           <View style={s.water}>{p.water}</View>
@@ -463,7 +463,7 @@ export default function FoodDayView(p: FoodDayViewProps) {
           <View style={s.segs} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
             {/* Done meals fill from the left, as C_day draws them. */}
             {[...day.slots].sort((a, b) => Number(b.logs.length > 0) - Number(a.logs.length > 0))
-              .map((x) => <View key={x.key} style={[s.seg, (x.logs.length > 0 || left?.over) && s.segDone]} />)}
+              .map((x) => <View key={x.key} style={[s.seg, x.logs.length > 0 && s.segDone]} />)}
           </View>
           {isPlan ? (
             <Text style={s.mastLine}>{leftLine ?? ''}</Text>
@@ -535,7 +535,7 @@ function workoutRow(s: Styles, name: string, min: number | null) {
   );
 }
 
-function extraRow(s: Styles, l: FoodLog, reduced: boolean, onEdit: (l: FoodLog) => void, plan = true) {
+function extraRow(s: Styles, l: FoodLog, reduced: boolean, onEdit: (l: FoodLog) => void, plan: boolean) {
   const min = logMinutes(l);
   // Main's OFFLINE-FOOD-M marks: a waiting food carries the offline line in place of its meal; a refused one
   // says so and shows no number (it counts in nothing).
