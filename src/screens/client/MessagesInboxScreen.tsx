@@ -337,13 +337,13 @@ const s = StyleSheet.create({
   dim: { opacity: 0.75 },
   // A badge, not a tap target (the whole card is): 40 pt as drawn, so a long first name keeps its line.
   unread: { minWidth: 40, minHeight: 40, borderWidth: 2, borderRadius: radius.chip, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center' },
-  unreadText: { ...typography.h3, fontVariant: ['tabular-nums'] },
+  unreadText: { ...typography.h3, fontVariant: ['lining-nums', 'tabular-nums'] },
   preview: { ...typography.body, fontSize: 17, lineHeight: 26 },
   left: { alignItems: 'flex-end', marginLeft: 'auto' },
   // Large text at 320 pt: "36 left today" moves under the name instead of splitting "Your assistant" mid-word.
   wrapTop: { flexWrap: 'wrap', rowGap: 4 },
   whoMin: { minWidth: 128 },
-  count: { ...typography.h1, fontVariant: ['tabular-nums'] },
+  count: { ...typography.h1, fontVariant: ['lining-nums', 'tabular-nums'] },
   body: { ...typography.body },
   small: { ...typography.bodySmall },
   crisis: { borderLeftWidth: 2, paddingLeft: 12 },
@@ -354,7 +354,7 @@ const s = StyleSheet.create({
   // Semibold as drawn (B_coachless): "Join a coach" and "Contact support" on one line each at 390 pt.
   actionText: { ...typography.bodyMd, fontFamily: 'Inter_600SemiBold', fontWeight: '600', textAlign: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', minHeight: layout.rowMinHeight, paddingVertical: 12 },
-  rowCount: { ...typography.h1, fontVariant: ['tabular-nums'], marginRight: 12 },
+  rowCount: { ...typography.h1, fontVariant: ['lining-nums', 'tabular-nums'], marginRight: 12 },
   rowText: { ...typography.body, flex: 1 },
   privacy: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: layout.touchMin, paddingHorizontal: 4, justifyContent: 'center' },
 });
