@@ -8,6 +8,12 @@ import LogScreen from '../../../screens/client/LogScreen';
 import { logApi } from '../../../services/api';
 import { addDays, getTodayString } from '../../../utils/date';
 
+// FIX-930R2 (LO-930R2 B1 class): a fixed clock, never the real date, set before today is read below. Only Date is
+// faked (and keeps ticking); timers stay real.
+jest.useFakeTimers({ now: new Date('2026-11-05T12:00:00'), advanceTimers: true, doNotFake: ['nextTick', 'setImmediate',
+  'clearImmediate', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'queueMicrotask', 'hrtime',
+  'performance', 'requestAnimationFrame', 'cancelAnimationFrame', 'requestIdleCallback', 'cancelIdleCallback'] });
+afterAll(() => jest.useRealTimers());
 const mockToday = getTodayString();
 const mockStore = {
   selectedDate: mockToday, foodLogs: [], hasLoadedDay: true, dailyTotals: { calories: 0, protein: 0, carbs: 0, fat: 0 },
@@ -81,15 +87,14 @@ it('UI-3b: a coached client with no plan sees the usual day, repeats it, and is 
   expect(await screen.findByText('1 food added to Snacks.')).toBeTruthy();
 });
 
-it('UI-3b: a coached client with no plan and no usual meal keeps the classic Food log', async () => {
+it('UI-3b: a coached client with no plan and no usual meal gets the Style C first day (C_first)', async () => {
   await show();
-  expect(await screen.findByLabelText('Add food to breakfast')).toBeTruthy();
+  expect(await screen.findByText('Log what you eat today')).toBeTruthy();
   await waitFor(() => expect(logApi.getDaily).toHaveBeenCalledTimes(7));
-  expect(screen.queryByTestId('food-day')).toBeNull();
-  // The classic section Add keeps its own meal: no meal choice.
-  await fireEvent.press(screen.getByLabelText('Add food to dinner'));
+  expect(screen.getByTestId('food-day')).toBeTruthy();
+  // A meal row with nothing logged opens the add sheet on that meal.
+  await fireEvent.press(screen.getByTestId('food-day-first-dinner'));
   expect(await screen.findByText('Add to Dinner')).toBeTruthy();
-  expect(screen.queryByTestId('food-search-meals')).toBeNull();
 });
 
 it('UI-3d: Extras Add opens on the meal up next with the four meals, and files the food under the meal picked', async () => {
@@ -105,7 +110,8 @@ it('UI-3d: Extras Add opens on the meal up next with the four meals, and files t
   expect(meal('Lunch').props.accessibilityState.checked).toBe(true);
   expect(meal('Snacks').props.accessibilityState.checked).toBe(false);
   await fireEvent.press(await screen.findByText('Rolled oats'));
-  await fireEvent.press(await screen.findByTestId('quantity-log-food'));
+  // C2-S-33: "Add another food" logs and keeps the add sheet open.
+  await fireEvent.press(await screen.findByTestId('quantity-add-another'));
   await waitFor(() => expect(logApi.logFood).toHaveBeenCalledTimes(1));
   expect(lastWrite()).toEqual(expect.objectContaining({ meal_type: 'lunch', food_item_id: 'f1' }));
   expect(lastWrite()).not.toHaveProperty('plan_slot_id');
