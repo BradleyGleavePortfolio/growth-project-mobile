@@ -1,6 +1,6 @@
 // KITCHEN-REFINE-M: exact ctx#457 CSS values, not new features or copy.
 import React from 'react';
-import { Dimensions, StyleSheet } from 'react-native';
+import { Dimensions, StyleSheet, TouchableOpacity } from 'react-native';
 import { fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { listsApi, prepGuideApi } from '../../../services/api';
@@ -87,7 +87,8 @@ it('M15-M16: the added sheet uses its own drawn title, button and link, without 
   const ui = await render(<StyleCSheet visible icon="cart-outline" title="Added to Grocery List" body="3 ingredients added to your grocery list." action="View List" onAction={onAction} link="OK" onClose={onClose} />);
   expect(flat(ui.getByText('Added to Grocery List').props.style)).toMatchObject({ fontFamily: 'CormorantGaramond_500Medium', fontWeight: '500', fontSize: 27, lineHeight: 32.4, letterSpacing: 0 });
   expect(flat(ui.getByText('3 ingredients added to your grocery list.').props.style)).toMatchObject({ lineHeight: 23.2, letterSpacing: 0 });
-  expect(flat(ui.getByRole('button', { name: 'View List' }).props.style)).toMatchObject({ minHeight: 65.52, borderRadius: 16 });
+  expect(flat(ui.getByRole('button', { name: 'View List' }).props.style).minHeight).toBeCloseTo(65.52);
+  expect(flat(ui.getByRole('button', { name: 'View List' }).props.style).borderRadius).toBe(16);
   expect(flat(ui.getByText('View List').props.style)).toMatchObject({ fontSize: 17, fontWeight: '600', letterSpacing: 0 });
   expect(flat(ui.getByText('OK').props.style)).toMatchObject({ fontSize: 16, fontWeight: '500' });
   await fireEvent.press(ui.getByRole('button', { name: 'View List' }));
@@ -120,14 +121,19 @@ it.each([['Grocery list', GroceryListScreen], ['Shopping list', ShoppingListScre
     expect(list.getByRole('header', { name: title })).toBeTruthy();
     expect(list.getByPlaceholderText('Add item…')).toBeTruthy();
     expect(flat(list.getByPlaceholderText('Add item…').props.style).height).toBeCloseTo(62.4);
+    expect(flat(list.getByPlaceholderText('Add item…').props.style).width).toBe('100%');
     expect(flat(list.getByPlaceholderText('Qty').props.style).width).toBeCloseTo(67.6);
     expect(flat(list.getByPlaceholderText('Unit').props.style).width).toBe(91);
     const add = list.getByRole('button', { name: 'Add item' });
     expect(add.props.accessibilityState?.disabled ?? add.props.disabled).toBe(true);
     expect(flat(add.props.style).opacity).toBe(0.42);
-    await fireEvent.changeText(list.getByPlaceholderText('Add item…'), 'Bread');
-    expect(flat(list.getByRole('button', { name: 'Add item' }).props.style).opacity ?? 1).toBe(1);
-    expect(list.getByRole('button', { name: 'Add item' }).props.accessibilityState?.disabled ?? list.getByRole('button', { name: 'Add item' }).props.disabled).toBe(false);
+    await fireEvent.changeText(ui.getByPlaceholderText('Add item…'), 'Bread');
+    expect(ui.getByPlaceholderText('Add item…').props.value).toBe('Bread');
+    // Assert the supplied style, not TouchableOpacity's mocked native-driver animation,
+    // whose host opacity stays at its initial value in Jest.
+    const supplied = ui.UNSAFE_getAllByType(TouchableOpacity).find((node) => node.props.accessibilityLabel === 'Add item');
+    expect(flat(supplied?.props.style).opacity ?? 1).toBe(1);
+    expect(ui.getByRole('button', { name: 'Add item' }).props.accessibilityState?.disabled ?? ui.getByRole('button', { name: 'Add item' }).props.disabled).toBe(false);
   },
 );
 
@@ -144,7 +150,7 @@ it('M21-M24: both lists share the drawn overline, scalable row, normal serif tra
   expect(styles.itemRow).toMatchObject({ minHeight: 83.2, paddingVertical: 0 });
   expect(styles.itemName).toMatchObject({ lineHeight: 26.25, letterSpacing: 0 });
   expect(styles.itemMeta).toMatchObject({ fontSize: 15, letterSpacing: 0, fontVariant: ['tabular-nums'] });
-  expect(styles.itemMeta.lineHeight).toBeUndefined();
+  expect(flat(styles.itemMeta).lineHeight).toBeUndefined();
   expect(styles.clearBtn).toMatchObject({ paddingVertical: 16 });
 });
 
