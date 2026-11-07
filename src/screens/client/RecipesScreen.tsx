@@ -279,10 +279,10 @@ export default function RecipesScreen() {
           flickers; the perceived win from virtualization is bigger than the
           mount-in animation. */}
       {isLoading ? (
-        <View style={styles.loadingContainer}>
+        <ScrollView style={styles.list} contentContainerStyle={styles.loadingContainer}>
           <Text style={styles.loadingText}>Loading recipes…</Text>
           <StyleCLoadingLines />
-        </View>
+        </ScrollView>
       ) : (
         <FlatList<Recipe>
           testID="recipes-list"
@@ -372,7 +372,7 @@ const makeStyles = (colors: SemanticTokens) =>
   searchIcon: { marginRight: 10 },
   searchInput: { ...typography.body, fontSize: 17, flex: 1, color: colors.textPrimary, minHeight: 48 },
 
-  tagFilterRow: { maxHeight: 44, marginBottom: 8 },
+  tagFilterRow: { minHeight: 44, maxHeight: 44, flexGrow: 0, flexShrink: 0, marginBottom: 8 },
   tagFilterContent: { paddingHorizontal: 24, gap: 8, alignItems: 'center' },
   tagFilter: {
     paddingHorizontal: 16,
