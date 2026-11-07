@@ -200,3 +200,42 @@ it('the coach\'s own Roman room is unchanged: holding a reply opens no menu', as
   expect(api.post).not.toHaveBeenCalled();
   mockUser = { id: 'client-1', firstName: 'Maya' };
 });
+
+// B-TEST LS-950 B1: history is pushed over the live room. A successful
+// Delete, Delete all, or transcript-gone event replaces its session/messages,
+// but the new reply selection must not survive that source-chat boundary.
+const selectThenEraseSource = async (r: R) => {
+  await hold(r);
+  await act(async () => { fireEvent.press(r.getByLabelText('Reply')); });
+  expect(r.getByText('Replying to Roman')).toBeTruthy();
+  state = {
+    ...state,
+    session: {
+      id: 'fresh-session', surface: 'client', messageCount: 0,
+      startedAt: '2026-11-06T10:02:00Z', lastActivityAt: '2026-11-06T10:02:00Z',
+    },
+    messages: [],
+  };
+  await r.rerender(<RomanChatScreen />);
+};
+
+const sourceSession = () => ({
+  id: 'source-session', surface: 'client' as const, messageCount: 2,
+  startedAt: '2026-11-06T10:00:00Z', lastActivityAt: '2026-11-06T10:00:05Z',
+});
+
+it('B-TEST LS-950 B1: erasing the source chat removes its selected reply words from the fresh chat', async () => {
+  state.session = sourceSession();
+  const r = await open();
+  await selectThenEraseSource(r);
+  expect(r.queryByText('Replying to Roman')).toBeNull();
+});
+
+it('B-TEST LS-950 B1: the next send after erasing the source chat contains no erased quote', async () => {
+  state.session = sourceSession();
+  const r = await open();
+  await selectThenEraseSource(r);
+  await fireEvent.changeText(r.getByTestId(INPUT), 'A fresh question');
+  await act(async () => { fireEvent.press(r.getByTestId('roman-composer-send')); });
+  expect(state.send).toHaveBeenCalledWith('A fresh question');
+});
