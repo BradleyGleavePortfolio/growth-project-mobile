@@ -170,7 +170,8 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
   // LS-933R3 B1: the nudge form takes the same answer. A nudge the server refuses as closed is its newest answer for
   // that pair, so this visit's list holds the pair closed until the next read (a stale 'open' must not reopen it).
   const onRefused = useCallback((id: string) => setClosedIds((p) => (p ? { coach: p.coach, ids: new Set(p.ids).add(id) } : p)), []);
-  const nudge = useLookupNudge(colors, pairOf, onRefused);
+  // FIX-933R4: a row's form that the pair closes under says why itself; over the peek, the peek's line says it.
+  const nudge = useLookupNudge(colors, pairOf, onRefused, peek != null);
   const endedPage = useMemo(
     () => (ended && ended.coach === coachId && blockList.known ? withoutBlocked(ended.page, blockList.blockedIds) : null),
     [ended, coachId, blockList.known, blockList.blockedIds],
