@@ -97,10 +97,10 @@ it('LO-950 B1: after the chat is erased, the Reply quote is gone and the next me
   // The person opens "Your conversations with Roman" from the header and deletes this chat.
   state = { ...state, messages: [], session: null };
   await act(async () => { romanChatsEvents.emitErased({ id: null }); });
-  r.rerender(<RomanChatScreen surface="client" />);
+  await r.rerender(<RomanChatScreen surface="client" />);
   // ...and the hook opens a fresh chat (useRomanChat.ts 191: open()).
   state = { ...state, session: { ...session('s-new'), messageCount: 0 } };
-  await act(async () => { r.rerender(<RomanChatScreen surface="client" />); });
+  await r.rerender(<RomanChatScreen surface="client" />);
   // The erased reply's words must not stay on screen (B-376-1, KT-13).
   expect(r.queryByText('Replying to Roman')).toBeNull();
   expect(r.queryByText(/30-minute/)).toBeNull();
