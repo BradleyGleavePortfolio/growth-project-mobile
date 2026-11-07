@@ -101,3 +101,27 @@ it.each([
   await ask(result, turn.question, turn.id);
   expect(sent(1).key).not.toBe(sent(0).key);
 });
+
+it('each failed turn keeps its own key: another question in between never takes it (LS-953 B1)', async () => {
+  const { result } = await mount();
+  send.mockRejectedValueOnce(NO_ANSWER).mockRejectedValueOnce(NO_ANSWER);
+  await ask(result, 'Why did my calories change?');
+  await ask(result, 'Why did my target change?');
+  const [one, two] = result.current.turns;
+  expect(await ask(result, two.question, two.id)).toBe('sent');
+  expect(await ask(result, one.question, one.id)).toBe('sent');
+  expect(sent(2)).toEqual(sent(1));
+  expect(sent(3)).toEqual(sent(0));
+  expect(sent(1).key).not.toBe(sent(0).key);
+});
+
+it('a refusal that ends a key ends it for every turn that holds it', async () => {
+  const { result } = await mount();
+  send.mockRejectedValueOnce(NO_ANSWER).mockRejectedValueOnce(REFUSED);
+  await ask(result, 'Why did my calories change?');
+  const first = result.current.turns[0];
+  await ask(result, 'Why did my calories change?'); // the same words asked again: the same key, refused
+  expect(sent(1)).toEqual(sent(0));
+  await ask(result, first.question, first.id);
+  expect(sent(2).key).not.toBe(sent(0).key);
+});

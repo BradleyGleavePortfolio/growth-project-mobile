@@ -5,7 +5,8 @@
  * once and get no answer, then Send again / Publish again / Retry sends the same words. Both requests must carry the
  * same v4 Idempotency-Key header (never a body field), and new words must carry a new one. A resend that makes a new
  * key, or sends none, turns its row red by name. The shape check pins the table to the server's five phone writes;
- * other phone paths that resend one of them (Copilot's Try again) get a row of their own.
+ * other phone paths that resend one of them (Copilot's Try again, an earlier Copilot turn's Try again after another
+ * question, a Roman quick-start chip tapped again beside another draft) get a row of their own.
  * Only the wire is stubbed: `services/api` posts (community) and `fetch` (Roman); reads answer through spies.
  */
 import React from 'react';
@@ -78,6 +79,7 @@ const CommunityThreadScreen = require('../screens/community/CommunityThreadScree
 const CommunityChallengeDetailScreen = require('../screens/community/CommunityChallengeDetailScreen').default;
 const RomanChatScreen = require('../screens/roman/RomanChatScreen').default;
 const { useCopilotAsk } = require('../screens/client/copilot/useCopilotAsk');
+const { ROMAN_QUICK_STARTS } = require('../components/roman/romanVoice');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const WS = '11111111-1111-1111-1111-111111111111';
@@ -252,9 +254,12 @@ const SEND_ONCE_PHONE_TABLE: Row[] = [
 
 /**
  * Other phone paths that resend one of the five writes (class-first): each must keep the same key too. Copilot asks
- * through Roman's own send (the same server row), from its own hook; its Try again passes the turn's id.
+ * through Roman's own send (the same server row), from its own hook; its Try again passes the turn's id. Each proof
+ * gives the wire's first send, its resend and a send of other words, in that order; `same` is the resent words.
+ * A path where two sends wait at once (two failed Copilot turns, a chip beside a typed draft) is its own row
+ * (LS-953 B1, B2): one key slot shared by both loses the first send's key.
  */
-type OtherPath = { write: string; resend: string; phone: string[]; proof: () => Promise<Sent[]> };
+type OtherPath = { write: string; resend: string; phone: string[]; same?: string; proof: () => Promise<Sent[]> };
 const OTHER_RESEND_PATHS: OtherPath[] = [
   {
     write: 'POST /roman/sessions/:id/messages',
@@ -269,6 +274,43 @@ const OTHER_RESEND_PATHS: OtherPath[] = [
       const turn = result.current.turns[0];
       await act(async () => { await result.current.ask(turn.question, turn.id); });
       await act(async () => { await result.current.ask('Other words'); });
+      return romanTurns();
+    },
+  },
+  {
+    write: 'POST /roman/sessions/:id/messages',
+    resend: 'Try again on an earlier Copilot turn after another question',
+    phone: ['src/screens/client/copilot/useCopilotAsk.ts ask (each failed turn keeps its own key, by turn id)'],
+    proof: async () => {
+      const { result } = await renderHook(() => useCopilotAsk());
+      await act(async () => { await result.current.ask('Same words'); });
+      const turn = result.current.turns[0];
+      await act(async () => { await result.current.ask('Other words'); });
+      await act(async () => { await result.current.ask(turn.question, turn.id); });
+      const [first, other, again] = romanTurns();
+      return [first, again, other];
+    },
+  },
+  {
+    write: 'POST /roman/sessions/:id/messages',
+    resend: 'A quick-start chip tapped again while another draft is in the box',
+    phone: [
+      'src/screens/roman/RomanChatScreen.tsx sendText (a chip kept out of the box keeps its key aside)',
+      'src/lib/chatDrafts.ts keepAside / keyFor (one kept key per text beside the box, on the device)',
+    ],
+    same: ROMAN_QUICK_STARTS[0],
+    proof: async () => {
+      const v = await render(<RomanChatScreen surface="client" />);
+      await waitFor(() => expect(v.getByTestId(ROMAN_INPUT)).toBeTruthy());
+      await type(v, ROMAN_INPUT, 'Other words');
+      await press(v, 'roman-quick-start-0');
+      await waitFor(() => expect(romanTurns()).toHaveLength(1));
+      await press(v, 'roman-quick-start-0');
+      await waitFor(() => expect(romanTurns()).toHaveLength(2));
+      expect(v.getByTestId(ROMAN_INPUT).props.value).toBe('Other words');
+      await press(v, 'roman-composer-send');
+      await waitFor(() => expect(romanTurns()).toHaveLength(3));
+      v.unmount();
       return romanTurns();
     },
   },
@@ -335,8 +377,8 @@ describe('SEND-ONCE-PHONE table: the five writes the member can send again', () 
     async (_write, _resend, path) => {
       const [first, again, other] = await path.proof();
       [first, again, other].forEach((req) => expect(req.key).toEqual(expect.stringMatching(UUID)));
-      expect(first.body).toEqual({ content: 'Same words' });
-      expect(again.body).toEqual({ content: 'Same words' });
+      expect(first.body).toEqual({ content: path.same ?? 'Same words' });
+      expect(again.body).toEqual({ content: path.same ?? 'Same words' });
       expect(other.body).toEqual({ content: 'Other words' });
       expect(again.key).toBe(first.key); // a resend that makes a new key fails here
       expect(other.key).not.toBe(first.key);

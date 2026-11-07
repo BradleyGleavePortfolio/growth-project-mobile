@@ -158,6 +158,47 @@ it.each([
   expect(boxOf(r)).toBe('My separate unfinished question');
 });
 
+it('a chip kept aside keeps its key after the typed draft is sent and after leaving; its own answer ends it', async () => {
+  wire = [NO_ANSWER, OK, OK, OK];
+  const a = await open();
+  await fireEvent.changeText(a.getByTestId(INPUT), 'My separate unfinished question');
+  await act(async () => { fireEvent.press(a.getByTestId('roman-quick-start-0')); });
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  await sendFrom(a);
+  await waitFor(() => expect(boxOf(a)).toBe(''));
+  const { key } = sent(0);
+  await waitFor(() => expect(mockDisk.get(`${CHAT_DRAFT_KEY_PREFIX}client-1:roman`)).toContain(key));
+  await a.unmount();
+  const b = await open();
+  await act(async () => { fireEvent.press(b.getByTestId('roman-quick-start-0')); });
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+  expect(sent(2)).toEqual(sent(0));
+  expect(sent(1).key).not.toBe(key);
+  await waitFor(() => expect(mockDisk.get(`${CHAT_DRAFT_KEY_PREFIX}client-1:roman`)).toBeUndefined());
+  await act(async () => { fireEvent.press(b.getByTestId('roman-quick-start-0')); });
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+  expect(sent(3).content).toBe(sent(0).content);
+  expect(sent(3).key).not.toBe(key);
+});
+
+it('a chip that fails beside a failed typed draft leaves the draft its own key', async () => {
+  wire = [NO_ANSWER, NO_ANSWER, OK, OK];
+  const r = await open();
+  await fireEvent.changeText(r.getByTestId(INPUT), 'My separate unfinished question');
+  await sendFrom(r);
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  await act(async () => { fireEvent.press(r.getByTestId('roman-quick-start-0')); });
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  expect(boxOf(r)).toBe('My separate unfinished question');
+  await sendFrom(r);
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+  await act(async () => { fireEvent.press(r.getByTestId('roman-quick-start-0')); });
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+  expect(sent(2)).toEqual(sent(0));
+  expect(sent(3)).toEqual(sent(1));
+  expect(sent(1).key).not.toBe(sent(0).key);
+});
+
 it('new words after a failed send are a new key', async () => {
   wire = [NO_ANSWER, OK];
   const r = await open();
