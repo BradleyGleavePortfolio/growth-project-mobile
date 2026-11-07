@@ -264,3 +264,31 @@ it('leaving after a failed send and coming back keeps the words and the key', as
   expect(sent(1)).toEqual({ content: 'Swap my Thursday run for a ride?', key });
   await waitFor(() => expect(mockDisk.get(`${CHAT_DRAFT_KEY_PREFIX}client-1:roman`)).toBeUndefined());
 });
+
+it('LS-953R2 B1: reopening while the first answer is pending replays the kept draft key', async () => {
+  let finishFirst!: (text: string) => void;
+  const pendingBody = new Promise<string>((resolve) => { finishFirst = resolve; });
+  fetchMock.mockImplementationOnce(async () => ({
+    ok: true,
+    status: 200,
+    headers: { get: () => null },
+    text: () => pendingBody,
+  } as unknown as Response));
+
+  const a = await open();
+  await fireEvent.changeText(a.getByTestId(INPUT), 'Swap my Thursday run for a ride?');
+  await sendFrom(a);
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  expect(a.getByTestId('roman-composer-input').props.editable).toBe(false);
+  const first = sent(0);
+  // No answer has settled. Back/reopen retains the existing draft, not a new intent.
+  await a.unmount();
+  const b = await open();
+  expect(boxOf(b)).toBe(first.content);
+  await sendFrom(b);
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  const retry = sent(1);
+  // Settle the abandoned request so this test leaves no pending transport.
+  await act(async () => { finishFirst(DONE('The first answer.')); });
+  expect(retry).toEqual(first);
+});
