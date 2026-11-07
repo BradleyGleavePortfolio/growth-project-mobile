@@ -65,3 +65,24 @@ it.each(['success', 'failure'] as const)(
     expect(retry.key).toBe(first.key);
   },
 );
+
+it('LS-953R2 evidence: failed turns created in one millisecond stay distinct and retry their own keys', async () => {
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(1794030000000);
+  try {
+    fetchMock.mockImplementationOnce(noAnswer).mockImplementationOnce(noAnswer).mockResolvedValueOnce(ok());
+    const { result } = await renderHook(() => useCopilotAsk());
+    await act(async () => { await result.current.ask('How was my week?'); });
+    const first = result.current.turns[0];
+    await act(async () => { await result.current.ask('What is next week?'); });
+    expect(result.current.turns).toHaveLength(2);
+    expect(result.current.turns[1].id).not.toBe(first.id);
+    await act(async () => { await result.current.ask(first.question, first.id); });
+    const [a, b, retry] = requests();
+    expect(b.key).not.toBe(a.key);
+    expect(retry.key).toBe(a.key);
+    expect(result.current.turns[0].answer?.text).toBe('Your week is ready.');
+    expect(result.current.turns[1].answer).toBeNull();
+  } finally {
+    clock.mockRestore();
+  }
+});

@@ -22,12 +22,12 @@ jest.mock('../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser 
 const { useChatDraft, CHAT_DRAFT_KEY_PREFIX } = require('../chatDrafts');
 const { authEvents } = require('../../utils/authEvents');
 
-function Box({ thread, initial, failed }: { thread: string | null; initial?: string; failed?: [string, string] }) {
+function Box({ thread, initial, failed, lookup }: { thread: string | null; initial?: string; failed?: [string, string]; lookup?: string }) {
   const [text, setText, sendKey] = useChatDraft(thread, initial);
   return (
     <>
       <TextInput accessibilityLabel="box" value={text} onChangeText={setText} />
-      <Text testID="key">{sendKey.keyFor(text) ?? 'none'}</Text>
+      <Text testID="key">{sendKey.keyFor(lookup ?? text) ?? 'none'}</Text>
       <Text testID="fail" onPress={() => failed && sendKey.keepFailed(failed[0], failed[1])}>fail</Text>
     </>
   );
@@ -112,4 +112,21 @@ it('without a chat (null) the box keeps nothing', async () => {
   await a.unmount();
   expect(value(await render(<Box thread={null} />))).toBe('');
   expect(diskKeys()).toEqual([]);
+});
+
+it.each([
+  ['typed', { text: 'Kept typed words', failed: { text: 'Kept typed words', key: 'typed-key' } }, 'Kept typed words', 'typed-key'],
+  ['aside-empty', { text: '', aside: [{ text: 'Chip prompt', key: 'chip-key' }] }, 'Chip prompt', 'chip-key'],
+  ['aside-occupied', { text: 'Other typed words', failed: { text: 'Other typed words', key: 'typed-key' }, aside: [{ text: 'Chip prompt', key: 'chip-key' }] }, 'Chip prompt', 'chip-key'],
+] as const)('LS-953R2 evidence: cold device %s restores its key without crossing accounts', async (kind, persisted, words, key) => {
+  const thread = `cold-${kind}`;
+  mockDisk.set(`${CHAT_DRAFT_KEY_PREFIX}client-1:${thread}`, JSON.stringify(persisted));
+  const r = await render(<Box thread={thread} lookup={words} />);
+  await waitFor(() => expect(r.getByTestId('key').props.children).toBe(key));
+  expect(value(r)).toBe(persisted.text);
+  await r.unmount();
+  mockUser = { id: 'client-2' };
+  const other = await render(<Box thread={thread} lookup={words} />);
+  expect(value(other)).toBe('');
+  expect(other.getByTestId('key').props.children).toBe('none');
 });
