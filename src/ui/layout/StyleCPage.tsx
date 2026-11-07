@@ -187,7 +187,7 @@ export function StyleCLoadingLines({ rows = 4, label, lead }: { rows?: number; l
   return (
     <View accessible={label != null} accessibilityLabel={label} style={lead ? s.leadLines : s.lines}>
       {Array.from({ length: rows }, (_, i) => lead === 'ring' ? (
-        <View key={i} style={[s.ringRow, s.leadRow, { borderColor: sc.border }]}><View style={[s.check, { borderColor: sc.border }]} /><View style={[s.ringBar, fill]} /><View style={[s.ringAmt, fill]} /></View>
+        <View key={i} style={[s.ringRow, s.leadRow, { borderColor: sc.border }]}><View style={[s.check, { borderColor: sc.border }]} /><View style={[s.ringBar, fill]} /><View testID="stylec-loading-spacer" style={s.grow} /><View style={[s.ringAmt, fill]} /></View>
       ) : (
         <View key={i} style={lead ? [s.tileRow, s.leadRow, { borderColor: sc.border }] : undefined}>
           {lead ? <View style={[s.tilePh, fill]} /> : null}
