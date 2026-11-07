@@ -32,7 +32,7 @@
  * Owner 2026-10-09 00:0x: a client with no coach, or a 403 ROMAN_REQUIRES_COACH,
  * gets the "Join a coach" lock instead of the room. Nothing is sent to Roman.
  */
-import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { NavigationContext } from '@react-navigation/native';
 import { useChatDraft } from '../../lib/chatDrafts';
 import * as Clipboard from 'expo-clipboard';
@@ -199,6 +199,11 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
   const [actionTarget, setActionTarget] = useChatBound(chat);
   const [replyTarget, setReplyTarget] = useChatBound(chat);
   const [reportTarget, setReportTarget] = useChatBound(chat);
+  // The chat open now, for a report that settles after the chat it was sent from is gone (FIX-950R2).
+  const chatNow = useRef(chat);
+  useLayoutEffect(() => {
+    chatNow.current = chat;
+  }, [chat]);
 
   const listRef = useRef<FlatList<RomanMessage>>(null);
   // Last assistant message id we announced to assistive tech, so a re-render
@@ -406,10 +411,12 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
     async (payload: { reason: ReportReason; details?: string }) => {
       if (!reportTarget) return;
       await reportMessage(reportTarget.id, payload);
+      // LS-950R2 C3: a late answer leaves a newer chat (or sign-in) alone: no sheet closed, no alert.
+      if (chatNow.current !== chat) return;
       setReportTarget(null);
       Alert.alert('Reported', 'Your report has been submitted.');
     },
-    [reportTarget],
+    [reportTarget, chat],
   );
 
   // B30: the reply that arrives after a send fades in like reading.
@@ -617,7 +624,9 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
           onClose={() => setActionTarget(null)}
           canReport={actionTarget != null && !isLocalRomanId(actionTarget.id)}
         />
+        {/* LO-950R2 N3: keyed by chat, so a chat change also drops the sheet's pick, words and error. */}
         <ReportMessageSheet
+          key={chat}
           visible={reportTarget != null}
           messagePreview={reportTarget ? romanQuoteExcerpt(reportTarget.content, 400) : ''}
           onSubmit={onSubmitReport}
