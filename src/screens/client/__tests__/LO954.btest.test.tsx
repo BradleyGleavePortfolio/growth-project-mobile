@@ -1,6 +1,6 @@
 // LO-954 (Opus lens, m#954 @ faabff0c) B-TESTs: each fails at the reviewed head and passes on main 738bbce0's layout.
 import React from 'react';
-import { Dimensions } from 'react-native';
+import { Dimensions, StyleSheet } from 'react-native';
 import { render, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { listsApi, prepGuideApi } from '../../../services/api';
@@ -51,4 +51,31 @@ it.each([
   expect(within(scroll).getByLabelText('Add item')).toBeTruthy();
   // RN default 'never': with the keyboard up, the first tap on Add item only dismisses the keyboard.
   expect(['handled', 'always']).toContain(scroll.props.keyboardShouldPersistTaps);
+});
+
+type Inst = { type: unknown; props: { style?: unknown }; parent: Inst | null };
+const num = (v: unknown) => (typeof v === 'number' ? v : 0);
+// Vertical offset of a node's top inside its scroll view's content, from the margins and paddings on the
+// host views between them (first-child chain). Negative = the scroll view clips the top of the node.
+function offsetInsideScroll(node: Inst, scroll: Inst): number {
+  let sum = 0;
+  for (let n: Inst | null = node; n && n !== scroll; n = n.parent) {
+    if (typeof n.type !== 'string') continue;
+    const s = (StyleSheet.flatten(n.props.style as Parameters<typeof StyleSheet.flatten>[0]) ?? {}) as Record<string, unknown>;
+    sum += num(s.marginTop ?? s.marginVertical ?? s.margin);
+    if (n !== node) sum += num(s.paddingTop ?? s.paddingVertical ?? s.padding);
+  }
+  return sum;
+}
+
+it.each([
+  ['Grocery list', GroceryListScreen, 'Milk'],
+  ['Shopping list', ShoppingListScreen, 'Milk'],
+  ['Prep guide', PrepGuideScreen, 'Lentil soup'],
+] as const)('B2 LO-954: the %s Back target keeps its full 44 pt inside the scroll view (not pulled above its top edge)', async (_name, Screen, row) => {
+  const ui = await mount(Screen);
+  await waitFor(() => expect(ui.getAllByText(row).length).toBeGreaterThan(0));
+  const scroll = ui.getByTestId('list-scroll') as unknown as Inst;
+  const back = within(ui.getByTestId('list-scroll')).getByLabelText('Back') as unknown as Inst;
+  expect(offsetInsideScroll(back, scroll)).toBeGreaterThanOrEqual(0);
 });
