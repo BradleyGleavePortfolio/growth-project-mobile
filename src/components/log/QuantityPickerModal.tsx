@@ -262,7 +262,7 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'center',
-    marginTop: 10,
+    marginTop: 12,
   },
   quantityInput: {
     minWidth: 48,
@@ -274,7 +274,7 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     lineHeight: 60,
     color: sc.textPrimary,
     textAlign: 'center',
-    fontVariant: ['oldstyle-nums', 'tabular-nums'],
+    fontVariant: ['oldstyle-nums'],
   },
   amountUnit: {
     fontFamily: typography.body.fontFamily,
