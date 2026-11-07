@@ -209,7 +209,7 @@ const REGISTRY: Surface[] = [
   // FIX-952R1 (LS-952 B2): Roman's drafts card on both coach Messages screens counts drafts for clients; the drafts
   // screen and Home read the same list (usePendingAiDrafts), so one rule and one proof cover the three counts.
   { file: 'screens/coach/CoachInboxV2.tsx', kind: 'list', what: 'Roman\'s drafts card: drafts waiting for clients, by kind',
-    how: 'usePendingAiDrafts leaves out a draft with words for a client I block, from the block store at once; the server leaves out theirs and a client who moved on',
+    how: 'usePendingAiDrafts leaves out a draft with words for a client I block (block store) or whose chat Messages heard is closed (closedClientsStore, LS-952R2 B1), at once; the server leaves out a client who moved on',
     proof: { by: 'state', id: 'coach-drafts-count' } },
   { file: 'screens/coach/MessagesScreen.tsx', kind: 'list', what: 'Roman\'s drafts card on the legacy coach list: drafts waiting, by kind',
     how: 'the same card and the same rule as the coach inbox (usePendingAiDrafts)', proof: { by: 'state', id: 'coach-drafts-count' } },
