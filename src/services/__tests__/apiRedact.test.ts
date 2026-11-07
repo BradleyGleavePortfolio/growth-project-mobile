@@ -1,5 +1,5 @@
 /**
- * TOKEN-CACHE-M (b): the shared axios instance (services/api.ts) redacts the
+ * TOKEN-CACHE-M, second guard: the shared axios instance (services/api.ts) redacts the
  * Authorization header in an AxiosError's JSON, so no JSON.stringify of a
  * failed request (the query cache, a log line) can write the sign-in token.
  *
@@ -49,7 +49,7 @@ beforeEach(() => {
   secure.__store.set('supabase_token', TOKEN);
 });
 
-describe('(b) the shared axios instance redacts Authorization in error JSON', () => {
+describe('second guard: the shared axios instance redacts Authorization in error JSON', () => {
   it.each([
     ['a plain call', () => api.get('/v1/community/notes/n1')],
     ['a call with its own config', () => api.put('/v1/community/notes/n1', { a: 1 }, { headers: { 'X-Test': '1' }, timeout: 5000 })],

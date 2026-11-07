@@ -96,11 +96,12 @@ afterEach(() => {
 });
 
 describe('a failed query saved through the real persister path', () => {
-  it('(a) leaves no Bearer, token, Authorization or signed URL in the saved JSON', async () => {
+  it('(a) an AxiosError with Authorization and a signed URL: no Bearer, token or Authorization in the saved JSON', async () => {
     const client = new QueryClient();
-    const err = communityFailure(404);
-    // Control: the default JSON of this error carries the token (main's save path).
+    const err = axiosFailure(404);
+    // Control: the default JSON of this error carries the token and the signed URL (main's save path).
     expect(JSON.stringify(err)).toContain(`Bearer ${TOKEN}`);
+    expect(JSON.stringify(err)).toContain(SIGNATURE);
 
     const json = await save(client, () =>
       client.prefetchQuery({ queryKey: ['community', 'voice', 'n1'], queryFn: () => Promise.reject(err), retry: false }),
@@ -110,6 +111,27 @@ describe('a failed query saved through the real persister path', () => {
     const [saved] = JSON.parse(json).clientState.queries;
     expect(saved.state.status).toBe('error');
     // The plain fields readers use are kept, as they were saved before.
+    expect(saved.state.error).toEqual({
+      message: 'Request failed with status code 404',
+      name: 'AxiosError',
+      code: 'ERR_BAD_REQUEST',
+      status: 404,
+    });
+    expect(saved.state.fetchFailureReason).toEqual(saved.state.error);
+  });
+
+  it('(b) the same for a CommunityApiError with that AxiosError as its cause', async () => {
+    const client = new QueryClient();
+    const err = communityFailure(404);
+    expect(JSON.stringify(err)).toContain(`Bearer ${TOKEN}`);
+
+    const json = await save(client, () =>
+      client.prefetchQuery({ queryKey: ['community', 'voice', 'n1'], queryFn: () => Promise.reject(err), retry: false }),
+    );
+
+    expectNoCredential(json);
+    const [saved] = JSON.parse(json).clientState.queries;
+    expect(saved.state.status).toBe('error');
     expect(saved.state.error).toEqual({ kind: 'unknown', status: 404, name: 'CommunityApiError' });
     expect(saved.state.fetchFailureReason).toEqual(saved.state.error);
   });

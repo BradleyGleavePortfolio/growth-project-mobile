@@ -363,7 +363,7 @@ describe('CommunitySafetyScreen — a block list error restored from the phone c
     return { qc, json };
   }
 
-  it('still shows the offline copy for a saved request failure, and nothing saved holds the token', async () => {
+  it('(c) still shows the offline copy for a saved request failure, and nothing saved holds the token', async () => {
     mockGetInfo.mockRejectedValue(new Error('offline'));
     mockListBlocks.mockReturnValue(new Promise(() => undefined)); // the refetch on open never answers
     const { qc, json } = await restoredClient();
