@@ -324,6 +324,13 @@ const REGISTRY: Surface[] = [
       ...(['list', 'composer'] as const).map((kind): Surface => ({ file: 'components/community/space-chat/spaceChatApi.ts', kind,
         what: 'the space chat wire (messages read, send, delete)', how: 'the server leaves out blocks (both ways), bans and departed authors and refuses a send with 403 / 404 (isNoAccess), which the hook and the outbox turn into a closed space; the row stops nothing (exports: [], LS-942 N1), so every caller is named on its own',
         proof: { by: 'suite', file, titles: [WIRE] }, exports: [] })),
+      // Part 2: the rows. A row is drawn only for a message useSpaceChat hands the screen (above).
+      { file: 'components/community/space-chat/SpaceVoiceNote.tsx', kind: 'list', what: 'one space voice row\'s note (communityVoiceApi.getOne, for its playable copy)',
+        how: 'read only for a row useSpaceChat still holds (a block, a ban or a departure takes the row there); a row the coach removed draws no player and reads nothing; a refused lookup (403 / 404), cold or after an earlier answer, draws Try again and hands the player no url, so a clip it had is let go (LS-943 B1), never the note',
+        proof: { by: 'suite', file: 'components/community/space-chat/__tests__/spaceChatRowsKT2.test.tsx', titles: [
+          'KT-2: a row the coach removed draws its one line only: no words, no player, no menu and no lookup of the note',
+          'KT-2: a voice note whose lookup is refused (403 / 404) draws no New mark and nothing to play, only Try again',
+        ] } },
     ];
   })(),
   // FR-911R2 (LO-911R2 B1): a KNOWN GAP row no longer stops the scan, so the files that draw a gap part are named; each
