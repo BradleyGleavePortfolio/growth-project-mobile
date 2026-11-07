@@ -110,13 +110,9 @@ describe('a failed query saved through the real persister path', () => {
     expectNoCredential(json);
     const [saved] = JSON.parse(json).clientState.queries;
     expect(saved.state.status).toBe('error');
-    // The plain fields readers use are kept, as they were saved before.
-    expect(saved.state.error).toEqual({
-      message: 'Request failed with status code 404',
-      name: 'AxiosError',
-      code: 'ERR_BAD_REQUEST',
-      status: 404,
-    });
+    // FIX-955R1: a closed record. Only the values readers compare are kept;
+    // this message and code are not among them.
+    expect(saved.state.error).toEqual({ name: 'AxiosError', status: 404 });
     expect(saved.state.fetchFailureReason).toEqual(saved.state.error);
   });
 
@@ -176,6 +172,28 @@ describe('a failed query saved through the real persister path', () => {
     expect(saved.state.failureReason).toEqual({ kind: 'network', status: 0, name: 'CommunityApiError' });
   });
 
+  it('LS-955 C1: an error that throws when read is saved as {} and the rest of the cache is still saved', async () => {
+    const client = new QueryClient();
+    const throwing = Object.defineProperty(new Error('x'), 'code', {
+      enumerable: true,
+      get() {
+        throw new Error('getter');
+      },
+    });
+    // Control: the default JSON of this error throws, which stopped the whole save.
+    expect(() => JSON.stringify(throwing)).toThrow('getter');
+
+    const json = await save(client, async () => {
+      client.setQueryData(['habits'], [{ id: 'h1' }]);
+      await client.prefetchQuery({ queryKey: ['community', 'voice', 'n1'], queryFn: () => Promise.reject(throwing), retry: false });
+    });
+
+    const { queries } = JSON.parse(json).clientState;
+    const saved = (key: unknown[]) => queries.find((q: { queryHash: string }) => q.queryHash === JSON.stringify(key));
+    expect(saved(['habits']).state.data).toEqual([{ id: 'h1' }]);
+    expect(saved(['community', 'voice', 'n1']).state.error).toEqual({});
+  });
+
   it('rewrites a blob saved before this fix at the next save', async () => {
     const before = new QueryClient();
     await before.prefetchQuery({
@@ -208,7 +226,7 @@ describe('a failed query saved through the real persister path', () => {
   });
 });
 
-describe('persistableError keeps only plain fields, for every error shape (R24 table)', () => {
+describe('persistableError keeps a closed record, for every error shape (R24 table)', () => {
   class WithResponse extends Error {
     constructor(public readonly response: unknown) {
       super('payload invalid');
@@ -223,28 +241,49 @@ describe('persistableError keeps only plain fields, for every error shape (R24 t
     refusal: { message: 'no' },
   });
 
+  // LS-955 C1: reading these throws; each is saved as {} instead of stopping the save.
+  const throwingField = Object.defineProperty(new Error('x'), 'code', {
+    enumerable: true,
+    get() {
+      throw new Error('getter');
+    },
+  });
+  const throwingToJSONField = Object.defineProperty({ status: 500 }, 'toJSON', {
+    get() {
+      throw new Error('getter');
+    },
+  });
+  const throwingToJSON = { status: 500, toJSON: () => { throw new Error('toJSON'); } };
+
   it.each<[string, unknown, unknown]>([
-    ['a raw AxiosError', axiosFailure(500), {
-      message: 'Request failed with status code 500',
-      name: 'AxiosError',
-      code: 'ERR_BAD_REQUEST',
-      status: 500,
-    }],
+    ['a raw AxiosError', axiosFailure(500), { name: 'AxiosError', status: 500 }],
+    ['a raw AxiosError with no answer', axiosFailure(null), { message: 'Network Error', name: 'AxiosError', code: 'ERR_NETWORK' }],
     ['a CommunityApiError wrapping one', communityFailure(0), { kind: 'network', status: 0, name: 'CommunityApiError' }],
     ['a plain Error (its message is not enumerable, so it was never saved)', new Error('boom'), {}],
-    ['an error that keeps a response object', new WithResponse({ status: 502, headers: { Authorization: `Bearer ${TOKEN}` } }), {
-      name: 'WithResponse',
-    }],
-    ['an error with credential-named and object fields', credentialNamed, {
-      code: 'E1',
-      requestedRecordTypes: ['Steps', 'HeartRate'],
-    }],
+    ['an error that keeps a response object', new WithResponse({ status: 502, headers: { Authorization: `Bearer ${TOKEN}` } }), {}],
+    ['an error with credential-named and object fields', credentialNamed, {}],
     ['a saved record restored from an old blob', JSON.parse(JSON.stringify(communityFailure(404))), {
       kind: 'unknown',
       status: 404,
       name: 'CommunityApiError',
     }],
-    ['a thrown string', 'offline', 'offline'],
+    ['fixed values readers compare', { code: 'messaging.blocked', status: 403, userMessage: 'Messages cannot be sent to blocked users', isAxiosError: false }, {
+      code: 'messaging.blocked',
+      status: 403,
+      userMessage: 'Messages cannot be sent to blocked users',
+      isAxiosError: false,
+    }],
+    ['other words under kept fields', { name: SIGNED_URL, kind: TOKEN, code: `E ${TOKEN}`, message: SIGNED_URL, userMessage: TOKEN, status: '403' }, {}],
+    ['a thrown string', 'offline', 'error'],
+    ['an empty thrown string', '', ''],
+    ['a thrown array', [SIGNED_URL, { token: TOKEN }], []],
+    ['a thrown number', 42, 42],
+    ['a thrown bigint (JSON.stringify would throw)', BigInt(7), undefined],
+    ['a toJSON that returns a string', { toJSON: () => SIGNED_URL }, 'error'],
+    ['a toJSON that returns a record', { toJSON: () => ({ status: 404, detail: SIGNED_URL, cause: { token: TOKEN } }) }, { status: 404 }],
+    ['a field that throws when read (C1)', throwingField, {}],
+    ['a toJSON that throws when read (C1)', throwingToJSONField, {}],
+    ['a toJSON that throws when called', throwingToJSON, {}],
     ['null', null, null],
     ['undefined', undefined, undefined],
   ])('%s', (_label, error, expected) => {
