@@ -9,10 +9,11 @@
  *   - Copy   — copies the bubble body to the system clipboard.
  *   - Report — opens the ReportMessageSheet to capture a reason + free text.
  */
-import React, { useEffect, useMemo, useCallback } from 'react';
+import React, { useLayoutEffect, useMemo, useCallback } from 'react';
 import { ActionSheetIOS, Modal, Platform, Pressable, StyleSheet, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { authEpoch, onAuthEpochChange } from '../../services/accountBinding';
 
 export interface MessageActionSheetProps {
   visible: boolean;
@@ -44,8 +45,27 @@ export function MessageActionSheet({
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
-  useEffect(() => {
+  // KT-13 (FIX-950R2): one iOS native sheet lives only as long as the open it was shown for.
+  // ActionSheetIOS keeps its choice callback outside React until a tap or dismissActionSheet
+  // (RCTActionSheetManager.mm), so the sheet is dismissed and its callback goes dead when
+  // visible turns false, when this unmounts and when the sign-in changes (sign-out, session
+  // expiry, another sign-in). A choice that arrives after that runs nothing. A layout effect,
+  // so the callback is dead in the same commit that hides the open.
+  useLayoutEffect(() => {
     if (!visible || Platform.OS !== 'ios') return;
+    let live = true;
+    const shownUnder = authEpoch();
+    const end = (): boolean => {
+      if (!live) return false;
+      live = false;
+      stopWatching();
+      ActionSheetIOS.dismissActionSheet();
+      return true;
+    };
+    // The parent still thinks the menu is open after a sign-in change, so it is told it closed.
+    const stopWatching = onAuthEpochChange(() => {
+      if (end()) onClose();
+    });
     const keys: Array<'reply' | 'copy' | 'report'> = [
       ...(canReply ? (['reply'] as const) : []),
       'copy',
@@ -64,6 +84,9 @@ export function MessageActionSheet({
         userInterfaceStyle: 'light',
       },
       (idx) => {
+        if (!live || authEpoch() !== shownUnder) return;
+        live = false;
+        stopWatching();
         onClose();
         const k = keys[idx];
         if (k === 'reply') onReply();
@@ -71,6 +94,9 @@ export function MessageActionSheet({
         else if (k === 'report') onReport();
       },
     );
+    return () => {
+      end();
+    };
     // The parent re-toggles `visible` to re-trigger the native sheet;
     // including handlers would risk double-firing during re-renders.
     // eslint-disable-next-line react-hooks/exhaustive-deps

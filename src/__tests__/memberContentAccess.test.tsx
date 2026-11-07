@@ -400,7 +400,7 @@ const EXEMPT: { file: string; kinds: Kind[]; why: string; passes?: true; exports
   { file: 'screens/community/CommunityChallengesScreen.tsx', kinds: ['list'], why: 'coach-made challenges of a space; the notes are the registered challenge screen' },
   { file: 'screens/community/CommunityClassroomScreen.tsx', kinds: ['list'], why: 'coach-made lessons' },
   { file: 'screens/community/CommunityWearablePromptsScreen.tsx', kinds: ['list'], why: 'coach-only prompts the server drafts from a client\'s own opted-in wearable insights' },
-  { file: 'screens/roman/RomanChatScreen.tsx', kinds: ['list'], why: 'Roman (the assistant), not a member' },
+  { file: 'screens/roman/RomanChatScreen.tsx', kinds: ['list', 'composer'], why: 'Roman (the assistant), not a member' },
   // FR-911R2 (F1): a services/api call whose path the scan cannot read fails closed; the ones in src/ today, each with why.
   { file: 'services/health/ingestBatching.ts', kinds: ['composer'], exports: ['postIngestBatches'],
     why: 'my own health samples to WEARABLES_INGEST_PATH (/v1/wearables/samples/ingest), through a post seam whose path is a parameter; no member words' },
@@ -1954,5 +1954,53 @@ describe('FIX-911R4: a via row mutes its parts only at its root and in the expor
     const ctx2 = scanCtx({ [f]: synth, [s]: st, [h]: ht });
     expect(classify(s, st, ctx2).composer).toBe(true);
     expect(classify(h, ht, ctx2).composer).toBe(false);
+  });
+});
+
+// ROMAN-HOLD-M2 (operator agent 201's ruling, undo word "narrow roman exempt"): the RomanChatScreen EXEMPT row was widened
+// to ['list', 'composer'] because its ReplyComposer sends only to Roman (Reply quotes a Roman message into a message to
+// Roman; Report goes only to TGP's team). The limit: that row stops RomanChatScreen and nothing else.
+describe('ROMAN-HOLD-M2: the RomanChatScreen composer exemption stops only RomanChatScreen', () => {
+  const roman = 'screens/roman/RomanChatScreen.tsx';
+  const row = () => EXEMPT.find((e) => e.file === roman);
+  const peek = (imp: string, use: string) => `import React from 'react';\n${imp}\nexport default function RomanHoldM2Peek() {\n  ${use}\n}\n`;
+  const unnamed = (ctx: ScanCtx) => {
+    const s = scan(ctx);
+    return (['composer', 'list'] as Kind[]).flatMap((k) => s[k].filter((f) => !registered(f, k)).map((f) => `${k} ${f}`)).sort();
+  };
+  it('the row is the one widened row: list and composer, the same why, no passes, no exports', () => {
+    expect(EXEMPT.filter((e) => e.file === roman)).toHaveLength(1);
+    expect(row()).toEqual({ file: roman, kinds: ['list', 'composer'], why: 'Roman (the assistant), not a member' });
+    expect(classify(roman, read(roman)).composer).toBe(true);
+  });
+  it('a second file drawing ReplyComposer is still named a composer', () => {
+    const f = 'screens/client/RomanHoldM2Peek.tsx';
+    const text = peek("import ReplyComposer from '../../components/messaging/ReplyComposer';",
+      "return <ReplyComposer target={{ id: 'm1', body: 'hi', authorLabel: 'A member' }} onCancel={() => undefined} />;");
+    expect(classify(f, text).composer).toBe(true);
+    expect(unnamed(scanCtx({ [f]: text }))).toContain(`composer ${f}`);
+  });
+  it('a file drawing RomanChatScreen and a ReplyComposer of its own is still named a composer', () => {
+    const f = 'navigation/RomanHoldM2Peek.tsx';
+    const text = peek("import RomanChatScreen from '../screens/roman/RomanChatScreen';\nimport ReplyComposer from '../components/messaging/ReplyComposer';",
+      "return <><RomanChatScreen surface=\"client\" /><ReplyComposer target={null} onCancel={() => undefined} /></>;");
+    expect(classify(f, text).composer).toBe(true);
+  });
+  it('a file drawing only RomanChatScreen is quiet (as the navigators are)', () => {
+    const f = 'navigation/RomanHoldM2Peek.tsx';
+    const text = peek("import RomanChatScreen from '../screens/roman/RomanChatScreen';", 'return <RomanChatScreen surface="client" />;');
+    expect(classify(f, text).composer).toBe(false);
+  });
+  it('narrowed back to list, the scan names exactly RomanChatScreen and the navigators that reach it, so the row quiets nothing else', () => {
+    const r = row()!;
+    const kinds = r.kinds;
+    r.kinds = ['list'];
+    let narrowed: string[];
+    try { narrowed = unnamed(scanCtx()); } finally { r.kinds = kinds; }
+    expect(narrowed).toEqual([
+      'composer navigation/ClientNavigator.tsx', 'composer navigation/CoachNavigator.tsx', 'composer navigation/RootNavigator.tsx',
+      `composer ${roman}`, 'composer screenshots/ScreenshotNavigator.tsx',
+    ]);
+    expect(unnamed(scanCtx())).toEqual([]);
   });
 });

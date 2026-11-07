@@ -7,7 +7,7 @@
  * blocked-state without coupling this presentational component to network
  * code.
  */
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { Modal, View, Text, Pressable, TextInput, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
@@ -24,6 +24,11 @@ export interface ReportMessageSheetProps {
   messagePreview: string;
   onSubmit: (payload: { reason: ReportReason; details?: string }) => Promise<void>;
   onClose: () => void;
+  /**
+   * ROMAN-HOLD-M: bring the failure line into view and announce it (KT-11). Off by
+   * default so the DM sheets (client and coach) are unchanged; see the PR's Found list.
+   */
+  revealError?: boolean;
 }
 
 export function ReportMessageSheet({
@@ -31,6 +36,7 @@ export function ReportMessageSheet({
   messagePreview,
   onSubmit,
   onClose,
+  revealError = false,
 }: ReportMessageSheetProps): React.ReactElement {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -38,6 +44,10 @@ export function ReportMessageSheet({
   const [details, setDetails] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string>('');
+  const scrollRef = useRef<ScrollView>(null);
+  useEffect(() => {
+    if (revealError && error) scrollRef.current?.scrollToEnd({ animated: true });
+  }, [revealError, error]);
 
   const reset = useCallback(() => {
     setReason(null);
@@ -91,7 +101,7 @@ export function ReportMessageSheet({
           <View style={{ width: 24 }} />
         </View>
 
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <Text style={styles.lede}>
             Reports are reviewed by the safety team within 24 hours. The user will not be told who
             reported them.
@@ -155,7 +165,16 @@ export function ReportMessageSheet({
             {details.length}/{DETAILS_MAX}
           </Text>
 
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          {error ? (
+            <Text
+              style={styles.errorText}
+              accessibilityRole={revealError ? 'alert' : undefined}
+              accessibilityLiveRegion={revealError ? 'polite' : undefined}
+              testID="report-sheet-error"
+            >
+              {error}
+            </Text>
+          ) : null}
         </ScrollView>
 
         <View style={styles.footer}>
