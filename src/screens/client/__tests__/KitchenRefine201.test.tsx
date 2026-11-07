@@ -24,7 +24,8 @@ jest.mock('../../../services/api', () => ({
   prepGuideApi: { getWeeklyGuide: jest.fn() },
 }));
 
-const flat = (style: unknown) => StyleSheet.flatten(style as Parameters<typeof StyleSheet.flatten>[0]) ?? {};
+const flat = (style: unknown): Record<string, unknown> =>
+  (StyleSheet.flatten(style as Parameters<typeof StyleSheet.flatten>[0]) ?? {}) as Record<string, unknown>;
 type Node = { props: { style?: unknown }; children?: (Node | string)[] | null };
 const stylesOf = (node: Node | Node[] | string | null): Record<string, unknown>[] => {
   if (!node || typeof node === 'string') return [];
