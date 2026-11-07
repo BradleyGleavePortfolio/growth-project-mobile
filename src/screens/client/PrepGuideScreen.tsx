@@ -377,7 +377,7 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
     backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 12, borderRadius: radius.card,
   },
   addToGroceryBtnDisabled: { opacity: 0.6 },
-  addToGroceryBtnText: { ...typography.h4, fontFamily: 'Inter_600SemiBold', fontWeight: '600', color: colors.textOnPrimary },
+  addToGroceryBtnText: { ...typography.h4, fontFamily: 'Inter_600SemiBold', fontWeight: '600', letterSpacing: 0, color: colors.textOnPrimary },
 
   ingredientRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, paddingTop: 12, minHeight: 44 },
   // A dotted leader (ctx#457): a thin box with every border dotted draws as one dotted line on both platforms.

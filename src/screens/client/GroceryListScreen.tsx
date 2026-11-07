@@ -346,13 +346,15 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
 
   addRow: { paddingHorizontal: 24, marginBottom: 0 },
   // Underlined fields (C_grocery, ctx#457), not boxes: the name on its own line, then Qty, Unit and the round add.
-  addInputs: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', columnGap: 14 },
+  addInputs: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', columnGap: 14, rowGap: 14 },
   nameInput: {
     fontFamily: typography.body.fontFamily,
     flexBasis: '100%',
     width: '100%',
     height: 48 * fontScale,
-    paddingTop: 0,
+    // Inter's normal line box is 1.21em. Fill the remaining space above it so
+    // single-line iOS/RNW inputs share the drawing's 10pt bottom baseline.
+    paddingTop: Math.max(0, (48 - 18 * 1.21) * fontScale - 10),
     paddingBottom: 10,
     textAlignVertical: 'bottom',
     borderBottomWidth: 1.5,
@@ -364,12 +366,12 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
     fontFamily: typography.body.fontFamily, fontVariant: ['tabular-nums'],
     width: 52 * fontScale,
     height: 48 * fontScale,
-    paddingTop: 0,
+    paddingTop: Math.max(0, (48 - 16 * 1.21) * fontScale - 10),
     paddingBottom: 10,
     textAlignVertical: 'bottom',
     borderBottomWidth: 1.5,
     borderColor: colors.border,
-    paddingHorizontal: 8,
+    paddingHorizontal: 0,
     fontSize: 16,
     color: colors.textPrimary,
     textAlign: 'center',
@@ -378,12 +380,12 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
     fontFamily: typography.body.fontFamily,
     width: 70 * fontScale,
     height: 48 * fontScale,
-    paddingTop: 0,
+    paddingTop: Math.max(0, (48 - 16 * 1.21) * fontScale - 10),
     paddingBottom: 10,
     textAlignVertical: 'bottom',
     borderBottomWidth: 1.5,
     borderColor: colors.border,
-    paddingHorizontal: 8,
+    paddingHorizontal: 0,
     fontSize: 16,
     color: colors.textPrimary,
   },
@@ -427,7 +429,7 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
   // name keeps at least half the row so a word never breaks mid-word; when the amount does not fit beside it (narrow
   // phones at large text) the amount moves under the name, still at the right, whole.
   // The 44 pt targets reach into the 24 pt gutter so the ring and the cross sit at the content edges and the row keeps its width.
-  checkbox: { width: 44, height: 44, marginLeft: -8, alignItems: 'center', justifyContent: 'center' },
+  checkbox: { width: 44, height: 44, marginLeft: -2, alignItems: 'flex-start', justifyContent: 'center' },
   itemContent: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 12 },
   itemName: { ...typography.h3, fontSize: 21, lineHeight: 26.25, letterSpacing: 0, paddingVertical: 10, color: colors.textPrimary, flex: 1, minWidth: '50%' },
   itemNameChecked: { textDecorationLine: 'line-through', color: colors.textMuted },
