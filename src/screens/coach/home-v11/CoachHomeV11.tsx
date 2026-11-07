@@ -1,8 +1,10 @@
 /**
  * The coach Home (spec #688 6295886580, Style A of planning/MOCKUP3/HOME3), behind featureFlags.coachHomeV11. Hero:
  * date, bell, gear, setup checklist until done, "{n} wins this week" with one win in turn (opens the wins list), tiles,
- * Open alerts, the day's rings. Page: push ask and brief, Roman, one Needs you tile, Business, Clients rows. Only real
- * numbers: a server without b#1123's `home` gets the hero and tiles from the overview, and no rings.
+ * the day's rings. Page (NEEDS-YOU-M, GOAL planning/MOCKUP3/NEEDS-YOU-R2, owner #197-E5): Needs you first, always above
+ * Roman, with an open safety alert folded in (gold edge, #197-E3) and no Open alerts row; the push ask and brief;
+ * Roman, whose tiles include the workout changes waiting (counted once); Business; Clients rows. Only real numbers: a
+ * server without b#1123's `home` gets the hero and tiles from the overview, and no rings.
  */
 import React, { useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
@@ -11,27 +13,30 @@ import { useTheme } from '../../../theme/ThemeProvider';
 import { forestPop, layout, radius, typography } from '../../../theme/tokens';
 import { useScreenInsets } from '../../../ui';
 import { QuietError, QuietLoading, loadFailureMessage } from '../../../ui/states/QuietStates';
-import RomanAvatar from '../../../components/roman/RomanAvatar';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { rosterDisplayName } from '../../../utils/coach/clientRoster';
 import { formatCount } from '../../../components/home/rings/homeRings';
 import type { CoachHomeSources } from '../command-center/coachHomeSources';
 import { dateOverline, heroAmount, monthOverline, paceLine, payoutWords, retentionPct } from '../command-center/coachHomeCopy';
 import { hasMonthMoney } from '../command-center/CoachHomeSections';
-import { AlertsRow, DayRing, EYEBROW, LinkRow, MiniTile, SEMI, styleA, useCardStyles } from './HomeParts';
+import { DayRing, EYEBROW, LinkRow, MiniTile, SEMI, styleA, useCardStyles } from './HomeParts';
 import { HomeSheet, reachOutAsk, type DraftAsk, type SheetList } from './DraftSheets';
-import { firstWord, pct, ringSpecs, ringsCaption, winLine, winsHeadline, type HomeWin } from './homeDay';
+import { firstWord, ringSpecs, ringsCaption, winLine, winsHeadline, type HomeWin } from './homeDay';
 import { useCoachHomeV11 } from './useCoachHomeV11';
 import { WinTurn, useWinFade, useWinTurn } from './WinTurn';
 import { usePlanEnded } from './planEndedData';
+import { needsLead } from '../../../utils/coach/needsYou';
+import { featureFlags } from '../../../config/featureFlags';
+import { safetyGold } from '../../../theme/safetyGold';
 import { PlanEndedHomeRow, PlanEndedList } from './PlanEnded';
+import { RomanMark } from './RomanMark';
 
 /** Reach-outs: the ring's goal is at most five of the at-risk set (b#1123), so the sheet offers its five most urgent. */
 const REACH_ROWS = 5;
 
 type Go = () => void;
 interface Props {
-  onOpenNeedsYou: Go; onOpenClients: Go; onOpenStreaks: Go; onOpenAlerts: Go; onOpenMoney: Go; onOpenDrafts: Go; onOpenNotifications: Go; onOpenSettings: Go;
+  onOpenNeedsYou: Go; onOpenClients: Go; onOpenStreaks: Go; onOpenMoney: Go; onOpenDrafts: Go; onOpenNotifications: Go; onOpenSettings: Go;
   /** Only when Roman's coach chat is on. */
   onAskRoman?: Go;
   /** The setup checklist (CoachHomeCards 'setup'), on the hero until setup is done. */
@@ -48,7 +53,7 @@ export default function CoachHomeV11(p: Props) {
   const cs = useCardStyles();
   const { top, bottom } = useScreenInsets();
   const bigText = useWindowDimensions().fontScale > 1.15; // no win line, Approve over the kinds: on the first screen (LS B2)
-  const { data, blockList, reload, retryMonth, retryRoster, retryDrafts, focused } = useCoachHomeV11(p.sources);
+  const { data, blockList, reload, retryMonth, retryRoster, retryDrafts, focused } = useCoachHomeV11(p.sources, undefined, featureFlags.clientPathCopilot);
   const [ask, setAsk] = useState<DraftAsk | null>(null);
   const [list, setList] = useState<'wins' | 'reach' | null>(null);
   const planEnded = usePlanEnded(blockList);
@@ -70,7 +75,6 @@ export default function CoachHomeV11(p: Props) {
   const bell = data.unreadNotifications;
   const rings = home?.rings ? ringSpecs(home.rings) : null;
   const retention = retentionPct(data.ltv);
-  const checkIns = o ? pct(o.check_in_rate_7day) : null;
   const monthOk = data.month.kind === 'ok' ? data.month.summary : null;
 
   const askWin = (w: HomeWin) => setAsk({ clientName: w.client_name, about: `A congratulations for ${firstWord(w.client_name)}: ${winLine(w)}.`, request: w.draft });
@@ -142,25 +146,61 @@ export default function CoachHomeV11(p: Props) {
   const tiles = o && roster > 0 ? (
     <View style={s.tiles} testID="home-tiles">
       {home ? <MiniTile value={formatCount(o.active_today)} label={`of ${rosterN} active today`} testID="home-tile-active" /> : null}
-      {checkIns ? <MiniTile value={checkIns} label="check-ins · last 7 days" testID="home-tile-checkins" /> : null}
       {retention ? <MiniTile value={retention} label="stayed · this month" testID="home-tile-stayed" /> : null}
     </View>
   ) : null;
 
   const needsTile = (() => {
-    const n = data.needs.length;
+    const a = data.areas;
+    const n = a.total;
+    const gold = a.safety.length > 0; // an open safety alert folds in here: gold edge and ring, its row first (#197-E5)
     const box = (value: string | null) => (
-      <View style={s.needsBox}>
-        {value === null ? <Ionicons name="people-outline" size={30} color={forestPop.leaf} /> : <Text style={s.needsNum} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>}
+      <View style={gold ? s.needsRing : null} testID={gold ? 'home-needs-ring' : undefined}>
+        <View style={s.needsBox}>
+          {value === null ? <Ionicons name="people-outline" size={30} color={forestPop.leaf} /> : <Text style={s.needsNum} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>}
+        </View>
       </View>
     );
-    if (data.rosterState === 'error') {
-      return <View style={cs.card}><QuietError layout="inline" message="Who needs you could not load." onRetry={retryRoster} testID="home-needs-error" /></View>;
+    const safetyMark = (
+      <Text style={[s.bold, { color: safetyGold.text }]} testID="home-needs-safety">
+        <Ionicons name="shield-outline" size={14} color={safetyGold.text} />{' Safety alert'}
+      </Text>
+    );
+    const rosterHeld = data.rosterState === 'error' ? (
+      <View style={cs.card}><QuietError layout="inline" message="Who needs you could not load." onRetry={retryRoster} testID="home-needs-error" /></View>
+    ) : data.rosterState === 'loading' ? (
+      <View style={cs.card}><QuietLoading label="Loading who needs you" rows={1} testID="home-needs-loading" /></View>
+    ) : null;
+    const alertsHeld = data.alertsState === 'error' ? (
+      <View style={cs.card}><QuietError layout="inline" message="Alerts did not load. Pull down to try again." onRetry={() => void reload(false)} testID="home-needs-alerts-error" /></View>
+    ) : data.alertsState === 'loading' ? (
+      <View style={cs.card}><QuietLoading label="Loading who needs you" rows={1} testID="home-needs-loading" /></View>
+    ) : null;
+    const held = rosterHeld || alertsHeld;
+    // A verified safety alert never waits on another counted read: its gold lead and tap stay without a partial
+    // total, while each failed read's existing error/retry stays visible under it.
+    if (gold && (held || data.rosterState === 'off')) {
+      const name = a.safety[0].client_name;
+      return (
+        <>
+          <Pressable
+            style={({ pressed }) => [cs.card, s.needs, s.needsGold, pressed && s.pressed]} onPress={tap(p.onOpenNeedsYou)}
+            accessibilityRole="button" accessibilityLabel={`Needs you. ${name}, Safety alert`} testID="home-needs"
+          >
+            {box(null)}
+            <View style={s.grow}>
+              <Text style={cs.title}>Needs you</Text>
+              <Text style={[cs.body, s.small]} testID="home-needs-lead"><Text style={s.bold}>{name}</Text>{' · '}{safetyMark}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+          </Pressable>
+          {rosterHeld}
+          {data.alertsState === 'error' || !rosterHeld ? alertsHeld : null}
+        </>
+      );
     }
-    if (data.rosterState === 'loading') {
-      return <View style={cs.card}><QuietLoading label="Loading who needs you" rows={1} testID="home-needs-loading" /></View>;
-    }
-    if (o && roster === 0) {
+    if (held) return <>{rosterHeld}{data.alertsState === 'error' || !rosterHeld ? alertsHeld : null}</>;
+    if (o && roster === 0 && !gold) {
       return (
         <View style={[cs.card, s.needs]} testID="home-needs">
           {box('0')}
@@ -168,20 +208,34 @@ export default function CoachHomeV11(p: Props) {
         </View>
       );
     }
-    const lead = data.needs[0];
-    const leadName = lead ? rosterDisplayName(lead.client) : '';
+    const lead = needsLead(a);
     const off = data.rosterState === 'off';
-    const label = off ? 'Needs you. Open the list' : n === 0 ? 'Needs you, 0. Nobody needs you right now' : `Needs you, ${n}. ${leadName}, ${lead.reason.text}${n > 1 ? `, and ${n - 1} more` : ''}`;
+    const leadName = !lead ? '' : lead.kind === 'client' ? rosterDisplayName(lead.row.client) : lead.name;
+    const leadText = !lead ? '' : lead.kind === 'safety' ? 'Safety alert' : lead.kind === 'alert' ? lead.text : lead.row.reason.text;
+    const more = n > 1 ? `, and ${n - 1} more` : '';
+    const split = `Attention ${a.attention}, Routine ${a.routineCount}`;
+    const label = off && !gold ? 'Needs you. Open the list' : n === 0 ? 'Needs you, 0. Nobody needs you right now'
+      : `Needs you, ${n}. ${leadName}, ${leadText.replace(/\.$/, '')}${more}. ${split}`;
     return (
-      <Pressable style={({ pressed }) => [cs.card, s.needs, pressed && s.pressed]} onPress={tap(p.onOpenNeedsYou)} accessibilityRole="button" accessibilityLabel={label} testID="home-needs">
-        {box(off ? null : String(n))}
+      <Pressable
+        style={({ pressed }) => [cs.card, s.needs, gold && s.needsGold, pressed && s.pressed]} onPress={tap(p.onOpenNeedsYou)}
+        accessibilityRole="button" accessibilityLabel={label} testID="home-needs"
+      >
+        {box(off && !gold ? null : String(n))}
         <View style={s.grow}>
-          <Text style={cs.title}>{off ? 'Needs you' : `Needs you, ${n}`}</Text>
-          {off ? <Text style={cs.body}>Open the list</Text> : n === 0 ? <Text style={cs.body}>Nobody needs you right now.</Text> : (
-            <Text style={[cs.body, s.small]}>
-              <Text style={s.bold}>{leadName}</Text>{` · ${lead.reason.text}`}{n > 1 ? <Text style={s.bold}>{`  +${n - 1} more`}</Text> : null}
+          <Text style={cs.title}>{off && !gold ? 'Needs you' : `Needs you, ${n}`}</Text>
+          {off && !gold ? <Text style={cs.body}>Open the list</Text> : n === 0 || !lead ? <Text style={cs.body}>Nobody needs you right now.</Text> : (
+            <Text style={[cs.body, s.small]} testID="home-needs-lead">
+              <Text style={s.bold}>{leadName}</Text>{' · '}
+              {lead.kind === 'safety' ? safetyMark : leadText}
+              {n > 1 ? <Text style={s.bold}>{`  +${n - 1} more`}</Text> : null}
             </Text>
           )}
+          {n > 0 && !(off && !gold) ? (
+            <Text style={[cs.body, s.small, s.split]} testID="home-needs-split">
+              {'Attention '}<Text style={s.bold}>{a.attention}</Text>{'    Routine '}<Text style={s.bold}>{a.routineCount}</Text>
+            </Text>
+          ) : null}
         </View>
         <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
       </Pressable>
@@ -191,7 +245,10 @@ export default function CoachHomeV11(p: Props) {
   const roman = (() => {
     const n = data.draftsWaiting;
     const k = data.draftKinds;
-    const chips = ([[k.workouts, 'Workout', 'Workouts'], [k.mealPlans, 'Meal plan', 'Meal plans'], [k.nudges, 'Nudge', 'Nudges']] as const)
+    const chips = ([
+      [k.workouts, 'Workout', 'Workouts'], [k.mealPlans, 'Meal plan', 'Meal plans'], [k.nudges, 'Nudge', 'Nudges'],
+      [k.workoutChanges, 'Workout change', 'Workout changes'], // #197-E5: the approvals clients asked for, tiles here
+    ] as const)
       .filter(([c]) => c > 0).map(([c, one, many]) => [c, c === 1 ? one : many] as const);
     const approve = n > 0 ? (
       <Pressable
@@ -199,7 +256,7 @@ export default function CoachHomeV11(p: Props) {
         accessibilityLabel={`Approve Roman's drafts, ${n}`} testID="home-drafts"
         style={({ pressed }) => [s.approve, { backgroundColor: sc.accent }, pressed && s.pressed]}
       >
-        <Text style={[s.approveText, { color: sc.textOnAccent }]} numberOfLines={2} maxFontSizeMultiplier={1.3}>{"Approve Roman's drafts\u00a0→"}</Text>
+        <Text style={[s.approveText, { color: sc.textOnAccent }]} maxFontSizeMultiplier={1.3}>{"Approve Roman's drafts\u00a0→"}</Text>
         <View style={s.approveBadge}><Text style={s.approveBadgeText} maxFontSizeMultiplier={1.2}>{n}</Text></View>
       </Pressable>
     ) : null;
@@ -212,7 +269,7 @@ export default function CoachHomeV11(p: Props) {
     return (
       <View style={cs.card} testID="home-roman">
         <View style={s.romanHead}>
-          <RomanAvatar crop="monogram" size={48} />
+          <RomanMark size={35} r={20} testID="home-roman-mark" />
           <View style={s.grow}>
             <Text style={cs.title}>{n > 0 ? `Roman has ${n} ${n === 1 ? 'draft' : 'drafts'} ready` : 'Roman'}</Text>
             {data.draftsState === 'ok' && n === 0 ? (
@@ -306,7 +363,6 @@ export default function CoachHomeV11(p: Props) {
           {p.setup}
           {hero}
           {tiles}
-          {o ? <AlertsRow count={o.open_alerts} onPress={tap(p.onOpenAlerts)} /> : null}
           {o && rings ? (
             <View testID="home-rings">
               <Text style={s.dayLabel} accessibilityRole="header">YOUR DAY</Text>
@@ -324,9 +380,9 @@ export default function CoachHomeV11(p: Props) {
           {planEnded.page && ((planEnded.page.total > 0 && planEnded.page.items.length > 0) || roster > 0) ? <PlanEndedHomeRow page={planEnded.page} onOpen={() => { setEnded(true); void planEnded.reload(); }} /> : null}
         </View>
         <View style={s.page} testID="home-page">
+          {needsTile /* first under the masthead, always above Roman (#197-E5) */}
           {p.belowHero?.(!!o && roster === 0)}
           {roman}
-          {needsTile}
           {business}
           {clientsCard}
         </View>
@@ -366,10 +422,14 @@ const s = StyleSheet.create({
   grow: { flex: 1, minWidth: 0 },
   bold: { fontFamily: SEMI },
   small: { fontSize: 14, lineHeight: 20 }, // the kinds and the Needs you line, on one and two rows (Style A A-2)
-  needs: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  needsBox: { width: 72, height: 72, borderRadius: radius.card, backgroundColor: forestPop.deep, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
-  needsNum: { fontFamily: SEMI, fontSize: 30, lineHeight: 36, color: forestPop.leaf },
-  romanHead: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  // LS-934 B4: GOAL NEEDS-YOU-R2 gen.py `.need` (gap 14, padding 12 x 14) and `.nbox` (64, number 28).
+  needs: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 12, paddingHorizontal: 14 },
+  needsBox: { width: 64, height: 64, borderRadius: radius.card, backgroundColor: forestPop.deep, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
+  needsNum: { fontFamily: SEMI, fontSize: 28, lineHeight: 34, color: forestPop.leaf },
+  needsGold: { borderWidth: 2, borderColor: safetyGold.edge, backgroundColor: safetyGold.card },
+  needsRing: { borderWidth: 2, borderColor: safetyGold.edge, borderRadius: radius.card + 4, padding: 2 },
+  split: { marginTop: 4 },
+  romanHead: { flexDirection: 'row', alignItems: 'center', gap: 12 }, // GOAL `.rom .row` gap 12 beside the 38 pt `.rav`
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
   chip: { minHeight: 32, borderRadius: radius.button, paddingHorizontal: 10, justifyContent: 'center' },
   approve: { minHeight: 52, marginTop: 12, borderRadius: radius.button, paddingHorizontal: 12, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
