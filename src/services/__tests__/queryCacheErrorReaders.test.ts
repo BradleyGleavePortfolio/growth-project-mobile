@@ -112,8 +112,8 @@ const READERS: Reader[] = [
   ['calendarErrorMessage (client), src/calendar/schedulingErrors.ts:111', (e) => calendarErrorMessage(e, 'load open times'), 'all'],
   ['calendarErrorMessage (coach), src/calendar/schedulingErrors.ts:111', (e) => calendarErrorMessage(e, 'load your schedule', 'coach'), 'all'],
   ['describeProgramFailure, src/utils/programErrors.ts:233', (e) => describeProgramFailure(e, 'load the program'), 'all'],
-  ['isClosedRefusal, src/components/messaging/closedRefusal.ts:34', isClosedRefusal, 'all'],
-  ['toMessagingError, src/api/messagingV2Api.ts:217 (CoachInboxV2.tsx:303)', (e) => {
+  ['isClosedRefusal, src/components/messaging/closedRefusal.ts:33', isClosedRefusal, 'all'],
+  ['toMessagingError, src/api/messagingV2Api.ts:218 (CoachInboxV2.tsx:303)', (e) => {
     const m = toMessagingError(e);
     return { kind: m.kind, status: m.status, code: m.code, userMessage: m.userMessage, off: m.isFeatureDisabled };
   }, 'all'],
