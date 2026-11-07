@@ -206,8 +206,9 @@ async function call<T>(
   }
 }
 
-function idempotentHeaders(): { headers: Record<string, string> } {
-  return { headers: { 'Idempotency-Key': generateIdempotencyKey() } };
+function idempotentHeaders(key?: string): { headers: Record<string, string> } {
+  // SEND-ONCE-PHONE: a write the member can send again passes its draft's key (lib/sendOnce.ts); else a new key.
+  return { headers: { 'Idempotency-Key': key ?? generateIdempotencyKey() } };
 }
 
 // ─── Pagination (bounded, cursor-paged reads) ────────────────────────────────
@@ -335,16 +336,20 @@ export const communityChallengesApi = {
     );
   },
 
-  /** POST /community/challenges/:challengeId/comments — encouragement. */
+  /**
+   * POST /community/challenges/:challengeId/comments — encouragement. `idempotencyKey` is the draft's send-once key
+   * (Send again sends the same one).
+   */
   addComment(
     challengeId: string,
     body: string,
+    idempotencyKey?: string,
   ): Promise<CommunityChallengeComment> {
     return call(ChallengeCommentResponseSchema, () =>
       api.post<unknown>(
         `/community/challenges/${challengeId}/comments`,
         { body },
-        idempotentHeaders(),
+        idempotentHeaders(idempotencyKey),
       ),
     ).then((r) => r.comment);
   },

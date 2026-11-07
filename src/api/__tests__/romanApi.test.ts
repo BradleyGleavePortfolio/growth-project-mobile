@@ -271,7 +271,7 @@ describe('romanApi — sendMessage (buffered SSE over fetch)', () => {
     global.fetch = mock;
   }
 
-  it('POSTs the event-stream and returns the settled reply without any retry/dedupe header', async () => {
+  it('POSTs the event-stream and returns the settled reply without a send-once header when no key is given', async () => {
     mockFetchOnce({
       text:
         'data: {"type":"delta","text":"Good "}\n\n' +
@@ -282,11 +282,10 @@ describe('romanApi — sendMessage (buffered SSE over fetch)', () => {
     const [url, opts] = fetchMock.mock.calls[0];
     expect(url).toBe(`http://test.local/api/roman/sessions/${SESSION_ID}/messages`);
     expect(opts.method).toBe('POST');
-    // The backend does not implement a retry/dedupe header; the client must not
-    // advertise a guarantee that does not exist (#2 fabrication). Build the
-    // forbidden header name dynamically so this source file carries no literal
-    // reference to it, then assert it is absent from the sent header set.
-    const forbiddenDedupeHeader = ['idem', 'potency-key'].join('');
+    // SEND-ONCE-PHONE (b#1228): the header is optional and travels only when the
+    // caller hands a send-once key (RomanSendOnce.test.tsx covers the keyed send).
+    // With no key, no send-once header is sent.
+    const forbiddenDedupeHeader = 'idempotency-key';
     const sentHeaderKeys = Object.keys(opts.headers ?? {}).map((k) => k.toLowerCase());
     expect(sentHeaderKeys).not.toContain(forbiddenDedupeHeader);
     expect(opts.headers.Accept).toBe('text/event-stream');
