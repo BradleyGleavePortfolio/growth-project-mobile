@@ -2,7 +2,6 @@ import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   FlatList,
   TouchableOpacity,
   TextInput,
@@ -18,13 +17,11 @@ import * as Haptics from 'expo-haptics';
 import { listsApi } from '../../services/api';
 
 import FadeInView from '../../components/FadeInView';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import { typography } from '../../theme/tokens';
-
-function EmptyState({ title, subtitle }: { icon: string; title: string; subtitle: string }) {
-  const { semanticColors: sc } = useTheme();
-  return <View style={{ padding: 24, gap: 12 }}><Text style={[typography.h2, { color: sc.textPrimary }]}>{title}</Text><Text style={[typography.bodySmall, { color: sc.textMuted }]}>{subtitle}</Text></View>;
-}
+import { useTheme } from '../../theme/ThemeProvider';
+import { PrimaryButton, TextLink, Screen } from '../../ui';
+import { HapticService } from '../../ui/haptics/haptics.service';
+import { StyleCCheck, StyleCDashes, StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCNotice, StyleCPaper, useStyleCScreen } from '../../ui/layout/StyleCPage';
+import { makeListStyles as makeStyles } from './GroceryListScreen';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface ListItem {
@@ -41,6 +38,7 @@ const QUERY_KEY = ['lists', LIST_TYPE];
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function ShoppingListScreen() {
+  const page = useStyleCScreen();
   const { semanticColors: sc } = useTheme();
   const colors = useMemo(() => ({
     background: sc.bgPrimary, surface: sc.bgPrimary, primary: sc.accent,
@@ -132,7 +130,7 @@ export default function ShoppingListScreen() {
 
   const handleToggle = useCallback(
     (item: ListItem) => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      void HapticService.selection(); // C2 section 5: a check is a selection tick
       toggleMutation.mutate({ id: item.id, is_checked: !item.is_checked });
     },
     [toggleMutation],
@@ -167,11 +165,7 @@ export default function ShoppingListScreen() {
         activeOpacity={0.7}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
-        <Ionicons
-          name={item.is_checked ? 'checkmark-circle-outline' : 'ellipse-outline'}
-          size={24}
-          color={item.is_checked ? colors.success : colors.textMuted}
-        />
+        <StyleCCheck checked={item.is_checked} />
       </TouchableOpacity>
       <View style={styles.itemContent}>
         <Text style={[styles.itemName, item.is_checked && styles.itemNameChecked]}>
@@ -190,7 +184,7 @@ export default function ShoppingListScreen() {
         activeOpacity={0.7}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
-        <Ionicons name="close-circle-outline" size={20} color={colors.textMuted} />
+        <Ionicons name="close" size={20} color={colors.textMuted} />
       </TouchableOpacity>
     </View>
   );
@@ -203,25 +197,14 @@ export default function ShoppingListScreen() {
   ];
 
   return (
-    <View style={styles.container} testID="grocery-prep-screen">
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back" onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Shopping list</Text>
-        {checked.length > 0 ? (
-          <TouchableOpacity
-            style={styles.clearBtn}
-            onPress={handleClearChecked}
-            activeOpacity={0.7}
-            disabled={clearCheckedMutation.isPending}
-          >
-            <Text style={styles.clearBtnText}>Clear checked</Text>
-          </TouchableOpacity>
+    <Screen edges={['top']} scroll={false} {...page} testID="grocery-prep-screen">
+      <StyleCMasthead title="Shopping list" onBack={() => navigation.goBack()}>
+        {/* The summary on the masthead with one dash per item, gold when checked (ctx#457 shopping). */}
+        {!isLoading && !isError && items.length > 0 ? (
+          <StyleCDashes total={items.length} done={checked.length} label={unchecked.length > 0 ? `${unchecked.length} to get.` : 'All items checked.'} />
         ) : null}
-      </View>
-      {!isLoading && !isError && items.length > 0 ? <Text style={styles.summary}>{unchecked.length > 0 ? `${unchecked.length} to get.` : 'All items checked.'}</Text> : null}
+      </StyleCMasthead>
+      <StyleCPaper style={styles.paper}>
 
       {/* Add item input */}
       <View style={styles.addRow}>
@@ -252,38 +235,36 @@ export default function ShoppingListScreen() {
             onChangeText={setNewItemUnit}
             returnKeyType="done"
           />
+          <TouchableOpacity
+            accessibilityRole="button" accessibilityLabel="Add item"
+            style={[styles.addBtn, !newItemName.trim() && styles.addBtnDisabled]}
+            onPress={handleAdd}
+            disabled={!newItemName.trim() || addMutation.isPending}
+            activeOpacity={0.8}
+          >
+            {addMutation.isPending ? (
+              <ActivityIndicator size="small" color={colors.textOnPrimary} />
+            ) : (
+              <Ionicons name="add" size={22} color={colors.textOnPrimary} />
+            )}
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          accessibilityRole="button" accessibilityLabel="Add item"
-          style={[styles.addBtn, !newItemName.trim() && styles.addBtnDisabled]}
-          onPress={handleAdd}
-          disabled={!newItemName.trim() || addMutation.isPending}
-          activeOpacity={0.8}
-        >
-          {addMutation.isPending ? (
-            <ActivityIndicator size="small" color={colors.textOnPrimary} />
-          ) : (
-            <Ionicons name="add" size={22} color={colors.textOnPrimary} />
-          )}
-        </TouchableOpacity>
       </View>
 
       {/* List */}
       {isLoading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading shopping list…</Text>
+          <StyleCLoadingLines lead="ring" />
         </View>
       ) : isError ? (
         <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Couldn't load shopping list.</Text>
-          <TouchableOpacity onPress={() => refetch()} disabled={isRefetching} style={styles.clearBtn}>
-            <Text style={styles.clearBtnText}>Try again</Text>
-          </TouchableOpacity>
+          <StyleCNotice>Couldn't load shopping list.</StyleCNotice>
+          <PrimaryButton label="Try again" onPress={() => refetch()} disabled={isRefetching} haptic={false} />
         </View>
       ) : items.length === 0 ? (
         <FadeInView>
-          <EmptyState
+          <StyleCEmpty
             icon="bag-outline"
             title="Your shopping list is empty"
             subtitle="Add items using the field above."
@@ -305,6 +286,9 @@ export default function ShoppingListScreen() {
             />
           }
           contentContainerStyle={styles.listContent}
+          ListFooterComponent={checked.length > 0 ? (
+            <TextLink label="Clear checked" tone="accent" align="start" onPress={handleClearChecked} disabled={clearCheckedMutation.isPending} style={styles.clearBtn} />
+          ) : null}
           renderItem={({ item }) => {
             if ('type' in item) {
               return (
@@ -320,118 +304,7 @@ export default function ShoppingListScreen() {
           showsVerticalScrollIndicator={false}
         />
       )}
-    </View>
+    </StyleCPaper>
+    </Screen>
   );
 }
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
-const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primary' | 'textPrimary' | 'textMuted' | 'textOnPrimary' | 'border' | 'error'>) =>
-  StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 60,
-    marginBottom: 16,
-    gap: 12,
-  },
-  backBtn: { width: 44, height: 44, justifyContent: 'center' },
-  title: { ...typography.h1, color: colors.textPrimary, flex: 1 },
-  summary: { ...typography.h2, color: colors.textPrimary, paddingHorizontal: 24, marginBottom: 24, fontVariant: ['tabular-nums'] },
-  clearBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    minHeight: 44, justifyContent: 'center',
-    borderRadius: 0, // radius.sm
-  },
-  clearBtnText: { ...typography.bodySmall, color: colors.textMuted },
-
-  addRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    marginBottom: 12,
-    gap: 8,
-    alignItems: 'center',
-  },
-  addInputs: { flex: 1, flexDirection: 'row', gap: 6 },
-  nameInput: {
-    fontFamily: typography.body.fontFamily,
-    flex: 3,
-    height: 44,
-    backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 12,
-    fontSize: 14,
-    color: colors.textPrimary,
-  },
-  qtyInput: {
-    fontFamily: typography.body.fontFamily, fontVariant: ['tabular-nums'],
-    flex: 1,
-    height: 44,
-    backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 8,
-    fontSize: 14,
-    color: colors.textPrimary,
-    textAlign: 'center',
-  },
-  unitInput: {
-    fontFamily: typography.body.fontFamily,
-    flex: 1,
-    height: 44,
-    backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 8,
-    fontSize: 14,
-    color: colors.textPrimary,
-  },
-  addBtn: {
-    width: 44,
-    height: 44,
-    backgroundColor: colors.primary,
-    borderRadius: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addBtnDisabled: { opacity: 0.5 },
-
-  loadingContainer: { alignItems: 'center', paddingTop: 60, gap: 12 },
-  loadingText: { ...typography.bodySmall, color: colors.textMuted },
-
-  listContent: { paddingHorizontal: 16, paddingBottom: 40 },
-
-  sectionHeader: {
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    marginTop: 8,
-  },
-  sectionHeaderText: { ...typography.eyebrow, color: colors.textMuted, fontVariant: ['tabular-nums'] },
-
-  itemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: 2, // radius.md
-    paddingVertical: 12,
-    paddingHorizontal: 0,
-    marginBottom: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    gap: 10,
-  },
-  itemRowChecked: { opacity: 1 },
-  checkbox: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  itemContent: { flex: 1 },
-  itemName: { ...typography.bodyMd, color: colors.textPrimary },
-  itemNameChecked: { textDecorationLine: 'line-through', color: colors.textMuted },
-  itemMeta: { ...typography.bodySmall, color: colors.textMuted, marginTop: 1, fontVariant: ['tabular-nums'] },
-  deleteBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-
-  });

@@ -13,6 +13,8 @@ import GroceryListScreen from '../GroceryListScreen';
 
 const mockNavigation = { goBack: jest.fn(), navigate: jest.fn() };
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => mockNavigation }));
+// The Style C masthead paints the status bar on focus; no navigator here (STYLE-KITCHEN-M).
+jest.mock('../../../components/StatusBarBand', () => ({ useStatusBarBand: () => undefined }));
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({ colors: jest.requireActual('../../../constants/colors').default, semanticColors: jest.requireActual('../../../theme/tokens').lightTokens }),
 }));
@@ -80,7 +82,8 @@ describe('Grocery is the one list (CF-ONE-LIST-128)', () => {
     expect(view.getByText('2 to get.')).toBeTruthy();
     expect(view.getByText('To get (2)')).toBeTruthy();
     expect(view.getByText('Checked (2)')).toBeTruthy();
-    expect(view.getByText(NOTE)).toHaveStyle({ color: lightTokens.textMuted, fontFamily: 'Inter_400Regular' });
+    // REFINE-929: the note sits on the forest masthead under the summary (ctx#457), in its muted light words.
+    expect(view.getByText(NOTE)).toHaveStyle({ color: lightTokens.textOnMastheadMuted, fontFamily: 'Inter_400Regular' });
     expect(view.getByText('Grocery list')).toBeTruthy();
     expect(listsApi.getList).toHaveBeenCalledWith('grocery');
     expect(listsApi.getList).toHaveBeenCalledWith('shopping');
