@@ -7,6 +7,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 // cache (lib/userCache over the AsyncStorage jest mock) and the real useCurrentUser connect the two screens; only the
 // network, navigation, theme, analytics, crash reporting and haptics are stubbed.
 const mockUpdate = jest.fn(async (_body: unknown) => ({}));
+// The Style C masthead paints the status bar on focus; no navigator here (STYLE-KITCHEN-M).
+jest.mock('../../../components/StatusBarBand', () => ({ useStatusBarBand: () => undefined }));
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: jest.fn(), navigate: jest.fn() }) }));
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({ semanticColors: require('../../../theme/tokens').lightTokens, colors: new Proxy({}, { get: () => 'legacy' }) }),

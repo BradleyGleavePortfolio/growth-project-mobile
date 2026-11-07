@@ -14,6 +14,8 @@ jest.mock('../services/api', () => ({
 jest.mock('../theme/ThemeProvider', () => ({
   useTheme: () => ({ colors: new Proxy({}, { get: () => '#123456' }), semanticColors: require('../theme/tokens').lightTokens }),
 }));
+// The Style C masthead paints the status bar on focus; no navigator here (STYLE-KITCHEN-M).
+jest.mock('../components/StatusBarBand', () => ({ useStatusBarBand: () => undefined }));
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ goBack: mockBack }),
   useRoute: () => ({ params: { recipeId: 'recipe-1' } }),

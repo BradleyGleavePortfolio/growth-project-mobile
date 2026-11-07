@@ -11,6 +11,7 @@ import { layout, spacing, typography } from '../../theme/tokens';
 import { useScreenInsets } from '../../ui';
 import { SetLogger } from './active-workout/SetLogger';
 import type { SessionSet } from './active-workout/types';
+import { isTimedRow } from '../../utils/workout/exerciseUnit';
 import { loggedWorkoutEditPayload, loggedWorkoutExercises, type LoggedWorkout } from './active-workout/sessionQuality';
 
 export default function WorkoutHistoryEditScreen() {
@@ -97,9 +98,10 @@ export default function WorkoutHistoryEditScreen() {
         <View style={[styles.setHeaderRow, { marginTop: 12 }]}>
           <Text style={[styles.setHeaderText, { width: 36 }]}>Set</Text>
           <Text style={[styles.setHeaderText, { flex: 1 }]}>Weight (lb)</Text>
-          <Text style={[styles.setHeaderText, { flex: 1 }]}>Reps</Text>
+          {/* LS-928 B1: a saved timed exercise is edited in seconds (K3-S-41). */}
+          <Text style={[styles.setHeaderText, { flex: 1 }]}>{isTimedRow(exercise) ? 'Seconds' : 'Reps'}</Text>
         </View>
-        {exercise.sets.map((set, setIdx) => <SetLogger key={setIdx} set={set} exIdx={exIdx} setIdx={setIdx} onUpdate={updateSet} onToggleComplete={() => undefined} colors={colors} styles={styles} hideCompletion editable={!saving} />)}
+        {exercise.sets.map((set, setIdx) => <SetLogger key={setIdx} set={set} exIdx={exIdx} setIdx={setIdx} onUpdate={updateSet} onToggleComplete={() => undefined} colors={colors} styles={styles} hideCompletion editable={!saving} timed={isTimedRow(exercise)} />)}
         <TextInput style={styles.notesInput} value={exercise.notes ?? ''} multiline maxLength={1000} placeholder="Exercise notes" placeholderTextColor={sc.textMuted} accessibilityLabel={`Notes for ${exercise.exerciseName}`} editable={!saving} onChangeText={(value) => {
           changed.current = true;
           setExercises((prev) => prev.map((e, i) => i === exIdx ? { ...e, notes: value } : e));
