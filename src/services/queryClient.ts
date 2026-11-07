@@ -127,6 +127,80 @@ function shouldDehydrateQuery(query: Query): boolean {
   return query.meta?.persist !== false;
 }
 
+// TOKEN-CACHE-M: a saved error keeps only its plain fields. With the default
+// JSON.stringify an AxiosError writes its request config (the headers carry
+// `Authorization: Bearer <access token>`, the URL can be a signed one), and
+// app errors keep the AxiosError as their `cause`. So a saved error keeps the
+// text, number and true/false fields it would have been saved with (name,
+// code, status, kind, ...) and nothing else: no cause, request config,
+// headers, request or response, no other object, no stack, and no field named
+// like a credential or an address. It never adds a field, so a reader of a
+// restored error reads the same plain values it read before.
+const NEVER_SAVED_ERROR_FIELD =
+  /^stack$|authori[sz]ation|bearer|token|secret|password|cookie|signature|credential|api_?key|ur[il]$/i;
+
+type PlainValue = string | number | boolean | null;
+
+function isPlainValue(value: unknown): value is PlainValue {
+  return value === null || ['string', 'number', 'boolean'].includes(typeof value);
+}
+
+/** The form of a query or mutation error that may be written to disk. */
+export function persistableError(error: unknown): unknown {
+  if (error === null || typeof error !== 'object') return error;
+  // Read the fields JSON.stringify would have written: toJSON() when the
+  // error has one (AxiosError), else its own enumerable fields.
+  let saved: unknown = error;
+  const toJSON = (error as { toJSON?: unknown }).toJSON;
+  if (typeof toJSON === 'function') {
+    try {
+      saved = toJSON.call(error);
+    } catch {
+      saved = {};
+    }
+    if (saved === null || typeof saved !== 'object') return isPlainValue(saved) ? saved : undefined;
+  }
+  const kept: Record<string, PlainValue | PlainValue[]> = {};
+  for (const [field, value] of Object.entries(saved as Record<string, unknown>)) {
+    if (NEVER_SAVED_ERROR_FIELD.test(field)) continue;
+    if (isPlainValue(value)) kept[field] = value;
+    else if (Array.isArray(value) && value.every(isPlainValue)) kept[field] = value;
+  }
+  return kept;
+}
+
+/**
+ * The persister's serialize: the dehydrated client as JSON, with the error
+ * and failure reason of every saved query (and of every saved paused
+ * mutation) cut down by persistableError. Which queries are saved is
+ * unchanged (shouldDehydrateQuery).
+ */
+export function serializePersistedClient(client: PersistedClient): string {
+  const { queries, mutations } = client.clientState;
+  return JSON.stringify({
+    ...client,
+    clientState: {
+      ...client.clientState,
+      queries: queries.map((query) => ({
+        ...query,
+        state: {
+          ...query.state,
+          error: persistableError(query.state.error),
+          fetchFailureReason: persistableError(query.state.fetchFailureReason),
+        },
+      })),
+      mutations: mutations.map((mutation) => ({
+        ...mutation,
+        state: {
+          ...mutation.state,
+          error: persistableError(mutation.state.error),
+          failureReason: persistableError(mutation.state.failureReason),
+        },
+      })),
+    },
+  });
+}
+
 export type RestoreOutcome = 'restored' | 'empty' | 'timeout' | 'retired' | 'failed';
 export type DrainOutcome = 'drained' | 'timeout';
 
@@ -261,6 +335,7 @@ export function createIdentityPersistence(
     storage: fencedStorage,
     key,
     throttleTime: QUERY_CACHE_THROTTLE_MS,
+    serialize: serializePersistedClient,
   });
 
   const subscribe = () => {
