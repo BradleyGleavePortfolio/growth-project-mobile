@@ -165,8 +165,8 @@ export default function CoachInboxV2({ onFeatureDisabled }: CoachInboxV2Props) {
   }, [data, blocked]);
   // LS-952R2 B1: the same closed clients leave Roman's drafts count, here, on Home and on the drafts screen.
   useEffect(() => {
-    if (data) rememberClosedClients(currentUser?.id, 'inbox', closed);
-  }, [data, closed, currentUser?.id]);
+    if (data) rememberClosedClients(currentUser?.id, 'inbox', closed, query.dataUpdatedAt);
+  }, [data, closed, currentUser?.id, query.dataUpdatedAt]);
   const totalUnread = data?.pages[0]?.total_unread ?? 0;
 
   const rows: Row[] = useMemo(() => {

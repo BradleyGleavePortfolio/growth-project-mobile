@@ -13,7 +13,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({ colors: new Proxy({}, { get: () => '#000000' }), semanticColors: jest.requireActual('../../../theme/tokens').lightTokens }),
 }));
-jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'coach-1', role: 'coach' }) }));
+let mockMe = 'coach-1';
+jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: mockMe, role: 'coach' }) }));
 jest.mock('../../../store/coachStore', () => {
   const state = {
     clients: [
@@ -159,25 +160,35 @@ it.each(ROWS)('a %s closure leaves the closed client words draft on the %s', asy
   }
 });
 
-it('a closure heard for one coach is not used once the block list is not theirs (sign-out, switch)', async () => {
+// LO-952R3 C4: a closure belongs to the signed-in coach (useCurrentUser), not to whoever's block list is loaded. It still
+// applies while my block list is not loaded yet; after sign-out (which clears the query cache) another coach never sees it.
+it('a closure heard for the signed-in coach applies before their block list loads, and never for the next coach (sign-out, switch)', async () => {
+  mockMe = 'coach-1';
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 120_000 } } });
-  useBlockedUsersStore.setState({ userId: 'coach-1', hydrated: true, blocked: [] });
+  useBlockedUsersStore.setState({ userId: null, hydrated: false, blocked: [] });
   mockV2 = true;
-  qc.setQueryData(coachInboxKey('all'), inboxAnswer('closed_client_ids', true));
-  qc.setQueryData(COACH_AI_PENDING_DRAFTS_QUERY_KEY, {
+  const seed = () => qc.setQueryData(COACH_AI_PENDING_DRAFTS_QUERY_KEY, {
     drafts: [{ id: 'n-closed', subject_user_id: 'client-closed', capability: 'draft.send_notification', status: 'pending', payload: {} }],
   });
+  qc.setQueryData(coachInboxKey('all'), inboxAnswer('closed_client_ids', true));
+  seed();
   const wrap = (ui: React.ReactElement) => <QueryClientProvider client={qc}>{ui}</QueryClientProvider>;
   const messages = await render(wrap(<MessagesScreen />));
   const home = await render(wrap(<HomeProbe />));
   try {
     await waitFor(() => expect(home.getByTestId('home-drafts').props.children).toBe('0 waiting, 0 nudges, 0 workouts'));
     await messages.unmount();
-    await act(async () => { useBlockedUsersStore.setState({ userId: 'coach-2', hydrated: true, blocked: [] }); });
+    await act(async () => {
+      mockMe = 'coach-2';
+      qc.clear(); // sign-out clears the query cache (authActions settleAndClearQueryCache); coach-2 signs in
+      seed();
+      useBlockedUsersStore.setState({ userId: 'coach-2', hydrated: true, blocked: [] });
+    });
     await waitFor(() => expect(home.getByTestId('home-drafts').props.children).toBe('1 waiting, 1 nudges, 0 workouts'));
   } finally {
     await home.unmount();
     qc.clear();
+    mockMe = 'coach-1';
     useBlockedUsersStore.setState({ userId: null, hydrated: false, blocked: [] });
   }
 });

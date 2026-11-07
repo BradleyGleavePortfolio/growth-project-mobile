@@ -1,6 +1,6 @@
 // Phase 9: Bell icon + NotificationCenter added to CoachNavigator.
 // All existing routes preserved.
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AppState, Platform, Pressable, Text, TouchableOpacity, View, StyleSheet } from 'react-native';
 import { BottomTabBar, createBottomTabNavigator, type BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -150,6 +150,8 @@ import { typography } from '../theme/tokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCoachTeamStatus } from '../hooks/useCoachRoleType';
 import { useBlockedUsersStore } from '../store/blockedUsersStore';
+import { rememberUnreadCounts } from '../store/closedClientsStore';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 import { CoachTeamEntryContext } from './coachTeamEntry';
 
 // Match ClientNavigator: reclaim the tab button's 5 pt inset for one-line labels.
@@ -786,12 +788,17 @@ function TeamStackNavigator() {
 export function useCoachUnreadPolling(): number {
   const [total, setTotal] = useState(0);
   const blocked = useBlockedUsersStore((st) => st.blocked); // FR-880 (Sol B4): a block or unblock reads the count again
+  // LS-952R3 B3: each answer is Roman's drafts count's too, kept under the coach it was asked for.
+  const coachId = useRef<string | undefined>(undefined);
+  coachId.current = useCurrentUser()?.id;
   useEffect(() => {
     let mounted = true;
     const refresh = async () => {
       try {
+        const asked = coachId.current;
         const res = await coachApi.getUnreadCounts();
         if (!mounted) return;
+        rememberUnreadCounts(asked ?? coachId.current, res);
         setTotal(Number(res.data?.total ?? 0));
       } catch (err) {
         // Non-fatal: the unread total holds and the next 30s tick retries.
