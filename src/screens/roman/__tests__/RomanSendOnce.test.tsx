@@ -292,3 +292,53 @@ it('LS-953R2 B1: reopening while the first answer is pending replays the kept dr
   await act(async () => { finishFirst(DONE('The first answer.')); });
   expect(retry).toEqual(first);
 });
+
+it('LS-953R2 B2: Send again after an in-flight no-reply replay never creates a second stored turn', async () => {
+  // Backend main roman.controller.ts:179-181,290-303: same key + a stored
+  // user turn without a reply answers ROMAN_UNAVAILABLE, including while
+  // its first model request is still answering. A new key creates a new turn.
+  const stored = new Map<string, string>();
+  let firstKey: string | undefined;
+  let firstReplyReady = false;
+  fetchMock.mockImplementation(async (_url: string, init: RequestInit) => {
+    const key = (init.headers as Record<string, string>)['Idempotency-Key'];
+    const content = (JSON.parse(String(init.body)) as { content: string }).content;
+    const replay = stored.has(key);
+    if (!replay) stored.set(key, content);
+    const initial = firstKey === undefined;
+    if (initial) firstKey = key;
+    const body = replay && key === firstKey && !firstReplyReady
+      ? ('text' in NO_REPLY_FRAME ? String(NO_REPLY_FRAME.text) : '')
+      : DONE('Swap it.');
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      text: async () => {
+        if (initial) throw new TypeError('Connection lost after the turn was stored');
+        return body;
+      },
+    } as unknown as Response;
+  });
+  mockList.mockImplementation(async () => ({
+    messages: [...stored].reverse().map(([id, content]) => ({
+      id, role: 'user', content, interrupted: false, createdAt: '2026-11-07T06:00:00.000Z',
+    })),
+    nextCursor: null,
+  }));
+
+  const r = await open();
+  await fireEvent.changeText(r.getByTestId(INPUT), 'Swap my Thursday run for a ride?');
+  await sendFrom(r); // first turn stored; phone loses the buffered stream
+  await sendAgain(r); // replay arrives while the first answer is still pending
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  expect(sent(1)).toEqual(sent(0));
+  expect(stored.size).toBe(1);
+  // The first answer can finish before the next tap: there is no tight race
+  // at the third send. The visible Send again action and unchanged draft remain.
+  firstReplyReady = true;
+  expect(boxOf(r)).toBe('Swap my Thursday run for a ride?');
+  await sendAgain(r);
+  expect(fetchMock).toHaveBeenCalledTimes(3);
+  expect(stored.size).toBe(1);
+});
