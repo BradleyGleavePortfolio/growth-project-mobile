@@ -39,6 +39,12 @@ export interface RomanMessageBubbleProps {
 const HOLD_MS = 350;
 const HOLD_HINT = 'Long press for message actions.';
 const HOLD_ACTIONS = [{ name: 'longpress' as const }];
+/**
+ * LS-950 B2 (FIX-950R1): a one-line reply reads 28 pt tall, so the hold reaches 8 pt above and
+ * below it (44 pt at 100%, 52 at 130%). Nothing drawn moves: the reach sits in the row's own
+ * speaker gap and bottom padding (both spacing.sm), so Android still delivers the touch.
+ */
+export const HOLD_SLOP = { top: spacing.sm, bottom: spacing.sm, left: 0, right: 0 } as const;
 
 export type RomanBlock =
   | { kind: 'paragraph'; text: string }
@@ -134,6 +140,7 @@ function RomanMessageBubbleComponent({
           style={({ pressed }) => [styles.assistantBody, pressed && hold ? styles.held : null]}
           onLongPress={hold}
           delayLongPress={HOLD_MS}
+          hitSlop={hold ? HOLD_SLOP : undefined}
           accessible
           accessibilityRole="text"
           // The interrupted note is part of what a screen reader speaks (B-602-C-1).
