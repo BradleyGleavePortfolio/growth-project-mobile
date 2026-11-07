@@ -12,6 +12,7 @@ import { coachApi } from '../../../services/api';
 import { useClientUnreadCount } from '../../../hooks/useClientUnreadCount';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { usePendingAiDrafts } from '../../../hooks/usePendingAiDrafts';
+import { rememberUnreadCounts } from '../../../store/closedClientsStore';
 import { isStream2Capability } from '../../../api/types/coachAiExecution';
 import { isSubCoachBillingBlocked } from '../../../lib/coachSetup/errors';
 import type { LtvMetrics } from '../../../components/command-center/CoachLtvDashboard';
@@ -109,6 +110,7 @@ export function useCoachHomeV11(sources: CoachHomeSources = coachHomeSources, re
     const store = useCoachStore.getState();
     if (store.filterStatus === 'archived') { setRosterState('off'); return; }
     const [, u] = await Promise.allSettled([store.loadClients(coachId, 'active', { silent: true }), coachApi.getUnreadCounts()]);
+    if (u.status === 'fulfilled') rememberUnreadCounts(coachId, u.value); // LS-952R3 B3: Roman's drafts count hears it too
     if (mine !== seq.current) return;
     if (u.status === 'fulfilled') setUnread(((u.value?.data as { by_client?: UnreadByClient } | undefined)?.by_client) ?? {});
     const failed = u.status === 'rejected' || useCoachStore.getState().loadError !== null;

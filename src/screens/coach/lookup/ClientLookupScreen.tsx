@@ -19,6 +19,7 @@ import PushPermissionCard from '../../../components/home/PushPermissionCard';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { coachApi } from '../../../services/api';
 import { ROSTER_PAGE_SIZE, useCoachStore } from '../../../store/coachStore';
+import { rememberUnreadCounts } from '../../../store/closedClientsStore';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { colors as palette, layout, radius, typography } from '../../../theme/tokens';
 import { Overline, useScreenInsets } from '../../../ui';
@@ -107,6 +108,7 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
     const [u, a] = await Promise.allSettled([coachApi.getUnreadCounts(), coachApi.getClients('archived', undefined, ROSTER_PAGE_SIZE), loadEnded()]);
     // A failed unread read keeps the counts already shown. The archived count shows only when one page holds them all.
     if (u.status === 'fulfilled') setUnread((u.value?.data?.by_client as UnreadByClient) ?? {});
+    if (u.status === 'fulfilled') rememberUnreadCounts(coachId, u.value); // LS-952R3 B3: Roman's drafts count hears it too
     const rows: unknown = a.status === 'fulfilled' ? a.value?.data : null;
     setArchivedCount(Array.isArray(rows) && rows.length < ROSTER_PAGE_SIZE ? rows.length : null);
   }, [coachId, loadEnded]);
