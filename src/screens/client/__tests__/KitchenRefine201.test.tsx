@@ -160,7 +160,7 @@ it('M21-M24: both lists share the drawn overline, scalable row, normal serif tra
   expect(styles.sectionHeader).toMatchObject({ paddingTop: 26, paddingBottom: 0 });
   expect(styles.sectionHeaderText).toMatchObject({ fontSize: 11.5, lineHeight: 14, fontWeight: '600', letterSpacing: 2, fontVariant: ['tabular-nums'] });
   expect(styles.itemRow).toMatchObject({ minHeight: 83.2, paddingVertical: 0 });
-  expect(styles.itemName).toMatchObject({ lineHeight: 26.25, letterSpacing: 0 });
+  expect(styles.itemName).toMatchObject({ lineHeight: 26.25, letterSpacing: 0, flexGrow: 1, flexShrink: 1, flexBasis: 'auto' });
   expect(styles.itemMeta).toMatchObject({ fontSize: 15, letterSpacing: 0, fontVariant: ['tabular-nums'] });
   expect(flat(styles.itemMeta).lineHeight).toBeUndefined();
   expect(styles.clearBtn).toMatchObject({ paddingVertical: 16 });
