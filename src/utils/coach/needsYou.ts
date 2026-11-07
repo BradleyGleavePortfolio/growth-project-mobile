@@ -31,10 +31,18 @@ export interface NeedsAreas {
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-/** Open alerts only (the queue also returns dismissed ones), safety first in the server's order. */
+// Existing red-risk names: backend queue, phone queue, and legacy Home/list fixtures.
+const RED_RISK_TYPES: readonly string[] = ['risk_red_transition', 'high_churn_risk', 'risk_red'];
+
+/** Open alerts only: safety, then red risk, then other alerts; server order within each priority. */
 export function openAlerts(items: ReadonlyArray<ActionQueueItem> | null | undefined): ActionQueueItem[] {
   const open = (items ?? []).filter((i) => i.dismissed_at === null);
-  return [...open.filter(isSafetyAlert), ...open.filter((i) => !isSafetyAlert(i))];
+  const ordinary = open.filter((i) => !isSafetyAlert(i));
+  return [
+    ...open.filter(isSafetyAlert),
+    ...ordinary.filter((i) => RED_RISK_TYPES.includes(i.alert_type)),
+    ...ordinary.filter((i) => !RED_RISK_TYPES.includes(i.alert_type)),
+  ];
 }
 
 /**
