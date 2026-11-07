@@ -363,7 +363,7 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
     color: colors.textPrimary,
   },
   qtyInput: {
-    fontFamily: typography.body.fontFamily, fontVariant: ['tabular-nums'],
+    fontFamily: typography.body.fontFamily,
     width: 52 * fontScale,
     height: 48 * fontScale,
     paddingTop: Math.max(0, (48 - 16 * 1.21) * fontScale - 10),
