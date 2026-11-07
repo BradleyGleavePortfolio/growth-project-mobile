@@ -200,7 +200,9 @@ export function StyleCLoadingLines({ rows = 4, label, lead }: { rows?: number; l
 
 const s = StyleSheet.create({
   bare: { flexGrow: 1, paddingHorizontal: 0, paddingBottom: 0 },
-  head: { marginTop: -8, paddingHorizontal: layout.gutter, paddingBottom: radius.sheet + 16 },
+  // Keep the entire Back/Save row inside scroll hosts. Recover the former
+  // 8pt top offset from the quiet space below, not from the 44pt target.
+  head: { marginTop: 0, paddingHorizontal: layout.gutter, paddingBottom: radius.sheet + 8 },
   bar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: -10, marginBottom: 2 },
   icon: { minWidth: layout.touchMin, minHeight: layout.touchMin, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 40, lineHeight: 45, letterSpacing: 0.4 },

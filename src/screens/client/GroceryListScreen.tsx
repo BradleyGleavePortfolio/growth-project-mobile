@@ -223,6 +223,7 @@ export default function GroceryListScreen() {
   return (
     <Screen edges={['top']} scroll={false} {...page} testID="grocery-prep-screen">
       <FlatList
+        keyboardShouldPersistTaps="handled"
         testID="list-scroll"
         style={{ backgroundColor: sc.bgPrimary }}
         ListHeaderComponent={(
