@@ -316,7 +316,7 @@ export default function GroceryListScreen() {
             />
           ) : undefined}
           contentContainerStyle={styles.listContent}
-          ListFooterComponent={checked.length > 0 ? (
+          ListFooterComponent={!isLoading && !isError && checked.length > 0 ? (
             <TextLink label="Clear checked" tone="accent" align="start" onPress={handleClearChecked} disabled={clearCheckedMutation.isPending} style={styles.clearBtn} />
           ) : null}
           renderItem={({ item }) => {

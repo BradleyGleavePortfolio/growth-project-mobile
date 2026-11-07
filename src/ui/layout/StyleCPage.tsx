@@ -18,6 +18,11 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { gold, layout, radius, typography, withAlpha } from '../../theme/tokens';
 import { HapticService } from '../haptics/haptics.service';
 
+// The kitchen drawing's 14pt tile/notice sits between the semantic action and
+// card corners. Derive this local variant from the owner's rounded scale;
+// primitives must not introduce a literal corner or change the global tokens.
+const kitchenRadius = (radius.button + radius.card) / 2;
+
 export function StyleCMasthead({ title, onBack, backLabel = 'Back', trailing, loading, children, compact }: {
   title?: string; onBack?: () => void; backLabel?: string; children?: React.ReactNode;
   /** A variable-length title (a recipe name) keeps the 32 pt h1; the screen titles are 40 pt (ctx#457). */
@@ -224,13 +229,13 @@ const s = StyleSheet.create({
   paper: { flex: 1, marginTop: -radius.sheet, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, overflow: 'hidden' },
   paperFlow: { flex: 0, flexGrow: 1 },
   check: { width: 28, height: 28, borderRadius: radius.chip, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  thumb: { borderRadius: 14, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  thumb: { borderRadius: kitchenRadius, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   thumbImage: { width: '100%', height: '100%' },
   empty: { alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 44 },
   emptyTitle: { marginTop: 12 },
   emptyBody: { fontSize: 15, lineHeight: 22.5 },
   emptyText: { textAlign: 'center' },
-  notice: { gap: 4, borderLeftWidth: 3, borderRadius: 14, paddingHorizontal: 18, paddingVertical: 16 },
+  notice: { gap: 4, borderLeftWidth: 3, borderRadius: kitchenRadius, paddingHorizontal: 18, paddingVertical: 16 },
   noticeTitle: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', lineHeight: 22.95, letterSpacing: 0 },
   noticeBody: { lineHeight: 23.2, letterSpacing: 0 },
   lines: { gap: 24, paddingVertical: 8 },
@@ -239,7 +244,7 @@ const s = StyleSheet.create({
   lineRow: { gap: 10 },
   grow: { flex: 1 },
   tileRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  tilePh: { width: 64, height: 64, borderRadius: 14 },
+  tilePh: { width: 64, height: 64, borderRadius: kitchenRadius },
   ringRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   ringBar: { flex: 1, maxWidth: '60%', height: 20, borderRadius: radius.button },
   ringAmt: { marginLeft: 'auto', width: 56, height: 14, borderRadius: radius.button },
