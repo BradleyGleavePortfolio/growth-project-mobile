@@ -38,6 +38,7 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
 import { useBlockedUsersStore } from '../../store/blockedUsersStore';
+import { rememberClosedClients } from '../../store/closedClientsStore';
 import { openInboxChat } from '../../navigation/coachInbox';
 import { subscribeToMessages } from '../../services/realtime';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -146,21 +147,26 @@ export default function CoachInboxV2({ onFeatureDisabled }: CoachInboxV2Props) {
   // FX-872 (owner 10-23 "Dissapear"): a chat closed by a block on either side is not a row at all, and that client is
   // not offered again as "start a conversation" below. The one block cache drops it the moment I block.
   const blocked = useBlockedUsersStore((st) => st.blocked);
-  const { threads, hidden } = useMemo(() => {
+  const { threads, hidden, closed } = useMemo(() => {
     const seen = new Set<string>();
-    const gone = new Set<string>(blocked.map((b) => b.id));
+    const closed = new Set<string>();
     const out: InboxThread[] = [];
     for (const page of data?.pages ?? []) {
-      for (const id of page.closed_client_ids ?? []) gone.add(id); // FR-872 (Opus B1, Sol B1): blocked by the client
+      for (const id of page.closed_client_ids ?? []) closed.add(id); // FR-872 (Opus B1, Sol B1): blocked by the client
       for (const t of page.items) {
         if (seen.has(t.thread_id)) continue;
         seen.add(t.thread_id);
-        if (t.closed || t.blocked_by_me) gone.add(t.client_id);
+        if (t.closed || t.blocked_by_me) closed.add(t.client_id);
         else out.push(t);
       }
     }
-    return { threads: out.filter((t) => !gone.has(t.client_id)), hidden: gone };
+    const gone = new Set<string>([...closed, ...blocked.map((b) => b.id)]);
+    return { threads: out.filter((t) => !gone.has(t.client_id)), hidden: gone, closed };
   }, [data, blocked]);
+  // LS-952R2 B1: the same closed clients leave Roman's drafts count, here, on Home and on the drafts screen.
+  useEffect(() => {
+    if (data) rememberClosedClients(currentUser?.id, 'inbox', closed);
+  }, [data, closed, currentUser?.id]);
   const totalUnread = data?.pages[0]?.total_unread ?? 0;
 
   const rows: Row[] = useMemo(() => {

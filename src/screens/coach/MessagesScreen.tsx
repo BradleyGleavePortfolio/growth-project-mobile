@@ -13,6 +13,7 @@ import { useFocusEffect, useNavigation, NavigationProp, ParamListBase } from '@r
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
 import { useBlockedUsersStore } from '../../store/blockedUsersStore';
+import { rememberClosedClients } from '../../store/closedClientsStore';
 import { coachApi } from '../../services/api';
 import { subscribeToMessages } from '../../services/realtime';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -65,11 +66,13 @@ function LegacyCoachMessages() {
       const raw = res.data || {};
       const byClient: UnreadByClient = raw.by_client || raw.byClient || {};
       setUnreadByClient(byClient);
-      setClosedIds(Array.isArray(raw.closed_client_ids) ? raw.closed_client_ids : []); // absent on an older server
+      const closed: string[] = Array.isArray(raw.closed_client_ids) ? raw.closed_client_ids : []; // absent on an older server
+      setClosedIds(closed);
+      rememberClosedClients(currentUser?.id, 'legacy', closed); // LS-952R2 B1: Roman's drafts count leaves them out too
     } catch (err) {
       // Silent — keep previous counts
     }
-  }, []);
+  }, [currentUser?.id]);
 
   useEffect(() => {
     if (currentUser) {

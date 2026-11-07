@@ -18,11 +18,12 @@
  * requirement without burning the backend.
  */
 
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { coachAiExecutionApi } from '../api/coachAiExecutionApi';
 import type { AiActionDraftRow, ListPendingResponse } from '../api/types/coachAiExecution';
 import { useBlockedUsersStore } from '../store/blockedUsersStore';
+import { closedClientIdsFor, useClosedClientsStore } from '../store/closedClientsStore';
 
 /** Query-key prefix. Exported so mutations (approve / reject / invoke)
  *  can invalidate the cache via `queryClient.invalidateQueries`. */
@@ -61,8 +62,10 @@ export function draftClientIds(d: Pick<AiActionDraftRow, 'subject_user_id' | 'pa
  * KT-2 (LS-952 B2): the one rule for which drafts a coach sees and counts (Messages card, drafts screen, Home). It is
  * the server's queue rule (backend ai-approval.service.ts keepOnRoster) kept on the phone between reads: a draft with
  * words for a client this coach blocked leaves at once, from the block store blockSync fills, with no new read. A
- * workout or meal plan draft stays, as the server keeps it. Their block, a move to another coach and a draft quoting a
- * blocked person's chat message (withoutBlockedSources) are known only from the server, whose next answer leaves them out.
+ * workout or meal plan draft stays, as the server keeps it. LS-952R2 B1: a client whose chat Messages already heard is
+ * closed (their block: closed_client_ids or a closed thread, any page; closedClientsStore) leaves the same way. A move
+ * to another coach and a draft quoting a blocked person's chat message (withoutBlockedSources) are known only from the
+ * server, whose next answer leaves them out.
  */
 export function visibleDrafts(drafts: readonly AiActionDraftRow[], blocked: ReadonlySet<string>): AiActionDraftRow[] {
   if (blocked.size === 0) return [...drafts];
@@ -84,11 +87,17 @@ export function usePendingAiDrafts(
 ): UsePendingAiDraftsResult {
   const { enabled = true } = options;
   const blocked = useBlockedUsersStore((st) => st.blocked);
+  const me = useBlockedUsersStore((st) => st.userId);
+  const closedBySource = useClosedClientsStore((st) => st.bySource);
+  const hidden = useMemo(
+    () => new Set([...blocked.map((b) => b.id), ...closedClientIdsFor(closedBySource, me)]),
+    [blocked, closedBySource, me],
+  );
   const select = useCallback((res: ListPendingResponse): ListPendingResponse => {
-    if (!res || !Array.isArray(res.drafts) || blocked.length === 0) return res;
-    const drafts = visibleDrafts(res.drafts, new Set(blocked.map((b) => b.id)));
+    if (!res || !Array.isArray(res.drafts) || hidden.size === 0) return res;
+    const drafts = visibleDrafts(res.drafts, hidden);
     return drafts.length === res.drafts.length ? res : { ...res, drafts };
-  }, [blocked]);
+  }, [hidden]);
   return useQuery<ListPendingResponse, Error>({
     queryKey: COACH_AI_PENDING_DRAFTS_QUERY_KEY,
     queryFn: () => coachAiExecutionApi.listPending(),
