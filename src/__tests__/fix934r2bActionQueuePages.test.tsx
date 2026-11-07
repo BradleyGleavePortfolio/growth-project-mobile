@@ -43,7 +43,7 @@ jest.mock('../components/command-center/AlertRow', () => ({
 jest.mock('../components/command-center/MockDataBanner', () => ({ __esModule: true, default: () => null }));
 jest.mock('../components/roman/adjust/RomanAdjustmentsSection', () => ({ __esModule: true, default: () => null }));
 
-const rows = (type = 'missed_checkins'): ActionQueueItem[] => Array.from({ length: 101 }, (_, n) => ({
+const rows = (type: ActionQueueItem['alert_type'] = 'missed_checkins'): ActionQueueItem[] => Array.from({ length: 101 }, (_, n): ActionQueueItem => ({
   alert_id: `a${n}`, alert_type: n === 100 ? type : 'missed_checkins',
   client_id: `c${n}`, client_name: `Client${n}`, message: 'An alert is waiting.',
   dismissed_at: null, created_at: new Date(Date.UTC(2026, 10, 5, 12) - n * 60000).toISOString(),
@@ -62,7 +62,7 @@ beforeEach(() => {
   mockLoaded = [];
 });
 
-it.each(['missed_checkins', 'roman_urgent_reply'])('loads the older %s row and preserves its existing destination', async type => {
+it.each(['missed_checkins', 'roman_urgent_reply'] as const)('loads the older %s row and preserves its existing destination', async type => {
   const all = rows(type);
   mockQueue.mockImplementation(paged(all));
   const onSelectClient = jest.fn();
