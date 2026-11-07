@@ -24,16 +24,18 @@ const props = {
 };
 const flat = (node: { props: { style?: unknown } }): Record<string, any> => StyleSheet.flatten(node.props.style as any) ?? {};
 
-describe.each([320, 390])('FIX-948R1 drawing values at %i pt', (width) => {
+describe.each([320, 390])('FIX-948 drawing values at %i pt', (width) => {
   it.each([1, 1.3])('keeps 1–4 digit widths and the drawn amount face at %f text', async (fontScale) => {
     Object.assign(mockWindow, { width, fontScale });
     const view = await render(<QuantityPickerContent {...props} />);
-    for (const digits of ['1', '12', '150', '1500']) {
+    const amounts = ['1', '12', '150', '1500',
+      ...Array.from({ length: 10 }, (_, digit) => [1, 2, 3, 4].map((length) => String(digit).repeat(length))).flat()];
+    for (const digits of amounts) {
       await view.rerender(<QuantityPickerContent {...props} quantityInput={digits} />);
       const input = screen.getByLabelText('Food quantity');
       expect(flat(input)).toMatchObject({
         fontFamily: 'CormorantGaramond_500Medium', fontSize: 48, lineHeight: 60,
-        fontVariant: ['oldstyle-nums', 'tabular-nums'],
+        fontVariant: ['oldstyle-nums'],
         width: Math.ceil(digits.length * 28 * fontScale) + 12,
       });
       expect(input.props.value).toBe(digits);
@@ -44,7 +46,7 @@ describe.each([320, 390])('FIX-948R1 drawing values at %i pt', (width) => {
   it.each([1, 1.3])('uses the drawn metadata, tabs and gaps at %f text without changing fit', async (fontScale) => {
     Object.assign(mockWindow, { width, fontScale });
     await render(<QuantityPickerContent {...props} />);
-    expect(flat(screen.getByLabelText('Food quantity').parent!)).toMatchObject({ marginTop: 10 });
+    expect(flat(screen.getByLabelText('Food quantity').parent!)).toMatchObject({ marginTop: 12 });
     const unit = screen.getAllByText('g', { includeHiddenElements: true }).find((node) => node.props.accessibilityElementsHidden);
     expect(unit).toBeDefined();
     expect(flat(unit!)).toMatchObject({ fontFamily: 'Inter_400Regular', fontSize: 16, color: lightTokens.textMuted });
