@@ -1,5 +1,5 @@
 // KITCHEN-REFINE-M: exact ctx#457 CSS values, not new features or copy.
-import React from 'react';
+import React, { act } from 'react';
 import { Dimensions, StyleSheet } from 'react-native';
 import { fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -133,6 +133,19 @@ it.each([['Grocery list', GroceryListScreen], ['Shopping list', ShoppingListScre
     // TouchableOpacity's mocked native-driver opacity stays at its initial value.
     // The render harness checks the enabled computed opacity; Jest checks the state.
     expect(ui.getByRole('button', { name: 'Add item' }).props.accessibilityState?.disabled ?? ui.getByRole('button', { name: 'Add item' }).props.disabled).toBe(false);
+  },
+);
+
+it.each([['grocery', GroceryListScreen], ['shopping', ShoppingListScreen]] as const)(
+  'preserves the %s error state: cached checked rows must not expose Clear checked',
+  async (_kind, Screen) => {
+    jest.mocked(listsApi.getList).mockResolvedValue({ data: [{ ...item, is_checked: true }] } as Awaited<ReturnType<typeof listsApi.getList>>);
+    const ui = await mount(Screen);
+    await waitFor(() => expect(ui.getByRole('button', { name: 'Clear checked' })).toBeTruthy());
+    jest.mocked(listsApi.getList).mockRejectedValue(new Error('Network Error'));
+    await act(async () => { await clients[clients.length - 1].refetchQueries(); });
+    await waitFor(() => expect(ui.getByText(/Couldn't load (grocery|shopping) list\./)).toBeTruthy());
+    expect(ui.queryByRole('button', { name: 'Clear checked' })).toBeNull();
   },
 );
 
