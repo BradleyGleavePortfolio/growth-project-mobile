@@ -113,6 +113,13 @@ it('M18: lead-specific loading rows have drawn 45/88 percent bars, 14pt padding 
   expect(styles).toContainEqual(expect.objectContaining({ paddingVertical: 14 }));
 });
 
+it('M28: list loading rows keep the drawn flex spacer instead of stretching the name bar', async () => {
+  const ui = await render(<StyleCLoadingLines lead="ring" rows={5} />);
+  const spacers = ui.getAllByTestId('stylec-loading-spacer');
+  expect(spacers).toHaveLength(5);
+  spacers.forEach(spacer => expect(flat(spacer.props.style)).toMatchObject({ flex: 1 }));
+});
+
 it.each([['Grocery list', GroceryListScreen], ['Shopping list', ShoppingListScreen]] as const)(
   'M19-M20: %s scrolls the existing title and add row with its rows, keeping the disabled/enabled plus meaning',
   async (title, Screen) => {
