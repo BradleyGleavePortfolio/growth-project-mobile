@@ -71,6 +71,12 @@ it.each([
     await waitFor(() => expect(ui.getByRole('header', { name: title })).toBeTruthy());
     const back = ui.getByRole('button', { name: label }) as unknown as Host;
     expect(flat(back).minHeight).toBeGreaterThanOrEqual(44);
+    let row = back.parent;
+    while (row && !(typeof row.type === 'string' && flat(row).flexDirection === 'row')) row = row.parent;
+    expect(row).not.toBeNull();
+    // Serif ink may overflow its title box; the entire Back/Save row must
+    // win hit testing rather than yielding its last pixel to the next text.
+    expect(flat(row!).zIndex).toBe(1);
     let offset = 0;
     for (let node: Host | null = back; node; node = node.parent) {
       if (typeof node.type !== 'string') continue;
