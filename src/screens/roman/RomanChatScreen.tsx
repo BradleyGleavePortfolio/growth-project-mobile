@@ -138,7 +138,7 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
     clearSendError,
   } = useRomanChat(surface);
   // CHAT-DISCARD (owner 10-21): half-typed text stays with this chat on the device (src/lib/chatDrafts.ts).
-  const [draft, setDraft, { keyFor, keepFailed, dropFailed }] = useChatDraft('roman');
+  const [draft, setDraft, { keyFor, keepFailed, keepAside, dropFailed }] = useChatDraft('roman');
   // Shown after AI help is allowed for a message the server already stored.
   const [askAgainHint, setAskAgainHint] = useState(false);
   // The quick-start chip last sent (forest outline, prototype 70).
@@ -287,14 +287,16 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
         setDraft('');
       }
       if (outcome === 'noop') return;
-      // The key stays with the words in the box only while Send again may replay it; otherwise it goes.
+      // The key stays with these words while Send again may replay it, otherwise it goes. A chip whose prompt did not
+      // go into the box (another draft is there) keeps its key aside, so tapping it again replays it (LS-953 B2).
       if (outcome !== 'sent' && kept) {
         if (inBox) keepFailed(words, key);
+        else keepAside(words, key);
       } else if (keyFor(words) === key) {
-        dropFailed();
+        dropFailed(words);
       }
     },
-    [send, setDraft, keyFor, keepFailed, dropFailed],
+    [send, setDraft, keyFor, keepFailed, keepAside, dropFailed],
   );
 
   const onSend = useCallback(async () => {

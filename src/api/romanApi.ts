@@ -49,7 +49,7 @@
  *   - The send carries the draft's send-once key as the `Idempotency-Key` header when the caller gives one
  *     (SEND-ONCE-PHONE; the server's send-once rule is b#1228): a resend under the same key is answered from what
  *     the first send stored (its reply, or a coded no-reply frame), with no second model run. The body stays exactly
- *     `{ content }` (SendMessageDto is strict). A caller that gives no key (Copilot) sends no header, as before.
+ *     `{ content }` (SendMessageDto is strict). A caller that gives no key sends no header.
  *   - Errors are mapped to a typed RomanApiError union: unavailable (404 /
  *     feature-off), rateLimited (uncoded 429 + retryAfterSeconds), dailyCap
  *     (429 ROMAN_RATE_LIMIT / 503 ROMAN_CAPACITY_REACHED, HTTP or in-stream:

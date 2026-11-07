@@ -14,12 +14,14 @@ import { authEvents } from '../utils/authEvents';
  *
  * A send that failed in a way that may have reached the server keeps its device key with its text (Sol B1, m#841), so
  * sending the same text again, even after the chat was closed and opened again, replays that key and can never post twice.
+ * A failed send whose words never went into the box (a Roman quick-start chip beside a typed draft) keeps its key in
+ * `aside`, one per text, so the box's own key and every such send keep theirs (SEND-ONCE-PHONE, LS-953 B2).
  */
 export const CHAT_DRAFT_KEY_PREFIX = 'chat_draft_';
 
 /** A failed send whose key must be replayed while the box still holds the same text. */
 export interface FailedSend { text: string; key: string }
-export interface ChatDraft { text: string; failed?: FailedSend }
+export interface ChatDraft { text: string; failed?: FailedSend; aside?: FailedSend[] }
 
 const memory = new Map<string, ChatDraft>();
 let sweep: Promise<void> = Promise.resolve();
@@ -30,10 +32,15 @@ function parse(raw: string | undefined): ChatDraft | undefined {
   if (!raw) return undefined;
   try {
     const d = JSON.parse(raw) as Partial<ChatDraft>;
-    if (typeof d?.text !== 'string' || d.text.trim() === '') return undefined;
-    const f = d.failed;
-    const failed = f && typeof f.text === 'string' && typeof f.key === 'string' ? { text: f.text, key: f.key } : undefined;
-    return failed ? { text: d.text, failed } : { text: d.text };
+    if (typeof d?.text !== 'string') return undefined;
+    const sendOf = (f: unknown): FailedSend | undefined => {
+      const v = f as Partial<FailedSend> | null | undefined;
+      return v && typeof v.text === 'string' && typeof v.key === 'string' ? { text: v.text, key: v.key } : undefined;
+    };
+    const aside = Array.isArray(d.aside) ? d.aside.map(sendOf).filter((f): f is FailedSend => !!f) : [];
+    const failed = d.text.trim() !== '' ? sendOf(d.failed) : undefined;
+    if (d.text.trim() === '' && !aside.length) return undefined;
+    return { text: d.text, ...(failed ? { failed } : {}), ...(aside.length ? { aside } : {}) };
   } catch {
     return undefined;
   }
@@ -84,7 +91,7 @@ async function readLater(scope: string): Promise<ChatDraft | undefined> {
 
 function write(scope: string, draft: ChatDraft): void {
   const k = storageKey(scope);
-  if (draft.text.trim() === '') {
+  if (draft.text.trim() === '' && !draft.aside?.length) {
     memory.delete(scope);
     quietly(() => cacheStorage.delete(k));
     return;
@@ -99,8 +106,8 @@ function write(scope: string, draft: ChatDraft): void {
  */
 function withKept(kept: ChatDraft | undefined, passed: string): ChatDraft {
   if (!kept) return { text: passed };
-  if (kept.text.includes(passed.trim())) return kept;
-  return kept.failed ? { text: `${kept.text}\n\n${passed}`, failed: kept.failed } : { text: `${kept.text}\n\n${passed}` };
+  if (kept.text.trim() !== '' && kept.text.includes(passed.trim())) return kept;
+  return { ...kept, text: kept.text.trim() === '' ? passed : `${kept.text}\n\n${passed}` };
 }
 
 export type SetChatText = (next: string | ((current: string) => string)) => void;
@@ -109,14 +116,17 @@ export interface ChatSendKey {
   keyFor: (text: string) => string | undefined;
   /** Keep a failed send's key with its text, here and on the device. */
   keepFailed: (text: string, key: string) => void;
-  /** Forget a kept send's key (the text stays): its next send is a new send (SEND-ONCE-PHONE, a box not emptied). */
-  dropFailed: () => void;
+  /** Keep the key of a failed send whose words are not in the box (one per text), here and on the device. */
+  keepAside: (text: string, key: string) => void;
+  /** Forget every kept key for `text` (the box's text stays): its next send is a new send (SEND-ONCE-PHONE). */
+  dropFailed: (text: string) => void;
 }
 
 /**
  * A chat's text box, kept per signed-in user and per chat (`thread`, e.g. `coach:<clientId>`); `thread` null keeps it in
  * the component only. `initialText` (a passed draft, e.g. Send check-in) is added under kept text, never over it.
- * Emptying the box (every successful send) removes the kept text and any failed send's key with it.
+ * Emptying the box (every successful send) removes the kept text and the box's failed key with it; keys kept aside stay
+ * until their own send ends (`dropFailed`).
  */
 export function useChatDraft(thread: string | null, initialText?: string): [string, SetChatText, ChatSendKey] {
   const userId = useCurrentUser()?.id ?? null;
@@ -187,21 +197,32 @@ export function useChatDraft(thread: string | null, initialText?: string): [stri
   const setText = useCallback<SetChatText>((next) => {
     const prev = current();
     const text = typeof next === 'function' ? next(prev.text) : next;
-    put(text.trim() !== '' && prev.failed ? { text, failed: prev.failed } : { text });
+    const failed = text.trim() !== '' ? prev.failed : undefined;
+    put({ text, ...(failed ? { failed } : {}), ...(prev.aside ? { aside: prev.aside } : {}) });
   }, [current, put]);
 
   const keyFor = useCallback((text: string) => {
-    const failed = current().failed;
-    return failed?.text === text ? failed.key : undefined;
+    const d = current();
+    if (d.failed?.text === text) return d.failed.key;
+    return d.aside?.find((f) => f.text === text)?.key;
   }, [current]);
 
   const keepFailed = useCallback((text: string, key: string) => {
-    put({ text: current().text, failed: { text, key } });
+    put({ ...current(), failed: { text, key } });
   }, [current, put]);
 
-  const dropFailed = useCallback(() => {
-    if (current().failed) put({ text: current().text });
+  const keepAside = useCallback((text: string, key: string) => {
+    const d = current();
+    put({ ...d, aside: [...(d.aside ?? []).filter((f) => f.text !== text), { text, key }] });
   }, [current, put]);
 
-  return [shown.draft.text, setText, { keyFor, keepFailed, dropFailed }];
+  const dropFailed = useCallback((text: string) => {
+    const d = current();
+    const aside = d.aside?.filter((f) => f.text !== text);
+    if (d.failed?.text !== text && aside?.length === d.aside?.length) return;
+    const failed = d.failed?.text === text ? undefined : d.failed;
+    put({ text: d.text, ...(failed ? { failed } : {}), ...(aside?.length ? { aside } : {}) });
+  }, [current, put]);
+
+  return [shown.draft.text, setText, { keyFor, keepFailed, keepAside, dropFailed }];
 }
