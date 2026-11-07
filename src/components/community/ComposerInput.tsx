@@ -96,14 +96,23 @@ const ComposerInput = forwardRef<ComposerInputHandle, ComposerInputProps>(
     // path keeps the existing immediate-clear behaviour.
     const draft = trimmed;
     const key = sendKey.keyFor(draft) ?? generateIdempotencyKey();
+    // The key goes with these words before the request, beside the box that clears now (LS-953R2 B1): the same
+    // words sent again before this send ends (typed again, after a Back, a reopen or a restart) send it again.
+    sendKey.keepAside(draft, key);
     const result = onSubmit(draft, key);
     if (result && typeof result.then === 'function') {
       setField('');
       result
-        .catch((err: unknown) => {
-          if (valueRef.current !== '') return; // a new draft typed meanwhile: neither the words nor the key come back
+        .then(() => sendKey.dropFailed(draft), (err: unknown) => {
+          const keep = failedSendKeepsKey(err);
+          sendKey.dropFailed(draft);
+          // A new draft typed meanwhile: the words do not come back, and a kept key stays beside the box.
+          if (valueRef.current !== '') {
+            if (keep) sendKey.keepAside(draft, key);
+            return;
+          }
           setField(draft);
-          if (failedSendKeepsKey(err)) sendKey.keepFailed(draft, key);
+          if (keep) sendKey.keepFailed(draft, key);
         })
         .finally(() => {
           // Cleared only after the promise settles so the guard spans the whole
@@ -112,6 +121,7 @@ const ComposerInput = forwardRef<ComposerInputHandle, ComposerInputProps>(
         });
     } else {
       setField('');
+      sendKey.dropFailed(draft); // the call is already complete: nothing is left to send again
       // Synchronous path: the call is already complete, so release immediately.
       submittingRef.current = false;
     }

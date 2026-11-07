@@ -265,7 +265,14 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
       // SEND-ONCE-PHONE (b#1228): the draft's send-once key; Send again with the same words after a failure that
       // keeps it (lib/sendOnce.ts) replays it, so the server answers from what the first send stored.
       const words = text.trim();
-      const key = keyFor(words) ?? generateIdempotencyKey();
+      const held = keyFor(words);
+      const key = held ?? generateIdempotencyKey();
+      // The key goes with these words before the request (LS-953R2 B1): a Back, a reopen or a restart before this
+      // send ends finds it and sends it again. Only the answer that ends this send drops it (below).
+      if (!held && words !== '') {
+        if (fromChip) keepAside(words, key);
+        else keepFailed(words, key);
+      }
       let kept = false;
       const outcome = await send(text, { key, keep: () => { kept = true; } });
       // Clear the composer ONLY when the turn actually persisted; on a send
@@ -286,12 +293,17 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
       } else if (outcome === 'sent') {
         setDraft('');
       }
-      if (outcome === 'noop') return;
+      if (outcome === 'noop') {
+        if (!held && keyFor(words) === key) dropFailed(words); // nothing was sent under the new key
+        return;
+      }
       // The key stays with these words while Send again may replay it, otherwise it goes. A chip whose prompt did not
       // go into the box (another draft is there) keeps its key aside, so tapping it again replays it (LS-953 B2).
       if (outcome !== 'sent' && kept) {
-        if (inBox) keepFailed(words, key);
-        else keepAside(words, key);
+        if (inBox) {
+          if (fromChip) dropFailed(words); // the chip's words are in the box now: its key moves from aside to the box
+          keepFailed(words, key);
+        } else keepAside(words, key);
       } else if (keyFor(words) === key) {
         dropFailed(words);
       }

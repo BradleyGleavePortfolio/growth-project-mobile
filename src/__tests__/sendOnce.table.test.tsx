@@ -138,6 +138,10 @@ type Row = {
   wire: () => Sent[];
   /** The body the server sees for `words` (the key is never in it). */
   body: (words: string) => Record<string, unknown>;
+  /** This row's write at the wire (the path its first request is held on). */
+  path: RegExp;
+  /** Where its draft lasts: on the device (Back and a restart keep it) or in the screen (it ends when the screen closes). */
+  lasts: 'device' | 'screen';
 };
 
 const DM_FIELD = 'community-dmthread-composer-field';
@@ -165,6 +169,8 @@ const SEND_ONCE_PHONE_TABLE: Row[] = [
     again: (v) => press(v, 'community-dmthread-composer-send'),
     wire: () => postsTo(/\/community\/workspaces\/[^/]+\/dms\/coach-7\/messages$/),
     body: (words) => ({ body: words }),
+    path: /\/community\/workspaces\/[^/]+\/dms\/coach-7\/messages$/,
+    lasts: 'device',
   },
   {
     write: 'POST /community/workspaces/:workspaceId/posts',
@@ -188,6 +194,8 @@ const SEND_ONCE_PHONE_TABLE: Row[] = [
     again: (v) => press(v, 'community-composer-submit'),
     wire: () => postsTo(/\/community\/workspaces\/[^/]+\/posts$/),
     body: (words) => ({ title: 'Week one', body: words }),
+    path: /\/community\/workspaces\/[^/]+\/posts$/,
+    lasts: 'screen',
   },
   {
     write: 'POST /community/posts/:postId/comments',
@@ -208,6 +216,8 @@ const SEND_ONCE_PHONE_TABLE: Row[] = [
     again: (v) => press(v, 'community-thread-composer-send'),
     wire: () => postsTo(new RegExp(`/community/posts/${POST}/comments$`)),
     body: (words) => ({ body: words }),
+    path: new RegExp(`/community/posts/${POST}/comments$`),
+    lasts: 'screen',
   },
   {
     write: 'POST /community/challenges/:challengeId/comments',
@@ -227,6 +237,8 @@ const SEND_ONCE_PHONE_TABLE: Row[] = [
     again: (v) => press(v, 'community-challenge-composer-send'),
     wire: () => postsTo(/\/community\/challenges\/ch-1\/comments$/),
     body: (words) => ({ body: words }),
+    path: /\/community\/challenges\/ch-1\/comments$/,
+    lasts: 'screen',
   },
   {
     write: 'POST /roman/sessions/:id/messages',
@@ -249,6 +261,8 @@ const SEND_ONCE_PHONE_TABLE: Row[] = [
     },
     wire: romanTurns,
     body: (words) => ({ content: words }),
+    path: /\/roman\/sessions\/sess-1\/messages$/,
+    lasts: 'device',
   },
 ];
 
@@ -316,11 +330,35 @@ const OTHER_RESEND_PATHS: OtherPath[] = [
   },
 ];
 
+/**
+ * Hold the first request to `path` with no answer yet (LS-953R2 B1); `answer()` then ends it with no answer. Every
+ * other request gets no answer at once, as in every row.
+ */
+const holdFirst = (path: RegExp) => {
+  let end!: () => void;
+  const held = new Promise<never>((_resolve, reject) => { end = () => reject(NO_ANSWER); });
+  held.catch(() => undefined);
+  let first = true;
+  const take = (url: unknown) => {
+    if (!first || !path.test(String(url))) return false;
+    first = false;
+    return true;
+  };
+  mockPost.mockImplementation((url: unknown) => (take(url) ? held : Promise.reject(NO_ANSWER)));
+  fetchMock.mockImplementation(async (url: string) => {
+    if (take(url)) await held.catch(() => undefined);
+    throw new TypeError('Network request failed');
+  });
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+  // React Query lands a mutation's end on a timer tick: let it, so the screen can send again.
+  return { answer: async () => { await act(async () => { end(); await tick(); await tick(); }); } };
+};
+
 const realFetch = global.fetch;
 beforeEach(async () => {
   mockPost.mockReset().mockRejectedValue(NO_ANSWER); // every community write: no answer
   mockGet.mockReset().mockRejectedValue(NO_ANSWER); // reads the spies below do not answer
-  fetchMock.mockClear();
+  fetchMock.mockReset().mockImplementation(async () => { throw new TypeError('Network request failed'); });
   global.fetch = fetchMock as unknown as typeof fetch;
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(false);
@@ -406,6 +444,38 @@ describe('SEND-ONCE-PHONE table: the five writes the member can send again', () 
       expect(again.key).toBe(first.key); // a resend that makes a new key fails here
       expect(other.key).not.toBe(first.key);
       v.unmount();
+    },
+  );
+
+  // LS-953R2 B1 (class-first): each write keeps its key with its draft before its first request, so the same words
+  // sent before that request has any answer send the same key. A draft kept on the device is on the device by then
+  // (a restart reads it back: lib/chatDrafts) and survives Back and a reopen; a draft held in its screen is sent again
+  // there once the first send ends.
+  it.each(SEND_ONCE_PHONE_TABLE.map((row) => [row.write, row.lasts, row] as const))(
+    '%s: the key is kept with its draft (%s) before the first request has any answer',
+    async (_write, _lasts, row) => {
+      const hold = holdFirst(row.path);
+      let v = await row.open();
+      await row.fill(v, 'Same words');
+      await row.send(v);
+      await waitFor(() => expect(row.wire()).toHaveLength(1));
+      const [first] = row.wire();
+      if (row.lasts === 'device') {
+        await waitFor(() => expect([...mockDisk.values()].some((d) => d.includes(String(first.key)))).toBe(true));
+        await v.unmount(); // Back, then the chat opens again while the first send has no answer yet
+        v = await row.open();
+      }
+      await row.fill(v, 'Same words'); // typed again (a sent box clears) or still in the box
+      if (row.lasts === 'screen') await hold.answer(); // one screen sends one at a time: the first ends, no answer
+      await row.send(v);
+      await waitFor(() => expect(row.wire()).toHaveLength(2));
+      if (row.lasts === 'device') await hold.answer();
+
+      const again = row.wire()[1];
+      expect(again.body).toEqual(row.body('Same words'));
+      expect(again.key).toEqual(expect.stringMatching(UUID));
+      expect(again.key).toBe(first.key); // a key minted again for the same draft fails here
+      await v.unmount();
     },
   );
 });
