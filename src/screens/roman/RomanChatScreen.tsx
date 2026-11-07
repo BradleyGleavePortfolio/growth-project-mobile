@@ -76,6 +76,7 @@ import { useRomanChat } from './useRomanChat';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachlessClient } from '../../hooks/useCoachlessClient';
 import { logger } from '../../utils/logger';
+import { authEpoch, onAuthEpochChange } from '../../services/accountBinding';
 import { reportMessage, type RomanMessage, type RomanSurface } from '../../api/romanApi';
 import type { ReportReason } from '../../api/messagesApi';
 import MessageActionSheet from '../../components/messaging/MessageActionSheet';
@@ -125,6 +126,41 @@ export default function RomanChatScreen({
   return <RomanChatRoom surface={surface} />;
 }
 
+/** The chat a selection belongs to: this sign-in (auth epoch) and the open session. */
+function useChatKey(sessionId: string | null): string {
+  const [epoch, setEpoch] = useState(authEpoch);
+  useEffect(() => onAuthEpochChange(setEpoch), []);
+  return `${epoch}:${sessionId ?? ''}`;
+}
+
+type ChatBoundSet = (next: RomanMessage | null | ((cur: RomanMessage | null) => RomanMessage | null)) => void;
+
+/**
+ * A Roman reply picked in one chat (KT-13, FIX-950R1). It reads as null the moment the chat
+ * changes (no frame where an erased reply is still drawn or sent) and is then let go. The setter
+ * is stable and always files a pick under the chat open now, so a memoised hold handler works
+ * in every chat, and a late clear from an older send can only drop the reply it sent.
+ */
+function useChatBound(chat: string): [RomanMessage | null, ChatBoundSet] {
+  const [held, setHeld] = useState<{ chat: string; m: RomanMessage } | null>(null);
+  const chatRef = useRef(chat);
+  useEffect(() => {
+    chatRef.current = chat;
+    setHeld((h) => (h && h.chat !== chat ? null : h));
+  }, [chat]);
+  const set = useCallback<ChatBoundSet>(
+    (next) =>
+      setHeld((h) => {
+        const now = chatRef.current;
+        const cur = h && h.chat === now ? h.m : null;
+        const m = typeof next === 'function' ? next(cur) : next;
+        return m ? { chat: now, m } : null;
+      }),
+    [],
+  );
+  return [held && held.chat === chat ? held.m : null, set];
+}
+
 function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactElement {
   const navigation = useContext(NavigationContext);
   const { semanticColors: sc } = useTheme();
@@ -132,6 +168,7 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
   const coachless = useCoachlessClient();
   const {
     phase,
+    session,
     isFirstOpen,
     messages,
     sending,
@@ -156,9 +193,12 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
   const [reduceMotion, setReduceMotion] = useState(false);
   // ROMAN-HOLD-M (#197-D3): the held reply (menu open), the reply being
   // answered (quote strip over the composer) and the reply being reported.
-  const [actionTarget, setActionTarget] = useState<RomanMessage | null>(null);
-  const [replyTarget, setReplyTarget] = useState<RomanMessage | null>(null);
-  const [reportTarget, setReportTarget] = useState<RomanMessage | null>(null);
+  // KT-13 (FIX-950R1): each belongs to the chat and sign-in it was picked in, so an
+  // erase, Delete all, a fresh or another chat, or a sign-out drops it at once.
+  const chat = useChatKey(session?.id ?? null);
+  const [actionTarget, setActionTarget] = useChatBound(chat);
+  const [replyTarget, setReplyTarget] = useChatBound(chat);
+  const [reportTarget, setReportTarget] = useChatBound(chat);
 
   const listRef = useRef<FlatList<RomanMessage>>(null);
   // Last assistant message id we announced to assistive tech, so a re-render
@@ -283,9 +323,10 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
       // but only when the composer is empty: it never replaces a typed draft.
       if (fromChip) {
         if (outcome === 'send-failed') setDraft((d) => (d.trim() === '' ? text : d));
-      } else if (outcome === 'sent') {
-        setDraft('');
-        // Only the reply that went drops its quote; a failed send keeps both.
+      } else if (outcome === 'sent' || outcome === 'stored-no-reply') {
+        if (outcome === 'sent') setDraft('');
+        // The quote goes once: a turn the server stored (answered or not) carries it,
+        // so only the reply that went drops it; a failed send keeps both.
         if (quoted) setReplyTarget((r) => (r?.id === quoted.id ? null : r));
       }
     },
