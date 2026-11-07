@@ -59,6 +59,7 @@ import { z } from 'zod';
 import axios from 'axios';
 import api from '../services/api';
 import { generateIdempotencyKey } from '../utils/idempotency';
+import { EXERCISE_UNITS } from '../utils/workout/exerciseUnit';
 
 // ─── Bounds (mirror workout-builder-autosave.dto.ts byte-for-byte) ───────────
 
@@ -88,6 +89,8 @@ export const UpsertExerciseRowSchema = z
     order: z.number().int().min(1),
     sets: z.number().int().min(1).max(SETS_MAX),
     reps_or_duration_seconds: z.number().int().min(1),
+    // TIMED-SETS-BE (b#1211): z.enum(PLAN_EXERCISE_UNITS).optional(), as the server has it.
+    unit: z.enum(EXERCISE_UNITS).optional(),
     weight_lbs: z.number().min(0).nullable().optional(),
     rest_seconds: z.number().int().min(0).nullable().optional(),
     superset_group_id: z.string().min(1).nullable().optional(),

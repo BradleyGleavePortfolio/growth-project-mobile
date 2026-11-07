@@ -24,6 +24,10 @@ export interface RomanVoiceLogReadbackProps {
   weight: number;
   /** Parsed rep count. */
   reps: number;
+  /** LS-928 B3: the set is counted in seconds. */
+  timed?: boolean;
+  /** LS-928 B3: a body-weight exercise (an unloaded set reads "Body weight"). */
+  bodyWeight?: boolean;
   /** default | celebration (voice PR) | error (could not parse). */
   mode: RomanVoiceMode;
   testID?: string;
@@ -32,11 +36,13 @@ export interface RomanVoiceLogReadbackProps {
 export default function RomanVoiceLogReadback({
   weight,
   reps,
+  timed,
+  bodyWeight,
   mode,
   testID,
 }: RomanVoiceLogReadbackProps): React.ReactElement {
   const crop = mode === 'celebration' ? 'smile' : 'neutral';
-  const line = romanVoiceLog({ weight, reps, mode });
+  const line = romanVoiceLog({ weight, reps, timed, bodyWeight, mode });
   return (
     <View style={styles.row} testID={testID} accessibilityRole="summary">
       {/* FACE+VOICE: small avatar co-located with the §2.9 readback copy. */}
