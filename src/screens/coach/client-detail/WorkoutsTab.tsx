@@ -6,6 +6,7 @@ import type { ClientDetailStyles } from './styles';
 import type { SessionExercise, WorkoutSession } from './types';
 import { formatCoachSessionSets } from '../../../utils/workout/workoutLogging';
 import { dayStart, instantDay } from '../../../utils/workout/workoutDay';
+import { setVolume } from '../../../utils/workout/exerciseUnit';
 import { AdjustForClientEntry } from '../../../components/coach/ai-entry/AdjustForClient';
 import { spacing, typography } from '../../../theme/tokens';
 
@@ -26,7 +27,7 @@ export function WorkoutsTab({
   styles: ClientDetailStyles;
 }) {
   const { semanticColors: sc } = useTheme();
-  const parseExercises = (json: string): (SessionExercise & { rpe?: number | null })[] => {
+  const parseExercises = (json: string): (SessionExercise & { rpe?: number | null; unit?: string })[] => {
     try { return JSON.parse(json); } catch { return []; }
   };
 
@@ -129,7 +130,7 @@ export function WorkoutsTab({
                 </View>
                 <View style={styles.sessionStat}>
                   <Text style={heading}>
-                    {Math.round(exList.reduce((s, e) => s + e.sets.reduce((ss, st) => ss + (st.completed ? st.weight * st.reps : 0), 0), 0))}
+                    {Math.round(exList.reduce((s, e) => s + e.sets.reduce((ss, st) => ss + (st.completed ? setVolume(st.weight, st.reps, e.unit) : 0), 0), 0))}
                   </Text>
                   <Text style={meta}>Volume (lb)</Text>
                 </View>
@@ -140,7 +141,7 @@ export function WorkoutsTab({
               {exList.map((e, i) => (
                 <View key={`${e.exerciseId}-${i}`} style={{ marginTop: i === 0 ? 0 : 8 }} testID={`coach-session-${session.id}-exercise-${i}`}>
                   <Text style={[body, { color: sc.textPrimary }]}>{e.exerciseName}</Text>
-                  <Text style={body}>{formatCoachSessionSets(e.sets)}</Text>
+                  <Text style={body}>{formatCoachSessionSets(e.sets, e.unit)}</Text>
                   {typeof e.rpe === 'number' ? <Text style={meta}>{`RPE ${e.rpe}`}</Text> : null}
                   {e.notes ? (
                     <Text style={body}>Client note: {e.notes}</Text>
