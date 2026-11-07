@@ -153,6 +153,21 @@ it('M21-M24: both lists share the drawn overline, scalable row, normal serif tra
   expect(styles.clearBtn).toMatchObject({ paddingVertical: 16 });
 });
 
+it.each([1, 1.3])('M25-M26: the wrapped form and check gutter follow the drawing at %sx text', (fontScale) => {
+  const styles = makeListStyles({
+    background: lightTokens.bgPrimary, surface: lightTokens.bgPrimary, primary: lightTokens.accent,
+    textPrimary: lightTokens.textPrimary, textMuted: lightTokens.textMuted, textOnPrimary: lightTokens.textOnAccent,
+    border: lightTokens.border, error: lightTokens.textMuted,
+  }, fontScale);
+  expect(styles.addInputs).toMatchObject({ columnGap: 14, rowGap: 14, alignItems: 'flex-end' });
+  expect(styles.nameInput.paddingTop).toBeCloseTo((48 - 18 * 1.21) * fontScale - 10);
+  expect(styles.qtyInput.paddingTop).toBeCloseTo((48 - 16 * 1.21) * fontScale - 10);
+  expect(styles.unitInput.paddingTop).toBeCloseTo((48 - 16 * 1.21) * fontScale - 10);
+  expect(styles.qtyInput.paddingHorizontal).toBe(0);
+  expect(styles.unitInput.paddingHorizontal).toBe(0);
+  expect(styles.checkbox).toMatchObject({ width: 44, height: 44, marginLeft: -2, alignItems: 'flex-start' });
+});
+
 it('M05-M12: prep uses the drawn paper, overline, names, metadata, ingredients and large-text Add all height', async () => {
   const ui = await mount(PrepGuideScreen);
   await waitFor(() => expect(ui.getByText('Lentil soup')).toBeTruthy());
@@ -165,5 +180,6 @@ it('M05-M12: prep uses the drawn paper, overline, names, metadata, ingredients a
   expect(flat(ui.getByText('Red lentils').props.style)).toMatchObject({ lineHeight: 22.4, letterSpacing: 0 });
   expect(flat(ui.getByText('400 g').props.style)).toMatchObject({ letterSpacing: 0, fontVariant: ['tabular-nums'] });
   expect(flat(ui.getByRole('button', { name: 'Add all ingredients' }).props.style).minHeight).toBeCloseTo(65.52);
+  expect(flat(ui.getByText('Add all').props.style).letterSpacing).toBe(0);
   expect(flat(ui.getByText('This week').props.style).letterSpacing).toBe(0.3);
 });
