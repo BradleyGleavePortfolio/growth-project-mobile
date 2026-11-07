@@ -177,6 +177,7 @@ it.each([1, 1.3])('M25-M26: the wrapped form and check gutter follow the drawing
   expect(styles.qtyInput.paddingTop).toBeCloseTo((48 - 16 * 1.21) * fontScale - 10);
   expect(styles.unitInput.paddingTop).toBeCloseTo((48 - 16 * 1.21) * fontScale - 10);
   expect(styles.qtyInput.paddingHorizontal).toBe(0);
+  expect(flat(styles.qtyInput).fontVariant).toBeUndefined();
   expect(styles.unitInput.paddingHorizontal).toBe(0);
   expect(styles.checkbox).toMatchObject({ width: 44, height: 44, marginLeft: -2, alignItems: 'flex-start' });
 });
