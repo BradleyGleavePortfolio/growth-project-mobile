@@ -9,6 +9,7 @@ import type {
   AssignmentExercise,
   WorkoutPlanExercise,
 } from '../../api/workoutBuilderApi';
+import { unitField, type ExerciseUnit } from './exerciseUnit';
 
 /** A frozen assignment row or a live plan row (older replies). */
 type SeedRow = AssignmentExercise | WorkoutPlanExercise;
@@ -24,6 +25,10 @@ export interface SessionExerciseSeed {
   weightLbs?: number;
   /** The coach's note for this exercise, shown during the live workout. */
   coachNote?: string;
+  /** TIMED-SETS-M: the row's unit as the server sent it; absent reads reps. */
+  unit?: ExerciseUnit;
+  /** The row's order on the assignment, sent back as plan_order (b#1219). */
+  planOrder?: number;
 }
 
 export function buildActiveWorkoutExercises(
@@ -49,6 +54,8 @@ function exerciseToSessionSeed(ex: SeedRow): SessionExerciseSeed {
     // The coach's weight as written, 0 (bodyweight) included; null = left empty.
     ...(typeof ex.weight_lbs === 'number' && ex.weight_lbs >= 0 ? { weightLbs: ex.weight_lbs } : {}),
     ...(ex.notes && ex.notes.trim() ? { coachNote: ex.notes.trim() } : {}),
+    ...unitField(ex.unit),
+    ...(typeof ex.order === 'number' ? { planOrder: ex.order } : {}),
   };
 }
 
