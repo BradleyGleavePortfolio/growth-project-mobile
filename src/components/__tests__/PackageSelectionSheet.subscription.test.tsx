@@ -44,7 +44,8 @@ jest.mock('../../services/api', () => ({
 }));
 const mockGetEntitlement = jest.fn();
 jest.mock('../../api/clientPaymentsApi', () => ({
-  clientPaymentsApi: { getEntitlement: () => mockGetEntitlement() },
+  // EXPO_PUBLIC_FF_CLIENT_BILLING_V2: the success moment (PlanActiveMoment.tsx:169) reads getPurchases; here it is unknown.
+  clientPaymentsApi: { getEntitlement: () => mockGetEntitlement(), getPurchases: async () => ({ ok: false }) },
 }));
 const mockCapture = jest.fn();
 jest.mock('../../services/sentry', () => ({ captureError: (...a: unknown[]) => mockCapture(...a) }));

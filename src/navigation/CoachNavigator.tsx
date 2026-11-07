@@ -71,11 +71,8 @@ import ClientConsultationScreen from '../screens/coach/ClientConsultationScreen'
 import CoachSafetyAlertScreen from '../screens/coach/CoachSafetyAlertScreen';
 import ClientPaymentsScreen from '../screens/coach/ClientPaymentsScreen';
 import CoachWorkoutBuilderScreen from '../screens/coach/CoachWorkoutBuilderScreen';
-import CoachBulkInviteScreen from '../screens/coach/CoachBulkInviteScreen';
-// Email Pipeline v1 — bulk-invite + invites list (per-recipient delivery view).
-// These complement the legacy CoachBulkInviteScreen / InviteCodesScreen;
-// the v1 surfaces target the email-delivery contract on
-// feat/email-pipeline-v1-backend.
+// Email Pipeline v1: bulk invite (the one invite-by-email flow, INVITE-ONE-M)
+// and the invites list (per-recipient delivery view).
 import BulkInviteScreen from '../screens/coach/BulkInviteScreen';
 import CoachInvitesScreen from '../screens/coach/CoachInvitesScreen';
 // Concierge Phase 1 — scheduling coach surfaces.
@@ -113,7 +110,6 @@ const GatedCreditPackCheckoutScreen = withNonP2PPurchaseGate(CreditPackCheckoutS
 // shell so the §2.6 celebration can overlay any tab when the coach's first
 // payment INSERT lands (flag-gated; MMKV once-only).
 import FirstPaymentWowHost from '../screens/coach/ed/FirstPaymentWowHost';
-import CoachAiConsentHost from '../components/ai/CoachAiConsentHost';
 import CoachSetupScreen from '../screens/coach/setup/CoachSetupScreen';
 // Stream 2 — Coach AI execution drafts inbox (draft.client_message,
 // draft.assign_workout, draft.assign_meal_plan, draft.send_notification).
@@ -231,8 +227,7 @@ export type ClientsStackParamList = {
   ClientPayments:       { clientId: string; clientName?: string };
   /** AIB-FINISH-127 job 6: clientId/clientName open a client's copy with Ask AI using that client's context. */
   CoachWorkoutBuilder:  { planId?: string; openAi?: boolean; clientId?: string; clientName?: string } | undefined;
-  CoachBulkInvite:      undefined;
-  /** Email Pipeline v1 — bulk invite v2 surface (per-recipient delivery). */
+  /** The one invite-by-email flow: paste (email, name, note) or CSV, preview, send (INVITE-ONE-M). */
   BulkInvite:           undefined;
   /** Email Pipeline v1 — invites list with delivery + resend / revoke. */
   CoachInvites:         undefined;
@@ -455,11 +450,7 @@ function ClientsStackNavigator() {
         name="CoachWorkoutBuilder"
         component={CoachWorkoutBuilderScreen}
       />
-      <ClientsStack.Screen
-        name="CoachBulkInvite"
-        component={CoachBulkInviteScreen}
-      />
-      {/* Email Pipeline v1 — v2 bulk invite surface + invites list. */}
+      {/* Email Pipeline v1: bulk invite (every invite entry opens it) + invites list. */}
       <ClientsStack.Screen
         name="BulkInvite"
         component={BulkInviteScreen}
@@ -1061,8 +1052,6 @@ export default function CoachNavigator() {
         })}
       />
     </Tab.Navigator>
-    {/* COACH-AI-CONSENT: asked once over coach Home, when the server says never asked. */}
-    <CoachAiConsentHost />
     </CoachTeamEntryContext.Provider>
     </FirstPaymentWowHost>
   );

@@ -67,16 +67,19 @@ it('opens before the first answer with the prototype title, paired actions and P
   expect(api.grantRoman).not.toHaveBeenCalled();
 });
 
-it('stacks Allow and Not now at the same full width so neither label truncates', async () => {
+// FR-913R2 (LS-E4R2 B2, C3 Style B): Allow stays full width; Not now is now a centred underlined link under it
+// (it replaced prototype 68's framed Not now), so neither label truncates.
+it('stacks a full-width Allow over a centred Not now link', async () => {
   const { StyleSheet } = jest.requireActual('react-native');
   const r = await render(<RomanConsentGate surface="client" api={makeApi({ kind: 'ok', status: OFF })} />);
   await waitFor(() => expect(r.getByTestId('roman-consent-gate-allow')).toBeTruthy());
   expect(StyleSheet.flatten(r.getByTestId('roman-consent-gate-actions').props.style)?.flexDirection).not.toBe('row');
-  for (const id of ['roman-consent-gate-allow', 'roman-consent-gate-not-now']) {
-    const st = StyleSheet.flatten(r.getByTestId(id).props.style);
-    expect(st.alignSelf).toBe('stretch');
-    expect(st.flex).toBeUndefined();
-  }
+  const allow = StyleSheet.flatten(r.getByTestId('roman-consent-gate-allow').props.style);
+  expect(allow.alignSelf).toBe('stretch');
+  expect(allow.flex).toBeUndefined();
+  const notNow = StyleSheet.flatten(r.getByTestId('roman-consent-gate-not-now').props.style);
+  expect(notNow.alignSelf).toBe('center');
+  expect(notNow.borderWidth ?? 0).toBe(0);
 });
 
 it.each([

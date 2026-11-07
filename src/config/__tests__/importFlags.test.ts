@@ -26,13 +26,25 @@ const RECONSTRUCT_HOOK = fs.readFileSync(
   'utf8',
 );
 
+// Pins EXPO_PUBLIC_FF_EXTENSION_IMPORT and EXPO_PUBLIC_FF_IMPORT_REVIEW off: these two check the shipped default.
+const shippedDefault = (key: string): typeof featureFlags => {
+  const saved = process.env[key];
+  delete process.env[key];
+  let flags = featureFlags;
+  jest.isolateModules(() => {
+    flags = require('../featureFlags').featureFlags;
+  });
+  if (saved !== undefined) process.env[key] = saved;
+  return flags;
+};
+
 describe('importer flags default OFF', () => {
   it('extensionImport is false at runtime', () => {
-    expect(featureFlags.extensionImport).toBe(false);
+    expect(shippedDefault('EXPO_PUBLIC_FF_EXTENSION_IMPORT').extensionImport).toBe(false);
   });
 
   it('importReview is false at runtime', () => {
-    expect(featureFlags.importReview).toBe(false);
+    expect(shippedDefault('EXPO_PUBLIC_FF_IMPORT_REVIEW').importReview).toBe(false);
   });
 
   it('importReview reads its env var with a hard false default, not isDev', () => {

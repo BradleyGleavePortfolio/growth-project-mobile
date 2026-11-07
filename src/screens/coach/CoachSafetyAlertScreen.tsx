@@ -15,6 +15,8 @@
  * > Actions, as before 57d. The alert opens with one warning haptic
  * (docs/HAPTICS.md). Light and dark from the theme; the client's words stay
  * out of analytics capture (`ph-no-capture`).
+ * SAFETY-GOLD-M (owner #197-E3): the alert wears safety gold (src/theme/safetyGold.ts): the message sits on the
+ * #FFF8EC card with the deep gold #6B4F1A edge, and the fixed line is in deep gold; Message stays forest.
  */
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -32,6 +34,7 @@ import { HapticService } from '../../ui/haptics/haptics.service';
 import { QuietLoading } from '../../ui/states/QuietStates';
 import { useTheme } from '../../theme/useTheme';
 import { radius, spacing, typography } from '../../theme/tokens';
+import { safetyGold } from '../../theme/safetyGold';
 
 /** Owner 57, C6a, #ROMAN-CRISIS-ALERT: the one fixed line, word for word. */
 export const SAFETY_ALERT_SUMMARY: Record<SafetyAlertType, string> = {
@@ -144,7 +147,7 @@ export default function CoachSafetyAlertScreen({ route, navigation }: Props): Re
           ) : null}
           {quote ? (
             <View
-              style={[styles.quote, { backgroundColor: sc.bgSurface, borderLeftColor: sc.border }]}
+              style={[styles.quote, { backgroundColor: safetyGold.card, borderLeftColor: safetyGold.edge }]}
               testID="coach-safety-alert-quote"
             >
               <Text style={[styles.quoteText, { color: sc.textPrimary }]} selectable>
@@ -152,7 +155,7 @@ export default function CoachSafetyAlertScreen({ route, navigation }: Props): Re
               </Text>
             </View>
           ) : null}
-          <Text style={[styles.summary, { color: sc.textPrimary }]} testID="coach-safety-alert-summary">
+          <Text style={[styles.summary, { color: safetyGold.text }]} testID="coach-safety-alert-summary">
             {SAFETY_ALERT_SUMMARY[alertType].replace('{first name}', first || clientName)}
           </Text>
         </View>

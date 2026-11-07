@@ -180,6 +180,14 @@ export const CommunityCohortSummarySchema = z
     kind: z.string().optional(),
     member_count: z.number().int().nonnegative(),
     my_role: z.enum(COMMUNITY_MEMBER_ROLES),
+    // SC-BE2 (backend#1137): the caller's unread messages in this space, 0..99 (99 means 99 or more). Optional (older
+    // backends do not send it); a bad value is dropped (no badge) rather than failing the list. The cast keeps one
+    // input/output type, which call<T>(z.ZodType<T>) needs; the runtime schema is the .catch one.
+    unread_count: z.number().int().nonnegative().optional().catch(undefined) as unknown as z.ZodOptional<z.ZodNumber>,
+    // FR-871R7 (m#871 B871-1; SC-PURPOSE-BE, backend#1178): what the space is for, as its coach wrote it (up to 2,000
+    // characters), or null. Absent until that backend lands, and then no purpose line; a bad value is dropped the same
+    // way (no purpose line) rather than failing the list. Same cast as unread_count.
+    description: z.string().nullable().optional().catch(undefined) as unknown as z.ZodOptional<z.ZodNullable<z.ZodString>>,
   })
   .passthrough();
 export type CommunityCohortSummary = z.infer<

@@ -34,7 +34,8 @@ const mockDay = {
 };
 jest.mock('../../../config/featureFlags', () => {
   // A getter in the object literal would be read once by the spread helper; define it after.
-  const flags = { ...jest.requireActual('../../../config/featureFlags').featureFlags, clientHomeRings: true };
+  // Pins EXPO_PUBLIC_FF_C3_STYLE_B off: this file opens Roman from Home (HomeHeaderActions.tsx:138 sends Style B to the Messages list).
+  const flags = { ...jest.requireActual('../../../config/featureFlags').featureFlags, clientHomeRings: true, c3StyleB: false };
   Object.defineProperty(flags, 'romanChat', { get: () => mockRomanChat });
   return { featureFlags: flags };
 });
@@ -123,7 +124,14 @@ it('no build profile switches the flag on and it defaults off, so merging change
     const value = String(profile.env?.EXPO_PUBLIC_FF_CLIENT_HOME_RINGS ?? '').trim().toLowerCase();
     expect([name, ['1', 'true', 'yes', 'on'].includes(value)]).toEqual([name, false]);
   }
-  expect(jest.requireActual('../../../config/featureFlags').featureFlags.clientHomeRings).toBe(false);
+  // Pins EXPO_PUBLIC_FF_CLIENT_HOME_RINGS off: this test checks the shipped default.
+  const saved = process.env.EXPO_PUBLIC_FF_CLIENT_HOME_RINGS;
+  delete process.env.EXPO_PUBLIC_FF_CLIENT_HOME_RINGS;
+  try {
+    jest.isolateModules(() => expect(jest.requireActual('../../../config/featureFlags').featureFlags.clientHomeRings).toBe(false));
+  } finally {
+    if (saved !== undefined) process.env.EXPO_PUBLIC_FF_CLIENT_HOME_RINGS = saved;
+  }
 });
 
 it('coached: three dials with their own numbers and one forest button', async () => {

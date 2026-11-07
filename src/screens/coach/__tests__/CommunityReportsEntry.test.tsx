@@ -24,6 +24,10 @@ jest.mock('@react-navigation/native', () => {
 
 import api from '../../../services/api';
 import { CommunityReportsEntry } from '../CommunityReportsEntry';
+import { featureFlags } from '../../../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_COACH_TABS_V2 off: the queue opens over Clients here, the five-tab layout (with six tabs it sits in Messages).
+jest.replaceProperty(featureFlags, 'coachTabsV2', false);
 
 const http = { get: api.get as jest.Mock };
 

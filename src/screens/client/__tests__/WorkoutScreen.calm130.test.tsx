@@ -236,10 +236,10 @@ describe('Train tab: one forest action and every route kept (TRAIN-TAB-FIN-130)'
 
   it('weights read lb, the week count is tabular ink, labels are sentence case, and no text is below 11 pt', async () => {
     mockGetAll.mockResolvedValue({ data: [lifted('s1')] });
-    mockGetVolume.mockResolvedValue({ data: [{ muscle_group: 'chest', total_volume: 1200, period: 'week' }] });
+    // LS-928R2 B2: the muscle breakdown comes from the same sets as the chart.
     const view = await render(<WorkoutScreen />);
-    await waitFor(() => expect(view.getByText('1,200 lb')).toBeTruthy());
-    expect(view.getByText('500 lb')).toBeTruthy();
+    await waitFor(() => expect(view.getByLabelText('Chest progress').props.accessibilityValue.text).toBe('500 lb'));
+    expect(view.getAllByText('500 lb')).toHaveLength(2);
     expect(view.getByText('Last 8 weeks, lb lifted')).toBeTruthy();
     expect(view.queryByText(/\blbs\b/)).toBeNull();
     for (const label of ['My routines', 'Recent workouts', 'This week', 'Training volume', 'Muscle breakdown']) {

@@ -33,6 +33,8 @@ jest.mock('../theme/useTheme', () => ({
 
 import { ProtectedScreen } from '../entitlements/ProtectedScreen';
 import * as Provider from '../entitlements/EntitlementProvider';
+import { featureFlags } from '../config/featureFlags';
+
 
 type Ctx = ReturnType<typeof Provider.useEntitlement>;
 
@@ -54,6 +56,11 @@ function mockEntitlement(ctx: Partial<Ctx>) {
 }
 
 const Child = () => <Text testID="paid-content">Paid feature</Text>;
+
+beforeEach(() => {
+  // Pins EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES off: this file is the paywall gate; iosNonP2PSurfacesMatrix covers the hidden one.
+  jest.replaceProperty(featureFlags, 'iosHideNonP2PPurchases', false);
+});
 
 afterEach(() => {
   jest.restoreAllMocks();

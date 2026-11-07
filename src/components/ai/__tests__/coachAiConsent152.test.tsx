@@ -7,6 +7,8 @@
 import React from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { createHash } from 'crypto';
+import { existsSync, readFileSync } from 'fs';
+import { join } from 'path';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 jest.mock('../../../services/sentry', () => ({ captureError: jest.fn() }));
@@ -30,7 +32,6 @@ jest.mock('@expo/vector-icons', () => ({
 }));
 jest.mock('../../../ui/skeletons/Skeleton', () => ({ Skeleton: () => null }));
 
-import CoachAiConsentHost from '../CoachAiConsentHost';
 import AiRefusalNotice, { type AiRefusalNoticeProps } from '../AiRefusalNotice';
 import RomanConsentGate from '../../roman/RomanConsentGate';
 import RomanChatScreen from '../../../screens/roman/RomanChatScreen';
@@ -47,7 +48,6 @@ import { coachAiConsentApi, markCoachAskedAtSignUp, parseCoachAiConsentStatus, t
 import { ROMAN_LOADING_A11Y_LABEL } from '../../roman/romanVoice';
 import { COACH_AI_CONSENT_COPY as COPY, COACH_AI_CONSENT_COPY_SHA256 } from '../../../lib/ai/coachAiConsentCopy';
 import { aiRefusalCopy, aiRefusalFromHttp, aiRefusalFromStreamCode, aiRefusalOf } from '../../../lib/ai/aiRefusal';
-import { HapticService } from '../../../ui/haptics/haptics.service';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
 import http from '../../../services/api';
 
@@ -60,7 +60,6 @@ function makeApi(state: CoachAiConsentState) {
     withdraw: jest.fn(async () => ok('withdrawn')),
   };
 }
-const ASKED: CoachAiConsentState[] = ['declined', 'granted', 'withdrawn'];
 const TYPED_403 = Object.assign(new Error('HTTP 403'), { isAxiosError: true, response: { status: 403, data: { code: 'coach_ai_consent_required', message: 'Turn on Roman' } } });
 const OFF: CoachAiConsentState[] = ['not_asked', 'declined', 'withdrawn'];
 
@@ -112,44 +111,16 @@ describe('words and contract', () => {
   });
 });
 
-describe('the one-time sheet over coach Home', () => {
-  it('opens for a coach never asked; Allow grants once with a success haptic', async () => {
+describe('the one-time sheet over coach Home (retired, STORE-E4)', () => {
+  it('the coach app never opens an AI sheet on app open: a coach is asked the first time Roman opens', async () => {
+    const nav = readFileSync(join(__dirname, '../../../navigation/CoachNavigator.tsx'), 'utf8');
+    expect(nav).not.toMatch(/CoachAiConsentHost|CoachAiConsentSheet/);
+    expect(existsSync(join(__dirname, '../CoachAiConsentHost.tsx'))).toBe(false);
+    // The ask that stays: the "Roman is off" card (CAC-5) inside Roman.
     const api = makeApi('not_asked');
-    const success = jest.spyOn(HapticService, 'success');
-    const r = await render(<CoachAiConsentHost api={api} />);
-    expect(await r.findByText(COPY.paragraph)).toBeTruthy();
-    expect(r.getByRole('header', { name: COPY.title })).toBeTruthy();
-    await fireEvent.press(r.getByTestId('coach-ai-consent-once-allow'));
-    await waitFor(() => expect(r.queryByText(COPY.paragraph)).toBeNull());
-    expect(api.grant).toHaveBeenCalledTimes(1);
-    expect(success).toHaveBeenCalledTimes(1);
-    expect(api.decline).not.toHaveBeenCalled();
-  });
-
-  it('Not now records the decline and closes', async () => {
-    const api = makeApi('not_asked');
-    const r = await render(<CoachAiConsentHost api={api} />);
-    await fireEvent.press(await r.findByText(COPY.notNow));
-    expect(api.decline).toHaveBeenCalledTimes(1);
+    const r = await render(<RomanConsentGate surface="coach" coachApi={api}><Text>room</Text></RomanConsentGate>);
+    expect(await r.findByText('Roman is off')).toBeTruthy();
     expect(api.grant).not.toHaveBeenCalled();
-    expect(r.queryByText(COPY.paragraph)).toBeNull();
-  });
-
-  it.each(ASKED)('never opens once the server says %s', async (state) => {
-    const api = makeApi(state);
-    const r = await render(<CoachAiConsentHost api={api} />);
-    await waitFor(() => expect(api.getStatus).toHaveBeenCalledTimes(1));
-    expect(r.queryByText(COPY.paragraph)).toBeNull();
-  });
-
-  it('asks nothing of a sub-coach or of the account that just saw the sign-up box', async () => {
-    const api = makeApi('not_asked');
-    mockUser = { id: 'sub-1', role: 'sub_coach' };
-    await render(<CoachAiConsentHost api={api} />);
-    mockUser = { id: 'coach-1', role: 'coach' };
-    markCoachAskedAtSignUp('coach-1');
-    await render(<CoachAiConsentHost api={api} />);
-    expect(api.getStatus).not.toHaveBeenCalled();
   });
 });
 

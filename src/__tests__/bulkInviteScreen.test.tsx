@@ -3,14 +3,14 @@
  *
  * Covers:
  *   - Renders in paste mode and shows the paste input.
- *   - Pasted emails are parsed into valid/invalid groups, the parsed
- *     summary surfaces both counts, and invalid display-unsafe rows
- *     are stripped of control chars.
- *   - Submit hits `invitesApi.bulkInvite` with the cleaned valid list
- *     (the api layer translates that to the `rows` shape — covered in
- *     `invitesApi.test`).
- *   - Per-email result pills render after a successful response.
- *   - A bulk-failure surfaces a fixed safe Alert, never the raw error.
+ *   - Pasted lines are parsed into rows (email, name, note), every row is
+ *     previewed valid or invalid, and display-unsafe rows never reach the API.
+ *   - Submit hits `invitesApi.bulkInvite` with the cleaned valid rows, each
+ *     with its name and note (the api layer translates that to the `rows`
+ *     shape — covered in `invitesApi.test`).
+ *   - Per-email result pills render after a successful response; Retry puts
+ *     the failed rows back with their names and notes (INVITE-ONE-M).
+ *   - A bulk failure shows a fixed safe notice, never the raw error.
  */
 
 import React from 'react';
@@ -36,18 +36,10 @@ jest.mock('../api/invites', () => {
   };
 });
 
-jest.mock('../theme/ThemeProvider', () => ({
-  useTheme: () => ({
-    colors: {
-      primary: '#000', primaryLight: '#000', primaryPale: '#000',
-      primaryDark: '#000', accent: '#000',
-      background: '#000', surface: '#000', surfaceElevated: '#000',
-      textPrimary: '#000', textSecondary: '#000', textMuted: '#000',
-      textOnPrimary: '#fff', border: '#000', divider: '#000',
-      success: '#0a0', warning: '#aa0', error: '#a00', info: '#00a',
-      streak: '#aa0', primaryTint: '#000',
-    },
-  }),
+const mockGoBack = jest.fn();
+jest.mock('@react-navigation/native', () => ({
+  useNavigation: () => ({ canGoBack: () => true, goBack: mockGoBack }),
+  useFocusEffect: (effect: () => void | (() => void)) => jest.requireActual('react').useEffect(effect, [effect]),
 }));
 
 import BulkInviteScreen from '../screens/coach/BulkInviteScreen';
@@ -59,8 +51,8 @@ describe('BulkInviteScreen — RTL', () => {
   });
 
   it('renders the paste mode by default', async () => {
-    const { getByTestId } = await render(<BulkInviteScreen />);
-    expect(getByTestId('bulk-mode-paste')).toBeTruthy();
+    const { getByTestId, getByLabelText } = await render(<BulkInviteScreen />);
+    expect(getByLabelText('Paste').props.accessibilityState).toMatchObject({ checked: true });
     expect(getByTestId('bulk-paste-input')).toBeTruthy();
   });
 
@@ -84,7 +76,7 @@ describe('BulkInviteScreen — RTL', () => {
       expect(mockBulkInvite).toHaveBeenCalledTimes(1);
     });
     expect(mockBulkInvite).toHaveBeenCalledWith(
-      ['a@ex.com', 'b@ex.com', 'c@ex.com'],
+      [{ email: 'a@ex.com' }, { email: 'b@ex.com' }, { email: 'c@ex.com' }],
       undefined,
     );
 
@@ -122,23 +114,73 @@ describe('BulkInviteScreen — RTL', () => {
     await waitFor(() => expect(mockBulkInvite).toHaveBeenCalledTimes(1));
     // Only the clean address survives validation; the HTML-flavored rows
     // are filtered out before the network call.
-    expect(mockBulkInvite).toHaveBeenCalledWith(['a@ex.com'], undefined);
+    expect(mockBulkInvite).toHaveBeenCalledWith([{ email: 'a@ex.com' }], undefined);
   });
 
-  it('bulk failure: shows a fixed safe alert, never the raw error message', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert');
+  it('bulk failure: shows a fixed safe notice, never the raw error message, and keeps the list', async () => {
     mockBulkInvite.mockRejectedValueOnce(
       new Error('ECONNREFUSED postgres://_TOKEN@host'),
     );
-    const { getByTestId } = await render(<BulkInviteScreen />);
-    await fireEvent.changeText(getByTestId('bulk-paste-input'), 'a@ex.com');
+    const { getByTestId, queryByText } = await render(<BulkInviteScreen />);
+    await fireEvent.changeText(getByTestId('bulk-paste-input'), 'a@ex.com, Alice');
     await fireEvent.press(getByTestId('bulk-submit'));
-    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
-    const args = alertSpy.mock.calls[alertSpy.mock.calls.length - 1];
-    expect(args[0]).toBe('Could not send invites');
-    expect(args[1]).toBe('Your email list is still here. Check your connection and try sending the invites again.');
-    // Never leak the raw error string. Alert.alert only receives the safe
-    // title + message; no extra args carry the underlying error.
-    expect(args.length).toBeLessThanOrEqual(2);
+    await waitFor(() => expect(getByTestId('bulk-send-failed')).toBeTruthy());
+    expect(queryByText(
+      'Could not send invites. Your email list is still here. Check your connection and try sending the invites again.',
+    )).toBeTruthy();
+    expect(queryByText(/ECONNREFUSED/)).toBeNull();
+    expect(getByTestId('bulk-paste-input').props.value).toBe('a@ex.com, Alice');
+  });
+
+  it('previews every row with its name and note, and sends them (INVITE-ONE-M)', async () => {
+    mockBulkInvite.mockResolvedValueOnce({ results: [] });
+    const { getByTestId, getAllByTestId, getByText } = await render(<BulkInviteScreen />);
+    await fireEvent.changeText(
+      getByTestId('bulk-paste-input'),
+      'a@ex.com, Alice, Knee first, then hips\nbad-row, Bob\nb@ex.com\tBea',
+    );
+    expect(getByText('Parsed rows (3)')).toBeTruthy();
+    expect(getAllByTestId('bulk-row-valid')).toHaveLength(2);
+    expect(getAllByTestId('bulk-row-invalid')).toHaveLength(1);
+    expect(getByText('Alice')).toBeTruthy();
+    expect(getByText('Knee first, then hips')).toBeTruthy();
+    expect(getByText('Bob')).toBeTruthy();
+    await fireEvent.changeText(getByTestId('bulk-message-input'), 'Welcome aboard');
+    await fireEvent.press(getByTestId('bulk-submit'));
+    await waitFor(() => expect(mockBulkInvite).toHaveBeenCalledTimes(1));
+    expect(mockBulkInvite).toHaveBeenCalledWith(
+      [
+        { email: 'a@ex.com', name: 'Alice', note: 'Knee first, then hips' },
+        { email: 'b@ex.com', name: 'Bea' },
+      ],
+      'Welcome aboard',
+    );
+  });
+
+  it('retry puts the failed rows back with their names, notes and the message', async () => {
+    mockBulkInvite.mockResolvedValueOnce({
+      results: [
+        { email: 'a@ex.com', status: 'created', emailQueued: true, inviteId: 'i1' },
+        { email: 'b@ex.com', status: 'failed', emailQueued: false, error: 'x' },
+      ],
+    });
+    const { getByTestId, getByText } = await render(<BulkInviteScreen />);
+    await fireEvent.changeText(getByTestId('bulk-paste-input'), 'a@ex.com, Alice\nb@ex.com, Bea, Mon, Wed');
+    await fireEvent.changeText(getByTestId('bulk-message-input'), 'Hi');
+    await fireEvent.press(getByTestId('bulk-submit'));
+    await waitFor(() => expect(getByTestId('bulk-results')).toBeTruthy());
+    expect(getByText('Bea')).toBeTruthy();
+    await fireEvent.press(getByTestId('bulk-retry-failed'));
+    expect(getByTestId('bulk-paste-input').props.value).toBe('b@ex.com, Bea, Mon, Wed');
+    expect(getByTestId('bulk-message-input').props.value).toBe('Hi');
+  });
+
+  it('over the cap of 100: the summary says so and Send stays off', async () => {
+    const { getByTestId, getByText } = await render(<BulkInviteScreen />);
+    const lines = Array.from({ length: 101 }, (_, i) => `u${i}@ex.com`).join('\n');
+    await fireEvent.changeText(getByTestId('bulk-paste-input'), lines);
+    expect(getByText('101 valid · over cap (max 100)')).toBeTruthy();
+    expect(getByText('+1 more')).toBeTruthy();
+    expect(getByTestId('bulk-submit').props.accessibilityState).toMatchObject({ disabled: true });
   });
 });

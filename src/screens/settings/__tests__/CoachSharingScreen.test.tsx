@@ -28,6 +28,10 @@ jest.mock('../../../services/api', () => ({
 
 import * as sharingApi from '../../../api/coachSharingApi';
 import CoachSharingScreen from '../CoachSharingScreen';
+import { featureFlags } from '../../../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_CLIENT_TUTORIAL off: the tour shows Connected devices on every build (CoachSharingScreen.tsx:26); this file is the build rule.
+jest.replaceProperty(featureFlags, 'clientTutorial', false);
 
 /** What GET /consent/me sends since backend #1061: the four as granted for the current coach. */
 const SCOPES = ['fitness.workouts', 'fitness.food_macros', 'fitness.body_metrics', 'fitness.habits_progress'];

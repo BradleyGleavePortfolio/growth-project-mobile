@@ -20,12 +20,9 @@ import { listsApi } from '../../services/api';
 import FadeInView from '../../components/FadeInView';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { typography, radius } from '../../theme/tokens';
-import { Screen } from '../../ui';
-
-function EmptyState({ title, subtitle }: { icon: string; title: string; subtitle: string }) {
-  const { semanticColors: sc } = useTheme();
-  return <View style={{ padding: 24, gap: 12 }}><Text style={[typography.h2, { color: sc.textPrimary }]}>{title}</Text><Text style={[typography.bodySmall, { color: sc.textMuted }]}>{subtitle}</Text></View>;
-}
+import { PrimaryButton, TextLink, Screen } from '../../ui';
+import { HapticService } from '../../ui/haptics/haptics.service';
+import { StyleCCheck, StyleCDashes, StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCMastText, StyleCNotice, StyleCPaper, useStyleCScreen } from '../../ui/layout/StyleCPage';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface ListItem {
@@ -58,6 +55,7 @@ const fromShopping = (item: ListItem) => item.list_type === 'shopping';
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function GroceryListScreen() {
+  const page = useStyleCScreen();
   const { semanticColors: sc } = useTheme();
   const colors = useMemo(() => ({
     background: sc.bgPrimary, surface: sc.bgPrimary, primary: sc.accent,
@@ -154,7 +152,7 @@ export default function GroceryListScreen() {
 
   const handleToggle = useCallback(
     (item: ListItem) => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      void HapticService.selection(); // C2 section 5: a check is a selection tick
       toggleMutation.mutate({ id: item.id, is_checked: !item.is_checked });
     },
     [toggleMutation],
@@ -189,11 +187,7 @@ export default function GroceryListScreen() {
         activeOpacity={0.7}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
-        <Ionicons
-          name={item.is_checked ? 'checkmark-circle-outline' : 'ellipse-outline'}
-          size={24}
-          color={item.is_checked ? colors.success : colors.textMuted}
-        />
+        <StyleCCheck checked={item.is_checked} />
       </TouchableOpacity>
       <View style={styles.itemContent}>
         <Text style={[styles.itemName, item.is_checked && styles.itemNameChecked]}>
@@ -212,7 +206,7 @@ export default function GroceryListScreen() {
         activeOpacity={0.7}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
-        <Ionicons name="close-circle-outline" size={20} color={colors.textMuted} />
+        <Ionicons name="close" size={20} color={colors.textMuted} />
       </TouchableOpacity>
     </View>
   );
@@ -225,26 +219,15 @@ export default function GroceryListScreen() {
   ];
 
   return (
-    <Screen edges={['top']} scroll={false} contentStyle={styles.bare} testID="grocery-prep-screen">
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back" onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Grocery list</Text>
-        {checked.length > 0 ? (
-          <TouchableOpacity
-            style={styles.clearBtn}
-            onPress={handleClearChecked}
-            activeOpacity={0.7}
-            disabled={clearCheckedMutation.isPending}
-          >
-            <Text style={styles.clearBtnText}>Clear checked</Text>
-          </TouchableOpacity>
+    <Screen edges={['top']} scroll={false} {...page} testID="grocery-prep-screen">
+      <StyleCMasthead title="Grocery list" onBack={() => navigation.goBack()}>
+        {/* The summary on the masthead, as on the Shopping list (ctx#457): one look for both lists. */}
+        {!isLoading && !isError && items.length > 0 ? (
+          <StyleCDashes total={items.length} done={checked.length} label={unchecked.length > 0 ? `${unchecked.length} to get.` : 'All items checked.'} />
         ) : null}
-      </View>
-      {!isLoading && !isError && items.length > 0 ? <Text style={[styles.summary, hasShoppingItems && styles.summaryWithNote]}>{unchecked.length > 0 ? `${unchecked.length} to get.` : 'All items checked.'}</Text> : null}
-      {!isLoading && !isError && hasShoppingItems ? <Text style={styles.note}>Includes items from your shopping list.</Text> : null}
+        {!isLoading && !isError && hasShoppingItems ? <StyleCMastText kind="muted">Includes items from your shopping list.</StyleCMastText> : null}
+      </StyleCMasthead>
+      <StyleCPaper style={styles.paper}>
 
       {/* Add item input */}
       <View style={styles.addRow}>
@@ -275,38 +258,36 @@ export default function GroceryListScreen() {
             onChangeText={setNewItemUnit}
             returnKeyType="done"
           />
+          <TouchableOpacity
+            accessibilityRole="button" accessibilityLabel="Add item"
+            style={[styles.addBtn, !newItemName.trim() && styles.addBtnDisabled]}
+            onPress={handleAdd}
+            disabled={!newItemName.trim() || addMutation.isPending}
+            activeOpacity={0.8}
+          >
+            {addMutation.isPending ? (
+              <ActivityIndicator size="small" color={colors.textOnPrimary} />
+            ) : (
+              <Ionicons name="add" size={22} color={colors.textOnPrimary} />
+            )}
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          accessibilityRole="button" accessibilityLabel="Add item"
-          style={[styles.addBtn, !newItemName.trim() && styles.addBtnDisabled]}
-          onPress={handleAdd}
-          disabled={!newItemName.trim() || addMutation.isPending}
-          activeOpacity={0.8}
-        >
-          {addMutation.isPending ? (
-            <ActivityIndicator size="small" color={colors.textOnPrimary} />
-          ) : (
-            <Ionicons name="add" size={22} color={colors.textOnPrimary} />
-          )}
-        </TouchableOpacity>
       </View>
 
       {/* List */}
       {isLoading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading grocery list…</Text>
+          <StyleCLoadingLines lead="ring" />
         </View>
       ) : isError ? (
         <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Couldn't load grocery list.</Text>
-          <TouchableOpacity onPress={() => refetch()} disabled={isRefetching} style={styles.clearBtn}>
-            <Text style={styles.clearBtnText}>Try again</Text>
-          </TouchableOpacity>
+          <StyleCNotice>Couldn't load grocery list.</StyleCNotice>
+          <PrimaryButton label="Try again" onPress={() => refetch()} disabled={isRefetching} haptic={false} />
         </View>
       ) : items.length === 0 ? (
         <FadeInView>
-          <EmptyState
+          <StyleCEmpty
             icon="cart-outline"
             title="Your grocery list is empty"
             subtitle="Add items using the field above."
@@ -328,6 +309,9 @@ export default function GroceryListScreen() {
             />
           }
           contentContainerStyle={styles.listContent}
+          ListFooterComponent={checked.length > 0 ? (
+            <TextLink label="Clear checked" tone="accent" align="start" onPress={handleClearChecked} disabled={clearCheckedMutation.isPending} style={styles.clearBtn} />
+          ) : null}
           renderItem={({ item }) => {
             if ('type' in item) {
               return (
@@ -343,6 +327,7 @@ export default function GroceryListScreen() {
           showsVerticalScrollIndicator={false}
         />
       )}
+    </StyleCPaper>
     </Screen>
   );
 }
@@ -350,92 +335,61 @@ export default function GroceryListScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primary' | 'textPrimary' | 'textMuted' | 'textOnPrimary' | 'border' | 'error'>) =>
   StyleSheet.create({
-  // Screen owns the inset top (insets.top + 12) and the page colour.
-  bare: { paddingHorizontal: 0, paddingBottom: 0 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 16,
-    gap: 12,
-  },
-  backBtn: { width: 44, height: 44, justifyContent: 'center' },
-  title: { ...typography.h1, color: colors.textPrimary, flex: 1 },
-  summary: { ...typography.h2, color: colors.textPrimary, paddingHorizontal: 24, marginBottom: 24, fontVariant: ['tabular-nums'] },
-  summaryWithNote: { marginBottom: 4 },
-  note: { ...typography.bodySmall, color: colors.textMuted, paddingHorizontal: 24, marginBottom: 24 },
-  clearBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    minHeight: 44, justifyContent: 'center',
-    borderRadius: radius.button,
-  },
-  clearBtnText: { ...typography.bodySmall, color: colors.textMuted },
+  // Screen owns the inset top (forest via useStyleCScreen); the masthead and paper are Style C; the paper holds the list.
+  paper: { paddingTop: 22 },
+  clearBtn: { marginTop: 12 },
 
-  addRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    marginBottom: 12,
-    gap: 8,
-    alignItems: 'center',
-  },
-  addInputs: { flex: 1, flexDirection: 'row', gap: 6 },
+  addRow: { paddingHorizontal: 24, marginBottom: 12 },
+  // Underlined fields (C_grocery, ctx#457), not boxes: the name on its own line, then Qty, Unit and the round add.
+  addInputs: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', columnGap: 14 },
   nameInput: {
     fontFamily: typography.body.fontFamily,
-    flex: 3,
-    height: 44,
-    backgroundColor: colors.surface,
-    borderRadius: radius.input,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 12,
-    fontSize: 14,
+    flexBasis: '100%',
+    height: 48,
+    borderBottomWidth: 1.5,
+    borderColor: colors.textPrimary,
+    fontSize: 18,
     color: colors.textPrimary,
   },
   qtyInput: {
     fontFamily: typography.body.fontFamily, fontVariant: ['tabular-nums'],
-    flex: 1,
+    width: 52,
     height: 44,
-    backgroundColor: colors.surface,
-    borderRadius: radius.input,
-    borderWidth: 1,
+    borderBottomWidth: 1.5,
     borderColor: colors.border,
     paddingHorizontal: 8,
-    fontSize: 14,
+    fontSize: 16,
     color: colors.textPrimary,
     textAlign: 'center',
   },
   unitInput: {
     fontFamily: typography.body.fontFamily,
-    flex: 1,
+    width: 70,
     height: 44,
-    backgroundColor: colors.surface,
-    borderRadius: radius.input,
-    borderWidth: 1,
+    borderBottomWidth: 1.5,
     borderColor: colors.border,
     paddingHorizontal: 8,
-    fontSize: 14,
+    fontSize: 16,
     color: colors.textPrimary,
   },
   addBtn: {
     width: 44,
     height: 44,
     backgroundColor: colors.primary,
-    borderRadius: radius.button,
+    borderRadius: radius.chip,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  addBtnDisabled: { opacity: 0.5 },
+  addBtnDisabled: { opacity: 0.42 },
 
-  loadingContainer: { alignItems: 'center', paddingTop: 60, gap: 12 },
+  loadingContainer: { paddingHorizontal: 24, paddingTop: 14, gap: 16 },
   loadingText: { ...typography.bodySmall, color: colors.textMuted },
 
-  listContent: { paddingHorizontal: 16, paddingBottom: 40 },
+  listContent: { paddingHorizontal: 24, paddingBottom: 48 },
 
   sectionHeader: {
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    marginTop: 8,
+    paddingTop: 20,
+    paddingBottom: 4,
   },
   sectionHeaderText: { ...typography.eyebrow, color: colors.textMuted, fontVariant: ['tabular-nums'] },
 
@@ -443,19 +397,26 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
     flexDirection: 'row',
     alignItems: 'center',
     // A hairline row, not a boxed card (CATALOG: hairline sections).
-    minHeight: 56,
+    minHeight: 64,
     paddingVertical: 6,
     paddingHorizontal: 0,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    gap: 10,
+    gap: 6,
   },
   itemRowChecked: { opacity: 1 },
-  checkbox: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  itemContent: { flex: 1 },
-  itemName: { ...typography.bodyMd, color: colors.textPrimary },
+  // ctx#457: the ring at the left edge, the serif name, the amount at the right on one line, the cross at the edge. The
+  // name keeps at least half the row so a word never breaks mid-word; when the amount does not fit beside it (narrow
+  // phones at large text) the amount moves under the name, still at the right, whole.
+  // The 44 pt targets reach into the 24 pt gutter so the ring and the cross sit at the content edges and the row keeps its width.
+  checkbox: { width: 44, height: 44, marginLeft: -8, alignItems: 'center', justifyContent: 'center' },
+  itemContent: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 12 },
+  itemName: { ...typography.h3, fontSize: 21, lineHeight: 26, paddingVertical: 10, color: colors.textPrimary, flex: 1, minWidth: '50%' },
   itemNameChecked: { textDecorationLine: 'line-through', color: colors.textMuted },
-  itemMeta: { ...typography.bodySmall, color: colors.textMuted, marginTop: 1, fontVariant: ['tabular-nums'] },
-  deleteBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  itemMeta: { ...typography.body, fontSize: 15, lineHeight: 22, color: colors.textMuted, fontVariant: ['tabular-nums'], textAlign: 'right', flexShrink: 0, marginLeft: 'auto' },
+  deleteBtn: { width: 44, height: 44, marginRight: -12, alignItems: 'center', justifyContent: 'center' },
 
   });
+
+/** The same rows and fields on the Shopping list (one look for both lists). */
+export const makeListStyles = makeStyles;

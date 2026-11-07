@@ -239,6 +239,8 @@ export interface IssueVoiceUploadInput {
   duration_ms: number;
   bytes: number;
   mime_type: VoiceNoteMimeType;
+  /** Optional space target; omitted for Hall and DM uploads. */
+  cohort_id?: string;
 }
 
 export interface CreateVoiceNoteInput {

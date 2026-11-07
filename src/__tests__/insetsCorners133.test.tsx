@@ -14,6 +14,8 @@ import { layout } from '../theme/tokens';
 import GroceryListScreen from '../screens/client/GroceryListScreen';
 import PrepGuideScreen from '../screens/client/PrepGuideScreen';
 
+// The Style C masthead paints the status bar on focus; no navigator here (STYLE-KITCHEN-M).
+jest.mock('../components/StatusBarBand', () => ({ useStatusBarBand: () => undefined }));
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: jest.fn(), navigate: jest.fn() }) }));
 jest.mock('../components/FadeInView', () => ({
   __esModule: true, default: ({ children }: { children: React.ReactNode }) => children,

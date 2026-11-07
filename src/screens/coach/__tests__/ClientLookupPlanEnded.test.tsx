@@ -43,6 +43,10 @@ jest.mock('../../../navigation/coachLanding', () => ({ coachLandingTab: () => 'C
 import ClientLookupScreen from '../lookup/ClientLookupScreen';
 import { useCoachStore } from '../../../store/coachStore';
 import { useBlockedUsersStore } from '../../../store/blockedUsersStore';
+import { featureFlags } from '../../../config/featureFlags';
+
+// Pins EXPO_PUBLIC_FF_COACH_TABS_V2 off: this file opens chats over the Clients list (coachInbox.ts:18 sends them to Messages when on).
+jest.replaceProperty(featureFlags, 'coachTabsV2', false);
 
 const wire = (id: string, name: string) => ({
   id, name, email: `${id}@example.com`, created_at: '2026-08-01T10:00:00.000Z',

@@ -132,6 +132,21 @@ describe('communityVoiceApi — two-hop publish flow', () => {
     expect(res.bucket).toBe('community-voice');
   });
 
+  it('BPF-1: issueUploadUrl posts the optional space on the existing endpoint', async () => {
+    api.post.mockResolvedValueOnce({ data: uploadTarget });
+    await communityVoiceApi.issueUploadUrl(WS, {
+      duration_ms: 4200,
+      bytes: 91234,
+      mime_type: 'audio/mp4',
+      cohort_id: 'co-9',
+    });
+    expect(api.post).toHaveBeenCalledWith(
+      `/community/workspaces/${WS}/voice-notes/upload-url`,
+      { duration_ms: 4200, bytes: 91234, mime_type: 'audio/mp4', cohort_id: 'co-9' },
+      expect.objectContaining({ signal: expect.anything() }),
+    );
+  });
+
   it('uploadBytes PUTs the raw bytes to the signed URL with the right content type', async () => {
     mockedAxios.put.mockResolvedValueOnce({ status: 200 });
     const bytes = new ArrayBuffer(8);
