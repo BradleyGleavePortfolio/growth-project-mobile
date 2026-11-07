@@ -278,7 +278,6 @@ describe('persistableError keeps a closed record, for every error shape (R24 tab
     ['an empty thrown string', '', ''],
     ['a thrown array', [SIGNED_URL, { token: TOKEN }], []],
     ['a thrown number', 42, 42],
-    ['a thrown bigint (JSON.stringify would throw)', BigInt(7), undefined],
     ['a toJSON that returns a string', { toJSON: () => SIGNED_URL }, 'error'],
     ['a toJSON that returns a record', { toJSON: () => ({ status: 404, detail: SIGNED_URL, cause: { token: TOKEN } }) }, { status: 404 }],
     ['a field that throws when read (C1)', throwingField, {}],
@@ -290,5 +289,10 @@ describe('persistableError keeps a closed record, for every error shape (R24 tab
     const kept = persistableError(error);
     expect(kept).toEqual(expected);
     expectNoCredential(JSON.stringify(kept) ?? '');
+  });
+
+  // Checked by type: jest cannot report a failed assertion that holds a bigint.
+  it('a thrown bigint is not saved (JSON.stringify would throw)', () => {
+    expect(typeof persistableError(BigInt(7))).toBe('undefined');
   });
 });
