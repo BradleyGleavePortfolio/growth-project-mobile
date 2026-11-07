@@ -47,6 +47,7 @@ export function useCopilotAsk(deps = LIVE) {
   const live = useRef(true);
   const drops = useRef(0);
   const kept = useRef(new Map<string, { question: string; key: string }>());
+  const seq = useRef(0);
 
   useEffect(() => {
     live.current = true;
@@ -69,7 +70,8 @@ export function useCopilotAsk(deps = LIVE) {
     if (!question || busyRef.current) return 'skipped';
     busyRef.current = true;
     setBusy(true);
-    const id = retryId ?? `turn-${Date.now()}`;
+    // A count beside the time: two asks in one millisecond must not share an id (each turn's key is kept by id).
+    const id = retryId ?? `turn-${Date.now()}-${(seq.current += 1)}`;
     const patch = (p: Partial<CopilotTurn>) => setTurns((all) => all.map((t) => (t.id === id ? { ...t, ...p } : t)));
     if (retryId) patch({ error: null });
     else setTurns((all) => [...all, { id, question, askedAt: new Date(), answer: null, error: null }]);
