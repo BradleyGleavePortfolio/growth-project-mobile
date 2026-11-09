@@ -254,3 +254,14 @@ describe('Sol B-331-6: a delete answer never crosses an auth change', () => {
     expect(api.deleteOne).not.toHaveBeenCalled();
   });
 });
+
+// LO-950R3: Reply stores "> excerpt", a blank line and the words the person wrote as one turn (romanReply.ts:32-39).
+it('a sent reply is not printed as raw "> " text and the quoted words are not read as the person said them', async () => {
+  const api = makeApi({
+    readMessages: jest.fn(async () => pageOf([msg('m1', 'user', '> Keep Thursday easy\n\nCan I do it indoors?')])),
+  });
+  const screen = await renderScreen(api);
+  await screen.findByTestId('roman-transcript-message-m1');
+  expect(screen.queryByText(/^> /)).toBeNull();
+  expect(screen.getByLabelText('You said: Can I do it indoors?')).toBeTruthy();
+});
