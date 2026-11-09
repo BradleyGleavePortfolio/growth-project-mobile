@@ -41,6 +41,8 @@ export interface HapticPressableProps extends Omit<PressableProps, 'style'> {
   pressOpacity?: number;
   /** Disable built-in scale/opacity animation */
   disableAnimation?: boolean;
+  /** Layout for the animated wrapper (e.g. `{ flex: 1 }` so the button fills a row of equal halves). */
+  containerStyle?: StyleProp<ViewStyle>;
 }
 
 // ─── Haptic dispatcher ────────────────────────────────────────────────────────
@@ -75,6 +77,7 @@ export default function HapticPressable({
   pressOpacity = 0.85,
   disableAnimation = false,
   accessibilityRole,
+  containerStyle,
   ...rest
 }: HapticPressableProps) {
   // GLOBAL reduce-motion gate (R4 P2): every HapticPressable — the client Roman
@@ -158,7 +161,7 @@ export default function HapticPressable({
 
   return (
     <Animated.View
-      style={{ transform: [{ scale: scaleAnim }], opacity: opacityAnim }}
+      style={[containerStyle, { transform: [{ scale: scaleAnim }], opacity: opacityAnim }]}
     >
       <Pressable
         accessibilityRole={accessibilityRole ?? (onPress || rest.onLongPress ? 'button' : undefined)}
