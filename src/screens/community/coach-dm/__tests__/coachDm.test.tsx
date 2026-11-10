@@ -62,6 +62,8 @@ jest.mock('../../../../storage/mmkv', () => ({
     delete: async (k: string) => { mockDisk.delete(k); },
     getAllKeys: async () => [...mockDisk.keys()],
   },
+  // m#964 (CRISIS-TEXT-M) on main: communityApi.sendDm reads the signed-in account (crisisLineOwner -> readUserCacheSync).
+  prefsStorage: { getString: () => undefined },
 }));
 let mockUser: { id: string; role: string; name: string; firstName: string; coach_id: string | null } | null = null;
 jest.mock('../../../../hooks/useCurrentUser', () => ({
