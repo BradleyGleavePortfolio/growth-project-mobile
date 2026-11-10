@@ -46,10 +46,10 @@
  *   - Every response is validated with a `.strict()` Zod schema at the boundary
  *     so a shape that drifts from the backend view THROWS here (RomanWireError)
  *     instead of feeding malformed data into React state.
- *   - The send mutation carries no idempotency header: the merged backend send
- *     route (controller L91-119) and SendMessageDto (dto L28-35) accept only
- *     `content` and never read an idempotency header, so the client does not
- *     send one and never presents a retry as duplicate-safe.
+ *   - The send carries the draft's send-once key as the `Idempotency-Key` header when the caller gives one
+ *     (SEND-ONCE-PHONE; the server's send-once rule is b#1228): a resend under the same key is answered from what
+ *     the first send stored (its reply, or a coded no-reply frame), with no second model run. The body stays exactly
+ *     `{ content }` (SendMessageDto is strict). A caller that gives no key sends no header.
  *   - Errors are mapped to a typed RomanApiError union: unavailable (404 /
  *     feature-off), rateLimited (uncoded 429 + retryAfterSeconds), dailyCap
  *     (429 ROMAN_RATE_LIMIT / 503 ROMAN_CAPACITY_REACHED, HTTP or in-stream:
@@ -256,6 +256,17 @@ export class RomanApiError extends Error {
   }
 }
 
+/**
+ * SEND-ONCE-PHONE (b#1228): a RomanApiError the server answered so that a resend under the same Idempotency-Key could
+ * only repeat it: a 400 or 409 before the stream, or a coded frame after it opened (the turn is stored with no reply,
+ * and the server replays "no reply" for that key), except ROMAN_REPLY_PENDING (the first send may still store its
+ * reply, so the key stays). The next send of these words makes a new key, so Send again asks once more. Same kind,
+ * words and fields as the RomanApiError it is; only the send-once key reads the mark.
+ */
+export class RomanKeySpentError extends RomanApiError {
+  readonly sendOnceKeySpent = true;
+}
+
 /** Read a non-2xx body as JSON when it is JSON; never throws. */
 async function readErrorBody(response: Response): Promise<unknown> {
   try {
@@ -294,6 +305,11 @@ const ROMAN_DAILY_CAP_MESSAGE = 'Daily AI limit reached.';
 
 /** Backend B-668-1 machine code: the coach's monthly AI credit pool is used up (402). */
 export const COACH_AI_BUDGET_EXHAUSTED_CODE = 'COACH_AI_BUDGET_EXHAUSTED';
+/**
+ * Backend SEND-ONCE-PENDING-BE in-stream code (roman.constants.ts:75 at backend main f239683f): a same-key resend while
+ * the first send may still store its reply. Same words as ROMAN_UNAVAILABLE; the send-once key stays with the draft.
+ */
+export const ROMAN_REPLY_PENDING_CODE = 'ROMAN_REPLY_PENDING';
 const ROMAN_POOL_EMPTY_MESSAGE = 'AI credits used up for this month.';
 const ROMAN_REQUIRES_COACH_MESSAGE = 'Roman works with a coach.';
 
@@ -505,7 +521,7 @@ export function parseSseChunks(
 export async function sendMessage(
   sessionId: string,
   content: string,
-  opts: { copilot?: boolean } = {},
+  opts: { copilot?: boolean; idempotencyKey?: string } = {},
 ): Promise<RomanAssistantReply> {
   const token = await secureStorage.getItem('supabase_token');
   const url = `${env.API_URL}/roman/sessions/${encodeURIComponent(sessionId)}/messages`;
@@ -525,6 +541,8 @@ export async function sendMessage(
         ...safetyActionsHeaders(),
         // COPILOT-M2: only the Path Copilot surface opts in (b#1129 contract).
         ...(opts.copilot ? { 'x-roman-copilot': '1' } : {}),
+        // SEND-ONCE-PHONE: the draft's send-once key, a header only (never a body field).
+        ...(opts.idempotencyKey ? { 'Idempotency-Key': opts.idempotencyKey } : {}),
       },
       body: JSON.stringify({ content }),
       signal: controller.signal,
@@ -592,6 +610,10 @@ export async function sendMessage(
           throw new RomanApiError('aiRefused', 'Roman cannot answer this request.', undefined, refusal);
         }
       }
+      if (response.status === 400 || response.status === 409) {
+        // SEND-ONCE-PHONE: the server read this send and refused it (409: the key is spent on other words).
+        throw new RomanKeySpentError('generic', 'That request did not complete.');
+      }
       throw new RomanApiError('generic', 'That request did not complete.');
     }
 
@@ -600,7 +622,9 @@ export async function sendMessage(
     const { chunks, streamError } = parseSseChunks(bodyText);
 
     if (streamError) {
-      // Structured in-stream error (e.g. ROMAN_UNAVAILABLE, controller L152).
+      // Structured in-stream error (e.g. ROMAN_UNAVAILABLE, controller L152). SEND-ONCE-PHONE: each but
+      // ROMAN_REPLY_PENDING is a RomanKeySpentError: the turn is stored with no reply, and a same-key resend would
+      // only replay that. ROMAN_REPLY_PENDING says the first send may still store its reply: the key stays.
       // R2b: a consent / egress refusal mid-request keeps its code; the
       // reference is the stream response's X-Request-ID header (the frame
       // itself is exactly { code, message }, backend B-626-2).
@@ -615,20 +639,25 @@ export async function sendMessage(
             reference: refusal.reference,
           });
         }
-        throw new RomanApiError('aiRefused', streamError.message, undefined, refusal, true);
+        throw new RomanKeySpentError('aiRefused', streamError.message, undefined, refusal, true);
       }
       // The spend cap reached after the turn was stored (reserveDailySpend):
       // the turn stays, and the daily cap pop-up explains why no answer came.
       const dailyCap = aiDailyCapFromStreamCode(streamError.code);
       if (dailyCap) {
-        throw new RomanApiError('dailyCap', ROMAN_DAILY_CAP_MESSAGE, undefined, undefined, true, dailyCap);
+        throw new RomanKeySpentError('dailyCap', ROMAN_DAILY_CAP_MESSAGE, undefined, undefined, true, dailyCap);
       }
       if (streamError.code === COACH_AI_BUDGET_EXHAUSTED_CODE) {
-        throw new RomanApiError('poolEmpty', ROMAN_POOL_EMPTY_MESSAGE, undefined, undefined, true);
+        throw new RomanKeySpentError('poolEmpty', ROMAN_POOL_EMPTY_MESSAGE, undefined, undefined, true);
+      }
+      if (streamError.code === ROMAN_REPLY_PENDING_CODE) {
+        // FIX-953R3 (LS-953R2 B2): Roman is still writing the first answer. The same error as any other code, without
+        // the key-spent mark, so Send again replays the stored answer instead of storing the question a second time.
+        throw new RomanApiError('generic', streamError.message, undefined, undefined, true);
       }
       const kind: RomanErrorKind =
         streamError.code === 'ROMAN_UNAVAILABLE' ? 'unavailable' : 'generic';
-      throw new RomanApiError(kind, streamError.message, undefined, undefined, true);
+      throw new RomanKeySpentError(kind, streamError.message, undefined, undefined, true);
     }
 
     const done = chunks.find((c) => c.type === 'done');
