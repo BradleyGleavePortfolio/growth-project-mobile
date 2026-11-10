@@ -81,8 +81,8 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
   // person (a report needs concrete content to review).
   const latestFromOther = data.find((m) => m.sender_user_id === recipientId && !m.deleted);
 
-  const onSend = (body: string) =>
-    sendDm.mutateAsync(body).then(
+  const onSend = (body: string, idempotencyKey: string) =>
+    sendDm.mutateAsync({ body, idempotencyKey }).then(
       () => undefined,
       (err: unknown) => {
         // Content filter (draft kept), DM closed by a block, DMs turned off,

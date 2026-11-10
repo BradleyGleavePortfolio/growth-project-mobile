@@ -334,9 +334,10 @@ export const CommunityDmMessageResponseSchema = z
   .object({ message: CommunityDmMessageSchema })
   .passthrough();
 
-function idempotentHeaders(): { headers: Record<string, string> } {
-  // R19 — client-generated key so a retried mutation deduplicates server-side.
-  return { headers: { 'Idempotency-Key': generateIdempotencyKey() } };
+function idempotentHeaders(key?: string): { headers: Record<string, string> } {
+  // R19 — client-generated key so a retried mutation deduplicates server-side. SEND-ONCE-PHONE: a write the member
+  // can send again passes its draft's key (lib/sendOnce.ts), so Send again replays it; without one, a new key.
+  return { headers: { 'Idempotency-Key': key ?? generateIdempotencyKey() } };
 }
 
 // ─── Endpoint hooks (read-only first, then mutations) ────────────────────────
@@ -402,28 +403,33 @@ export const communityApi = {
 
   /**
    * POST /community/workspaces/:workspaceId/posts — create a Lab/Hall post.
-   * Idempotent (R19). Optimistic insert + rollback lives in the screen hook.
+   * Idempotent (R19): `idempotencyKey` is the draft's send-once key (Publish again sends the same one).
+   * Optimistic insert + rollback lives in the screen hook.
    */
   createPost(
     workspaceId: string,
     input: { title: string; body: string },
+    idempotencyKey?: string,
   ): Promise<CommunityPost> {
     return call(CommunityPostResponseSchema, () =>
       api.post<unknown>(
         `/community/workspaces/${workspaceId}/posts`,
-        input,
-        idempotentHeaders(),
+        { title: input.title, body: input.body }, // the key travels only as the header (strict DTOs)
+        idempotentHeaders(idempotencyKey),
       ),
     ).then((r) => r.post);
   },
 
-  /** POST /community/posts/:postId/comments — add a top-level comment. */
-  addComment(postId: string, body: string): Promise<CommunityComment> {
+  /**
+   * POST /community/posts/:postId/comments — add a top-level comment. `idempotencyKey` is the draft's send-once key
+   * (Send again sends the same one).
+   */
+  addComment(postId: string, body: string, idempotencyKey?: string): Promise<CommunityComment> {
     return call(CommunityCommentResponseSchema, () =>
       api.post<unknown>(
         `/community/posts/${postId}/comments`,
         { body },
-        idempotentHeaders(),
+        idempotentHeaders(idempotencyKey),
       ),
     ).then((r) => r.comment);
   },
@@ -489,18 +495,20 @@ export const communityApi = {
 
   /**
    * POST /community/workspaces/:workspaceId/dms/:recipientId/messages — send a
-   * DM. Idempotent (R19). Optimistic append + rollback lives in the screen hook.
+   * DM. Idempotent (R19): `idempotencyKey` is the draft's send-once key (Send again sends the same one).
+   * Optimistic append + rollback lives in the screen hook.
    */
   sendDm(
     workspaceId: string,
     recipientId: string,
     body: string,
+    idempotencyKey?: string,
   ): Promise<CommunityDmMessage> {
     return call(CommunityDmMessageResponseSchema, () =>
       api.post<unknown>(
         `/community/workspaces/${workspaceId}/dms/${recipientId}/messages`,
         { body },
-        idempotentHeaders(),
+        idempotentHeaders(idempotencyKey),
       ),
     ).then((r) => r.message);
   },
