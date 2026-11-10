@@ -270,8 +270,9 @@ export function useRomanChat(surface: RomanSurface): UseRomanChatResult {
       reply = await sendMessage(s.id, trimmed, { idempotencyKey: sendOnce?.key });
     } catch (err) {
       logger.warn('useRomanChat.send', err);
-      // SEND-ONCE-PHONE: no answer, a timeout, a 5xx or a cut stream may have stored this send: Send again replays
-      // its key. A 400 / 409 or a coded frame after the stream opened ends it (romanApi RomanKeySpentError).
+      // SEND-ONCE-PHONE: no answer, a timeout, a 5xx, a cut stream or ROMAN_REPLY_PENDING may have stored this send
+      // or may still answer it: Send again replays its key. A 400 / 409 or any other coded frame after the stream
+      // opened ends it (romanApi RomanKeySpentError).
       if (sendOnce && failedSendKeepsKey(err)) sendOnce.keep();
       // After an HTTP 200 the backend has stored the user turn before the
       // stream failed (in-stream refusal, ROMAN_UNAVAILABLE, a cut stream).

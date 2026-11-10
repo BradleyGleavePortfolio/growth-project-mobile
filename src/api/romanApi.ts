@@ -259,8 +259,9 @@ export class RomanApiError extends Error {
 /**
  * SEND-ONCE-PHONE (b#1228): a RomanApiError the server answered so that a resend under the same Idempotency-Key could
  * only repeat it: a 400 or 409 before the stream, or a coded frame after it opened (the turn is stored with no reply,
- * and the server replays "no reply" for that key). The next send of these words makes a new key, so Send again asks
- * once more. Same kind, words and fields as the RomanApiError it is; only the send-once key reads the mark.
+ * and the server replays "no reply" for that key), except ROMAN_REPLY_PENDING (the first send may still store its
+ * reply, so the key stays). The next send of these words makes a new key, so Send again asks once more. Same kind,
+ * words and fields as the RomanApiError it is; only the send-once key reads the mark.
  */
 export class RomanKeySpentError extends RomanApiError {
   readonly sendOnceKeySpent = true;
@@ -304,6 +305,11 @@ const ROMAN_DAILY_CAP_MESSAGE = 'Daily AI limit reached.';
 
 /** Backend B-668-1 machine code: the coach's monthly AI credit pool is used up (402). */
 export const COACH_AI_BUDGET_EXHAUSTED_CODE = 'COACH_AI_BUDGET_EXHAUSTED';
+/**
+ * Backend SEND-ONCE-PENDING-BE in-stream code (roman.constants.ts:75 at backend main f239683f): a same-key resend while
+ * the first send may still store its reply. Same words as ROMAN_UNAVAILABLE; the send-once key stays with the draft.
+ */
+export const ROMAN_REPLY_PENDING_CODE = 'ROMAN_REPLY_PENDING';
 const ROMAN_POOL_EMPTY_MESSAGE = 'AI credits used up for this month.';
 const ROMAN_REQUIRES_COACH_MESSAGE = 'Roman works with a coach.';
 
@@ -616,8 +622,9 @@ export async function sendMessage(
     const { chunks, streamError } = parseSseChunks(bodyText);
 
     if (streamError) {
-      // Structured in-stream error (e.g. ROMAN_UNAVAILABLE, controller L152). SEND-ONCE-PHONE: each is a
-      // RomanKeySpentError: the turn is stored with no reply, and a same-key resend would only replay that.
+      // Structured in-stream error (e.g. ROMAN_UNAVAILABLE, controller L152). SEND-ONCE-PHONE: each but
+      // ROMAN_REPLY_PENDING is a RomanKeySpentError: the turn is stored with no reply, and a same-key resend would
+      // only replay that. ROMAN_REPLY_PENDING says the first send may still store its reply: the key stays.
       // R2b: a consent / egress refusal mid-request keeps its code; the
       // reference is the stream response's X-Request-ID header (the frame
       // itself is exactly { code, message }, backend B-626-2).
@@ -642,6 +649,11 @@ export async function sendMessage(
       }
       if (streamError.code === COACH_AI_BUDGET_EXHAUSTED_CODE) {
         throw new RomanKeySpentError('poolEmpty', ROMAN_POOL_EMPTY_MESSAGE, undefined, undefined, true);
+      }
+      if (streamError.code === ROMAN_REPLY_PENDING_CODE) {
+        // FIX-953R3 (LS-953R2 B2): Roman is still writing the first answer. The same error as any other code, without
+        // the key-spent mark, so Send again replays the stored answer instead of storing the question a second time.
+        throw new RomanApiError('generic', streamError.message, undefined, undefined, true);
       }
       const kind: RomanErrorKind =
         streamError.code === 'ROMAN_UNAVAILABLE' ? 'unavailable' : 'generic';
