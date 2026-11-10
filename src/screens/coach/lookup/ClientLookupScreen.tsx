@@ -19,6 +19,7 @@ import PushPermissionCard from '../../../components/home/PushPermissionCard';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { coachApi } from '../../../services/api';
 import { ROSTER_PAGE_SIZE, useCoachStore } from '../../../store/coachStore';
+import { rememberUnreadCounts } from '../../../store/closedClientsStore';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { colors as palette, layout, radius, typography } from '../../../theme/tokens';
 import { Overline, useScreenInsets } from '../../../ui';
@@ -132,6 +133,7 @@ export default function ClientLookupScreen({ navigation, route }: Props) {
       const closed: unknown = u.value?.data?.closed_client_ids;
       setClosedIds({ coach: coachId, ids: new Set(Array.isArray(closed) ? closed.filter((x): x is string => typeof x === 'string') : []) });
     }
+    if (u.status === 'fulfilled') rememberUnreadCounts(coachId, u.value); // LS-952R3 B3: Roman's drafts count hears it too
     setUnreadState(u.status === 'fulfilled' ? 'ok' : 'error');
     const rows: unknown = a.status === 'fulfilled' ? a.value?.data : null;
     setArchivedCount(Array.isArray(rows) && rows.length < ROSTER_PAGE_SIZE ? rows.length : null);
