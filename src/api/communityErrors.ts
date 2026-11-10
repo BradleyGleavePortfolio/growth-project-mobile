@@ -21,6 +21,7 @@ import { captureError } from '../services/sentry';
 import { extractRequestId, REQUEST_ID_HEADER } from '../utils/correlation';
 import { randomUuid } from '../utils/idempotency';
 import { SUPPORT_EMAIL } from '../constants/support';
+import { withCrisisLine } from '../lib/communityCrisisLine';
 
 /**
  * Published support path when /community/safety has not loaded: the app's one
@@ -304,9 +305,10 @@ export function describeCommunityFailure(
   const serverMessage =
     typeof body?.message === 'string' && body.message.trim() ? body.message : null;
 
+  // CRISIS-TEXT-M: a refusal of the poster's own text that the crisis check flagged leads with the 911 / 988 line.
   const known = (message: string): CommunityFailure => ({
     title: code === 'community.content.rejected' ? 'Please rephrase' : title,
-    message,
+    message: withCrisisLine(message, err),
     reference: null,
     code,
     status,
@@ -352,7 +354,10 @@ export function describeCommunityFailure(
   });
   return {
     title,
-    message: `The app could not ${VERBS[action]} because of a server problem. Try again in a few minutes. If it keeps happening, email ${supportEmail} and quote reference ${reference}.`,
+    message: withCrisisLine(
+      `The app could not ${VERBS[action]} because of a server problem. Try again in a few minutes. If it keeps happening, email ${supportEmail} and quote reference ${reference}.`,
+      err,
+    ),
     reference,
     code,
     status,
