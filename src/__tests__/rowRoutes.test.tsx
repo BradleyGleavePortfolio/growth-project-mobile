@@ -19,9 +19,13 @@
  *     it.failing with the right screen written in it, and a plain case asserting today's symptom, because it.failing
  *     alone also passes when the harness breaks.
  *
- * Space chat: when communitySpaceChat lands in featureFlags (m#945), SPACE_CHAT_SHIPPED turns A2 to A5 and N3 into
- * plain opens rows to CommunitySpaceChat with their own ids, with no one editing this file. Until then A2 is the voice
- * note and A3 to A5 and N3 are gaps. See "Found, not fixed" on the PR for each gap's row id, file:line and follow-up.
+ * Space chat: when communitySpaceChat lands in featureFlags (m#945), SPACE_CHAT_SHIPPED turns A2 to A5, N3 and N3c
+ * into plain opens rows to CommunitySpaceChat with their own ids, and moves C5 (a coach's cohort row) and F1 (a
+ * SpaceTree space row) to CommunitySpaceChat {cohortId}, as m#945 draws them, with no one editing this file. Until
+ * then A2 is the voice note, A3 to A5, N3 and N3c are gaps, and C5 and F1 open today's cohort screens.
+ *
+ * Server switch-off rows (D8 the older Messages list, F13a and F13b the Find notices) need a server switch off; the
+ * "All switches on" job forces every server switch on (ALL_SWITCHES_ON_NAMES set), so there they are left out. See "Found, not fixed" on the PR for each gap's row id, file:line and follow-up.
  *
  * REACHABLE RULE (@react-navigation/core 7.21.1, useOnAction.tsx): navigate(name) runs on the current navigator's
  * router and bubbles up through onActionParent; it never goes down into a child navigator (that branch needs
@@ -180,6 +184,9 @@ import NotificationCenterScreen from '../screens/notifications/NotificationCente
 // m#945's switch. Pinned true above only when the real featureFlags has the key, so this file also runs at m#945.
 const SPACE_CHAT_SHIPPED = 'communitySpaceChat' in jest.requireActual('../config/featureFlags').featureFlags;
 
+// The "All switches on" job (.github/all-switches-on) forces every server switch on: no switch-off row can exist there.
+const SERVER_SWITCHES_FORCED_ON = !!process.env.ALL_SWITCHES_ON_NAMES;
+
 const SRC = path.resolve(__dirname, '..');
 const NAV = path.join(SRC, 'navigation');
 
@@ -288,6 +295,8 @@ interface Row {
   beforeTap?: (view: Awaited<ReturnType<typeof render>>) => void;
   /** Seeds the query cache before the mount (a row that exists only on this phone). */
   seedQueries?: (qc: QueryClient) => void;
+  /** The row exists only with a server switch off (left out where every server switch is forced on). */
+  serverSwitchOff?: true;
   expected: Expected;
 }
 
@@ -467,7 +476,9 @@ ROWS.push(
     http: { ...EMPTY_STATES, '/community/cohorts': COHORTS },
     screen: () => <CoachCommunityCohortsScreen />,
     tap: { testID: `coach-community-cohort-row-${COHORT_2}` },
-    expected: opens('CoachCommunityCohortDetail', { cohortId: COHORT_2, cohortName: 'Summer block' }),
+    expected: SPACE_CHAT_SHIPPED
+      ? opens('CommunitySpaceChat', { cohortId: COHORT_2 })
+      : opens('CoachCommunityCohortDetail', { cohortId: COHORT_2, cohortName: 'Summer block' }),
   },
   {
     id: 'C6', title: 'cohort member row opens its menu', role: 'coach', host: COACH_COMMUNITY_HOST,
@@ -571,7 +582,7 @@ ROWS.push(
     expected: chatOf(CLIENT_2, 'Sam Lee'),
   },
   {
-    id: 'D8', title: 'legacy Messages row (server flag messaging_core_v2 off)', role: 'coach', host: COACH_MESSAGES_HOST,
+    id: 'D8', title: 'legacy Messages row (server flag messaging_core_v2 off)', role: 'coach', host: COACH_MESSAGES_HOST, serverSwitchOff: true,
     before: () => {
       useCoachStore.getState().reset();
       mockGetClients.mockResolvedValue({ data: [
@@ -660,7 +671,9 @@ const post = (id: string, title: string | null, body: string | null, extra: obje
 const POSTS_URL = `/community/workspaces/${WS}/posts`;
 const spaceScreen = () => <CommunitySpaceScreen space="hall" />;
 ROWS.push(
-  homeRow('F1', 'SpaceTree space row', COHORT_2, opens('CommunitySpace', { space: 'cohort', cohortId: COHORT_2 })),
+  homeRow('F1', 'SpaceTree space row', COHORT_2, SPACE_CHAT_SHIPPED
+    ? opens('CommunitySpaceChat', { cohortId: COHORT_2 })
+    : opens('CommunitySpace', { space: 'cohort', cohortId: COHORT_2 })),
   homeRow('F2', 'SpaceTree coach row', 'coach', opens('Home', { screen: 'Messages' })),
   homeRow('F3', 'SpaceTree Leaderboard row', 'leaderboard', opens('Leaderboard')),
   homeRow('F4', 'SpaceTree Classroom row', 'classroom', opens('CommunityClassroom')),
@@ -711,6 +724,7 @@ const SEARCH_HTTP = (flags: Record<string, boolean>, results: object[]) => ({
 const searchHit = (id: string, kind: string, targetId: string) => ({ id, kind, targetId, cohortId: null, authorId: CLIENT_2, excerpt: 'a matching excerpt', createdAt: CREATED });
 const findRow = (id: string, title: string, kind: string, expected: Expected, flags: Record<string, boolean> = {}): Row => ({
   id, title, role: 'client', host: CLIENT_COMMUNITY_HOST,
+  ...(Object.values(flags).includes(false) ? { serverSwitchOff: true as const } : {}),
   http: SEARCH_HTTP(flags, [searchHit(uuid(80), 'post', uuid(81)), searchHit(uuid(82), kind, uuid(83))]),
   screen: () => <CommunityFindScreen />,
   beforeTap: (view) => fireEvent.changeText(view.getByTestId('community-search-input'), 'squat'),
@@ -1023,7 +1037,9 @@ beforeEach(() => {
   mockNeedsCoach = false;
 });
 
-describe.each(ROWS.filter((r) => r.expected.kind === 'opens'))('$id $title', (row) => {
+const LIVE_ROWS = ROWS.filter((r) => !(r.serverSwitchOff && SERVER_SWITCHES_FORCED_ON));
+
+describe.each(LIVE_ROWS.filter((r) => r.expected.kind === 'opens'))('$id $title', (row) => {
   const want = row.expected as OpensExpect;
   it(`one tap opens ${want.route} with this row's own ids, exactly once`, async () => {
     await tapRow(row);
@@ -1034,7 +1050,7 @@ describe.each(ROWS.filter((r) => r.expected.kind === 'opens'))('$id $title', (ro
   });
 });
 
-describe.each(ROWS.filter((r) => r.expected.kind === 'gap'))('$id $title (gap)', (row) => {
+describe.each(LIVE_ROWS.filter((r) => r.expected.kind === 'gap'))('$id $title (gap)', (row) => {
   const gap = row.expected as GapExpect;
   it.failing(`one tap opens ${gap.right.route} (flip this row to opens(...) when the gap closes)`, async () => {
     await tapRow(row);
@@ -1046,7 +1062,7 @@ describe.each(ROWS.filter((r) => r.expected.kind === 'gap'))('$id $title (gap)',
   });
 });
 
-describe.each(ROWS.filter((r) => r.expected.kind === 'inPlace'))('$id $title (complete in place)', (row) => {
+describe.each(LIVE_ROWS.filter((r) => r.expected.kind === 'inPlace'))('$id $title (complete in place)', (row) => {
   const { drawn, reason } = row.expected as InPlaceExpect;
   it(`complete in place: ${reason}`, async () => {
     const ctx = await tapRow(row);
@@ -1055,7 +1071,7 @@ describe.each(ROWS.filter((r) => r.expected.kind === 'inPlace'))('$id $title (co
   });
 });
 
-describe.each(ROWS.filter((r) => r.expected.kind === 'sheet'))('$id $title', (row) => {
+describe.each(LIVE_ROWS.filter((r) => r.expected.kind === 'sheet'))('$id $title', (row) => {
   const { testID, shows } = row.expected as SheetExpect;
   it('one tap opens that row\'s own sheet or notice and navigates nowhere', async () => {
     const { view } = await tapRow(row);
@@ -1065,7 +1081,7 @@ describe.each(ROWS.filter((r) => r.expected.kind === 'sheet'))('$id $title', (ro
   });
 });
 
-describe.each(ROWS.filter((r) => r.expected.kind === 'noRow'))('$id $title', (row) => {
+describe.each(LIVE_ROWS.filter((r) => r.expected.kind === 'noRow'))('$id $title', (row) => {
   const want = row.expected as NoRowExpect;
   it(`no row, so no dead tap: ${want.reason}`, async () => {
     const { view } = await tapRow(row);
@@ -1076,7 +1092,7 @@ describe.each(ROWS.filter((r) => r.expected.kind === 'noRow'))('$id $title', (ro
   });
 });
 
-describe.each(ROWS.filter((r) => r.expected.kind === 'calls'))('$id $title', (row) => {
+describe.each(LIVE_ROWS.filter((r) => r.expected.kind === 'calls'))('$id $title', (row) => {
   const { fn, reason } = row.expected as CallsExpect;
   it(`one tap runs its own action: ${reason}`, async () => {
     await tapRow(row);
@@ -1085,7 +1101,7 @@ describe.each(ROWS.filter((r) => r.expected.kind === 'calls'))('$id $title', (ro
   });
 });
 
-describe.each(ROWS.filter((r) => r.expected.kind === 'disabled'))('$id $title', (row) => {
+describe.each(LIVE_ROWS.filter((r) => r.expected.kind === 'disabled'))('$id $title', (row) => {
   const want = row.expected as DisabledExpect;
   it(`disabled until it is real: ${want.reason}`, async () => {
     const { view } = await tapRow(row);
@@ -1184,6 +1200,8 @@ describe('completeness guards', () => {
       'screens/community/CommunityThreadScreen.tsx': 'the comments under one post (rows inside one conversation)',
       'screens/community/CommunityDmThreadScreen.tsx': 'the bubbles of one DM thread (rows inside one conversation)',
       'screens/community/CommunityChallengeDetailScreen.tsx': 'one challenge\'s comments and leaderboard (rows inside one conversation)',
+      // m#945: present once the space chat lands.
+      'screens/community/CommunitySpaceChatScreen.tsx': 'the messages of one space chat (rows inside one conversation)',
     };
     const SURFACES: Record<string, string[]> = {
       'screens/community/CoachCommunityInboxScreen.tsx': ['A1', 'A2', 'A3', 'A4', 'A5'],
