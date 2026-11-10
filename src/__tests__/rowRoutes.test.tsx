@@ -375,7 +375,7 @@ const ROWS: Row[] = [
       ...EMPTY_STATES,
       '/community/moderation/flagged': { items: [flagged(uuid(200), 'post', uuid(300), 'first post'), flagged(uuid(201), 'post', uuid(301), 'a reported post')] },
     },
-    screen: () => <CoachCommunityModerationScreen navigation={mockNavObject as never} />,
+    screen: () => <CoachCommunityModerationScreen />,
     tap: { testID: `coach-community-flagged-content-${uuid(201)}` },
     expected: opens('CoachCommunityPostDetail', { postId: uuid(301), flagged: true }),
   },
@@ -391,7 +391,7 @@ const ROWS: Row[] = [
     // A captionless reported photo: content "", the photo drawn (FlaggedPhoto), decisions beside it (community-moderation.service.ts:938-945 image).
     id: 'B2p', title: 'flagged captionless photo', role: 'coach', host: COACH_COMMUNITY_HOST,
     http: { ...EMPTY_STATES, '/community/moderation/flagged': { items: [flagged(uuid(205), 'message', uuid(305), '', { image: { url: 'https://img.example/p.jpg', width: 600, height: 800, expires_at: '2026-11-09T18:00:00.000Z' } })] } },
-    screen: () => <CoachCommunityModerationScreen navigation={mockNavObject as never} />,
+    screen: () => <CoachCommunityModerationScreen />,
     tap: { testID: `coach-community-flagged-row-${uuid(205)}` },
     expected: { kind: 'inPlace', reason: 'a reported photo is drawn whole with the decisions beside it, so the row names nothing it does not show', drawn: (ctx) => {
       expect(ctx.view.getByTestId(`coach-community-flagged-photo-${uuid(205)}`)).toBeTruthy();
@@ -408,7 +408,7 @@ function moderationInPlace(id: string, title: string, target: string, item: { id
     role: 'coach',
     host: COACH_COMMUNITY_HOST,
     http: { ...EMPTY_STATES, '/community/moderation/flagged': { items: [item] } },
-    screen: () => <CoachCommunityModerationScreen navigation={mockNavObject as never} />,
+    screen: () => <CoachCommunityModerationScreen />,
     tap: { testID: `coach-community-flagged-content-${item.id}` },
     expected: {
       kind: 'inPlace',
