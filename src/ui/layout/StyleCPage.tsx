@@ -214,10 +214,13 @@ export function StyleCLoadingLines({ rows = 4, label, lead }: { rows?: number; l
 }
 
 const s = StyleSheet.create({
-  bare: { flexGrow: 1, paddingHorizontal: 0, paddingBottom: 0 },
-  // Keep the entire Back/Save row inside scroll hosts. Recover the former
-  // 8pt top offset from the quiet space below, not from the 44pt target.
-  head: { marginTop: 0, paddingHorizontal: layout.gutter, paddingBottom: radius.sheet + 8 },
+  // KITCHEN-TITLE-954 (ctx#457 .mast padding-top 4): Screen's column rises 8 pt into its own forest top padding
+  // (insets.top + 12), so the Back row sits 4 pt under the status bar. The column carries the scroll host, so the
+  // whole Back/Save row stays inside it; nothing inside a host is pulled up.
+  bare: { flexGrow: 1, paddingHorizontal: 0, paddingBottom: 0, marginTop: -8 },
+  // Keep the entire Back/Save row inside scroll hosts (marginTop 0). 16 pt from the gold rule to the paper, as
+  // drawn; the 8 pt the column rises comes back here, so the paper's top does not move.
+  head: { marginTop: 0, paddingHorizontal: layout.gutter, paddingBottom: radius.sheet + 16 },
   bar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: -10, marginBottom: 2, zIndex: 1 },
   icon: { minWidth: layout.touchMin, minHeight: layout.touchMin, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 40, lineHeight: 45, letterSpacing: 0.4 },
