@@ -705,7 +705,8 @@ it('every chat opened outside Clients goes through coachInbox.ts, and every file
   // The brief's row takes its target from brief/briefActions.ts, which CoachBriefScreen re-exports (BRIEFA).
   // The coach Home's plan-ended list (CHURN-M, home-v11/PlanEnded.tsx) has its Message row in coachPlanEnded.test.tsx.
   const rows = [...ENTRIES.map(([probe]) => (probe === 'CoachBriefScreen' ? 'briefActions.ts' : `${path.basename(probe)}.tsx`)),
-    'CoachInboxV2.tsx', 'ClientDetailScreen.tsx', 'CoachSafetyAlertScreen.tsx', 'ClientInsightScreen.tsx', 'ClientLookupScreen.tsx', 'PlanEnded.tsx'];
+    'CoachInboxV2.tsx', 'ClientDetailScreen.tsx', 'CoachSafetyAlertScreen.tsx', 'ClientInsightScreen.tsx', 'ClientLookupScreen.tsx', 'PlanEnded.tsx',
+    'pushTapRouter.ts']; // COACH-ROW-CHAT: a coach's message row (the COACH-ROW-CHAT cases below)
   expect(callers.map(([file]) => file).sort()).toEqual(rows.sort());
   // Only the navigator, the chat itself and Clients screens that open a chat over themselves name the route.
   const naming = SOURCES.filter(([, source]) => /["']ClientMessages["']/.test(source)).map(([file]) => file);
@@ -725,4 +726,118 @@ it.each([
   await act(async () => ref.navigate('SettingsStack', { screen: 'SettingsHome' }));
   expect(view.getAllByRole('tab')).toHaveLength(6);
   mockFlags.coachBrief = true;
+});
+
+// COACH-ROW-CHAT (owner 203-D4, #203-E22: "open the clients chat"): a coach's "New message from <client>" row in the
+// notification list opens that client's chat the way the inbox row does (chatTarget through openTarget), and Back still
+// lands on the inbox (the part of COACH-CHAT-BACK that stays). The raw row is the server's, key for key, through the real
+// normalizer, the real routeNotification, routePushTap, attachPushNavigator and setPushSession, into the real navigator.
+const { normalizeNotification } = jest.requireActual('../../services/notificationsApi');
+const { routeNotification } = jest.requireActual('../../screens/notifications/NotificationCenterScreen');
+const DANA = { clientId: '0b9a2a52-6f0e-4c39-9d43-2f1f3c1f6a01', clientName: 'Dana' };
+const RAY = { clientId: '5d3c1e7a-8b2f-4a6d-9e10-7f4b2c8d9a02', clientName: 'Ray' };
+/**
+ * growth-project-backend 579104f0: sendAsClient -> notifyNewMessage(coachId, clientId, coachId, clientId)
+ * (messaging.service.ts:1039, :557-573: threadId = the client's id, senderName = resolveSenderName :200-210) ->
+ * MessageReceivedEmitter.emit (message-received.emitter.ts:35-47) -> createNotification (notifications.service.ts:607-617),
+ * read back whole by GET /notifications (notifications.controller.ts:58-65; findMany with no select, :726-730).
+ */
+const messageRow = (id: string, senderName: string, threadId?: string, deepLink = `tgp://messages/${threadId}`) => ({
+  id,
+  user_id: 'coach-1', // emitter :41, the client's current coach (messaging.service.ts:993)
+  kind: 'message_received', // emitter :42
+  payload: threadId === undefined ? { senderName } : { senderName, threadId }, // emitter :44 (JSON drops an undefined threadId)
+  body: `New message from ${senderName}`, // emitter :37
+  deep_link: deepLink, // emitter :38, :45
+  channel: 'inapp', // emitter :46
+  read_at: null, // schema.prisma model Notification
+  created_at: '2026-11-09T20:00:00.000Z',
+  ai_draft_id: null,
+  inbox_hidden: false,
+});
+const rowFor = ({ clientId, clientName }: { clientId: string; clientName: string }, id = `n-${clientId}`) =>
+  messageRow(id, clientName, clientId);
+const tapRow = (raw: object) => act(async () => {
+  pushTap();
+  routeNotification(normalizeNotification(raw), { navigate: jest.fn() }); // NotificationCenterScreen.tsx:82-90
+});
+
+it('COACH-ROW-CHAT flag on: a message row opens that client\'s chat over the inbox in one navigate; Back lands on the inbox', async () => {
+  const view = await mount();
+  await act(async () => ref.navigate('ClientsStack', { screen: 'NotificationCenter' }));
+  const navigate = jest.spyOn(ref, 'navigate');
+  await tapRow(rowFor(DANA));
+  expect(navigate.mock.calls).toEqual([['Messages', { screen: 'ClientMessages', params: DANA, initial: false }]]);
+  expect([focusedTab(), stackOf('Messages'), ref.getCurrentRoute()?.params]).toEqual(['Messages', ['MessagesInbox', 'ClientMessages'], DANA]);
+  expect(view.getByRole('tab', { name: MESSAGES_TAB })).toBeSelected();
+  navigate.mockRestore();
+  await act(async () => ref.goBack());
+  expect([focusedTab(), ref.getCurrentRoute()?.name]).toEqual(['Messages', 'MessagesInbox']);
+});
+
+it.each([
+  ['a chat', [['ClientMessages', RAY]]],
+  ['a chat and its contact page', [['ClientMessages', RAY], ['ContactView', { contactId: RAY.clientId, displayName: RAY.clientName }]]],
+] as const)('COACH-ROW-CHAT flag on: with %s for another client left open with unsent text, the row puts this chat right on the inbox; the other keeps its text', async (_left, left) => {
+  const ask = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  const view = await mount();
+  await openChat(RAY);
+  await fireEvent.changeText(view.getByLabelText('Message text'), 'Ray, your plan is in');
+  for (const [screen, params] of left.slice(1)) await act(async () => ref.navigate('Messages', { screen, params }));
+  const before = messagesKeys();
+  await act(async () => ref.navigate('ClientsStack', { screen: 'NotificationCenter' }));
+  await tapRow(rowFor(DANA));
+  expect(ask).not.toHaveBeenCalled();
+  expect([stackOf('Messages'), messagesKeys()[0], before.includes(messagesKeys()[1]), ref.getCurrentRoute()?.params, box(view)])
+    .toEqual([['MessagesInbox', 'ClientMessages'], before[0], false, DANA, '']);
+  await act(async () => ref.goBack());
+  expect(ref.getCurrentRoute()?.name).toBe('MessagesInbox'); // the inbox, never the other chat
+  await openChat(RAY);
+  expect(box(view)).toBe('Ray, your plan is in');
+  ask.mockRestore();
+});
+
+it('COACH-ROW-CHAT flag off: the row opens the chat where chatTarget\'s off form puts it, over the client list; Back lands there', async () => {
+  mockFlags.coachTabsV2 = false;
+  await mount();
+  await act(async () => ref.navigate('ClientsStack', { screen: 'NotificationCenter' }));
+  await tapRow(rowFor(DANA));
+  expect([focusedTab(), stackOf('ClientsStack'), stackOf('Messages'), ref.getCurrentRoute()?.params])
+    .toEqual(['ClientsStack', ['ClientsList', 'NotificationCenter', 'ClientMessages'], undefined, DANA]);
+  await act(async () => ref.goBack());
+  expect(ref.getCurrentRoute()?.name).toBe('NotificationCenter'); // chatTarget off: the chat over the screen it opened from
+});
+
+it('COACH-ROW-CHAT: of two rows for two clients, the second opens the second client\'s chat', async () => {
+  await mount();
+  const rows = [rowFor(RAY, 'n-1'), rowFor(DANA, 'n-2')].map((raw) => normalizeNotification(raw));
+  await act(async () => { pushTap(); routeNotification(rows[1], { navigate: jest.fn() }); });
+  expect(ref.getCurrentRoute()?.params).toEqual(DANA);
+});
+
+it('COACH-ROW-CHAT: the name the row opens with is the one the inbox row opens the same chat with', async () => {
+  // CoachInboxV2.tsx:239 passes counterpart.display_name (messaging-inbox.service.ts:224, the user's trimmed name), the
+  // same text the row's senderName holds (messaging.service.ts:206) for a client with a name.
+  inboxTap = (n) => require('../coachInbox').openInboxChat(n, DANA.clientId, 'Dana');
+  const view = await mount();
+  await fireEvent.press(view.getByRole('tab', { name: MESSAGES_TAB }));
+  await fireEvent.press(view.getByText('../screens/coach/MessagesScreen'));
+  const fromInbox = ref.getCurrentRoute()?.params;
+  await act(async () => ref.goBack());
+  await tapRow(rowFor(DANA));
+  expect(ref.getCurrentRoute()?.params).toEqual(fromInbox);
+  expect((ref.getCurrentRoute()?.params as { clientName: string }).clientName).toBe('Dana');
+});
+
+it.each([
+  ['a bare tgp://messages row (no thread)', messageRow('n-bare', 'Dana', undefined, 'tgp://messages')],
+  ['a row whose thread is not a UUID', messageRow('n-bad', 'Dana', 'client-1', 'tgp://messages/client-1')],
+  ['a row for a client with no name (the server writes "Your coach")', messageRow('n-anon', 'Your coach', DANA.clientId)],
+  ['a row with a blank name', messageRow('n-blank', '  ', DANA.clientId)],
+])('COACH-ROW-CHAT flag on: %s opens the inbox, as today, never a chat with a made-up or blank name', async (_name, raw) => {
+  await mount();
+  await openChat(RAY);
+  await act(async () => ref.navigate('CommandCenter'));
+  await tapRow(raw);
+  expect([focusedTab(), stackOf('Messages')]).toEqual(['Messages', ['MessagesInbox']]);
 });
