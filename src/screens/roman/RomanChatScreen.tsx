@@ -623,6 +623,7 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
           onReport={onOpenReport}
           onClose={() => setActionTarget(null)}
           canReport={actionTarget != null && !isLocalRomanId(actionTarget.id)}
+          canReply={actionTarget?.safetyActions == null}
         />
         {/* LO-950R2 N3: keyed by chat, so a chat change also drops the sheet's pick, words and error. */}
         <ReportMessageSheet
