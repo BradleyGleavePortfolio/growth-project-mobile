@@ -10,17 +10,21 @@ import { useTheme } from '../../theme/useTheme';
 import { spacing, radius } from '../../theme/tokens';
 import { isOptimisticId } from '../../hooks/useCommunity';
 import type { CommunityDmMessage } from '../../api/communityApi';
+import { formatTime } from '../../calendar/calendarTime';
 
 export interface MessageBubbleProps {
   message: CommunityDmMessage;
   /** Calling client's user id, to decide alignment. */
   myUserId: string;
+  /** COACH-DM-M (Studio): the send time inside the bubble, in the phone's zone. Unset, nothing changes. */
+  showTime?: boolean;
   testID?: string;
 }
 
 export default function MessageBubble({
   message,
   myUserId,
+  showTime,
   testID,
 }: MessageBubbleProps): React.ReactElement {
   const { semanticColors } = useTheme();
@@ -66,6 +70,10 @@ export default function MessageBubble({
           >
             Sending…
           </Text>
+        ) : showTime ? (
+          <Text style={[styles.status, !mine && styles.timeTheirs, { color: mine ? semanticColors.textOnAccent : semanticColors.textMuted }]}>
+            {formatTime(new Date(message.created_at))}
+          </Text>
         ) : null}
       </View>
     </View>
@@ -105,4 +113,5 @@ const styles = StyleSheet.create({
     marginTop: 2,
     textAlign: 'right',
   },
+  timeTheirs: { textAlign: 'left' },
 });

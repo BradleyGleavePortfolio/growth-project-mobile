@@ -14,7 +14,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
-import { forestPop as fp, spacing } from '../../theme/tokens';
+import { forestPop as fp, radius, spacing } from '../../theme/tokens';
 import AckSignalChip, { type AckSignal } from './AckSignalChip';
 
 export interface ThreadHeaderProps {
@@ -27,6 +27,11 @@ export interface ThreadHeaderProps {
   onBack?: () => void;
   /** Deep tone: what sits in 05b's info position. */
   trailing?: React.ReactNode;
+  /** COACH-DM-M (Studio): a line under the title, the person's initials beside it, and Close in place of Back. Unset,
+   * the bar draws exactly as before (the client's DM thread and the voice note page pass none). */
+  subtitle?: string;
+  initials?: string | null;
+  backKind?: 'back' | 'close';
   testID?: string;
 }
 
@@ -36,21 +41,34 @@ export default function ThreadHeader({
   tone = 'default',
   onBack,
   trailing,
+  subtitle,
+  initials,
+  backKind = 'back',
   testID,
 }: ThreadHeaderProps): React.ReactElement {
   const { semanticColors } = useTheme();
   if (tone === 'deep') {
+    const close = backKind === 'close';
+    const heading = (
+      <Text style={[styles.deepTitle, subtitle ? styles.stacked : null]} numberOfLines={1} accessibilityRole="header">{title}</Text>
+    );
     return (
       <View style={styles.deep} testID={testID}>
         <View style={styles.slot}>
           {onBack ? (
-            <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Back" hitSlop={4}
-              testID={testID ? `${testID}-back` : undefined} style={({ pressed }) => [styles.slot, pressed && styles.pressed]}>
-              <Ionicons name="chevron-back" size={24} color={fp.onDeep} />
+            <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel={close ? 'Close' : 'Back'} hitSlop={4}
+              testID={testID ? `${testID}-${close ? 'close' : 'back'}` : undefined} style={({ pressed }) => [styles.slot, pressed && styles.pressed]}>
+              <Ionicons name={close ? 'close' : 'chevron-back'} size={24} color={fp.onDeep} />
             </Pressable>
           ) : null}
         </View>
-        <Text style={styles.deepTitle} numberOfLines={1} accessibilityRole="header">{title}</Text>
+        {initials ? <View style={styles.tile}><Text style={styles.tileText}>{initials}</Text></View> : null}
+        {subtitle ? (
+          <View style={styles.titles}>
+            {heading}
+            <Text style={styles.deepSub} numberOfLines={1}>{subtitle}</Text>
+          </View>
+        ) : heading}
         <View style={styles.slot}>{trailing}</View>
       </View>
     );
@@ -96,5 +114,11 @@ const styles = StyleSheet.create({
   },
   slot: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   deepTitle: { flex: 1, minWidth: 0, fontFamily: 'Inter_600SemiBold', fontSize: 20, lineHeight: 25, fontWeight: '600', color: fp.onDeep },
+  // COACH-DM-M (Studio thread bar): the initials tile, and the title with its line under it.
+  titles: { flex: 1, minWidth: 0 },
+  stacked: { flex: 0 },
+  deepSub: { fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 19, color: fp.onDeepMuted },
+  tile: { width: 40, height: 40, borderRadius: radius.input, backgroundColor: fp.sage, alignItems: 'center', justifyContent: 'center' },
+  tileText: { fontFamily: 'Inter_600SemiBold', fontSize: 14, fontWeight: '600', color: fp.deep },
   pressed: { opacity: 0.6 },
 });

@@ -194,6 +194,8 @@ interface PendingTap {
   waitForSignIn?: boolean;
   /** The signed-in user the tap belongs to; null while bootstrap is unknown. */
   ownerUserId: string | null;
+  /** COACH-DM-M: `path` is followed only for this role; any other role gets `screen` (coachDmLink). */
+  linkFor?: PushRole;
 }
 
 let navigator: PushNavigator | null = null;
@@ -315,6 +317,7 @@ export function routePushTap(
     screen: actionScreen,
     params: decodePushParams(actionParams),
     ownerUserId: sessionUserId(session),
+    ...coachDmLink(actionScreen, deepLink, sessionUserId(session)),
   };
   flushPendingPushTap();
 }
@@ -355,9 +358,9 @@ export function flushPendingPushTap(): boolean {
   // frame between an auth-state change and the navigator commit).
   if (!routeNames.includes(ROLE_ANCHOR[session.role])) return false;
 
-  const { screen, params, path } = pending;
+  const { screen, params, path, linkFor } = pending;
   pending = null;
-  if (path !== undefined) {
+  if (path !== undefined && (!linkFor || linkFor === session.role)) {
     const target = resolveAppLink(path, session.role);
     // A trusted but unsupported push URL keeps its existing inbox fallback.
     // URL opens have no fallback, and untrusted origins never enter the queue.
@@ -435,4 +438,19 @@ export function __resetPushTapRouterForTests(): void {
   pending = null;
   session = { kind: 'unknown' };
   seen.clear();
+}
+
+/**
+ * COACH-DM-M (b#1243 CONTRACT 6763103674): a community DM row's link names the other person, tgp://community/dm/<id>.
+ * Rows stored before b#1243 keep tgp://community/dms/<workspace>:<lo>:<hi>: read as the id that is not the signed-in
+ * user's, and when neither is, nothing is guessed. Held for a coach only: a client's row keeps its kind's Community
+ * screen (m#956 N2), as does a build whose switches cannot open the thread (resolveAppLink answers null).
+ */
+function coachDmLink(screen: string, deepLink: string | undefined, userId: string | null): Pick<PendingTap, 'path' | 'linkFor'> {
+  const path = screen === 'Community' && deepLink !== undefined ? incomingLinkPath(deepLink)?.split(/[?#]/, 1)[0] : null;
+  if (!path) return {};
+  if (/^community\/dm\/[^/]+$/.test(path)) return { path, linkFor: 'coach' };
+  const pair = /^community\/dms\/[^/:]+:([^/:]+):([^/:]+)$/.exec(path);
+  const other = pair && userId ? (pair[1] === userId ? pair[2] : pair[2] === userId ? pair[1] : null) : null;
+  return other ? { path: `community/dm/${other}`, linkFor: 'coach' } : {};
 }
