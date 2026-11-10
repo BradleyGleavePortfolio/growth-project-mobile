@@ -20,9 +20,13 @@
  *     alone also passes when the harness breaks.
  *
  * Space chat: when communitySpaceChat lands in featureFlags (m#945), SPACE_CHAT_SHIPPED turns A2 to A5, N3 and N3c
- * into plain opens rows to CommunitySpaceChat with their own ids, and moves C5 (a coach's cohort row) and F1 (a
- * SpaceTree space row) to CommunitySpaceChat {cohortId}, as m#945 draws them, with no one editing this file. Until
- * then A2 is the voice note, A3 to A5, N3 and N3c are gaps, and C5 and F1 open today's cohort screens.
+ * into plain opens rows to CommunitySpaceChat with their own ids, moves C5 (a coach's cohort row) to CommunitySpaceChat
+ * {cohortId}, and turns F1 (a SpaceTree space row) from a gap into a plain opens row to CommunitySpaceChat {cohortId},
+ * as m#945 draws them, with no one editing this file. Until then A2 is the voice note, C5 opens the coach's cohort
+ * screen, and A3 to A5, N3, N3c and F1 are gaps. F1 is a gap because its destination drops the id it is sent: the
+ * cohort screen CommunitySpace reads no route params, so every space row lands on the Hall feed (LO-956R1 B1). F16
+ * (the Today cohort card) sends the same and stays a gap in both cases until its own fix: m#945 does not change
+ * CommunityTodayScreen.
  *
  * Server switch-off rows (D8 the older Messages list, F13a and F13b the Find notices) need a server switch off; the
  * "All switches on" job forces every server switch on (ALL_SWITCHES_ON_NAMES set), so there they are left out. See "Found, not fixed" on the PR for each gap's row id, file:line and follow-up.
@@ -670,10 +674,34 @@ const post = (id: string, title: string | null, body: string | null, extra: obje
 });
 const POSTS_URL = `/community/workspaces/${WS}/posts`;
 const spaceScreen = () => <CommunitySpaceScreen space="hall" />;
+
+/**
+ * F1 and F16 (LO-956R1 B1): the row sends CommunitySpace with space 'cohort' and its cohortId (SpaceTree.tsx:95-96,
+ * CommunityTodayScreen.tsx:153), but the destination drops both: CommunitySpaceScreen is mounted as the route itself
+ * (CommunityNavigator.tsx:82), takes `space` as a prop that defaults to 'hall' and reads no route params
+ * (CommunitySpaceScreen.tsx:78-85), so whichever space a member taps she gets the Hall feed. The right screen is the
+ * cohort's own space, CommunitySpaceChat {cohortId}, as F1's shipped case and m#945 draw it. The symptom has two
+ * halves so either fix turns a mark red: a sender fix changes the navigate (the it.failing case then passes and the
+ * first half fails); a screen fix makes the screen read its route (the second half fails).
+ */
+const SPACE_SCREEN_FILE = 'screens/community/CommunitySpaceScreen.tsx';
+const SPACE_DROPS_WHY = 'CommunitySpace drops the cohortId: CommunitySpaceScreen.tsx:78-85 takes space as a prop defaulting to hall and reads no route params (mounted as the route at CommunityNavigator.tsx:82)';
+const spaceGap = (cohortId: string): GapExpect => ({
+  kind: 'gap',
+  right: opens('CommunitySpaceChat', { cohortId }),
+  why: SPACE_DROPS_WHY,
+  symptom: () => {
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).toHaveBeenCalledWith('CommunitySpace', { space: 'cohort', cohortId });
+    const screenSrc = fs.readFileSync(path.join(SRC, SPACE_SCREEN_FILE), 'utf8');
+    expect(screenSrc).not.toMatch(/useRoute/);
+    expect(screenSrc).not.toMatch(/params/);
+  },
+});
 ROWS.push(
   homeRow('F1', 'SpaceTree space row', COHORT_2, SPACE_CHAT_SHIPPED
     ? opens('CommunitySpaceChat', { cohortId: COHORT_2 })
-    : opens('CommunitySpace', { space: 'cohort', cohortId: COHORT_2 })),
+    : spaceGap(COHORT_2)),
   homeRow('F2', 'SpaceTree coach row', 'coach', opens('Home', { screen: 'Messages' })),
   homeRow('F3', 'SpaceTree Leaderboard row', 'leaderboard', opens('Leaderboard')),
   homeRow('F4', 'SpaceTree Classroom row', 'classroom', opens('CommunityClassroom')),
@@ -780,11 +808,12 @@ const TODAY_HTTP = {
     empty_reason: null,
   },
 };
-const todayRow = (id: string, title: string, testID: string, expected: OpensExpect): Row => ({
+const todayRow = (id: string, title: string, testID: string, expected: Expected): Row => ({
   id, title, role: 'client', host: CLIENT_COMMUNITY_HOST, http: TODAY_HTTP, screen: () => <CommunityTodayScreen />, tap: { testID }, expected,
 });
 ROWS.push(
-  todayRow('F16', 'Today cohort card', 'community-today-cohort', opens('CommunitySpace', { space: 'cohort', cohortId: COHORT })),
+  // A gap in both SPACE_CHAT_SHIPPED cases: m#945 leaves CommunityTodayScreen.tsx:153 and CommunitySpaceScreen as they are.
+  todayRow('F16', 'Today cohort card', 'community-today-cohort', spaceGap(COHORT)),
   todayRow('F17', 'Today pinned post card', 'community-today-pinned', opens('CommunityThread', { postId: uuid(95) })),
   todayRow('F18', 'Today event card', 'community-today-event', opens('CommunityEventDetail', { eventId: uuid(94) })),
   todayRow('F19', 'Today challenge card', 'community-today-challenge', opens('CommunityChallengeDetail', { challengeId: uuid(96) })),
@@ -884,17 +913,20 @@ const notifGap = (id: string, title: string, role: Role, row: { id: string; body
 });
 const SPACE_LINK_WHY = 'the phone reads no community/cohorts link: notificationsApi.ts:318 maps every community_* row to Community and pushTapRouter.ts:299-304 drops the link';
 const NESTED = (root: string, screen: string, params: Record<string, unknown>) => opens(root, { screen, params, initial: false });
+// The server's DM key sorts the two user ids (community-dms.repository.ts:23-26 dmKey: [lo, hi] = [a, b].sort()), and
+// the push link is tgp://community/dms/${dmKey} (community-dms.service.ts:223). Built once here, in the server's order.
+const DM_LINK = `tgp://community/dms/${WS}:${[CLIENT, COACH_USER].sort().join(':')}`;
 ROWS.push(
   notifGap('N1', 'community_post_replied (student)', 'client',
     communityRow('n-post', 'community_post_replied', 'Someone replied to your post.', `tgp://community/posts/${uuid(121)}`, { type: 'post', id: uuid(121) }),
     NESTED('CommunityTab', 'CommunityThread', { postId: uuid(121) }),
     'community-posts.service.ts:463 tgp://community/posts/<id> matches no phone link; the row lands on the Community root', landsOnCommunityRoot),
   notifGap('N2', 'community_dm_received (student)', 'client',
-    communityRow('n-dm', 'community_dm_received', 'New direct message.', `tgp://community/dms/${WS}:${COACH_USER}:${CLIENT}`, { type: 'dm', id: uuid(122) }),
+    communityRow('n-dm', 'community_dm_received', 'New direct message.', DM_LINK, { type: 'dm', id: uuid(122) }),
     NESTED('CommunityTab', 'CommunityDmThread', { recipientId: COACH_USER }),
     'community-dms.service.ts:223 tgp://community/dms/<dmKey> matches no phone link; the row lands on the Community root', landsOnCommunityRoot),
   notifGap('N2c', 'community_dm_received (coach, see Owner decisions: no coach DM screen exists)', 'coach',
-    communityRow('n-dmc', 'community_dm_received', 'New direct message for coach.', `tgp://community/dms/${WS}:${COACH_USER}:${CLIENT}`, { type: 'dm', id: uuid(123) }),
+    communityRow('n-dmc', 'community_dm_received', 'New direct message for coach.', DM_LINK, { type: 'dm', id: uuid(123) }),
     NESTED('CommunityStack', 'CommunityDmThread', { recipientId: CLIENT }),
     'the coach app has no CommunityDmThread route; the row stays on the notification list', staysOnCoachList),
 );
@@ -1160,9 +1192,20 @@ describe('completeness guards', () => {
     }
     // The server writes a post row with kind 'text' only (community-coach-inbox.service.ts:142-160); the mapper would pass others.
     const POST_NOT_SENT = new Set(['post:voice', 'post:photo']);
+    // The row types come from the mapper's runtime gate, InboxRowWireSchema's type enum (coachCommunityApi.ts:644-658;
+    // safeParse at :669 skips a row that fails). CoachInboxItemSchema (:131) holds the same enum text but is parsed
+    // nowhere, so the slice starts at the wire schema, not at the first match.
+    const api = fs.readFileSync(path.join(SRC, 'api/coachCommunityApi.ts'), 'utf8');
+    const wireStart = api.indexOf('const InboxRowWireSchema');
+    expect(wireStart).toBeGreaterThanOrEqual(0);
+    const wire = api.slice(wireStart, api.indexOf('.passthrough()', wireStart));
+    const typeEnum = wire.match(/type: z\.enum\(\[([^\]]*)\]\)/);
+    expect(typeEnum).not.toBeNull();
+    const rowTypes = [...(typeEnum?.[1] ?? '').matchAll(/'(\w+)'/g)].map((m) => m[1]);
+    expect(rowTypes.length).toBeGreaterThan(0);
     const missing: string[] = [];
     for (const kind of COACH_INBOX_ROW_KINDS) {
-      for (const type of ['message', 'post']) {
+      for (const type of rowTypes) {
         const combo = `${type}:${kind}`;
         if (!seen.has(combo) && !POST_NOT_SENT.has(combo)) missing.push(combo);
       }
@@ -1190,7 +1233,8 @@ describe('completeness guards', () => {
     const tree = fs.readFileSync(path.join(SRC, 'components/community/SpaceTree.tsx'), 'utf8');
     const union = tree.slice(tree.indexOf('export type SpaceTarget'), tree.indexOf('type IconName'));
     const kinds = [...union.matchAll(/kind: '(\w+)'/g)].map((m) => m[1]);
-    const routeNames = [...union.matchAll(/name: '(\w+)'(?: \| '(\w+)')*/g)].flatMap((m) => [m[1], m[2]]).filter(Boolean);
+    // Every quoted name in each name: union, wherever it sits (a repeated capture group keeps only its last match).
+    const routeNames = [...union.matchAll(/name: ([^;}]+)/g)].flatMap((m) => [...m[1].matchAll(/'(\w+)'/g)].map((q) => q[1]));
     const targetRow: Record<string, string> = { space: 'F1', coach: 'F2', Leaderboard: 'F3', CommunityClassroom: 'F4' };
     notInTable([...kinds.filter((k) => k !== 'route'), ...routeNames].filter((k) => !(k in targetRow) || !rowIds.has(targetRow[k])));
   });
