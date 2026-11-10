@@ -16,12 +16,13 @@ import { captureError } from '../../../services/sentry';
 import type { RomanChatsApi, RomanChatsFailure, RomanTranscriptPage } from '../../../api/romanChatsApi';
 import type { RomanMessage } from '../../../api/romanApi';
 import { ROMAN_INTERRUPTED_NOTE } from '../../../components/roman/romanVoice';
+import { featureFlags } from '../../../config/featureFlags';
 
 jest.mock('../../../services/api', () => ({ __esModule: true, default: {} }));
 jest.mock('../../../utils/haptics', () => ({ lightTap: jest.fn(), mediumTap: jest.fn(), warningTap: jest.fn(), selectionTap: jest.fn() }));
 jest.mock('../../../utils/logger', () => ({ logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn(), debug: jest.fn(), log: jest.fn() } }));
 jest.mock('../../../theme/ThemeProvider', () => ({
-  useTheme: () => ({ colors: new Proxy({}, { get: () => '#123456' }) }),
+  useTheme: () => ({ colors: new Proxy({}, { get: () => '#123456' }), semanticColors: new Proxy({}, { get: () => '#123456' }) }),
 }));
 jest.mock('expo-font', () => ({ isLoaded: () => true, loadAsync: jest.fn() }));
 jest.mock('../../../services/sentry', () => ({ captureError: jest.fn(), setSentryUser: jest.fn() }));
@@ -264,4 +265,49 @@ it('a sent reply is not printed as raw "> " text and the quoted words are not re
   await screen.findByTestId('roman-transcript-message-m1');
   expect(screen.queryByText(/^> /)).toBeNull();
   expect(screen.getByLabelText('You said: Can I do it indoors?')).toBeTruthy();
+});
+
+// FIX-950R3 (LO-950R3 B1): the history reads a sent reply as the room does; everything else draws as before.
+describe('FIX-950R3: a quoted turn in the history', () => {
+  const read = (content: string, role: RomanMessage['role'] = 'user') =>
+    renderScreen(makeApi({ readMessages: jest.fn(async () => pageOf([msg('m1', role, content)])) }));
+
+  it('draws the strip with its label, the body and "You said: <body>", and no "> "', async () => {
+    const screen = await read('> Keep Thursday easy\n\nCan I do it indoors?');
+    const strip = await screen.findByTestId('roman-transcript-message-m1-quote');
+    expect(strip.props.accessibilityLabel).toBe('Replying to: Keep Thursday easy');
+    expect(screen.getByText('Keep Thursday easy')).toBeTruthy();
+    expect(screen.getByText('Can I do it indoors?')).toBeTruthy();
+    expect(screen.getByLabelText('You said: Can I do it indoors?')).toBeTruthy();
+    expect(screen.queryByText(/^> /)).toBeNull();
+    expect(screen.queryByLabelText(/^You said: > /)).toBeNull();
+  });
+
+  it.each([
+    ['a plain turn', 'Can I do it indoors?', 'user', 'You'],
+    ['a "> " line with no blank line after it', '> Keep Thursday easy\nCan I do it indoors?', 'user', 'You'],
+    ['a "> " line with an empty body', '> Keep Thursday easy\n\n   ', 'user', 'You'],
+    ['a Roman turn that starts with a "> " line', '> Keep Thursday easy\n\nThat is what I said.', 'assistant', 'Roman'],
+  ] as const)('%s stays as text, with no strip', async (_name, content, role, who) => {
+    const screen = await read(content, role);
+    await screen.findByTestId('roman-transcript-message-m1');
+    expect(screen.queryByTestId('roman-transcript-message-m1-quote')).toBeNull();
+    expect(screen.getByLabelText(`${who} said: ${content}`).props.children).toBe(content);
+  });
+
+  it('a Roman turn keeps its interrupted note and crisis actions and is not split', async () => {
+    const pin = jest.replaceProperty(featureFlags, 'crisisActions', true);
+    try {
+      const content = '> A line of Roman’s own\n\nThe rest of it.';
+      const screen = await renderScreen(makeApi({
+        readMessages: jest.fn(async () => pageOf([{ ...msg('m1', 'assistant', content), interrupted: true, safetyActions: ['call_988'] }])),
+      }));
+      expect(await screen.findByText(ROMAN_INTERRUPTED_NOTE)).toBeTruthy();
+      expect(screen.getByTestId('roman-transcript-crisis-m1')).toBeTruthy();
+      expect(screen.queryByTestId('roman-transcript-message-m1-quote')).toBeNull();
+      expect(screen.getByLabelText(`Roman said: ${content}`)).toBeTruthy();
+    } finally {
+      pin.restore();
+    }
+  });
 });

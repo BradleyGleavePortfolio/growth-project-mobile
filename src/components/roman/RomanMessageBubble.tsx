@@ -16,6 +16,7 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View, type AccessibilityActionEvent } from 'react-native';
 import RomanAvatar from './RomanAvatar';
 import RomanCrisisActions from './RomanCrisisActions';
+import RomanQuoteStrip from './RomanQuoteStrip';
 import { featureFlags } from '../../config/featureFlags';
 import { ROMAN_INTERRUPTED_NOTE } from './romanVoice';
 import { splitRomanQuote } from './romanReply';
@@ -187,21 +188,7 @@ function RomanMessageBubbleComponent({
         style={[styles.userBubble, { backgroundColor: c.bgSurface, borderColor: c.border }]}
         testID={testID ? `${testID}-bubble` : undefined}
       >
-        {quoted ? (
-          // The people's chat reply strip (MessageBubble replyStub) and its label, reused.
-          <View
-            style={[styles.quote, { backgroundColor: c.bgPrimary }]}
-            accessible
-            accessibilityRole="text"
-            accessibilityLabel={`Replying to: ${quoted.quote}`}
-            testID={testID ? `${testID}-quote` : undefined}
-          >
-            <View style={[styles.quoteBar, { backgroundColor: c.accent }]} />
-            <Text style={[styles.quoteText, { color: c.textMuted }]} numberOfLines={2}>
-              {quoted.quote}
-            </Text>
-          </View>
-        ) : null}
+        {quoted ? <RomanQuoteStrip quote={quoted.quote} testID={testID ? `${testID}-quote` : undefined} /> : null}
         <Text style={[styles.userText, { color: c.textPrimary }]} accessibilityLabel={`You said: ${said}`}>
           {said}
         </Text>
@@ -241,10 +228,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg, paddingVertical: 10,
   },
   userText: { ...typography.body, lineHeight: 24 },
-  quote: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderRadius: radius.control,
-    paddingVertical: 6, paddingHorizontal: spacing.sm, marginBottom: 6,
-  },
-  quoteBar: { width: 2, alignSelf: 'stretch', borderRadius: radius.control },
-  quoteText: { ...typography.bodySmall, flex: 1, fontSize: 13 },
 });
