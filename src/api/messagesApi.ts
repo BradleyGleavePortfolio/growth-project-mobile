@@ -26,6 +26,7 @@ import type { AxiosResponse } from 'axios';
 import { emitTutorialSignal } from '../tutorial/tutorialEvents';
 import { blockPlaced, blockLifted } from '../lib/blockSync';
 import { blockListOwner } from '../store/blockedUsersStore';
+import { CRISIS_LINE_911_988 } from '../constants/crisisLines';
 
 /**
  * The categories the report sheet offers. The backend DTO
@@ -72,7 +73,7 @@ export const REPORT_WIRE_REASON: Readonly<Record<ReportReason, ReportWireReason>
 
 /** Shown with reasons that can mean someone is at risk right now. */
 export const REPORT_EMERGENCY_NOTE =
-  'Reports are not for emergencies. If you are in danger, call 911. If you are struggling emotionally, call or text 988.';
+  `Reports are not for emergencies. ${CRISIS_LINE_911_988}`; // #202-S5: its 911 / 988 sentences live in constants/crisisLines
 
 export function reportNeedsEmergencyNote(reason: ReportReason | null): boolean {
   return reason === 'self_harm' || reason === 'violence';

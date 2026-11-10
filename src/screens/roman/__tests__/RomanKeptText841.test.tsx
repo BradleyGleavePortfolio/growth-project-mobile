@@ -71,7 +71,7 @@ it('a failed send keeps the text, also after leaving; a sent message leaves the 
   const a = await open();
   await fireEvent.changeText(a.getByTestId(INPUT), 'Swap my Thursday run for a ride?');
   await act(async () => { fireEvent.press(a.getByTestId('roman-composer-send')); });
-  expect(state.send).toHaveBeenCalledWith('Swap my Thursday run for a ride?');
+  expect(state.send).toHaveBeenCalledWith('Swap my Thursday run for a ride?', expect.objectContaining({ key: expect.any(String) }));
   expect(boxOf(a)).toBe('Swap my Thursday run for a ride?');
   await a.unmount();
   state.send = jest.fn(async () => 'sent' as const);

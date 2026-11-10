@@ -64,7 +64,7 @@ jest.mock('../store/coachStore', () => {
 jest.mock('../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'coach-1', role: 'coach' }) }));
 jest.mock('../services/notificationsApi', () => ({ fetchUnreadCount: () => mockUnread() }));
 jest.mock('../hooks/usePendingAiDrafts', () => ({ usePendingAiDrafts: () => mockDrafts() }));
-const mockFlags = { coachHomeV11: true, romanChat: true, coachBrief: false, coachTabsV2: true };
+const mockFlags = { coachHomeV11: true, romanChat: true, coachBrief: false, coachTabsV2: true, clientPathCopilot: false };
 jest.mock('../config/featureFlags', () => ({ featureFlags: mockFlags }));
 jest.mock('../screens/coach/command-center/CoachHomeCards', () => {
   const R = jest.requireActual<typeof import('react')>('react');
@@ -81,7 +81,7 @@ jest.mock('../screens/coach/command-center/ActionQueueScreen', () => mockScreen(
 jest.mock('../screens/coach/command-center/AtRiskScreen', () => mockScreen('at-risk'));
 jest.mock('../screens/coach/command-center/WinStreaksScreen', () => mockScreen('win-streaks'));
 jest.mock('../screens/coach/command-center/InboxScreen', () => mockScreen('inbox'));
-const mockSources = { monthSoFar: jest.fn(), nextPayout: jest.fn(), ltv: jest.fn(), atRisk: jest.fn() };
+const mockSources = { monthSoFar: jest.fn(), nextPayout: jest.fn(), ltv: jest.fn(), atRisk: jest.fn(), actionQueue: jest.fn(), pathChangeDrafts: jest.fn() };
 jest.mock('../screens/coach/command-center/coachHomeSources', () => ({ get coachHomeSources() { return mockSources; } }));
 
 // Required after the mocks above exist (an import would be hoisted above them).
@@ -113,7 +113,9 @@ const overviewReads = () => mockGet.mock.calls.filter(([url]) => url === '/coach
 
 beforeEach(() => {
   jest.clearAllMocks();
-  Object.assign(mockFlags, { coachHomeV11: true, coachTabsV2: true, romanChat: true });
+  Object.assign(mockFlags, { coachHomeV11: true, coachTabsV2: true, romanChat: true, clientPathCopilot: false });
+  mockSources.actionQueue.mockResolvedValue([]);
+  mockSources.pathChangeDrafts.mockResolvedValue([]);
   mockFocus.current = true;
   mockWindow.fontScale = 1;
   mockUnread.mockResolvedValue(2);
@@ -142,7 +144,7 @@ beforeEach(() => {
 
 async function renderHome() {
   const view = await render(<CommandCenterScreen />);
-  await waitFor(() => expect(view.getByTestId('home-alerts')).toBeTruthy());
+  await waitFor(() => expect(view.queryAllByTestId(/^home-(hero-zero|hero-wins|hero-today|tiles)$/).length).toBeGreaterThan(0)); // the overview is in
   await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
   return view;
 }
@@ -151,19 +153,23 @@ const label = (v: View, id: string) => v.getByTestId(id).props.accessibilityLabe
 const press = (v: View, ...ids: string[]) => ids.reduce((p, id) => p.then(() => fireEvent.press(v.getByTestId(id))), Promise.resolve());
 
 describe('coach Home, flag on, with home (b#1123) and on an older server without it', () => {
-  it('asks for include=home and draws the wins hero with one win, tiles, alerts and rings', async () => {
+  it('asks for include=home and draws the wins hero with one win, tiles and rings, and no Open alerts row', async () => {
     const v = await renderHome();
     expect(mockGet).toHaveBeenCalledWith('/coach/command-center/overview', { params: { include: 'home' } });
     expect(v.getByText('12')).toBeTruthy();
     expect(v.getByText('wins this week')).toBeTruthy();
     expect(['w1', 'w2', 'w3', 'w4'].map((w) => !!v.queryByTestId(`home-win-${w}`))).toEqual([true, false, false, false]);
-    expect(Object.fromEntries(['home-tile-active', 'home-tile-checkins', 'home-tile-stayed', 'home-alerts', 'home-ring-check_ins', 'home-ring-replies', 'home-ring-reach_outs', 'home-wins-all'].map((id) => [id, label(v, id)]))).toEqual({
-      'home-tile-active': '21 of 30 active today', 'home-tile-checkins': '82% check-ins · last 7 days', 'home-tile-stayed': '95% stayed · this month',
-      'home-alerts': 'Open alerts, 3, Waiting in Actions', 'home-ring-check_ins': 'Check-ins, 5 of 9', 'home-ring-replies': 'Replies, 1 of 1',
+    expect(v.queryByTestId('home-tile-checkins')).toBeNull();
+    expect(v.getByText('REACH-OUTS').props.numberOfLines).toBeUndefined();
+    expect(v.getByText("Approve Roman's drafts\u00a0→").props.numberOfLines).toBeUndefined();
+    expect(Object.fromEntries(['home-tile-active', 'home-tile-stayed', 'home-ring-check_ins', 'home-ring-replies', 'home-ring-reach_outs', 'home-wins-all'].map((id) => [id, label(v, id)]))).toEqual({
+      'home-tile-active': '21 of 30 active today', 'home-tile-stayed': '95% stayed · this month',
+      'home-ring-check_ins': 'Check-ins, 5 of 9', 'home-ring-replies': 'Replies, 1 of 1',
       'home-ring-reach_outs': 'Reach-outs, 2 of 5', 'home-wins-all': '12 wins this week. See all',
     });
     expect([!!v.getByText('The day is in motion. Close the rings as you go.'), v.getByText('5/9').props]).toEqual([true, expect.objectContaining({ adjustsFontSizeToFit: true, minimumFontScale: 0.5, maxFontSizeMultiplier: 1 })]); // 112/140 fits (LO B2)
     expect(v.queryByTestId('command-center-settings')).toBeNull(); // no tab row on the Home itself
+    expect(v.queryByTestId('home-alerts')).toBeNull(); // alerts fold into Needs you (#197-E5)
     expect(v.getByTestId('cards-setup')).toBeTruthy(); // the setup checklist on the hero, the push ask and brief under it
     expect(v.queryByTestId('cards-all')).toBeNull();
     expect(v.getByTestId('cards-below').props.children).toBe('brief');
@@ -187,7 +193,7 @@ describe('coach Home, flag on, with home (b#1123) and on an older server without
     try {
       const v = await renderHome();
       // Maya would get Nudge (8 days quiet); blocked, she has no action, so she is steady, as on the Needs you list.
-      await waitFor(() => expect(label(v, 'home-needs')).toBe('Needs you, 1. Ana Ruiz, 2 check-ins to review'));
+      await waitFor(() => expect(label(v, 'home-needs')).toBe('Needs you, 1. Ana Ruiz, 2 check-ins to review. Attention 0, Routine 1'));
       expect(label(v, 'home-row-steady')).toBe('Steady, 3, 1 logged today');
     } finally {
       await prefsStorage.delete(KEY);
@@ -218,13 +224,9 @@ describe('coach Home, flag on, with home (b#1123) and on an older server without
     const seen = v.getAllByText(/^(Approve Roman|Ask Roman)|Workouts$/).map((n) => /^(Approve|Ask|Workouts)/.exec(String(n.props.children))?.[1]); // screen order
     expect([[...new Set(seen.filter(Boolean))].join(), !!v.queryByTestId('home-win-w1'), label(v, 'home-wins-all')]).toEqual([order, winLine, '12 wins this week. See all']);
   });
-  it("opens alerts in Actions with the tab row back, and labels Roman's drafts", async () => {
+  it("labels Roman's drafts", async () => {
     const v = await renderHome();
     expect(label(v, 'home-drafts')).toBe("Approve Roman's drafts, 3");
-    await press(v, 'home-alerts');
-    await waitFor(() => expect(v.getByTestId('action-queue')).toBeTruthy());
-    expect(v.getByTestId('command-center-settings')).toBeTruthy();
-    expect(v.getByText('Home')).toBeTruthy();
   });
   it("asks first before Roman writes to a win's client, cannot close while Roman writes, sends only on Send, then re-reads", async () => {
     let answer: (v: unknown) => void = () => undefined;
@@ -321,7 +323,7 @@ describe('coach Home, flag on, with home (b#1123) and on an older server without
     mockGet.mockResolvedValue({ data: overview(30) });
     const v = await renderHome();
     expect(v.getByText('ACTIVE TODAY')).toBeTruthy();
-    expect(['home-hero-today', 'home-hero-wins', 'home-rings', 'home-tile-active', 'home-tile-checkins'].map((id) => !!v.queryByTestId(id))).toEqual([true, false, false, false, true]);
+    expect(['home-hero-today', 'home-hero-wins', 'home-rings', 'home-tile-active', 'home-tile-checkins'].map((id) => !!v.queryByTestId(id))).toEqual([true, false, false, false, false]);
   });
   it('leaves Stayed out when there is no real base', async () => {
     mockSources.ltv.mockResolvedValue({ active_client_count: 0, churn_rate_pct: 0, mrr_30d_ago_cents: 0 });
@@ -382,7 +384,7 @@ describe('coach Home at zero clients, at 1,000 and on failures', () => {
     const v = await renderHome();
     expect(['home-needs-error', 'home-drafts-error', 'home-month'].map((id) => !!v.queryByTestId(id))).toEqual([true, true, true]);
   });
-  it('says Needs you did not load when the unread counts fail, never "Nobody needs you", and keeps a good read (LS B1)', async () => {
+  it('says Needs you did not load on both first and cached unread failures, never "Nobody needs you" (LS B1)', async () => {
     mockStore.clients = [client('c3', 'Ben', 'Cole', { lastActiveOn: day(0), checkInsToReview: 0 })];
     mockUnreadCounts.mockRejectedValueOnce(new Error('down'));
     const v = await renderHome();
@@ -393,7 +395,8 @@ describe('coach Home at zero clients, at 1,000 and on failures', () => {
     mockUnreadCounts.mockRejectedValueOnce(new Error('down'));
     for (const f of [false, true]) { mockFocus.current = f; await act(async () => v.rerender(<CommandCenterScreen />)); } // away and back
     await waitFor(() => expect(mockUnreadCounts).toHaveBeenCalledTimes(3));
-    expect(label(v, 'home-needs')).toMatch(/^Needs you, 1\. Ben Cole/); // the failed refresh keeps the verified answer
+    expect(v.queryByTestId('home-needs-error')).toBeTruthy();
+    expect(v.queryByTestId('home-needs')).toBeNull(); // retained data is not a verified latest read
   });
   it('draws no Needs you count while the Clients list is on Archived', async () => {
     mockStore.filterStatus = 'archived';
@@ -490,5 +493,69 @@ describe("coach Home's Business glance and Clients card in Style A (FR-863R6; a.
     const v = await renderHome();
     expect(flat(v.getByTestId('home-page')).gap).toBe(10);
     for (const t of ['BUSINESS', 'CLIENTS']) expect(flat(v.getByText(t))).toMatchObject({ marginTop: 12, marginBottom: 8 });
+  });
+});
+
+describe('Needs you in the client-wins style (NEEDS-YOU-M, GOAL planning/MOCKUP3/NEEDS-YOU-R2, owner #197-E5)', () => {
+  const queued = (alert_id: string, alert_type: string, client_name: string, dismissed_at: string | null = null) => ({
+    alert_id, alert_type, client_id: `x-${alert_id}`, client_name, message: `${client_name} crossed into the red risk band (82%).`,
+    created_at: '2026-11-04T10:00:00Z', sent_at: '2026-11-04T10:00:00Z', dismissed_at, quote: null,
+  });
+  const flat = (n: { props: { style?: unknown } }) => StyleSheet.flatten(n.props.style as ViewStyle);
+  const order = (v: View) => v.getAllByTestId(/^home-(needs|roman|month)$/).map((n) => n.props.testID as string);
+  it('sits first under the masthead, above Roman, with the Attention and Routine split', async () => {
+    const v = await renderHome();
+    expect(order(v)).toEqual(['home-needs', 'home-roman', 'home-month']);
+    // Maya (8 days quiet, Nudge) is Attention; Ana (2 check-ins) is Routine.
+    expect(label(v, 'home-needs')).toBe('Needs you, 2. Maya Ortiz, Last logged 8 days ago, and 1 more. Attention 1, Routine 1');
+    expect(v.queryByTestId('home-needs-ring')).toBeNull();
+  });
+  it('folds an open safety alert in: gold edge and ring, the client named with Safety alert, every open alert counted once; Home to the alert, tap 1 of 2', async () => {
+    mockSources.actionQueue.mockResolvedValue([queued('a2', 'risk_red', 'Hana Kim'), queued('a1', 'roman_crisis_reply', 'Avery Cole'), queued('a3', 'risk_red', 'Old One', '2026-11-01T00:00:00Z')]);
+    const v = await renderHome();
+    await waitFor(() => expect(label(v, 'home-needs')).toBe('Needs you, 4. Avery Cole, Safety alert, and 3 more. Attention 3, Routine 1'));
+    expect(flat(v.getByTestId('home-needs'))).toMatchObject({ borderColor: '#6B4F1A', borderWidth: 2, backgroundColor: '#FFF8EC' });
+    expect(flat(v.getByTestId('home-needs-ring'))).toMatchObject({ borderColor: '#6B4F1A' });
+    expect(v.getByTestId('home-needs-safety')).toBeTruthy();
+    // Two taps to the alert: this card opens the list, whose first row is the safety alert (ClientLookupUI4).
+    await press(v, 'home-needs');
+    expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'ClientsList', params: { view: 'needs' }, pop: true });
+  });
+  it('leads with another alert when no safety alert is open, with no gold', async () => {
+    mockSources.actionQueue.mockResolvedValue([queued('a2', 'risk_red', 'Hana Kim')]);
+    const v = await renderHome();
+    await waitFor(() => expect(label(v, 'home-needs')).toBe('Needs you, 3. Hana Kim, Crossed into the red risk band, and 2 more. Attention 2, Routine 1'));
+    expect(v.queryByTestId('home-needs-ring')).toBeNull();
+  });
+  it('says the alerts did not load without claiming a complete Needs count', async () => {
+    mockSources.actionQueue.mockRejectedValue(new Error('down'));
+    const v = await renderHome();
+    await waitFor(() => expect(v.getByTestId('home-needs-alerts-error')).toBeTruthy());
+    expect(v.queryByTestId('home-needs')).toBeNull();
+    expect(v.queryByText(/^Needs you, \d/)).toBeNull();
+  });
+  it("puts workout-change approvals in Roman's drafts as a tile, counted there once and never in Needs you", async () => {
+    mockFlags.clientPathCopilot = true;
+    mockSources.pathChangeDrafts.mockResolvedValue([{ id: 'p1' }, { id: 'p2' }]);
+    const v = await renderHome();
+    await waitFor(() => expect(label(v, 'home-drafts')).toBe("Approve Roman's drafts, 5"));
+    expect(v.getByText('Workout changes')).toBeTruthy();
+    expect(label(v, 'home-needs')).toMatch(/^Needs you, 2\. /);
+  });
+  it('flag off: no workout-change read and no tile', async () => {
+    const v = await renderHome();
+    expect([mockSources.pathChangeDrafts.mock.calls.length, v.queryByText(/Workout change/)]).toEqual([0, null]);
+  });
+});
+
+describe('B-TEST LO-934 B2 (Opus lens, m#934 @ 98258c2b): Roman never says nothing waits while the workout-change read failed', () => {
+  it("a failed workout-change read with no other drafts does not say 'Nothing to approve right now.'", async () => {
+    mockFlags.clientPathCopilot = true;
+    mockDrafts.mockReturnValue({ data: { drafts: [] }, refetch: jest.fn() });
+    mockSources.pathChangeDrafts.mockRejectedValue(new Error('timeout'));
+    const v = await renderHome();
+    await waitFor(() => expect(mockSources.pathChangeDrafts).toHaveBeenCalled());
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(v.queryByText('Nothing to approve right now.')).toBeNull();
   });
 });

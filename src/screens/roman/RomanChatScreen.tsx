@@ -36,6 +36,7 @@ import React, { useCallback, useContext, useEffect, useLayoutEffect, useRef, use
 import { NavigationContext } from '@react-navigation/native';
 import { useChatDraft } from '../../lib/chatDrafts';
 import * as Clipboard from 'expo-clipboard';
+import { generateIdempotencyKey } from '../../utils/idempotency';
 import {
   AccessibilityInfo,
   Alert,
@@ -181,7 +182,7 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
     clearSendError,
   } = useRomanChat(surface);
   // CHAT-DISCARD (owner 10-21): half-typed text stays with this chat on the device (src/lib/chatDrafts.ts).
-  const [draft, setDraft] = useChatDraft('roman');
+  const [draft, setDraft, { keyFor, keepFailed, keepAside, dropFailed }] = useChatDraft('roman');
   // Shown after AI help is allowed for a message the server already stored.
   const [askAgainHint, setAskAgainHint] = useState(false);
   // The quick-start chip last sent (forest outline, prototype 70).
@@ -320,22 +321,56 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
       setAskAgainHint(false);
       // A typed reply carries its quote; a chip never does (chips hide while replying).
       const quoted = !fromChip && replyTarget ? replyTarget : null;
-      const outcome = await send(quoted ? withRomanQuote(quoted.content, text) : text);
+      // SEND-ONCE-PHONE (b#1228): the draft's send-once key; Send again with the same words after a failure that
+      // keeps it (lib/sendOnce.ts) replays it, so the server answers from what the first send stored.
+      const words = text.trim();
+      const held = keyFor(words);
+      const key = held ?? generateIdempotencyKey();
+      // The key goes with these words before the request (LS-953R2 B1): a Back, a reopen or a restart before this
+      // send ends finds it and sends it again. Only the answer that ends this send drops it (below).
+      if (!held && words !== '') {
+        if (fromChip) keepAside(words, key);
+        else keepFailed(words, key);
+      }
+      let kept = false;
+      const outcome = await send(quoted ? withRomanQuote(quoted.content, text) : text, { key, keep: () => { kept = true; } });
       // Clear the composer ONLY when the turn actually persisted; on a send
       // failure the draft is preserved so the user can retry without retyping
       // (brief §3 / F5 RomanSendOutcome). A chip never clears a typed draft;
       // a chip that fails leaves its prompt in the composer to send again,
       // but only when the composer is empty: it never replaces a typed draft.
+      let inBox = !fromChip;
       if (fromChip) {
-        if (outcome === 'send-failed') setDraft((d) => (d.trim() === '' ? text : d));
+        if (outcome === 'send-failed') {
+          // setDraft runs this at once (lib/chatDrafts), so `inBox` says whether the prompt went into the box.
+          setDraft((d) => {
+            if (d.trim() !== '') return d;
+            inBox = true;
+            return text;
+          });
+        }
       } else if (outcome === 'sent' || outcome === 'stored-no-reply') {
         if (outcome === 'sent') setDraft('');
         // The quote goes once: a turn the server stored (answered or not) carries it,
         // so only the reply that went drops it; a failed send keeps both.
         if (quoted) setReplyTarget((r) => (r?.id === quoted.id ? null : r));
       }
+      if (outcome === 'noop') {
+        if (!held && keyFor(words) === key) dropFailed(words); // nothing was sent under the new key
+        return;
+      }
+      // The key stays with these words while Send again may replay it, otherwise it goes. A chip whose prompt did not
+      // go into the box (another draft is there) keeps its key aside, so tapping it again replays it (LS-953 B2).
+      if (outcome !== 'sent' && kept) {
+        if (inBox) {
+          if (fromChip) dropFailed(words); // the chip's words are in the box now: its key moves from aside to the box
+          keepFailed(words, key);
+        } else keepAside(words, key);
+      } else if (keyFor(words) === key) {
+        dropFailed(words);
+      }
     },
-    [send, replyTarget],
+    [send, replyTarget, setDraft, keyFor, keepFailed, keepAside, dropFailed],
   );
 
   const onSend = useCallback(async () => {
