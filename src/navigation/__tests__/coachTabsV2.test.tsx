@@ -715,19 +715,6 @@ it('every chat opened outside Clients goes through coachInbox.ts, and every file
   );
 });
 
-it.each([
-  [true, true, 0],
-  [true, false, 6],
-])('BRIEFA: with coachBrief %s and coachBriefGate %s the open brief leaves %s tabs on the bar, and leaving it restores six', async (brief, gate, shown) => {
-  Object.assign(mockFlags, { coachBrief: brief, coachBriefGate: gate });
-  const view = await mount();
-  await act(async () => ref.navigate('SettingsStack', { screen: 'CoachBrief' }));
-  expect(view.queryAllByRole('tab')).toHaveLength(shown);
-  await act(async () => ref.navigate('SettingsStack', { screen: 'SettingsHome' }));
-  expect(view.getAllByRole('tab')).toHaveLength(6);
-  mockFlags.coachBrief = true;
-});
-
 // COACH-ROW-CHAT (owner 203-D4, #203-E22: "open the clients chat"): a coach's "New message from <client>" row in the
 // notification list opens that client's chat the way the inbox row does (chatTarget through openTarget), and Back still
 // lands on the inbox (the part of COACH-CHAT-BACK that stays). The raw row is the server's, key for key, through the real
@@ -843,4 +830,17 @@ it.each([
   await act(async () => ref.navigate('CommandCenter'));
   await tapRow(raw);
   expect([focusedTab(), stackOf('Messages')]).toEqual(['Messages', ['MessagesInbox']]);
+});
+
+it.each([
+  [true, true, 0],
+  [true, false, 6],
+])('BRIEFA: with coachBrief %s and coachBriefGate %s the open brief leaves %s tabs on the bar, and leaving it restores six', async (brief, gate, shown) => {
+  Object.assign(mockFlags, { coachBrief: brief, coachBriefGate: gate });
+  const view = await mount();
+  await act(async () => ref.navigate('SettingsStack', { screen: 'CoachBrief' }));
+  expect(view.queryAllByRole('tab')).toHaveLength(shown);
+  await act(async () => ref.navigate('SettingsStack', { screen: 'SettingsHome' }));
+  expect(view.getAllByRole('tab')).toHaveLength(6);
+  mockFlags.coachBrief = true;
 });
