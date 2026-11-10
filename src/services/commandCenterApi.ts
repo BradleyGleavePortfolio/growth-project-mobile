@@ -13,6 +13,7 @@
 //   POST /coach/command-center/action-queue/:alertId/dismiss — dismiss an alert
 
 import api from './api';
+import { splitRomanQuote } from '../components/roman/romanReply';
 // `LtvMetrics` is currently defined alongside the dashboard component; the
 // `import type` ensures no runtime cycle.
 import type { LtvMetrics } from '../components/command-center/CoachLtvDashboard';
@@ -118,9 +119,13 @@ export function isSafetyAlert(
   return SAFETY_ALERT_TYPES.includes(item.alert_type);
 }
 
-/** Owner #ROMAN-CRISIS-ALERT: a crisis alert never shows the client's words. */
+/**
+ * Owner #ROMAN-CRISIS-ALERT: a crisis alert never shows the client's words.
+ * LO-950R3 C2: a turn sent as a reply carries Roman's words as its first line; the coach reads only the client's.
+ */
 export function safetyQuote(alertType: string, quote: string | null | undefined): string | null {
-  return alertType === 'roman_crisis_reply' ? null : quote ?? null;
+  if (alertType === 'roman_crisis_reply' || quote == null) return null;
+  return splitRomanQuote(quote)?.body ?? quote;
 }
 
 export interface ActionQueueResponse {
