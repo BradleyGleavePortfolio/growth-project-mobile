@@ -293,6 +293,69 @@ it('LS-953R2 B1: reopening while the first answer is pending replays the kept dr
   expect(retry).toEqual(first);
 });
 
+// FIX-953R3: the exact frame backend main f239683f sends a same-key resend while the first send may still store its
+// reply (CONTRACT 6754738036; roman.controller.ts:307-309). The member sees the same stored line as for
+// ROMAN_UNAVAILABLE; only the key differs: it stays with the words.
+const { ROMAN_STORED_NO_REPLY } = require('../../../components/roman/romanVoice');
+const REPLY_PENDING_FRAME: Wire = {
+  status: 200,
+  text: 'event: error\ndata: {"code":"ROMAN_REPLY_PENDING","message":"Roman is not available right now."}\n\n',
+};
+
+it('FIX-953R3: reopened while the first send is out, a "still being written" answer keeps the words and the key; Send again replays the stored answer', async () => {
+  let loseFirst!: () => void;
+  const firstBody = new Promise<string>((_resolve, reject) => {
+    loseFirst = () => reject(new TypeError('Connection lost after the turn was stored'));
+  });
+  firstBody.catch(() => undefined);
+  fetchMock.mockImplementationOnce(async () => ({
+    ok: true,
+    status: 200,
+    headers: { get: () => null },
+    text: () => firstBody,
+  } as unknown as Response));
+  wire = [REPLY_PENDING_FRAME, OK];
+
+  const a = await open();
+  await fireEvent.changeText(a.getByTestId(INPUT), 'Swap my Thursday run for a ride?');
+  await sendFrom(a);
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  const first = sent(0);
+  await a.unmount(); // Back while the first send is still out
+  const b = await open();
+  expect(boxOf(b)).toBe(first.content);
+  await sendFrom(b); // Roman is still writing the first answer
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  expect(sent(1)).toEqual(first);
+  await waitFor(() => expect(b.getByTestId('roman-send-retry')).toBeTruthy());
+  expect(b.getByText(ROMAN_STORED_NO_REPLY)).toBeTruthy();
+  expect(boxOf(b)).toBe(first.content);
+  expect(mockDisk.get(`${CHAT_DRAFT_KEY_PREFIX}client-1:roman`)).toContain(first.key);
+  await sendAgain(b); // the first answer is stored by now: the same key replays it
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+  expect(sent(2)).toEqual(first);
+  await waitFor(() => expect(boxOf(b)).toBe(''));
+  // The abandoned first request ends with no answer only now; nothing more is sent.
+  await act(async () => { loseFirst(); });
+  expect(fetchMock).toHaveBeenCalledTimes(3);
+});
+
+it('FIX-953R3: a quick-start chip beside a typed draft answered "still being written" keeps its key aside', async () => {
+  wire = [CUT_STREAM, REPLY_PENDING_FRAME, OK];
+  const r = await open();
+  await fireEvent.changeText(r.getByTestId(INPUT), 'My separate unfinished question');
+  await act(async () => { fireEvent.press(r.getByTestId('roman-quick-start-0')); });
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  await act(async () => { fireEvent.press(r.getByTestId('roman-quick-start-0')); });
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  expect(sent(1)).toEqual(sent(0));
+  expect(boxOf(r)).toBe('My separate unfinished question');
+  await act(async () => { fireEvent.press(r.getByTestId('roman-quick-start-0')); });
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+  expect(sent(2)).toEqual(sent(0));
+  expect(boxOf(r)).toBe('My separate unfinished question');
+});
+
 // FIX-953R3: backend main f239683f tells the two apart (b#1233, CONTRACT 6754738036): a same-key resend whose first
 // send may still store its reply answers the coded ROMAN_REPLY_PENDING frame (roman.controller.ts:307-309,
 // roman-sse-error.ts:33-37, roman.service.ts:869-872); one that ended with no reply answers ROMAN_UNAVAILABLE, as

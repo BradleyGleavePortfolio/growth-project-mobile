@@ -11,7 +11,7 @@ jest.mock('../../../../services/api', () => ({ __esModule: true, default: {} }))
 jest.mock('../../../../services/secureStorage', () => ({ secureStorage: { getItem: jest.fn(async () => 'test-token') } }));
 jest.mock('../../../../ui/haptics/haptics.service', () => ({ HapticService: { error: jest.fn(), success: jest.fn() } }));
 
-import { RomanApiError, RomanKeySpentError, RomanWireError } from '../../../../api/romanApi';
+import { RomanApiError, RomanKeySpentError, RomanWireError, sendMessage } from '../../../../api/romanApi';
 import { useCopilotAsk } from '../useCopilotAsk';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -113,6 +113,42 @@ it('each failed turn keeps its own key: another question in between never takes 
   expect(sent(2)).toEqual(sent(1));
   expect(sent(3)).toEqual(sent(0));
   expect(sent(1).key).not.toBe(sent(0).key);
+});
+
+it('FIX-953R3: asking the same words again after a "still being written" answer sends the same key', async () => {
+  // The real sendMessage over the wire backend main f239683f answers: the first ask's stream is cut after the 200
+  // (stored), the same words asked again get the ROMAN_REPLY_PENDING frame (roman.controller.ts:307-309), and once
+  // the first answer is stored the same key replays it.
+  const bodies: (string | Error)[] = [
+    new TypeError('Connection lost after the turn was stored'),
+    'event: error\ndata: {"code":"ROMAN_REPLY_PENDING","message":"Roman is not available right now."}\n\n',
+    'data: {"type":"done","text":"Because your week changed.","messageId":"m-1","interrupted":false}\n\n',
+  ];
+  const realFetch = global.fetch;
+  global.fetch = jest.fn(async () => {
+    const body = bodies.shift() ?? '';
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      text: async () => { if (body instanceof Error) throw body; return body; },
+    } as unknown as Response;
+  }) as unknown as typeof fetch;
+  send.mockImplementation(sendMessage);
+  try {
+    const { result } = await mount();
+    expect(await ask(result, 'Why did my calories change?')).toBe('stored');
+    expect(await ask(result, 'Why did my calories change?')).toBe('stored');
+    const pending = result.current.turns[1].error;
+    expect(pending).toBeInstanceOf(RomanApiError);
+    expect(pending).not.toBeInstanceOf(RomanKeySpentError);
+    expect(pending).toMatchObject({ kind: 'generic', turnStored: true }); // the card: the stored line, no Try again
+    expect(await ask(result, 'Why did my calories change?')).toBe('sent');
+    expect(sent(1)).toEqual(sent(0));
+    expect(sent(2)).toEqual(sent(0));
+  } finally {
+    global.fetch = realFetch;
+  }
 });
 
 it('a refusal that ends a key ends it for every turn that holds it', async () => {
