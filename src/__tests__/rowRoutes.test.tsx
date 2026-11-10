@@ -229,7 +229,7 @@ const EMPTY_STATES = { '/community/coach/empty-states': { surfaces: [] } };
 
 // ─── Moderation queue (GET /community/moderation/flagged) ────────────────────────────────────────────────────────────
 
-/** community-moderation.service.ts:958-975 listFlagged: the row shape, key for key. */
+/** community-moderation.service.ts:950-968 listFlagged: the row shape, key for key. */
 const flagged = (id: string, target_type: string, target_id: string, content: string, extra: object = {}) => ({
   id,
   workspace_id: WS,
@@ -388,7 +388,7 @@ const ROWS: Row[] = [
   ),
   moderationInPlace('B4', 'flagged win', 'win', flagged(uuid(204), 'win', uuid(304), 'New PR today')),
   {
-    // A captionless reported photo: content "", the photo drawn (FlaggedPhoto), decisions beside it (community-moderation.service.ts:938-945 image).
+    // A captionless reported photo: content "", the photo drawn (FlaggedPhoto), decisions beside it (community-moderation.service.ts:936-946 image).
     id: 'B2p', title: 'flagged captionless photo', role: 'coach', host: COACH_COMMUNITY_HOST,
     http: { ...EMPTY_STATES, '/community/moderation/flagged': { items: [flagged(uuid(205), 'message', uuid(305), '', { image: { url: 'https://img.example/p.jpg', width: 600, height: 800, expires_at: '2026-11-09T18:00:00.000Z' } })] } },
     screen: () => <CoachCommunityModerationScreen />,
@@ -755,7 +755,7 @@ function lessonRow(id: string) {
   };
 }
 
-// Today (community.service.ts:269-305 getToday; CommunityTodayResponseSchema).
+// Today (community.service.ts:262-298 getToday; CommunityTodayResponseSchema).
 const TODAY_HTTP = {
   '/community/today': {
     feature_flag_state: 'enabled',
