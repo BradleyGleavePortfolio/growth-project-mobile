@@ -10,6 +10,7 @@ import {
   RefreshControl,
   ActivityIndicator,
   Keyboard,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
@@ -19,10 +20,10 @@ import { listsApi } from '../../services/api';
 
 import FadeInView from '../../components/FadeInView';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import { typography, radius } from '../../theme/tokens';
+import { layout, typography, radius } from '../../theme/tokens';
 import { PrimaryButton, TextLink, Screen } from '../../ui';
 import { HapticService } from '../../ui/haptics/haptics.service';
-import { StyleCCheck, StyleCDashes, StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCMastText, StyleCNotice, StyleCPaper, useStyleCScreen } from '../../ui/layout/StyleCPage';
+import { StyleCCheck, StyleCDashes, StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCMastText, StyleCNotice, StyleCPaper, usePullToRefresh, useStyleCScreen } from '../../ui/layout/StyleCPage';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface ListItem {
@@ -62,7 +63,8 @@ export default function GroceryListScreen() {
     textPrimary: sc.textPrimary, textMuted: sc.textMuted, textOnPrimary: sc.textOnAccent,
     border: sc.border, success: sc.textMuted, error: sc.textMuted,
   }), [sc]);
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { fontScale } = useWindowDimensions();
+  const styles = useMemo(() => makeStyles(colors, fontScale), [colors, fontScale]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const queryClient = useQueryClient();
 
@@ -75,6 +77,7 @@ export default function GroceryListScreen() {
     queryFn: fetchOneList,
     staleTime: 60 * 1000,
   });
+  const { pulling, onRefresh } = usePullToRefresh(refetch);
 
   const items = data ?? [];
   const unchecked = items.filter((i) => !i.is_checked);
@@ -220,6 +223,12 @@ export default function GroceryListScreen() {
 
   return (
     <Screen edges={['top']} scroll={false} {...page} testID="grocery-prep-screen">
+      <FlatList
+        keyboardShouldPersistTaps="handled"
+        testID="list-scroll"
+        style={{ backgroundColor: sc.bgPrimary }}
+        ListHeaderComponent={(
+        <View style={{ backgroundColor: sc.surface.forestBand }}>
       <StyleCMasthead title="Grocery list" onBack={() => navigation.goBack()}>
         {/* The summary on the masthead, as on the Shopping list (ctx#457): one look for both lists. */}
         {!isLoading && !isError && items.length > 0 ? (
@@ -227,7 +236,7 @@ export default function GroceryListScreen() {
         ) : null}
         {!isLoading && !isError && hasShoppingItems ? <StyleCMastText kind="muted">Includes items from your shopping list.</StyleCMastText> : null}
       </StyleCMasthead>
-      <StyleCPaper style={styles.paper}>
+      <StyleCPaper scrolls style={styles.paper}>
 
       {/* Add item input */}
       <View style={styles.addRow}>
@@ -273,15 +282,17 @@ export default function GroceryListScreen() {
           </TouchableOpacity>
         </View>
       </View>
+      </StyleCPaper>
+      </View>
+      )}
 
-      {/* List */}
-      {isLoading ? (
+      ListEmptyComponent={isLoading ? (
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Loading grocery list…</Text>
-          <StyleCLoadingLines lead="ring" />
+          <StyleCLoadingLines lead="ring" rows={5} />
         </View>
       ) : isError ? (
-        <View style={styles.loadingContainer}>
+        <View style={styles.errorBlock}>
           <StyleCNotice>Couldn't load grocery list.</StyleCNotice>
           <PrimaryButton label="Try again" onPress={() => refetch()} disabled={isRefetching} haptic={false} />
         </View>
@@ -293,23 +304,22 @@ export default function GroceryListScreen() {
             subtitle="Add items using the field above."
           />
         </FadeInView>
-      ) : (
-        <FlatList
-          testID="list-scroll"
-          data={listData}
+      ) : null}
+          data={isLoading || isError ? [] : listData}
           keyExtractor={(item) =>
             'type' in item ? `header-${item.label}` : item.id
           }
           refreshControl={
             <RefreshControl
               testID="list-refresh"
-              refreshing={isRefetching}
-              onRefresh={refetch}
+              refreshing={pulling}
+              onRefresh={onRefresh}
+              enabled={!isLoading && !isError && items.length > 0}
               tintColor={colors.primary}
             />
           }
           contentContainerStyle={styles.listContent}
-          ListFooterComponent={checked.length > 0 ? (
+          ListFooterComponent={!isLoading && !isError && checked.length > 0 ? (
             <TextLink label="Clear checked" tone="accent" align="start" onPress={handleClearChecked} disabled={clearCheckedMutation.isPending} style={styles.clearBtn} />
           ) : null}
           renderItem={({ item }) => {
@@ -326,55 +336,69 @@ export default function GroceryListScreen() {
           }}
           showsVerticalScrollIndicator={false}
         />
-      )}
-    </StyleCPaper>
     </Screen>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primary' | 'textPrimary' | 'textMuted' | 'textOnPrimary' | 'border' | 'error'>) =>
+// A field grows and shrinks with the system text size but is never under the 44 pt target.
+const fieldSize = (size: number, fontScale: number) => Math.max(layout.touchMin, size * fontScale);
+// Inter's normal line box is 1.21em. Fill the space above it so the text keeps the drawing's 10 pt bottom baseline.
+const fieldPaddingTop = (textSize: number, fontScale: number) => Math.max(0, fieldSize(48, fontScale) - textSize * 1.21 * fontScale - 10);
+
+const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primary' | 'textPrimary' | 'textMuted' | 'textOnPrimary' | 'border' | 'error'>, fontScale = 1) =>
   StyleSheet.create({
   // Screen owns the inset top (forest via useStyleCScreen); the masthead and paper are Style C; the paper holds the list.
   paper: { paddingTop: 22 },
-  clearBtn: { marginTop: 12 },
+  clearBtn: { marginHorizontal: 24, paddingVertical: 16 },
 
-  addRow: { paddingHorizontal: 24, marginBottom: 12 },
+  addRow: { paddingHorizontal: 24, marginBottom: 0 },
   // Underlined fields (C_grocery, ctx#457), not boxes: the name on its own line, then Qty, Unit and the round add.
-  addInputs: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', columnGap: 14 },
+  addInputs: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', columnGap: 14, rowGap: 14 },
   nameInput: {
     fontFamily: typography.body.fontFamily,
     flexBasis: '100%',
-    height: 48,
+    width: '100%',
+    height: fieldSize(48, fontScale),
+    paddingTop: fieldPaddingTop(18, fontScale),
+    paddingBottom: 10,
+    textAlignVertical: 'bottom',
     borderBottomWidth: 1.5,
     borderColor: colors.textPrimary,
     fontSize: 18,
     color: colors.textPrimary,
   },
   qtyInput: {
-    fontFamily: typography.body.fontFamily, fontVariant: ['tabular-nums'],
-    width: 52,
-    height: 44,
+    fontFamily: typography.body.fontFamily,
+    width: fieldSize(52, fontScale),
+    height: fieldSize(48, fontScale),
+    paddingTop: fieldPaddingTop(16, fontScale),
+    paddingBottom: 10,
+    textAlignVertical: 'bottom',
     borderBottomWidth: 1.5,
     borderColor: colors.border,
-    paddingHorizontal: 8,
+    paddingHorizontal: 0,
     fontSize: 16,
     color: colors.textPrimary,
     textAlign: 'center',
   },
   unitInput: {
     fontFamily: typography.body.fontFamily,
-    width: 70,
-    height: 44,
+    width: fieldSize(70, fontScale),
+    height: fieldSize(48, fontScale),
+    paddingTop: fieldPaddingTop(16, fontScale),
+    paddingBottom: 10,
+    textAlignVertical: 'bottom',
     borderBottomWidth: 1.5,
     borderColor: colors.border,
-    paddingHorizontal: 8,
+    paddingHorizontal: 0,
     fontSize: 16,
     color: colors.textPrimary,
   },
   addBtn: {
     width: 44,
     height: 44,
+    marginBottom: 2,
     backgroundColor: colors.primary,
     borderRadius: radius.chip,
     alignItems: 'center',
@@ -382,24 +406,28 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
   },
   addBtnDisabled: { opacity: 0.42 },
 
-  loadingContainer: { paddingHorizontal: 24, paddingTop: 14, gap: 16 },
-  loadingText: { ...typography.bodySmall, color: colors.textMuted },
+  loadingContainer: { paddingHorizontal: 24, paddingTop: 26, gap: 4 },
+  // The drawn error state (ctx#457 shopping-error): Try again 16 pt under the notice.
+  errorBlock: { paddingHorizontal: 24, paddingTop: 26, gap: 16 },
+  loadingText: { ...typography.bodySmall, lineHeight: 20.3, color: colors.textMuted },
 
-  listContent: { paddingHorizontal: 24, paddingBottom: 48 },
+  listContent: { flexGrow: 1, paddingBottom: 48 },
 
   sectionHeader: {
-    paddingTop: 20,
-    paddingBottom: 4,
+    marginHorizontal: 24,
+    paddingTop: 26,
+    paddingBottom: 0,
   },
-  sectionHeaderText: { ...typography.eyebrow, color: colors.textMuted, fontVariant: ['tabular-nums'] },
+  sectionHeaderText: { ...typography.eyebrow, fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 11.5, lineHeight: 14, letterSpacing: 2, color: colors.textMuted, fontVariant: ['tabular-nums'] },
 
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
     // A hairline row, not a boxed card (CATALOG: hairline sections).
-    minHeight: 64,
-    paddingVertical: 6,
+    minHeight: 64 * fontScale,
+    paddingVertical: 0,
     paddingHorizontal: 0,
+    marginHorizontal: 24,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     gap: 6,
@@ -409,11 +437,11 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
   // name keeps at least half the row so a word never breaks mid-word; when the amount does not fit beside it (narrow
   // phones at large text) the amount moves under the name, still at the right, whole.
   // The 44 pt targets reach into the 24 pt gutter so the ring and the cross sit at the content edges and the row keeps its width.
-  checkbox: { width: 44, height: 44, marginLeft: -8, alignItems: 'center', justifyContent: 'center' },
+  checkbox: { width: 44, height: 44, marginLeft: -2, alignItems: 'flex-start', justifyContent: 'center' },
   itemContent: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 12 },
-  itemName: { ...typography.h3, fontSize: 21, lineHeight: 26, paddingVertical: 10, color: colors.textPrimary, flex: 1, minWidth: '50%' },
+  itemName: { ...typography.h3, fontSize: 21, lineHeight: 26.25, letterSpacing: 0, paddingVertical: 10, color: colors.textPrimary, flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: '50%' },
   itemNameChecked: { textDecorationLine: 'line-through', color: colors.textMuted },
-  itemMeta: { ...typography.body, fontSize: 15, lineHeight: 22, color: colors.textMuted, fontVariant: ['tabular-nums'], textAlign: 'right', flexShrink: 0, marginLeft: 'auto' },
+  itemMeta: { fontFamily: typography.body.fontFamily, fontSize: 15, letterSpacing: 0, color: colors.textMuted, fontVariant: ['tabular-nums'], textAlign: 'right', flexShrink: 0, marginLeft: 'auto' },
   deleteBtn: { width: 44, height: 44, marginRight: -12, alignItems: 'center', justifyContent: 'center' },
 
   });
