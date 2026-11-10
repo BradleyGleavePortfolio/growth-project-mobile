@@ -230,6 +230,9 @@ export function SetLogger({
       intent="light"
       disabled={set.completed || !editable}
       style={hideCompletion ? styles.previousSet : [styles.previousLine, tools && styles.previousLineShared]}
+      // LO-960R1 B1: the tools line lays out HapticPressable's wrapper, not the
+      // inner button, so the wrapper takes the free space and Previous stays left.
+      containerStyle={tools ? { flexGrow: 1, flexShrink: 1 } : undefined}
       accessibilityRole="button"
       accessibilityLabel={`Use previous set ${setIdx + 1}: ${readsBW(bodyWeight, previous.weight) ? 'body weight' : `${previous.weight} pounds`}, ${previous.reps} ${spoken}`}
       onPress={() => {
