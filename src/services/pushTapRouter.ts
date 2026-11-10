@@ -24,13 +24,17 @@
  *  - Params are decoded to a bounded string map; the delivered-id dedupe set
  *    is bounded.
  */
+import type { NavigationAction } from '@react-navigation/native';
 import { featureFlags } from '../config/featureFlags';
 import { creditPacksHidden } from '../config/purchaseSurfaces';
-import { incomingLinkPath, isPublicLinkPath, resolveAppLink } from '../navigation/incomingLinks';
+import { incomingLinkPath, isPublicLinkPath, resolveAppLink, UUID } from '../navigation/incomingLinks';
+import { chatTarget, openTarget } from '../navigation/coachInbox';
 
 export interface PushNavigator {
   isReady(): boolean;
   navigate(name: string, params?: object): void;
+  /** The container ref's dispatch: openTarget's RESET of the Messages stack (COACH-ROW-CHAT). */
+  dispatch?(action: NavigationAction): void;
   getRootState():
     | { routeNames?: readonly string[]; routes?: readonly { name: string; state?: { routes?: readonly { name: string }[] } }[] }
     | undefined;
@@ -380,11 +384,38 @@ function deliver(
   screen: string,
   params: Record<string, string> | undefined,
 ): boolean {
+  let rest = params;
+  if (screen === 'Messages' && params && 'clientId' in params && 'clientName' in params) {
+    const { clientId, clientName, ...others } = params;
+    // COACH-ROW-CHAT (owner 203-D4): a coach's message naming its client (a message row, notificationsApi
+    // messageChatParams) opens that client's chat as the inbox row does (chatTarget through openTarget: over the inbox,
+    // Back to it, another chat open there replaced). The pair is this rule's: any other Messages target (the client's
+    // Home > Messages, the coach inbox) gets the params it got before.
+    if (role === 'coach' && UUID.test(clientId ?? '') && clientName?.trim()) {
+      const chat = chatTarget(clientId, clientName);
+      if (routeNames.includes(chat.tab)) return openChat(nav, chat);
+    }
+    rest = Object.keys(others).length > 0 ? others : undefined;
+  }
   let target = resolvePushTarget(role, screen);
   if (!routeNames.includes(target.root)) {
     target = resolvePushTarget(role, 'NotificationCenter');
   }
-  return deliverTarget(nav, target, params);
+  return deliverTarget(nav, target, rest);
+}
+
+/** openTarget over the container ref: the coach tabs are the root navigator, so its state is what openTarget walks. */
+function openChat(nav: PushNavigator, chat: ReturnType<typeof chatTarget>): boolean {
+  try {
+    openTarget({
+      navigate: (name, params) => nav.navigate(name, params),
+      dispatch: (action) => nav.dispatch?.(action),
+      getState: () => nav.getRootState() as ReturnType<NonNullable<Parameters<typeof openTarget>[0]['getState']>>,
+    }, chat);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function deliverTarget(nav: PushNavigator, target: Target, params?: Record<string, string>): boolean {

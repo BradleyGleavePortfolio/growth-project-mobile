@@ -24,6 +24,7 @@ import api from '../services/api';
 import { generateIdempotencyKey } from '../utils/idempotency';
 import { REMOVED_ROWS_HEADERS, RemovedBySchema } from './communityRemovedRows';
 import { CommunityApiError } from './communityApi';
+import { crisisLineOwner, showCrisisLineFor } from '../lib/communityCrisisLine';
 
 // ─── Enums (mirror backend) ───────────────────────────────────────────────────
 
@@ -148,8 +149,10 @@ export type CommunityChallengeCommentPage = z.infer<
   typeof ChallengeCommentListResponseSchema
 >;
 
+// CRISIS-TEXT-M: the poster's answer may carry b#1232's crisis_flag (CONTRACT 6755386095); the schema takes that one
+// key, whatever its value (only true shows the line), and stays strict for every other key.
 const ChallengeCommentResponseSchema = z
-  .object({ comment: ChallengeCommentSchema })
+  .object({ comment: ChallengeCommentSchema, crisis_flag: z.unknown().optional() })
   .strict();
 
 // The comments surface has no backend empty-state payload: its true-empty
@@ -345,13 +348,17 @@ export const communityChallengesApi = {
     body: string,
     idempotencyKey?: string,
   ): Promise<CommunityChallengeComment> {
+    const owner = crisisLineOwner(); // CRISIS-TEXT-M: the answer's line reaches only the account that sent it
     return call(ChallengeCommentResponseSchema, () =>
       api.post<unknown>(
         `/community/challenges/${challengeId}/comments`,
         { body },
         idempotentHeaders(idempotencyKey),
       ),
-    ).then((r) => r.comment);
+    ).then((r) => {
+      showCrisisLineFor(r, owner); // read here and kept nowhere
+      return r.comment;
+    });
   },
 
   // There is no challenge-leave route on the backend; the only reversible

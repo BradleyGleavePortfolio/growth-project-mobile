@@ -9,6 +9,7 @@ import {
   RefreshControl,
   ActivityIndicator,
   Keyboard,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
@@ -20,7 +21,7 @@ import FadeInView from '../../components/FadeInView';
 import { useTheme } from '../../theme/ThemeProvider';
 import { PrimaryButton, TextLink, Screen } from '../../ui';
 import { HapticService } from '../../ui/haptics/haptics.service';
-import { StyleCCheck, StyleCDashes, StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCNotice, StyleCPaper, useStyleCScreen } from '../../ui/layout/StyleCPage';
+import { StyleCCheck, StyleCDashes, StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCNotice, StyleCPaper, usePullToRefresh, useStyleCScreen } from '../../ui/layout/StyleCPage';
 import { makeListStyles as makeStyles } from './GroceryListScreen';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -45,7 +46,8 @@ export default function ShoppingListScreen() {
     textPrimary: sc.textPrimary, textMuted: sc.textMuted, textOnPrimary: sc.textOnAccent,
     border: sc.border, success: sc.textMuted, error: sc.textMuted,
   }), [sc]);
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { fontScale } = useWindowDimensions();
+  const styles = useMemo(() => makeStyles(colors, fontScale), [colors, fontScale]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const queryClient = useQueryClient();
 
@@ -58,6 +60,7 @@ export default function ShoppingListScreen() {
     queryFn: () => listsApi.getList(LIST_TYPE).then((r) => r.data as ListItem[]),
     staleTime: 60 * 1000,
   });
+  const { pulling, onRefresh } = usePullToRefresh(refetch);
 
   const items = data ?? [];
   const unchecked = items.filter((i) => !i.is_checked);
@@ -198,13 +201,19 @@ export default function ShoppingListScreen() {
 
   return (
     <Screen edges={['top']} scroll={false} {...page} testID="grocery-prep-screen">
+      <FlatList
+        keyboardShouldPersistTaps="handled"
+        testID="list-scroll"
+        style={{ backgroundColor: sc.bgPrimary }}
+        ListHeaderComponent={(
+        <View style={{ backgroundColor: sc.surface.forestBand }}>
       <StyleCMasthead title="Shopping list" onBack={() => navigation.goBack()}>
         {/* The summary on the masthead with one dash per item, gold when checked (ctx#457 shopping). */}
         {!isLoading && !isError && items.length > 0 ? (
           <StyleCDashes total={items.length} done={checked.length} label={unchecked.length > 0 ? `${unchecked.length} to get.` : 'All items checked.'} />
         ) : null}
       </StyleCMasthead>
-      <StyleCPaper style={styles.paper}>
+      <StyleCPaper scrolls style={styles.paper}>
 
       {/* Add item input */}
       <View style={styles.addRow}>
@@ -250,15 +259,17 @@ export default function ShoppingListScreen() {
           </TouchableOpacity>
         </View>
       </View>
+      </StyleCPaper>
+      </View>
+      )}
 
-      {/* List */}
-      {isLoading ? (
+      ListEmptyComponent={isLoading ? (
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Loading shopping list…</Text>
-          <StyleCLoadingLines lead="ring" />
+          <StyleCLoadingLines lead="ring" rows={5} />
         </View>
       ) : isError ? (
-        <View style={styles.loadingContainer}>
+        <View style={styles.errorBlock}>
           <StyleCNotice>Couldn't load shopping list.</StyleCNotice>
           <PrimaryButton label="Try again" onPress={() => refetch()} disabled={isRefetching} haptic={false} />
         </View>
@@ -270,23 +281,22 @@ export default function ShoppingListScreen() {
             subtitle="Add items using the field above."
           />
         </FadeInView>
-      ) : (
-        <FlatList
-          testID="list-scroll"
-          data={listData}
+      ) : null}
+          data={isLoading || isError ? [] : listData}
           keyExtractor={(item) =>
             'type' in item ? `header-${item.label}` : item.id
           }
           refreshControl={
             <RefreshControl
               testID="list-refresh"
-              refreshing={isRefetching}
-              onRefresh={refetch}
+              refreshing={pulling}
+              onRefresh={onRefresh}
+              enabled={!isLoading && !isError && items.length > 0}
               tintColor={colors.primary}
             />
           }
           contentContainerStyle={styles.listContent}
-          ListFooterComponent={checked.length > 0 ? (
+          ListFooterComponent={!isLoading && !isError && checked.length > 0 ? (
             <TextLink label="Clear checked" tone="accent" align="start" onPress={handleClearChecked} disabled={clearCheckedMutation.isPending} style={styles.clearBtn} />
           ) : null}
           renderItem={({ item }) => {
@@ -303,8 +313,6 @@ export default function ShoppingListScreen() {
           }}
           showsVerticalScrollIndicator={false}
         />
-      )}
-    </StyleCPaper>
     </Screen>
   );
 }

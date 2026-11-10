@@ -139,6 +139,19 @@ export const COACH_AI_EXECUTION_PATHS = {
     `/ai/gateway/drafts/${encodeURIComponent(draftId)}`,
 } as const;
 
+/** LS-952R3 B1: the paged queue's page (backend ai-gateway.controller.ts listDrafts, `limit` at most 200). */
+interface QueuePage {
+  items: AiActionDraftRow[];
+  next_cursor: string | null;
+}
+const QUEUE_PAGE_SIZE = 200;
+/** 50 pages of 200: a queue that has not ended by then is read as failed, not as complete. */
+const QUEUE_MAX_PAGES = 50;
+function isQueuePage(body: unknown): body is QueuePage {
+  return typeof body === 'object' && body !== null && !Array.isArray(body)
+    && Array.isArray((body as { items?: unknown }).items);
+}
+
 export const coachAiExecutionApi = {
   /**
    * `draft.assign_workout` — AI proposes assigning an existing WorkoutPlan
@@ -228,7 +241,11 @@ export const coachAiExecutionApi = {
 
   /** Fetch the coach's pending AI drafts via the generic gateway endpoint.
    *  The gateway returns rows across ALL capabilities for the tenant coach;
-   *  the inbox filters with `isStream2Capability` for renderable rows. */
+   *  the inbox filters with `isStream2Capability` for renderable rows.
+   *  LS-952R3 B1: the whole queue, not the route's default newest 50. It reads the paged queue (`order=oldest`, backend
+   *  ai-approval.service.ts pageQueue) page by page until `next_cursor` is null, a page the server filtered short
+   *  included, and throws rather than hand back part of it. Newest first, as before. An older server without the paged
+   *  queue answers the plain list, which is used as it comes. */
   async listPending(
     options: { clientId?: string; limit?: number } = {},
   ): Promise<ListPendingResponse> {
@@ -239,17 +256,33 @@ export const coachAiExecutionApi = {
         .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
       return { drafts };
     }
-    const params: Record<string, string> = { status: 'pending' };
-    if (options.clientId) params.clientId = options.clientId;
-    if (options.limit) params.limit = String(options.limit);
-    const res = await api.get<ListPendingResponse | AiActionDraftRow[]>(
-      COACH_AI_EXECUTION_PATHS.listPending,
-      { params },
-    );
-    // Normalise both possible shapes (Prisma findMany returns a bare array;
-    // a future pagination wrapper would return an envelope).
-    if (Array.isArray(res.data)) return { drafts: res.data };
-    return res.data;
+    const pick = (res: ListPendingResponse): ListPendingResponse => {
+      if (!Array.isArray(res?.drafts) || (!options.clientId && !options.limit)) return res;
+      const mine = res.drafts.filter((d) => !options.clientId || d.subject_user_id === options.clientId);
+      return { ...res, drafts: options.limit ? mine.slice(0, options.limit) : mine };
+    };
+    const oldestFirst: AiActionDraftRow[] = [];
+    let after: string | null = null;
+    for (let page = 0; ; page += 1) {
+      if (page === QUEUE_MAX_PAGES) throw new Error('the drafts queue did not end');
+      const params: Record<string, string> = { status: 'pending', order: 'oldest', limit: String(QUEUE_PAGE_SIZE) };
+      if (after) params.after = after;
+      const res = await api.get<QueuePage | ListPendingResponse | AiActionDraftRow[]>(
+        COACH_AI_EXECUTION_PATHS.listPending,
+        { params },
+      );
+      const body: unknown = res.data;
+      if (!isQueuePage(body)) {
+        if (page > 0) throw new Error('a drafts queue page was not a page');
+        // An older server: Prisma findMany's bare array, or an envelope.
+        return pick(Array.isArray(body) ? { drafts: body as AiActionDraftRow[] } : (body as ListPendingResponse));
+      }
+      oldestFirst.push(...body.items);
+      if (!body.next_cursor) break;
+      if (body.next_cursor === after) throw new Error('the drafts queue cursor did not move');
+      after = body.next_cursor;
+    }
+    return pick({ drafts: oldestFirst.reverse() });
   },
 
   /** Approve a draft. PATCH the gateway decide endpoint. Returns the

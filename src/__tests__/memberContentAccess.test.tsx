@@ -215,6 +215,13 @@ const REGISTRY: Surface[] = [
     proof: { by: 'cache', id: 'coach-inbox' } },
   { file: 'screens/coach/MessagesScreen.tsx', kind: 'list', what: 'the legacy coach list (messaging v2 off): client rows and unread',
     how: 'hides closed_client_ids (blocked either way) and my blocks from the block store at once', proof: { by: 'state', id: 'legacy-coach-list' } },
+  // FIX-952R1 (LS-952 B2): Roman's drafts card on both coach Messages screens counts drafts for clients; the drafts
+  // screen and Home read the same list (usePendingAiDrafts), so one rule and one proof cover the three counts.
+  { file: 'screens/coach/CoachInboxV2.tsx', kind: 'list', what: 'Roman\'s drafts card: drafts waiting for clients, by kind',
+    how: 'usePendingAiDrafts leaves out a draft with words for a client I block (block store) or whose chat Messages heard is closed (closedClientsStore, LS-952R2 B1), at once; the server leaves out a client who moved on',
+    proof: { by: 'state', id: 'coach-drafts-count' } },
+  { file: 'screens/coach/MessagesScreen.tsx', kind: 'list', what: 'Roman\'s drafts card on the legacy coach list: drafts waiting, by kind',
+    how: 'the same card and the same rule as the coach inbox (usePendingAiDrafts)', proof: { by: 'state', id: 'coach-drafts-count' } },
   { file: 'screens/client/MessagesInboxScreen.tsx', kind: 'list', what: 'the client inbox: the coach card, preview, unread',
     how: 'the coaching row\'s closed / blocked_by_me and my block store hide the card; a block reads the list again',
     proof: { by: 'suite', file: 'screens/client/__tests__/MessagesInboxScreen.test.tsx', titles: [
@@ -1358,7 +1365,8 @@ describe('KT-2 lists: a blocked person already in the cache drops out after a bl
 
 // ─── Lists kept outside the query cache ───────────────────────────────────────────────────────────────────────────
 
-const STATE_CASES = ['legacy-coach-list', 'coach-bell-source', 'coach-community-inbox-source', 'focus-reread-coach-home', 'focus-reread-lookup'];
+const STATE_CASES = ['legacy-coach-list', 'coach-bell-source', 'coach-community-inbox-source', 'focus-reread-coach-home', 'focus-reread-lookup',
+  'coach-drafts-count'];
 
 describe('KT-2 lists kept in screen state', () => {
   it('legacy-coach-list: a client I block from another screen leaves the legacy coach list at once', async () => {
@@ -1374,6 +1382,42 @@ describe('KT-2 lists kept in screen state', () => {
     });
     await waitFor(() => expect(view.queryByLabelText(/Open messages with Ana Ruiz/)).toBeNull());
     expect(view.getByLabelText(/Open messages with Ben Ode/)).toBeTruthy();
+  });
+
+  // FIX-952R1 (LS-952 B2): the cached drafts list is not read again; the block store alone moves the count.
+  it('coach-drafts-count: a client I block from another screen leaves Roman\'s draft count at once, with no new read', async () => {
+    const { COACH_AI_PENDING_DRAFTS_QUERY_KEY } = require('../hooks/usePendingAiDrafts');
+    const { useRomanDrafts } = require('../screens/coach/inboxStyleB');
+    const { Text } = require('react-native');
+    const { QueryClientProvider } = require('@tanstack/react-query');
+    const draft = (id: string, capability: string, subject: string | null, payload: Record<string, unknown> = {}) =>
+      ({ id, capability, status: 'pending', tenant_coach_id: 'coach-1', subject_user_id: subject, requester_id: 'coach-1', created_at: '2026-11-06T10:00:00Z', payload });
+    const qc = new QueryClient();
+    qc.setQueryData(COACH_AI_PENDING_DRAFTS_QUERY_KEY, { drafts: [
+      draft('nudge-blocked', 'draft.send_notification', BLOCKED),
+      draft('nudge-named', 'draft.send_notification', null, { clientId: BLOCKED }),
+      draft('workout-blocked', 'draft.assign_workout', BLOCKED), // the server keeps a workout across a block
+      draft('nudge-other', 'draft.send_notification', OTHER),
+    ] });
+    registerBlockSyncClient(qc);
+    useBlockedUsersStore.setState({ blocked: [] });
+    function Count() {
+      return <Text testID="count">{String(useRomanDrafts(false).total)}</Text>;
+    }
+    const view = await render(<QueryClientProvider client={qc}><Count /></QueryClientProvider>);
+    expect(view.getByTestId('count').props.children).toBe('4');
+    mockPost.mockResolvedValue({ data: {} });
+    await act(async () => {
+      await messagesModerationApi.block(BLOCKED);
+    });
+    await waitFor(() => expect(view.getByTestId('count').props.children).toBe('2'));
+    expect(qc.getQueryState(COACH_AI_PENDING_DRAFTS_QUERY_KEY)?.fetchStatus).toBe('idle');
+    // the drafts screen and Home count from the same list, not a read of their own
+    for (const file of ['screens/coach/PendingAiDraftsScreen.tsx', 'screens/coach/home-v11/useCoachHomeV11.ts']) {
+      expect(read(file)).toMatch(/usePendingAiDrafts\(/);
+      expect(read(file)).not.toMatch(/listPending\(/);
+    }
+    qc.clear();
   });
 
   // These read the block store in place; a full draw needs the whole navigator, so the rule is checked in the source.

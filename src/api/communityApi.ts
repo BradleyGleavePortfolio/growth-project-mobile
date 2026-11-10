@@ -32,6 +32,7 @@ import { z } from 'zod';
 import api from '../services/api';
 import { generateIdempotencyKey } from '../utils/idempotency';
 import { call } from './apiCall';
+import { crisisLineOwner, showCrisisLineFor } from '../lib/communityCrisisLine';
 
 export { CommunityApiError } from './apiCall';
 
@@ -411,13 +412,17 @@ export const communityApi = {
     input: { title: string; body: string },
     idempotencyKey?: string,
   ): Promise<CommunityPost> {
+    const owner = crisisLineOwner(); // CRISIS-TEXT-M: the answer's line reaches only the account that sent it
     return call(CommunityPostResponseSchema, () =>
       api.post<unknown>(
         `/community/workspaces/${workspaceId}/posts`,
         { title: input.title, body: input.body }, // the key travels only as the header (strict DTOs)
         idempotentHeaders(idempotencyKey),
       ),
-    ).then((r) => r.post);
+    ).then((r) => {
+      showCrisisLineFor(r, owner); // b#1232's crisis_flag, read here and kept nowhere
+      return r.post;
+    });
   },
 
   /**
@@ -425,13 +430,17 @@ export const communityApi = {
    * (Send again sends the same one).
    */
   addComment(postId: string, body: string, idempotencyKey?: string): Promise<CommunityComment> {
+    const owner = crisisLineOwner(); // CRISIS-TEXT-M
     return call(CommunityCommentResponseSchema, () =>
       api.post<unknown>(
         `/community/posts/${postId}/comments`,
         { body },
         idempotentHeaders(idempotencyKey),
       ),
-    ).then((r) => r.comment);
+    ).then((r) => {
+      showCrisisLineFor(r, owner);
+      return r.comment;
+    });
   },
 
   /**
@@ -506,13 +515,17 @@ export const communityApi = {
     body: string,
     idempotencyKey?: string,
   ): Promise<CommunityDmMessage> {
+    const owner = crisisLineOwner(); // CRISIS-TEXT-M
     return call(CommunityDmMessageResponseSchema, () =>
       api.post<unknown>(
         `/community/workspaces/${workspaceId}/dms/${recipientId}/messages`,
         { body },
         idempotentHeaders(idempotencyKey),
       ),
-    ).then((r) => r.message);
+    ).then((r) => {
+      showCrisisLineFor(r, owner);
+      return r.message;
+    });
   },
 
   /** POST /community/workspaces/:workspaceId/dms — open (or fetch) a 1:1 thread. */
