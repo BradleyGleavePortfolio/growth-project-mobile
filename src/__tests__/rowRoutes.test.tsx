@@ -55,6 +55,12 @@ jest.mock('../services/api', () => ({
     getClients: (...a: unknown[]) => mockGetClients(...a),
     getUnreadCounts: (...a: unknown[]) => mockGetUnreadCounts(...a),
   },
+  nudgesApi: {
+    list: () => mockGet('/nudges'),
+    unreadCount: () => mockGet('/nudges/unread-count'),
+    markRead: (id: string) => mockPost(`/nudges/${id}/read`),
+    markAllRead: () => mockPost('/nudges/read-all'),
+  },
 }));
 
 // Every switch these screens read is on, read once at module scope by several of them ([R27]).
@@ -155,8 +161,9 @@ import CoachCommunityCohortsScreen from '../screens/community/CoachCommunityCoho
 import CoachCommunityCohortDetailScreen from '../screens/community/CoachCommunityCohortDetailScreen';
 import CoachCommunityEventsScreen from '../screens/community/CoachCommunityEventsScreen';
 import MessagesScreen from '../screens/coach/MessagesScreen';
+import CommandCenterScreen from '../screens/coach/command-center/CommandCenterScreen';
+import { useCoachStore } from '../store/coachStore';
 import { CommunityReportsEntry } from '../screens/coach/CommunityReportsEntry';
-import CommandCenterInboxScreen from '../screens/coach/command-center/InboxScreen';
 import MessagesInboxScreen from '../screens/client/MessagesInboxScreen';
 import ClientWinsScreen from '../screens/client/CommunityScreen';
 import ClientNudgesScreen from '../screens/client/NotificationsScreen';
@@ -222,20 +229,24 @@ const EMPTY_STATES = { '/community/coach/empty-states': { surfaces: [] } };
 
 // ─── Moderation queue (GET /community/moderation/flagged) ────────────────────────────────────────────────────────────
 
-/** community-moderation.service.ts:770 listFlagged: the phone's getFlagged reads only these keys. */
+/** community-moderation.service.ts:958-975 listFlagged: the row shape, key for key. */
 const flagged = (id: string, target_type: string, target_id: string, content: string, extra: object = {}) => ({
   id,
+  workspace_id: WS,
   target_type,
   target_id,
   content,
+  media: null,
+  removed: false,
+  author_user_id: CLIENT,
   author_name: 'Dana Cruz',
   cohort_name: 'Spring block',
   reason: 'spam',
-  author_user_id: CLIENT,
+  notes: null,
   created_at: CREATED,
   respond_by: '2026-11-09T17:00:00.000Z',
   overdue: false,
-  removed: false,
+  can_act: true,
   ...extra,
 });
 
@@ -253,9 +264,11 @@ const CLIENT_MORE_HOST: Host = ['Tab@ClientNavigator', 'MoreStackNav@ClientNavig
 interface OpensExpect { kind: 'opens'; route: string; params?: Record<string, unknown> }
 interface GapExpect { kind: 'gap'; right: OpensExpect; why: string; symptom: (ctx: RowCtx) => void }
 interface InPlaceExpect { kind: 'inPlace'; reason: string; drawn: (ctx: RowCtx) => void }
-interface SheetExpect { kind: 'sheet'; testID: string }
-interface NoRowExpect { kind: 'noRow'; reason: string; absent: string[]; neighbour?: { testID: string; opens: OpensExpect } }
-type Expected = OpensExpect | GapExpect | InPlaceExpect | SheetExpect | NoRowExpect;
+interface SheetExpect { kind: 'sheet'; testID: string; shows?: string }
+interface NoRowExpect { kind: 'noRow'; reason: string; absent: string[]; present?: string; neighbour?: OpensExpect }
+interface CallsExpect { kind: 'calls'; fn: jest.Mock; reason: string }
+interface DisabledExpect { kind: 'disabled'; testID: string; reason: string }
+type Expected = OpensExpect | GapExpect | InPlaceExpect | SheetExpect | NoRowExpect | CallsExpect | DisabledExpect;
 
 interface RowCtx { view: Awaited<ReturnType<typeof render>> }
 interface Row {
@@ -267,13 +280,19 @@ interface Row {
   http: Record<string, unknown>;
   screen: () => React.ReactElement;
   /** How to find the row (never added to a product file: an existing testID or accessibility label). */
-  tap: { testID: string } | { label: RegExp };
+  tap: { testID: string; index?: number } | { label: RegExp };
   /** What must be on screen before tapping (defaults to the row itself). */
   waitFor?: { testID: string } | { text: string };
   before?: () => void;
+  /** Runs against the mounted view before the row can exist (typing a search). */
+  beforeTap?: (view: Awaited<ReturnType<typeof render>>) => void;
+  /** Seeds the query cache before the mount (a row that exists only on this phone). */
+  seedQueries?: (qc: QueryClient) => void;
   expected: Expected;
 }
 
+/** A read that never answers: the row under test is one this phone holds, not one the server sent. */
+const PENDING = Symbol('pending');
 const opens = (route: string, params?: Record<string, unknown>): OpensExpect => ({ kind: 'opens', route, params });
 const inboxScreen = () => <CoachCommunityInboxScreen navigation={mockNavObject as never} />;
 const spaceChat = (cohortId: string, messageId: string) => opens('CommunitySpaceChat', { cohortId, messageId });
@@ -390,6 +409,486 @@ function moderationInPlace(id: string, title: string, target: string, item: { id
   };
 }
 
+// ─── C: coach Community lists ────────────────────────────────────────────────────────────────────────────────────────
+
+/** community-cohort.dto.ts:27-40 CommunityCohortSummarySchema (GET /community/cohorts). */
+const cohortRow = (id: string, name: string) => ({
+  id,
+  workspace_id: WS,
+  name,
+  is_default: false,
+  kind: 'chat',
+  posting_policy: 'all',
+  visibility: 'clients',
+  description: null,
+  member_count: 2,
+  my_role: 'coach',
+  unread_count: 0,
+});
+const COHORTS = { feature_flag_state: 'enabled', cohorts: [cohortRow(COHORT, 'Spring block'), cohortRow(COHORT_2, 'Summer block')] };
+/** community-me.dto.ts:22-41 (GET /community/me). */
+const ME = (role: 'client' | 'coach') => ({
+  feature_flag_state: 'enabled',
+  workspace_id: WS,
+  membership: { id: uuid(30), role, notify_level: 'live', dm_enabled_effective: true, last_read_message_at: null, joined_at: CREATED },
+  unread: { cohort_messages: 0, dm_messages: 0, mentions: 0 },
+  flags: { community_api: true, community_dm: true, community_realtime: true, community_push: true, community_telemetry: true },
+});
+const DASHBOARD_HTTP = {
+  ...EMPTY_STATES,
+  '/community/cohorts': COHORTS,
+  '/community/me/coach-inbox': inboxPage(inboxPost(uuid(101))),
+  '/community/moderation/flagged': { items: [flagged(uuid(200), 'post', uuid(300), 'a post')] },
+};
+const coachHomeCard = (id: string, title: string, testID: string, route: string): Row => ({
+  id, title, role: 'coach', host: COACH_COMMUNITY_HOST, http: DASHBOARD_HTTP,
+  screen: () => <CoachCommunityHomeScreen />, tap: { testID }, expected: opens(route),
+});
+ROWS.push(
+  coachHomeCard('C1', 'Home inbox card', 'coach-community-home-inbox-card', 'CoachCommunityInbox'),
+  coachHomeCard('C2', 'Home moderation card', 'coach-community-home-moderation-card', 'CoachCommunityModeration'),
+  coachHomeCard('C3', 'Home cohorts card', 'coach-community-home-cohorts-card', 'CoachCommunityCohorts'),
+  coachHomeCard('C4', 'Home events card', 'coach-community-home-events-card', 'CoachCommunityEvents'),
+  {
+    id: 'C5', title: 'cohort row', role: 'coach', host: COACH_COMMUNITY_HOST,
+    http: { ...EMPTY_STATES, '/community/cohorts': COHORTS },
+    screen: () => <CoachCommunityCohortsScreen />,
+    tap: { testID: `coach-community-cohort-row-${COHORT_2}` },
+    expected: opens('CoachCommunityCohortDetail', { cohortId: COHORT_2, cohortName: 'Summer block' }),
+  },
+  {
+    id: 'C6', title: 'cohort member row opens its menu', role: 'coach', host: COACH_COMMUNITY_HOST,
+    before: () => { mockRouteParams = { cohortId: COHORT, cohortName: 'Spring block' }; },
+    http: {
+      ...EMPTY_STATES,
+      // community-cohort-members.dto.ts:60-81 (GET /community/cohorts/:id/members) and community-cohort.dto.ts:41-64.
+      [`/community/cohorts/${COHORT}/members`]: {
+        members: [
+          { id: uuid(40), user_id: CLIENT, display_name: 'Dana Cruz', role: 'student', status: 'active', email: 'dana@example.com', joined_at: CREATED },
+          { id: uuid(41), user_id: CLIENT_2, display_name: 'Sam Lee', role: 'student', status: 'active', email: 'sam@example.com', joined_at: CREATED },
+        ],
+        next_cursor: null,
+      },
+      [`/community/cohorts/${COHORT}`]: { ...cohortRow(COHORT, 'Spring block'), created_at: CREATED },
+    },
+    screen: () => <CoachCommunityCohortDetailScreen />,
+    tap: { testID: `coach-community-member-menu-${CLIENT_2}` },
+    expected: { kind: 'sheet', testID: 'coach-community-member-menu-sheet', shows: 'Sam Lee' },
+  },
+  {
+    id: 'C7', title: 'event row opens its manage sheet', role: 'coach', host: COACH_COMMUNITY_HOST,
+    http: {
+      '/community/me': ME('coach'),
+      [`/community/workspaces/${WS}/events`]: { events: [eventRow(uuid(50), 'Morning stretch'), eventRow(uuid(51), 'Sunday review')], next_before: null },
+    },
+    screen: () => <CoachCommunityEventsScreen />,
+    tap: { testID: `coach-community-event-row-${uuid(51)}` },
+    expected: { kind: 'sheet', testID: 'coach-community-events-manage-modal', shows: 'Sunday review' },
+  },
+);
+
+/** community-event.dto.ts:168-195 CommunityEventSchema. */
+function eventRow(id: string, title: string) {
+  return {
+    id, workspace_id: WS, cohort_id: null, created_by_user_id: COACH_USER, title, description: null,
+    state: 'scheduled', starts_at: '2026-11-20T17:00:00.000Z', ends_at: null, external_url: null, reflected_at: null,
+    canceled: false, rsvp_counts: { going: 0, maybe: 0, declined: 0, attended: 0, missed: 0 }, viewer_rsvp_status: null,
+    created_at: CREATED, updated_at: CREATED,
+  };
+}
+
+// ─── D: coach one-to-one (GET /coach/messages/inbox) ─────────────────────────────────────────────────────────────────
+
+const SERVER_FLAGS = (on: Record<string, boolean>) => ({ flags: on, evaluated_at: CREATED });
+const V2_ON = { '/me/feature-flags': SERVER_FLAGS({ messaging_core_v2: true }) };
+/** messaging-inbox.service.ts:29-48 InboxThreadView (thread_id is the client id). */
+const thread = (clientId: string, name: string, last_message: object | null, extra: object = {}) => ({
+  thread_id: clientId, kind: 'coach_client', coach_id: COACH_USER, client_id: clientId,
+  counterpart: { user_id: clientId, display_name: name },
+  last_message, unread_count: 0, muted: false, muted_until: null, pinned: false,
+  blocked_by_me: false, closed: false, last_activity_at: CREATED, ...extra,
+});
+/** messaging-inbox.service.ts:129-141 lastMessageView, one per state the server writes. */
+const lastMessage = (kind: 'text' | 'voice' | 'deleted', preview: string, extra: object = {}) => ({
+  id: uuid(60), sender_id: CLIENT_2, is_mine: false, kind, preview, created_at: CREATED, edited: false, ...extra,
+});
+const coachInbox = (...items: object[]) => ({ items, next_cursor: null, total_unread: 0 });
+const NEIGHBOUR = thread(CLIENT, 'Dana Cruz', lastMessage('text', 'hello'));
+const chatOf = (clientId: string, clientName: string) => opens('Messages', { screen: 'ClientMessages', params: { clientId, clientName }, initial: false });
+const resetRoster = () => { useCoachStore.getState().reset(); mockGetClients.mockResolvedValue({ data: [] }); };
+const v2Row = (id: string, title: string, last: object | null, extra: object = {}): Row => ({
+  id, title, role: 'coach', host: COACH_MESSAGES_HOST, before: resetRoster,
+  http: { ...V2_ON, '/coach/messages/inbox': coachInbox(NEIGHBOUR, thread(CLIENT_2, 'Sam Lee', last, extra)) },
+  screen: () => <MessagesScreen />,
+  tap: { testID: `inbox-row-${CLIENT_2}` },
+  expected: chatOf(CLIENT_2, 'Sam Lee'),
+});
+ROWS.push(
+  v2Row('D1', 'thread, last message text', lastMessage('text', 'how was today?')),
+  v2Row('D2', 'thread, last message voice', lastMessage('voice', '')),
+  v2Row('D3', 'thread, last message deleted', lastMessage('deleted', '')),
+  v2Row('D4', 'thread, last message card only', lastMessage('text', '', { card_type: 'workout_card' })),
+  v2Row('D5', 'thread, no last message', null),
+  {
+    id: 'D6', title: 'thread with blocked_by_me draws no row', role: 'coach', host: COACH_MESSAGES_HOST, before: resetRoster,
+    http: { ...V2_ON, '/coach/messages/inbox': coachInbox(thread(CLIENT_2, 'Sam Lee', lastMessage('text', 'x'), { blocked_by_me: true }), NEIGHBOUR) },
+    screen: () => <MessagesScreen />,
+    tap: { testID: `inbox-row-${CLIENT}` },
+    waitFor: { testID: `inbox-row-${CLIENT}` },
+    expected: {
+      kind: 'noRow',
+      reason: 'a chat closed by a block is not a row at all (CoachInboxV2.tsx:143-148; the server sends none: messaging-inbox.service.ts:43-46)',
+      absent: [`inbox-row-${CLIENT_2}`],
+      neighbour: chatOf(CLIENT, 'Dana Cruz'),
+    },
+  },
+  {
+    id: 'D7', title: 'client with no thread (start a conversation)', role: 'coach', host: COACH_MESSAGES_HOST,
+    before: () => {
+      useCoachStore.getState().reset();
+      // coach clients list row: the roster the store loads (coachStore.ts:93).
+      mockGetClients.mockResolvedValue({ data: [
+        { id: CLIENT, name: 'Dana Cruz', role: 'student', email: 'dana@example.com', coach_id: COACH_USER, created_at: CREATED },
+        { id: CLIENT_2, name: 'Sam Lee', role: 'student', email: 'sam@example.com', coach_id: COACH_USER, created_at: CREATED },
+      ] });
+    },
+    http: { ...V2_ON, '/coach/messages/inbox': coachInbox() },
+    screen: () => <MessagesScreen />,
+    tap: { testID: `inbox-client-${CLIENT_2}` },
+    expected: chatOf(CLIENT_2, 'Sam Lee'),
+  },
+  {
+    id: 'D8', title: 'legacy Messages row (server flag messaging_core_v2 off)', role: 'coach', host: COACH_MESSAGES_HOST,
+    before: () => {
+      useCoachStore.getState().reset();
+      mockGetClients.mockResolvedValue({ data: [
+        { id: CLIENT, name: 'Dana Cruz', role: 'student', email: 'dana@example.com', coach_id: COACH_USER, created_at: CREATED },
+        { id: CLIENT_2, name: 'Sam Lee', role: 'student', email: 'sam@example.com', coach_id: COACH_USER, created_at: CREATED },
+      ] });
+      // messaging.service getUnreadCounts: { by_client, closed_client_ids }.
+      mockGetUnreadCounts.mockResolvedValue({ data: { by_client: { [CLIENT_2]: 2 }, closed_client_ids: [] } });
+    },
+    http: { '/me/feature-flags': SERVER_FLAGS({ messaging_core_v2: false }) },
+    screen: () => <MessagesScreen />,
+    tap: { label: /Open messages with Sam Lee, 2 unread/ },
+    expected: chatOf(CLIENT_2, 'Sam Lee'),
+  },
+  {
+    id: 'D9', title: 'Command Center inbox row', role: 'coach', host: ['Tab@CoachNavigator'],
+    http: {
+      // command-center.service.ts:81-90 InboxThread, GET /coach/command-center/inbox.
+      '/coach/command-center/inbox': {
+        total_unread: 0,
+        threads: [
+          { thread_id: CLIENT, client_id: CLIENT, client_name: 'Dana Cruz', last_message_preview: 'hi', last_message_at: CREATED, unread_count: 0, is_coach_turn: false },
+          { thread_id: CLIENT_2, client_id: CLIENT_2, client_name: 'Sam Lee', last_message_preview: 'hey', last_message_at: CREATED, unread_count: 0, is_coach_turn: true },
+        ],
+      },
+    },
+    screen: () => <CommandCenterScreen initialTab="inbox" />,
+    tap: { testID: 'command-center-inbox-row', index: 1 },
+    expected: chatOf(CLIENT_2, 'Sam Lee'),
+  },
+  {
+    id: 'D10', title: 'Community reports entry in the Messages header', role: 'coach', host: COACH_MESSAGES_HOST,
+    http: { ...EMPTY_STATES, '/community/moderation/flagged': { items: [flagged(uuid(200), 'post', uuid(300), 'a post')] } },
+    screen: () => <CommunityReportsEntry />,
+    tap: { testID: 'messages-community-reports-entry' },
+    expected: opens('CoachCommunityModeration'),
+  },
+);
+
+// ─── E: client inbox (MessagesInboxScreen) ───────────────────────────────────────────────────────────────────────────
+
+const CLIENT_INBOX_HTTP = {
+  ...V2_ON,
+  '/v1/clients/me/coach': { id: COACH_USER, name: 'Alex Morgan' },
+  '/messages/unread-count': { total: 3 },
+  // messaging-inbox.service.ts:29-48: the client's single coach thread.
+  '/messages/inbox': coachInbox(thread(COACH_USER, 'Alex Morgan', lastMessage('text', 'see you Monday'))),
+  '/me/roman/usage': { used: { messages: 1 }, limits: { messages: 10 } },
+  '/messages': {},
+};
+const clientInboxScreen = () => <MessagesInboxScreen navigation={mockNavObject as never} />;
+ROWS.push(
+  { id: 'E1', title: 'coach card', role: 'client', host: CLIENT_HOME_HOST, http: CLIENT_INBOX_HTTP, screen: clientInboxScreen, tap: { testID: 'inbox-coach' }, expected: opens('Messages') },
+  { id: 'E2', title: 'Roman card', role: 'client', host: CLIENT_HOME_HOST, http: CLIENT_INBOX_HTTP, screen: clientInboxScreen, tap: { testID: 'inbox-roman' }, expected: opens('MoreTab', { screen: 'RomanChat', initial: false }) },
+  { id: 'E3', title: 'Your conversations with Roman row', role: 'client', host: CLIENT_HOME_HOST, http: CLIENT_INBOX_HTTP, screen: clientInboxScreen, tap: { label: /never sees this chat/ }, expected: opens('MoreTab', { screen: 'RomanConversations', initial: false }) },
+  {
+    id: 'E4', title: 'no coach: Join a coach', role: 'client', host: CLIENT_HOME_HOST, http: {},
+    before: () => { mockNeedsCoach = true; }, screen: clientInboxScreen, tap: { testID: 'inbox-join' },
+    expected: { kind: 'calls', fn: mockMessageCoach, reason: 'useEntitlement().messageCoach is the one way to find a coach' },
+  },
+  {
+    id: 'E5', title: 'no coach: Contact support', role: 'client', host: CLIENT_HOME_HOST, http: {},
+    before: () => { mockNeedsCoach = true; }, screen: clientInboxScreen, tap: { testID: 'inbox-support' },
+    expected: { kind: 'calls', fn: mockOpenSupport, reason: 'useOpenSupport() is the app’s support entry' },
+  },
+);
+
+// ─── F: client community ─────────────────────────────────────────────────────────────────────────────────────────────
+
+const HOME_HTTP = {
+  '/community/me': ME('client'),
+  '/community/cohorts': { ...COHORTS, cohorts: COHORTS.cohorts.map((c) => ({ ...c, my_role: 'client' })) },
+  '/v1/clients/me/coach': { id: COACH_USER, name: 'Alex Morgan' },
+  '/messages/unread-count': { total: 0 },
+  '/messages': {},
+};
+const homeRow = (id: string, title: string, key: string, expected: Expected): Row => ({
+  id, title, role: 'client', host: CLIENT_COMMUNITY_HOST, http: HOME_HTTP,
+  screen: () => <CommunityHomeScreen />, tap: { testID: `space-row-${key}` }, expected,
+});
+/** community-posts.service.ts:89-107 postView. */
+const post = (id: string, title: string | null, body: string | null, extra: object = {}) => ({
+  id, workspace_id: WS, cohort_id: null, author_user_id: CLIENT_2, author_name: 'Sam', title, body,
+  scope: 'hall', type: 'text', pinned: false, created_at: CREATED, updated_at: CREATED, deleted: false, reactions: [], ...extra,
+});
+const POSTS_URL = `/community/workspaces/${WS}/posts`;
+const spaceScreen = () => <CommunitySpaceScreen space="hall" />;
+ROWS.push(
+  homeRow('F1', 'SpaceTree space row', COHORT_2, opens('CommunitySpace', { space: 'cohort', cohortId: COHORT_2 })),
+  homeRow('F2', 'SpaceTree coach row', 'coach', opens('Home', { screen: 'Messages' })),
+  homeRow('F3', 'SpaceTree Leaderboard row', 'leaderboard', opens('Leaderboard')),
+  homeRow('F4', 'SpaceTree Classroom row', 'classroom', opens('CommunityClassroom')),
+  {
+    id: 'F5', title: 'space post row', role: 'client', host: CLIENT_COMMUNITY_HOST,
+    http: { '/community/me': ME('client'), [POSTS_URL]: { posts: [post(uuid(70), 'first', 'one'), post(uuid(71), 'second', 'two')], next_before: null } },
+    screen: spaceScreen, tap: { testID: `post-card-${uuid(71)}` }, expected: opens('CommunityThread', { postId: uuid(71) }),
+  },
+  {
+    id: 'F6', title: 'a removed post has no tap', role: 'client', host: CLIENT_COMMUNITY_HOST,
+    http: {
+      '/community/me': ME('client'),
+      // A removed post keeps its place (communityRemovedRows.ts; community-posts.service.ts removal view): title and body null, removed_at, removed_by.
+      [POSTS_URL]: { posts: [post(uuid(72), null, null, { removed_at: CREATED, removed_by: { user_id: COACH_USER, name: 'Kim' } })], next_before: null },
+    },
+    screen: spaceScreen, tap: { testID: `post-removed-${uuid(72)}` },
+    expected: { kind: 'noRow', reason: 'CommunitySpaceScreen.tsx:325-333 draws one quiet line, no card', absent: [`post-card-${uuid(72)}`], present: `post-removed-line-${uuid(72)}` },
+  },
+  {
+    id: 'F7', title: 'an optimistic post is disabled', role: 'client', host: CLIENT_COMMUNITY_HOST,
+    http: { '/community/me': ME('client'), [POSTS_URL]: PENDING },
+    before: () => undefined,
+    seedQueries: (qc) => qc.setQueryData(['community', 'posts', WS], [post('optimistic-1', 'Sending', 'body')]),
+    screen: spaceScreen, tap: { testID: 'post-card-optimistic-1' },
+    expected: { kind: 'disabled', testID: 'post-card-optimistic-1', reason: 'CommunitySpaceScreen.tsx:274: the row is pressable only once the post has a server id' },
+  },
+  {
+    id: 'F8', title: 'DM row', role: 'client', host: CLIENT_COMMUNITY_HOST,
+    http: {
+      // community-dms.service.ts:284-289 listThreads.
+      [`/community/workspaces/${WS}/dms`]: { threads: [
+        { thread_id: `${WS}:${CLIENT}:${CLIENT_2}`, workspace_id: WS, other_user_id: CLIENT_2, created_at: null, last_message_at: CREATED },
+        { thread_id: `${WS}:${CLIENT}:${COACH_USER}`, workspace_id: WS, other_user_id: COACH_USER, created_at: null, last_message_at: CREATED },
+      ] },
+    },
+    screen: () => <CommunityDmListScreen workspaceId={WS} />,
+    tap: { testID: `dm-row-${WS}:${CLIENT}:${COACH_USER}` },
+    expected: opens('CommunityDmThread', { recipientId: COACH_USER }),
+  },
+);
+
+const SEARCH_HTTP = (flags: Record<string, boolean>, results: object[]) => ({
+  '/community/me': ME('client'),
+  '/me/feature-flags': SERVER_FLAGS({ community_search: true, community_classroom: true, community_events: true, ...flags }),
+  // community-search.service.ts:114-122; dto SearchResponseSchema.
+  [`/community/workspaces/${WS}/search`]: { version: 1, query: 'squat', results, nextCursor: null, tookMs: 4 },
+});
+const searchHit = (id: string, kind: string, targetId: string) => ({ id, kind, targetId, cohortId: null, authorId: CLIENT_2, excerpt: 'a matching excerpt', createdAt: CREATED });
+const findRow = (id: string, title: string, kind: string, expected: Expected, flags: Record<string, boolean> = {}): Row => ({
+  id, title, role: 'client', host: CLIENT_COMMUNITY_HOST,
+  http: SEARCH_HTTP(flags, [searchHit(uuid(80), 'post', uuid(81)), searchHit(uuid(82), kind, uuid(83))]),
+  screen: () => <CommunityFindScreen />,
+  beforeTap: (view) => fireEvent.changeText(view.getByTestId('community-search-input'), 'squat'),
+  tap: { testID: `community-search-result-${uuid(82)}` },
+  expected,
+});
+ROWS.push(
+  findRow('F9', 'search result: post', 'post', opens('CommunityThread', { postId: uuid(83) })),
+  findRow('F10', 'search result: voice note transcript', 'voice_note_transcript', opens('CommunityVoiceNoteDetail', { voiceNoteId: uuid(83), excerpt: 'a matching excerpt' })),
+  findRow('F11', 'search result: classroom lesson', 'classroom_lesson', opens('CommunityLessonDetail', { postId: uuid(83) })),
+  findRow('F12', 'search result: event', 'event', opens('CommunityEventDetail', { eventId: uuid(83) })),
+  findRow('F13a', 'search lesson with the server classroom switch off shows the notice', 'classroom_lesson', { kind: 'sheet', testID: 'community-find-unavailable-notice', shows: undefined }, { community_classroom: false }),
+  findRow('F13b', 'search event with the server events switch off shows the notice', 'event', { kind: 'sheet', testID: 'community-find-unavailable-notice', shows: undefined }, { community_events: false }),
+  {
+    id: 'F14', title: 'challenge row', role: 'client', host: CLIENT_COMMUNITY_HOST,
+    http: { '/community/me': ME('client'), [`/community/workspaces/${WS}/challenges`]: { challenges: [challengeRow(uuid(90)), challengeRow(uuid(91))], next_cursor: null } },
+    screen: () => <CommunityChallengesScreen />,
+    tap: { testID: `community-challenge-card-${uuid(91)}` }, expected: opens('CommunityChallengeDetail', { challengeId: uuid(91) }),
+  },
+  {
+    id: 'F15', title: 'classroom lesson row', role: 'client', host: CLIENT_COMMUNITY_HOST,
+    http: { '/community/me': ME('client'), [`/community/workspaces/${WS}/classroom`]: { posts: [lessonRow(uuid(92)), lessonRow(uuid(93))], next_cursor: null } },
+    screen: () => <CommunityClassroomScreen />,
+    tap: { testID: `community-lesson-card-${uuid(93)}` }, expected: opens('CommunityLessonDetail', { postId: uuid(93) }),
+  },
+);
+
+/** community-challenges.dto.ts:218-237 ChallengeSchema. */
+function challengeRow(id: string) {
+  return {
+    id, workspace_id: WS, cohort_id: null, created_by_user_id: COACH_USER, title: `Challenge ${id.slice(4, 8)}`, description: null,
+    status: 'active', starts_at: CREATED, ends_at: '2026-12-01T00:00:00.000Z', metric_key: null, target_value: 10, unit: 'days',
+    leaderboard_enabled: false, created_at: CREATED, updated_at: CREATED, archived: false,
+  };
+}
+/** community-classroom.service.ts:139-157 postView. */
+function lessonRow(id: string) {
+  return {
+    id, workspace_id: WS, cohort_id: null, coach_id: COACH_USER, title: `Lesson ${id.slice(4, 8)}`, body_markdown: 'read me',
+    status: 'published', pinned: false, pinned_order: null, release_at: null, release_locked: false, published_at: CREATED,
+    created_at: CREATED, updated_at: CREATED, media: [],
+  };
+}
+
+// Today (community.service.ts:269-305 getToday; CommunityTodayResponseSchema).
+const TODAY_HTTP = {
+  '/community/today': {
+    feature_flag_state: 'enabled',
+    cohort: { id: COHORT, name: 'Spring block', member_count: 12 },
+    event: { id: uuid(94), title: 'Morning stretch', starts_at: '2026-11-20T17:00:00.000Z', live_url: null },
+    pinned_post: { id: uuid(95), title: 'Read this first', author_user_id: COACH_USER },
+    challenge: { id: uuid(96), title: 'Ten day streak', ends_at: '2026-12-01T00:00:00.000Z' },
+    empty_reason: null,
+  },
+};
+const todayRow = (id: string, title: string, testID: string, expected: OpensExpect): Row => ({
+  id, title, role: 'client', host: CLIENT_COMMUNITY_HOST, http: TODAY_HTTP, screen: () => <CommunityTodayScreen />, tap: { testID }, expected,
+});
+ROWS.push(
+  todayRow('F16', 'Today cohort card', 'community-today-cohort', opens('CommunitySpace', { space: 'cohort', cohortId: COHORT })),
+  todayRow('F17', 'Today pinned post card', 'community-today-pinned', opens('CommunityThread', { postId: uuid(95) })),
+  todayRow('F18', 'Today event card', 'community-today-event', opens('CommunityEventDetail', { eventId: uuid(94) })),
+  todayRow('F19', 'Today challenge card', 'community-today-challenge', opens('CommunityChallengeDetail', { challengeId: uuid(96) })),
+);
+
+// ─── W: complete-in-place lists ──────────────────────────────────────────────────────────────────────────────────────
+
+ROWS.push(
+  {
+    id: 'W1', title: 'member win', role: 'client', host: CLIENT_MORE_HOST,
+    // community wins feed row: RawWinSchema in src/api/communityWinsApi.ts mirrors the server's feed row (GET /community/feed).
+    http: { '/community/feed': [{ id: uuid(110), user_id: CLIENT_2, display_name: 'Sam', title: 'New PR', description: 'Bench 100kg', created_at: CREATED, is_mine: false }] },
+    screen: () => <ClientWinsScreen />,
+    tap: { testID: `win-${uuid(110)}` },
+    expected: { kind: 'inPlace', reason: 'a win shows its whole title and description; Report and Block are its own controls (the row itself has no press)', drawn: (ctx) => {
+      expect(ctx.view.getByTestId(`win-${uuid(110)}`).props.onPress).toBeUndefined();
+      expect(ctx.view.getByTestId(`win-menu-${uuid(110)}`)).toBeTruthy();
+    } },
+  },
+  {
+    id: 'W2', title: 'coach nudge row', role: 'client', host: CLIENT_HOME_HOST,
+    // nudges.service.ts list rows (GET /nudges): the whole note is the row.
+    http: { '/nudges': [{ id: uuid(111), client_id: CLIENT, coach_id: COACH_USER, title: null, body: 'How did week 2 feel?', created_at: CREATED, read_at: null }] },
+    screen: () => <ClientNudgesScreen />,
+    tap: { label: /How did week 2 feel\?/ },
+    expected: { kind: 'inPlace', reason: 'a nudge shows its whole note; the tap only marks it read (it stands for nothing it does not show)', drawn: () => undefined },
+  },
+  {
+    id: 'W3', title: 'coach wearable prompt card', role: 'coach', host: COACH_COMMUNITY_HOST,
+    http: {
+      '/community/me': ME('coach'),
+      '/me/feature-flags': SERVER_FLAGS({ coach_community_wearable_prompts: true }),
+      // wearable-prompts.dto.ts:80-97 PromptViewSchema (GET /community/workspaces/:id/wearable-prompts).
+      [`/community/workspaces/${WS}/wearable-prompts`]: { version: 1, prompts: [{ id: uuid(112), workspaceId: WS, coachId: COACH_USER, clientId: CLIENT, metricKey: 'sleep', promptText: 'Ask Dana about sleep this week.', sources: [], generatedAt: CREATED, dismissedAt: null, actedOnAt: null }] },
+    },
+    screen: () => <CommunityWearablePromptsScreen />,
+    tap: { testID: `wearable-prompt-listitem-${uuid(112)}` },
+    expected: { kind: 'inPlace', reason: 'the card shows the whole prompt with Dismiss and Act on in place', drawn: (ctx) => {
+      expect(ctx.view.getByTestId(`wearable-prompt-listitem-${uuid(112)}`).props.onPress).toBeUndefined();
+    } },
+  },
+);
+
+// ─── N: notification center (real normalizer, real routePushTap, fake navigator) ─────────────────────────────────────
+
+const clientTabs = () => [...navigatorScreens('Tab@ClientNavigator')];
+const coachTabs = () => [...navigatorScreens('Tab@CoachNavigator')];
+const attach = (role: Role) => {
+  const nav: PushNavigator = { isReady: () => true, navigate: mockNavigate, getRootState: () => ({ routeNames: role === 'client' ? clientTabs() : coachTabs() }) };
+  attachPushNavigator(nav);
+  setPushSession({ kind: 'app', userId: role === 'client' ? CLIENT : COACH_USER, role: role === 'client' ? 'student' : 'coach' });
+};
+/** community-notifications.service.ts:222-233: the stored row carries idempotency_key, category, target_type, target_id only (no actionScreen). */
+const communityRow = (id: string, kind: string, body: string, deep_link: string, target: { type: string; id: string }) => ({
+  id, kind, body, deep_link, channel: 'push', read_at: null, created_at: CREATED,
+  payload: { idempotency_key: `community:${kind}:${id}`, category: 'COACH_DIRECT', target_type: target.type, target_id: target.id },
+});
+const notifications = (...items: object[]) => ({ items, nextCursor: null, unreadCount: items.length });
+const NOTIF_HTTP = (...items: object[]) => ({ '/notifications': notifications(...items), '/notifications/unread-count': { count: items.length } });
+const centerScreen = () => <NotificationCenterScreen />;
+/** A client's community row today: the Community tab's root, a hub (pushTapRouter.ts:129, :299-304). */
+const landsOnCommunityRoot = () => {
+  expect(mockNavigate).toHaveBeenCalledTimes(1);
+  expect(mockNavigate).toHaveBeenCalledWith('CommunityTab', undefined);
+};
+/** A coach's community row today: 'Community' is not a coach push route, so it stays on the list (pushTapRouter.ts:133, deliver()). */
+const staysOnCoachList = () => {
+  expect(mockNavigate).toHaveBeenCalledTimes(1);
+  expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'NotificationCenter', params: undefined });
+};
+const notifGap = (id: string, title: string, role: Role, row: { id: string; body: string; kind: string; deep_link: string }, right: OpensExpect, why: string, symptom: () => void): Row => ({
+  id, title, role, host: role === 'client' ? ['Tab@ClientNavigator'] : ['Tab@CoachNavigator'],
+  http: NOTIF_HTTP(communityRow('n-neighbour', row.kind, `neighbour ${row.kind}`, row.deep_link, { type: 'x', id: uuid(120) }), row),
+  before: () => attach(role), screen: centerScreen, tap: { label: new RegExp(row.body) },
+  expected: { kind: 'gap', right, why, symptom },
+});
+const SPACE_LINK_WHY = 'the phone reads no community/cohorts link: notificationsApi.ts:318 maps every community_* row to Community and pushTapRouter.ts:299-304 drops the link';
+const NESTED = (root: string, screen: string, params: Record<string, unknown>) => opens(root, { screen, params, initial: false });
+ROWS.push(
+  notifGap('N1', 'community_post_replied (student)', 'client',
+    communityRow('n-post', 'community_post_replied', 'Someone replied to your post.', `tgp://community/posts/${uuid(121)}`, { type: 'post', id: uuid(121) }),
+    NESTED('CommunityTab', 'CommunityThread', { postId: uuid(121) }),
+    'community-posts.service.ts:463 tgp://community/posts/<id> matches no phone link; the row lands on the Community root', landsOnCommunityRoot),
+  notifGap('N2', 'community_dm_received (student)', 'client',
+    communityRow('n-dm', 'community_dm_received', 'New direct message.', `tgp://community/dms/${WS}:${COACH_USER}:${CLIENT}`, { type: 'dm', id: uuid(122) }),
+    NESTED('CommunityTab', 'CommunityDmThread', { recipientId: COACH_USER }),
+    'community-dms.service.ts:223 tgp://community/dms/<dmKey> matches no phone link; the row lands on the Community root', landsOnCommunityRoot),
+  notifGap('N2c', 'community_dm_received (coach, see Owner decisions: no coach DM screen exists)', 'coach',
+    communityRow('n-dmc', 'community_dm_received', 'New direct message for coach.', `tgp://community/dms/${WS}:${COACH_USER}:${CLIENT}`, { type: 'dm', id: uuid(123) }),
+    NESTED('CommunityStack', 'CommunityDmThread', { recipientId: CLIENT }),
+    'the coach app has no CommunityDmThread route; the row stays on the notification list', staysOnCoachList),
+);
+const spaceRow = communityRow('n-space', 'community_message_received', 'New activity in Spring block.', `tgp://community/cohorts/${COHORT}`, { type: 'message', id: uuid(124) });
+ROWS.push(
+  SPACE_CHAT_SHIPPED
+    ? { id: 'N3', title: 'community_message_received (student)', role: 'client', host: ['Tab@ClientNavigator'], http: NOTIF_HTTP(spaceRow), before: () => attach('client'), screen: centerScreen, tap: { label: new RegExp(spaceRow.body) }, expected: NESTED('CommunityTab', 'CommunitySpaceChat', { cohortId: COHORT }) }
+    : notifGap('N3', 'community_message_received (student)', 'client', spaceRow, NESTED('CommunityTab', 'CommunitySpaceChat', { cohortId: COHORT }), SPACE_LINK_WHY, landsOnCommunityRoot),
+  SPACE_CHAT_SHIPPED
+    ? { id: 'N3c', title: 'community_message_received (coach)', role: 'coach', host: ['Tab@CoachNavigator'], http: NOTIF_HTTP(spaceRow), before: () => attach('coach'), screen: centerScreen, tap: { label: new RegExp(spaceRow.body) }, expected: NESTED('CommunityStack', 'CommunitySpaceChat', { cohortId: COHORT }) }
+    : notifGap('N3c', 'community_message_received (coach)', 'coach', spaceRow, NESTED('CommunityStack', 'CommunitySpaceChat', { cohortId: COHORT }), SPACE_LINK_WHY, staysOnCoachList),
+  notifGap('N4', 'community_event_starting_soon (student)', 'client',
+    communityRow('n-event', 'community_event_starting_soon', 'An event you RSVPd to starts soon.', `tgp://community/events/${uuid(125)}`, { type: 'event', id: uuid(125) }),
+    NESTED('CommunityTab', 'CommunityEventDetail', { eventId: uuid(125) }),
+    'community-events.service.ts:739 tgp://community/events/<id> matches no phone link; the row lands on the Community root', landsOnCommunityRoot),
+  notifGap('N5', 'community_challenge_milestone (student)', 'client',
+    communityRow('n-challenge', 'community_challenge_milestone', 'You completed a challenge.', `tgp://community/challenges/${uuid(126)}`, { type: 'challenge', id: uuid(126) }),
+    NESTED('CommunityTab', 'CommunityChallengeDetail', { challengeId: uuid(126) }),
+    'community-challenges.service.ts:502 tgp://community/challenges/<id> matches no phone link; the row lands on the Community root', landsOnCommunityRoot),
+  notifGap('N6', 'community_moderation_action_against_me (student)', 'client',
+    communityRow('n-mod', 'community_moderation_action_against_me', 'A moderation action was taken on your content.', 'tgp://community/moderation', { type: 'post', id: uuid(127) }),
+    NESTED('CommunityTab', 'CommunitySafety', {}),
+    'community-moderation.service.ts:598 tgp://community/moderation matches no phone link; the row lands on the Community root', landsOnCommunityRoot),
+  notifGap('N7', 'community_moderation_notice (student)', 'client',
+    // community-moderation-notices.ts:122-129 writes this row directly: channel inapp, payload idempotency_key, action, moderation_action_id, target_type, target_id.
+    { id: 'n-notice', kind: 'community_moderation_notice', body: 'Your post was hidden. Open Community safety to read why.', deep_link: 'tgp://community/safety', channel: 'inapp', read_at: null, created_at: CREATED, payload: { idempotency_key: 'community:moderation_notice:m1:hide', action: 'hide', moderation_action_id: uuid(128), target_type: 'post', target_id: uuid(129) } } as never,
+    NESTED('CommunityTab', 'CommunitySafety', {}),
+    'community-moderation-notices.ts:127 tgp://community/safety matches no phone link; the row lands on the Community root', landsOnCommunityRoot),
+  {
+    id: 'N8', title: 'message_received (student): the one coach chat', role: 'client', host: ['Tab@ClientNavigator'],
+    // notifications/emitters/message-received.emitter.ts:42-48: kind message_received, payload senderName, threadId, deep_link tgp://messages/<threadId>.
+    http: NOTIF_HTTP({ id: 'n-msg', kind: 'message_received', body: 'New message from Alex', deep_link: `tgp://messages/${uuid(130)}`, channel: 'inapp', read_at: null, created_at: CREATED, payload: { senderName: 'Alex', threadId: uuid(130) } }),
+    before: () => attach('client'), screen: centerScreen, tap: { label: /New message from Alex/ },
+    expected: opens('Home', { screen: 'Messages' }),
+  },
+  notifGap('N8c', 'message_received (coach: lands on the inbox, see Owner decisions)', 'coach',
+    { id: 'n-msg-c', kind: 'message_received', body: 'New message from Dana', deep_link: `tgp://messages/${CLIENT}`, channel: 'inapp', read_at: null, created_at: CREATED, payload: { senderName: 'Dana', threadId: CLIENT } } as never,
+    NESTED('Messages', 'ClientMessages', { clientId: CLIENT, clientName: 'Dana' }),
+    'the coach row opens the Messages inbox (a hub), not that client\'s chat: pushTapRouter.ts:134-135 COACH-CHAT-BACK',
+    () => { expect(mockNavigate).toHaveBeenCalledTimes(1); expect(mockNavigate).toHaveBeenCalledWith('Messages', { screen: 'MessagesInbox', pop: true }); }),
+);
+
 // ─── Reading the navigators (the registration check) ─────────────────────────────────────────────────────────────────
 
 function navigatorScreens(host: string): Set<string> {
@@ -431,10 +930,13 @@ function registrationOf(role: Role, host: Host, route: string, params?: Record<s
 function respond(http: Record<string, unknown>) {
   mockGet.mockImplementation(async (url: string) => {
     const key = url.split('?')[0];
-    if (key in http) return { data: http[key] };
+    if (key in http) {
+      if (http[key] === PENDING) return new Promise(() => undefined);
+      return { data: http[key], headers: {} };
+    }
     throw Object.assign(new Error(`no fixture for ${url}`), { response: { status: 404 } });
   });
-  mockPost.mockResolvedValue({ data: {} });
+  mockPost.mockResolvedValue({ data: {}, headers: {} });
 }
 
 function renderRow(row: Row) {
@@ -443,17 +945,25 @@ function renderRow(row: Row) {
     : { id: CLIENT, coach_id: COACH_USER, name: 'Dana Cruz', firstName: 'Dana' };
   respond(row.http);
   row.before?.();
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 0 } } });
+  row.seedQueries?.(client);
   return render(<QueryClientProvider client={client}>{row.screen()}</QueryClientProvider>);
 }
+
+const findRow2 = (view: Awaited<ReturnType<typeof render>>, row: Row) => {
+  if ('testID' in row.tap) {
+    return row.tap.index === undefined ? view.getByTestId(row.tap.testID) : view.getAllByTestId(row.tap.testID)[row.tap.index];
+  }
+  return view.getByLabelText(row.tap.label);
+};
 
 /** The row on screen and tapped once. */
 async function tapRow(row: Row): Promise<RowCtx> {
   const view = await renderRow(row);
-  const find = () => 'testID' in row.tap ? view.getByTestId(row.tap.testID) : view.getByLabelText(row.tap.label);
-  await waitFor(() => expect(find()).toBeTruthy());
+  row.beforeTap?.(view);
+  await waitFor(() => expect(findRow2(view, row)).toBeTruthy(), { timeout: 8000 });
   await act(async () => {
-    fireEvent.press(find());
+    fireEvent.press(findRow2(view, row));
   });
   return { view };
 }
@@ -479,7 +989,7 @@ beforeEach(() => {
 
 describe.each(ROWS.filter((r) => r.expected.kind === 'opens'))('$id $title', (row) => {
   const want = row.expected as OpensExpect;
-  it(`one tap opens ${want.route} with this row's own ids`, async () => {
+  it(`one tap opens ${want.route} with this row's own ids, exactly once`, async () => {
     await tapRow(row);
     expectOneNavigate(want);
   });
@@ -509,11 +1019,41 @@ describe.each(ROWS.filter((r) => r.expected.kind === 'inPlace'))('$id $title (co
   });
 });
 
-// keep imports used while the table grows
-void COACH_INBOX_ROW_KINDS;
-void COACH_MOD_TARGET_TYPES;
-void SEARCH_KINDS;
-void attachPushNavigator;
-void setPushSession;
-void (undefined as unknown as PushNavigator);
-void [COHORT_2, CLIENT_2, CoachCommunityHomeScreen, CoachCommunityCohortsScreen, CoachCommunityCohortDetailScreen, CoachCommunityEventsScreen, MessagesScreen, CommunityReportsEntry, CommandCenterInboxScreen, MessagesInboxScreen, ClientWinsScreen, ClientNudgesScreen, CommunitySpaceScreen, CommunityDmListScreen, CommunityFindScreen, CommunityChallengesScreen, CommunityClassroomScreen, CommunityTodayScreen, CommunityHomeScreen, CommunityWearablePromptsScreen, NotificationCenterScreen, WS, CLIENT_HOME_HOST, CLIENT_MORE_HOST, COACH_MESSAGES_HOST, CLIENT_COMMUNITY_HOST];
+describe.each(ROWS.filter((r) => r.expected.kind === 'sheet'))('$id $title', (row) => {
+  const { testID, shows } = row.expected as SheetExpect;
+  it('one tap opens that row\'s own sheet or notice and navigates nowhere', async () => {
+    const { view } = await tapRow(row);
+    await waitFor(() => expect(view.getByTestId(testID).props.visible).not.toBe(false));
+    if (shows) expect(view.queryAllByText(shows, { exact: false }).length).toBeGreaterThan(0);
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+});
+
+describe.each(ROWS.filter((r) => r.expected.kind === 'noRow'))('$id $title', (row) => {
+  const want = row.expected as NoRowExpect;
+  it(`no row, so no dead tap: ${want.reason}`, async () => {
+    const { view } = await tapRow(row);
+    for (const id of want.absent) expect(view.queryByTestId(id)).toBeNull();
+    if (want.present) expect(view.getByTestId(want.present)).toBeTruthy();
+    if (want.neighbour) expectOneNavigate(want.neighbour);
+    else expect(mockNavigate).not.toHaveBeenCalled();
+  });
+});
+
+describe.each(ROWS.filter((r) => r.expected.kind === 'calls'))('$id $title', (row) => {
+  const { fn, reason } = row.expected as CallsExpect;
+  it(`one tap runs its own action: ${reason}`, async () => {
+    await tapRow(row);
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+});
+
+describe.each(ROWS.filter((r) => r.expected.kind === 'disabled'))('$id $title', (row) => {
+  const want = row.expected as DisabledExpect;
+  it(`disabled until it is real: ${want.reason}`, async () => {
+    const { view } = await tapRow(row);
+    expect(view.getByTestId(want.testID).props.accessibilityState?.disabled ?? view.getByTestId(want.testID).props.disabled).toBe(true);
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+});
