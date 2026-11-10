@@ -810,9 +810,12 @@ it('COACH-ROW-CHAT flag off: the row opens the chat where chatTarget\'s off form
 
 it('COACH-ROW-CHAT: of two rows for two clients, the second opens the second client\'s chat', async () => {
   await mount();
-  const rows = [rowFor(RAY, 'n-1'), rowFor(DANA, 'n-2')].map((raw) => normalizeNotification(raw));
+  const rows = [rowFor(RAY, 'n-1'), rowFor(DANA, 'n-2')].map((raw) => normalizeNotification(raw)); // the list, in order
   await act(async () => { pushTap(); routeNotification(rows[1], { navigate: jest.fn() }); });
   expect(ref.getCurrentRoute()?.params).toEqual(DANA);
+  await act(async () => ref.goBack());
+  await act(async () => { pushTap(); routeNotification(rows[0], { navigate: jest.fn() }); });
+  expect(ref.getCurrentRoute()?.params).toEqual(RAY);
 });
 
 it('COACH-ROW-CHAT: the name the row opens with is the one the inbox row opens the same chat with', async () => {
