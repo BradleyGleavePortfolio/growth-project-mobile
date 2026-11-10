@@ -13,7 +13,7 @@
 //   POST /coach/command-center/action-queue/:alertId/dismiss — dismiss an alert
 
 import api from './api';
-import { splitRomanQuote } from '../components/roman/romanReply';
+import { splitRomanQuote } from '../components/roman/romanQuoteSplit';
 // `LtvMetrics` is currently defined alongside the dashboard component; the
 // `import type` ensures no runtime cycle.
 import type { LtvMetrics } from '../components/command-center/CoachLtvDashboard';
