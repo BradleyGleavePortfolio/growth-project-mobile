@@ -85,7 +85,7 @@ const CASES = (Object.keys(SCREENS) as (keyof typeof SCREENS)[]).flatMap((name) 
 type Host = { type: unknown; props: Record<string, unknown> & { style?: unknown }; parent: Host | null; children?: (Host | string)[] };
 const flat = (node: Host) => (StyleSheet.flatten(node.props.style as Parameters<typeof StyleSheet.flatten>[0]) ?? {}) as Record<string, unknown>;
 const num = (value: unknown) => (typeof value === 'number' ? value : 0);
-const isHost = (node: Host | null): node is Host => !!node && typeof node.type === 'string';
+const isHost = (node: Host | null): boolean => !!node && typeof node.type === 'string';
 const top = (node: Host) => { const st = flat(node); return num(st.marginTop ?? st.marginVertical ?? st.margin); };
 const padTop = (node: Host) => { const st = flat(node); return num(st.paddingTop ?? st.paddingVertical ?? st.padding); };
 const padBottom = (node: Host) => { const st = flat(node); return num(st.paddingBottom ?? st.paddingVertical ?? st.padding); };
@@ -164,6 +164,6 @@ describe("KitchenTitle954: on all five kitchen screens the Back row's top sits 4
     expect(flat(m.back).minWidth).toBeGreaterThanOrEqual(44);
     expect(m.rowUnderInset).toBeGreaterThanOrEqual(0);
     if (m.host) expect(topBelow(m.row, m.host)).toBeGreaterThanOrEqual(0);
-    if (m.save) expect(StyleSheet.flatten(m.save.props.style as Parameters<typeof StyleSheet.flatten>[0]).height).toBeGreaterThanOrEqual(44);
+    if (m.save) expect(flat(m.save).height).toBeGreaterThanOrEqual(44);
   });
 });
