@@ -5,7 +5,7 @@
  * The theme mock returns the real light tokens (the screen's own test returns one colour for all).
  */
 import React from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { render } from '@testing-library/react-native';
 import RomanConversationScreen from '../RomanConversationScreen';
 import RomanMessageBubble from '../../../components/roman/RomanMessageBubble';
@@ -30,7 +30,7 @@ const REPLY = '> Keep Thursday easy\n\nCan I do it indoors?';
 const msg = (role: RomanMessage['role'], content: string): RomanMessage => ({
   id: 'm1', role, content, interrupted: false, createdAt: '2026-10-01T08:00:00.000Z',
 });
-const flat = (s: unknown) => StyleSheet.flatten(s as never) ?? {};
+const flat = (s: unknown): ViewStyle => StyleSheet.flatten(s as StyleProp<ViewStyle>) ?? {};
 
 const readHistory = (message: RomanMessage) => {
   const api = {
