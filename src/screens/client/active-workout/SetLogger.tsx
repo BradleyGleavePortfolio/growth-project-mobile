@@ -122,6 +122,8 @@ export function SetLogger({
   nextUp = false,
   timed = false,
   bodyWeight = false,
+  onRemove,
+  exerciseName = '',
 }: {
   set: SessionSet;
   setIdx: number;
@@ -139,6 +141,10 @@ export function SetLogger({
   timed?: boolean;
   /** FIX-928-BW (#197-E10): a body-weight exercise; an unloaded set reads "BW", spoken "body weight". */
   bodyWeight?: boolean;
+  /** SET-EDIT-M: removes this set; absent, the row has no remove (the last set of a saved workout). */
+  onRemove?: (exIdx: number, setIdx: number) => void;
+  /** SET-EDIT-M: names the exercise in the remove control's spoken label. */
+  exerciseName?: string;
 }) {
   // The count's words: "reps" as on main, "seconds" / "sec" for a timed row.
   const spoken = timed ? 'seconds' : 'reps';
@@ -199,11 +205,31 @@ export function SetLogger({
       testID={`set-reps-${exIdx}-${setIdx}`}
     />
   );
+  // Only the next set (or one the client tapped) shows its fields; another
+  // set is text, done in one tap or changed by tapping its numbers.
+  const fields = (nextUp && !narrow) || editing;
+  // SET-EDIT-M: the remove control. On the live row it shows only while the
+  // row's numbers are open, on a line under them (the drawn row has no room
+  // beside them); in the history edit it takes the empty Previous slot.
+  const tools = !hideCompletion && fields && !!onRemove;
+  const removeSet = onRemove ? (
+    <HapticPressable
+      intent="warning"
+      style={hideCompletion ? styles.previousSet : styles.toolButton}
+      disabled={!editable}
+      onPress={() => onRemove(exIdx, setIdx)}
+      accessibilityRole="button"
+      accessibilityLabel={`Remove set ${setIdx + 1} from ${exerciseName}`}
+      testID={`remove-set-${exIdx}-${setIdx}`}
+    >
+      <Ionicons name="trash-outline" size={22} color={sc.textMuted} />
+    </HapticPressable>
+  ) : null;
   const usePrevious = previous ? (
     <HapticPressable
       intent="light"
       disabled={set.completed || !editable}
-      style={hideCompletion ? styles.previousSet : styles.previousLine}
+      style={hideCompletion ? styles.previousSet : [styles.previousLine, tools && styles.previousLineShared]}
       accessibilityRole="button"
       accessibilityLabel={`Use previous set ${setIdx + 1}: ${readsBW(bodyWeight, previous.weight) ? 'body weight' : `${previous.weight} pounds`}, ${previous.reps} ${spoken}`}
       onPress={() => {
@@ -222,7 +248,7 @@ export function SetLogger({
         <Text style={[styles.setText, { width: 36 }]}>{setIdx + 1}</Text>
         {weightCell([styles.setInput, { flex: 1 }])}
         {repsCell([styles.setInput, { flex: 1 }])}
-        {usePrevious ?? <View style={styles.previousSet} />}
+        {usePrevious ?? removeSet ?? <View style={styles.previousSet} />}
       </View>
     );
   }
@@ -232,9 +258,6 @@ export function SetLogger({
   // stay one tap away on the next set and on a set typed away from them.
   const differs = !!previous && (previous.weight !== set.weight || previous.reps !== set.reps);
   const showPrevious = !!usePrevious && !set.completed && (nextUp || differs);
-  // Only the next set (or one the client tapped) shows its fields; another
-  // set is text, done in one tap or changed by tapping its numbers.
-  const fields = (nextUp && !narrow) || editing;
   const zero = !!set.prescribedZero || (set.completed && previous?.weight === 0);
   const shownWeight = set.weight > 0 || zero ? set.weight : previous?.weight ?? 0;
   const shownReps = set.reps > 0 ? set.reps : previous?.reps ?? 0;
@@ -288,7 +311,12 @@ export function SetLogger({
           <Text style={[styles.asPlannedText, { color: nextUp ? sc.textOnAccent : sc.textMuted }]}>As planned</Text>
         </> : <Ionicons name="checkmark" size={16} color={set.completed ? colors.textOnPrimary : colors.textMuted} />}
       </HapticPressable>
-      {showPrevious ? usePrevious : null}
+      {tools ? (
+        <View style={styles.setLineTools}>
+          {showPrevious ? usePrevious : null}
+          {removeSet}
+        </View>
+      ) : showPrevious ? usePrevious : null}
     </View>
   );
 }
