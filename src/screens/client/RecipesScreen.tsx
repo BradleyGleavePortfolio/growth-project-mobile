@@ -27,7 +27,7 @@ import AllergySafetyPrompt from '../../components/AllergySafetyPrompt';
 import { useTheme } from '../../theme/ThemeProvider';
 import { typography, radius, SemanticTokens } from '../../theme/tokens';
 import { PrimaryButton, Screen } from '../../ui';
-import { StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCNotice, StyleCPaper, StyleCThumb, useStyleCScreen } from '../../ui/layout/StyleCPage';
+import { StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCNotice, StyleCPaper, StyleCThumb, usePullToRefresh, useStyleCScreen } from '../../ui/layout/StyleCPage';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { patchUserCache } from '../../lib/userCache';
 import { track } from '../../lib/analytics';
@@ -202,6 +202,7 @@ export default function RecipesScreen() {
     staleTime: 5 * 60 * 1000,
   });
   const { data, isLoading, isError, refetch, isRefetching } = showingSaved ? savedQuery : listQuery;
+  const { pulling, onRefresh } = usePullToRefresh(refetch);
 
   const recipes = data ?? [];
 
@@ -305,8 +306,8 @@ export default function RecipesScreen() {
           }
           refreshControl={
             <RefreshControl
-              refreshing={isRefetching}
-              onRefresh={refetch}
+              refreshing={pulling}
+              onRefresh={onRefresh}
               tintColor={colors.accent}
             />
           }

@@ -9,7 +9,7 @@
  * REFINE-929 (ctx#457 GOAL): the masthead carries the screen's summary under a 40 pt title, plus the list dashes and the
  * confirmation sheet those frames draw.
  */
-import React, { useContext, useEffect } from 'react';
+import React, { useCallback, useContext, useEffect, useState } from 'react';
 import { Image, Modal, Pressable, StyleSheet, Text, View, useWindowDimensions, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -64,6 +64,21 @@ export function useStyleCScreen(): { style: ViewStyle; contentStyle: ViewStyle }
 
 /** The bottom inset for a pinned footer or a sheet (0 where no provider is mounted). */
 export const useBottomInset = (): number => useContext(SafeAreaInsetsContext)?.bottom ?? 0;
+
+/** A RefreshControl's flag and handler: true only while the user's own pull is in flight. iOS moves the page by the
+ *  spinner's height whenever `refreshing` turns true by program, so a background reload must never set it. */
+export function usePullToRefresh(refetch: () => Promise<unknown>): { pulling: boolean; onRefresh: () => Promise<void> } {
+  const [pulling, setPulling] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setPulling(true);
+    try {
+      await refetch();
+    } finally {
+      setPulling(false);
+    }
+  }, [refetch]);
+  return { pulling, onRefresh };
+}
 
 /** Words on the forest masthead (ctx#457): the summary line in light sans, a muted line, or a small-caps eyebrow. */
 export function StyleCMastText({ children, kind = 'sub', style }: { children: React.ReactNode; kind?: 'sub' | 'muted' | 'eyebrow'; style?: StyleProp<TextStyle> }) {

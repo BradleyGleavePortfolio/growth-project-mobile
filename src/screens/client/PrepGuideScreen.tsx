@@ -21,7 +21,7 @@ import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { typography, radius, gold, brand, withAlpha } from '../../theme/tokens';
 import { PrimaryButton, Screen } from '../../ui';
 import {
-  StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCMastText, StyleCNotice, StyleCPaper, StyleCSheet, StyleCThumb, useBottomInset, useStyleCScreen,
+  StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCMastText, StyleCNotice, StyleCPaper, StyleCSheet, StyleCThumb, useBottomInset, usePullToRefresh, useStyleCScreen,
 } from '../../ui/layout/StyleCPage';
 import { getLocalWeekStart } from '../../utils/date';
 import { RecipeAllergenFields, recipeAllergenSummary } from '../../lib/recipeAllergens';
@@ -101,6 +101,7 @@ export default function PrepGuideScreen() {
     queryFn: () => prepGuideApi.getWeeklyGuide(weekStart).then((r) => r.data as PrepGuideData),
     staleTime: 5 * 60 * 1000,
   });
+  const { pulling, onRefresh } = usePullToRefresh(refetch);
 
   const shown = !isLoading && !isError && data && data.recipes.length > 0 ? data : null;
   const fromPlan = data?.source === 'plan';
@@ -158,8 +159,8 @@ export default function PrepGuideScreen() {
         refreshControl={
           <RefreshControl
             testID="list-refresh"
-            refreshing={isRefetching}
-            onRefresh={refetch}
+            refreshing={pulling}
+            onRefresh={onRefresh}
             tintColor={sc.textOnAccent}
           />
         }

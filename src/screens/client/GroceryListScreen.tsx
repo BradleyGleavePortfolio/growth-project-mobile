@@ -20,10 +20,10 @@ import { listsApi } from '../../services/api';
 
 import FadeInView from '../../components/FadeInView';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import { typography, radius } from '../../theme/tokens';
+import { layout, typography, radius } from '../../theme/tokens';
 import { PrimaryButton, TextLink, Screen } from '../../ui';
 import { HapticService } from '../../ui/haptics/haptics.service';
-import { StyleCCheck, StyleCDashes, StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCMastText, StyleCNotice, StyleCPaper, useStyleCScreen } from '../../ui/layout/StyleCPage';
+import { StyleCCheck, StyleCDashes, StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCMastText, StyleCNotice, StyleCPaper, usePullToRefresh, useStyleCScreen } from '../../ui/layout/StyleCPage';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface ListItem {
@@ -77,6 +77,7 @@ export default function GroceryListScreen() {
     queryFn: fetchOneList,
     staleTime: 60 * 1000,
   });
+  const { pulling, onRefresh } = usePullToRefresh(refetch);
 
   const items = data ?? [];
   const unchecked = items.filter((i) => !i.is_checked);
@@ -291,7 +292,7 @@ export default function GroceryListScreen() {
           <StyleCLoadingLines lead="ring" rows={5} />
         </View>
       ) : isError ? (
-        <View style={styles.loadingContainer}>
+        <View style={styles.errorBlock}>
           <StyleCNotice>Couldn't load grocery list.</StyleCNotice>
           <PrimaryButton label="Try again" onPress={() => refetch()} disabled={isRefetching} haptic={false} />
         </View>
@@ -308,14 +309,15 @@ export default function GroceryListScreen() {
           keyExtractor={(item) =>
             'type' in item ? `header-${item.label}` : item.id
           }
-          refreshControl={!isLoading && !isError && items.length > 0 ? (
+          refreshControl={
             <RefreshControl
               testID="list-refresh"
-              refreshing={isRefetching}
-              onRefresh={refetch}
+              refreshing={pulling}
+              onRefresh={onRefresh}
+              enabled={!isLoading && !isError && items.length > 0}
               tintColor={colors.primary}
             />
-          ) : undefined}
+          }
           contentContainerStyle={styles.listContent}
           ListFooterComponent={!isLoading && !isError && checked.length > 0 ? (
             <TextLink label="Clear checked" tone="accent" align="start" onPress={handleClearChecked} disabled={clearCheckedMutation.isPending} style={styles.clearBtn} />
@@ -339,6 +341,11 @@ export default function GroceryListScreen() {
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
+// A field grows and shrinks with the system text size but is never under the 44 pt target.
+const fieldSize = (size: number, fontScale: number) => Math.max(layout.touchMin, size * fontScale);
+// Inter's normal line box is 1.21em. Fill the space above it so the text keeps the drawing's 10 pt bottom baseline.
+const fieldPaddingTop = (textSize: number, fontScale: number) => Math.max(0, fieldSize(48, fontScale) - textSize * 1.21 * fontScale - 10);
+
 const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primary' | 'textPrimary' | 'textMuted' | 'textOnPrimary' | 'border' | 'error'>, fontScale = 1) =>
   StyleSheet.create({
   // Screen owns the inset top (forest via useStyleCScreen); the masthead and paper are Style C; the paper holds the list.
@@ -352,10 +359,8 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
     fontFamily: typography.body.fontFamily,
     flexBasis: '100%',
     width: '100%',
-    height: 48 * fontScale,
-    // Inter's normal line box is 1.21em. Fill the remaining space above it so
-    // single-line iOS/RNW inputs share the drawing's 10pt bottom baseline.
-    paddingTop: Math.max(0, (48 - 18 * 1.21) * fontScale - 10),
+    height: fieldSize(48, fontScale),
+    paddingTop: fieldPaddingTop(18, fontScale),
     paddingBottom: 10,
     textAlignVertical: 'bottom',
     borderBottomWidth: 1.5,
@@ -365,9 +370,9 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
   },
   qtyInput: {
     fontFamily: typography.body.fontFamily,
-    width: 52 * fontScale,
-    height: 48 * fontScale,
-    paddingTop: Math.max(0, (48 - 16 * 1.21) * fontScale - 10),
+    width: fieldSize(52, fontScale),
+    height: fieldSize(48, fontScale),
+    paddingTop: fieldPaddingTop(16, fontScale),
     paddingBottom: 10,
     textAlignVertical: 'bottom',
     borderBottomWidth: 1.5,
@@ -379,9 +384,9 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
   },
   unitInput: {
     fontFamily: typography.body.fontFamily,
-    width: 70 * fontScale,
-    height: 48 * fontScale,
-    paddingTop: Math.max(0, (48 - 16 * 1.21) * fontScale - 10),
+    width: fieldSize(70, fontScale),
+    height: fieldSize(48, fontScale),
+    paddingTop: fieldPaddingTop(16, fontScale),
     paddingBottom: 10,
     textAlignVertical: 'bottom',
     borderBottomWidth: 1.5,
@@ -402,6 +407,8 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
   addBtnDisabled: { opacity: 0.42 },
 
   loadingContainer: { paddingHorizontal: 24, paddingTop: 26, gap: 4 },
+  // The drawn error state (ctx#457 shopping-error): Try again 16 pt under the notice.
+  errorBlock: { paddingHorizontal: 24, paddingTop: 26, gap: 16 },
   loadingText: { ...typography.bodySmall, lineHeight: 20.3, color: colors.textMuted },
 
   listContent: { flexGrow: 1, paddingBottom: 48 },

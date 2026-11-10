@@ -21,7 +21,7 @@ import FadeInView from '../../components/FadeInView';
 import { useTheme } from '../../theme/ThemeProvider';
 import { PrimaryButton, TextLink, Screen } from '../../ui';
 import { HapticService } from '../../ui/haptics/haptics.service';
-import { StyleCCheck, StyleCDashes, StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCNotice, StyleCPaper, useStyleCScreen } from '../../ui/layout/StyleCPage';
+import { StyleCCheck, StyleCDashes, StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCNotice, StyleCPaper, usePullToRefresh, useStyleCScreen } from '../../ui/layout/StyleCPage';
 import { makeListStyles as makeStyles } from './GroceryListScreen';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -60,6 +60,7 @@ export default function ShoppingListScreen() {
     queryFn: () => listsApi.getList(LIST_TYPE).then((r) => r.data as ListItem[]),
     staleTime: 60 * 1000,
   });
+  const { pulling, onRefresh } = usePullToRefresh(refetch);
 
   const items = data ?? [];
   const unchecked = items.filter((i) => !i.is_checked);
@@ -268,7 +269,7 @@ export default function ShoppingListScreen() {
           <StyleCLoadingLines lead="ring" rows={5} />
         </View>
       ) : isError ? (
-        <View style={styles.loadingContainer}>
+        <View style={styles.errorBlock}>
           <StyleCNotice>Couldn't load shopping list.</StyleCNotice>
           <PrimaryButton label="Try again" onPress={() => refetch()} disabled={isRefetching} haptic={false} />
         </View>
@@ -285,14 +286,15 @@ export default function ShoppingListScreen() {
           keyExtractor={(item) =>
             'type' in item ? `header-${item.label}` : item.id
           }
-          refreshControl={!isLoading && !isError && items.length > 0 ? (
+          refreshControl={
             <RefreshControl
               testID="list-refresh"
-              refreshing={isRefetching}
-              onRefresh={refetch}
+              refreshing={pulling}
+              onRefresh={onRefresh}
+              enabled={!isLoading && !isError && items.length > 0}
               tintColor={colors.primary}
             />
-          ) : undefined}
+          }
           contentContainerStyle={styles.listContent}
           ListFooterComponent={!isLoading && !isError && checked.length > 0 ? (
             <TextLink label="Clear checked" tone="accent" align="start" onPress={handleClearChecked} disabled={clearCheckedMutation.isPending} style={styles.clearBtn} />
