@@ -153,6 +153,6 @@ describe('FIX-950R3: Copy and Report Message on a marked reply work as before', 
     await act(async () => { fireEvent.press(r.getByText('Cancel')); });
     await fireEvent.changeText(r.getByTestId('roman-composer-input'), 'Thanks for that.');
     await act(async () => { fireEvent.press(r.getByTestId('roman-composer-send')); });
-    expect(state.send).toHaveBeenCalledWith('Thanks for that.');
+    expect(state.send).toHaveBeenCalledWith('Thanks for that.', expect.objectContaining({ key: expect.any(String) }));
   });
 });

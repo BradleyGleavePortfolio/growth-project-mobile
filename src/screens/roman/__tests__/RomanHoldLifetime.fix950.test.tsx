@@ -126,7 +126,7 @@ describe.each(PATHS)('FIX-950R1 KT-13: %s', (_name, change) => {
     await fireEvent.changeText(r.getByTestId(INPUT), 'Hi again');
     await act(async () => { fireEvent.press(r.getByTestId('roman-composer-send')); });
     expect(state.send).toHaveBeenCalledTimes(1);
-    expect(state.send).toHaveBeenCalledWith('Hi again');
+    expect(state.send).toHaveBeenCalledWith('Hi again', expect.objectContaining({ key: expect.any(String) }));
   });
 
   it('closes the open menu', async () => {
@@ -157,7 +157,7 @@ it('FIX-950R1 KT-13: in the gap before the fresh chat opens, no quote is drawn o
   expect(r.queryByText('Replying to Roman')).toBeNull();
   await fireEvent.changeText(r.getByTestId(INPUT), 'Quick one');
   await act(async () => { fireEvent.press(r.getByTestId('roman-composer-send')); });
-  expect(state.send).toHaveBeenCalledWith('Quick one');
+  expect(state.send).toHaveBeenCalledWith('Quick one', expect.objectContaining({ key: expect.any(String) }));
 });
 
 it('FIX-950R1 KT-13: the same chat re-rendered keeps the quote (no needless drop)', async () => {
@@ -209,7 +209,7 @@ it('FIX-950R1 KT-13: in the chat that comes next, hold, Reply and Report work as
   expect(r.getByText('Replying to Roman')).toBeTruthy();
   await fireEvent.changeText(r.getByTestId(INPUT), 'And Saturday?');
   await act(async () => { fireEvent.press(r.getByTestId('roman-composer-send')); });
-  expect(state.send).toHaveBeenCalledWith('> Friday is a rest day.\n\nAnd Saturday?');
+  expect(state.send).toHaveBeenCalledWith('> Friday is a rest day.\n\nAnd Saturday?', expect.objectContaining({ key: expect.any(String) }));
   await hold(r, 'r-9');
   await act(async () => { fireEvent.press(r.getByLabelText('Report Message')); });
   await act(async () => { fireEvent.press(r.getByLabelText('Spam')); });

@@ -129,7 +129,7 @@ describe.each(EVENTS)('FIX-950R2 KT-13 (iOS native menu): %s', (name, end) => {
       expect(r.queryByLabelText('Submit report')).toBeNull();
       await fireEvent.changeText(r.getByTestId(INPUT), 'Next one');
       await act(async () => { fireEvent.press(r.getByTestId('roman-composer-send')); });
-      expect(state.send).toHaveBeenCalledWith('Next one');
+      expect(state.send).toHaveBeenCalledWith('Next one', expect.objectContaining({ key: expect.any(String) }));
     }
   });
 });

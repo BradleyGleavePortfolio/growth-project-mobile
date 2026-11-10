@@ -101,7 +101,7 @@ describe.each(['client'] as const)('%s: hold a Roman reply', (surface) => {
     await fireEvent.changeText(r.getByTestId(INPUT), 'Can I do it indoors?');
     await act(async () => { fireEvent.press(r.getByTestId('roman-composer-send')); });
     const excerpt = ROMAN_REPLY.replace(/\*\*/g, '');
-    expect(state.send).toHaveBeenCalledWith(`> ${excerpt}\n\nCan I do it indoors?`);
+    expect(state.send).toHaveBeenCalledWith(`> ${excerpt}\n\nCan I do it indoors?`, expect.objectContaining({ key: expect.any(String) }));
     expect(r.queryByText('Replying to Roman')).toBeNull();
     expect(r.getByTestId(INPUT).props.value).toBe('');
   });
@@ -119,7 +119,7 @@ describe.each(['client'] as const)('%s: hold a Roman reply', (surface) => {
     await act(async () => { fireEvent.press(r.getByLabelText('Cancel reply')); });
     expect(r.queryByText('Replying to Roman')).toBeNull();
     await act(async () => { fireEvent.press(r.getByTestId('roman-composer-send')); });
-    expect(state.send).toHaveBeenCalledWith('Can I do it indoors?');
+    expect(state.send).toHaveBeenCalledWith('Can I do it indoors?', expect.objectContaining({ key: expect.any(String) }));
   });
 
   it('Report sends the reply id and reason, then says it was submitted', async () => {
@@ -237,5 +237,5 @@ it('B-TEST LS-950 B1: the next send after erasing the source chat contains no er
   await selectThenEraseSource(r);
   await fireEvent.changeText(r.getByTestId(INPUT), 'A fresh question');
   await act(async () => { fireEvent.press(r.getByTestId('roman-composer-send')); });
-  expect(state.send).toHaveBeenCalledWith('A fresh question');
+  expect(state.send).toHaveBeenCalledWith('A fresh question', expect.objectContaining({ key: expect.any(String) }));
 });

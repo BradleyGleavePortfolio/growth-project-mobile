@@ -106,5 +106,5 @@ it('LO-950 B1: after the chat is erased, the Reply quote is gone and the next me
   expect(r.queryByText(/30-minute/)).toBeNull();
   await fireEvent.changeText(r.getByTestId(INPUT), 'Hi again');
   await act(async () => { fireEvent.press(r.getByTestId('roman-composer-send')); });
-  expect(state.send).toHaveBeenCalledWith('Hi again');
+  expect(state.send).toHaveBeenCalledWith('Hi again', expect.objectContaining({ key: expect.any(String) }));
 });
