@@ -27,7 +27,7 @@ import RomanAvatar from '../../components/roman/RomanAvatar';
 import RomanTypingIndicator from '../../components/roman/RomanTypingIndicator';
 import {
   ROMAN_AI_ON_ASK_AGAIN, ROMAN_ERROR_TRANSIENT, ROMAN_OFFLINE_BODY, ROMAN_OFFLINE_TITLE, ROMAN_QUICK_STARTS, ROMAN_ROOM_FOOTER,
-  ROMAN_STORED_NO_REPLY, romanPoolEmpty, romanRateLimited,
+  ROMAN_STORED_NO_REPLY, ROMAN_STILL_ANSWERING_COPILOT, romanPoolEmpty, romanRateLimited,
 } from '../../components/roman/romanVoice';
 import { ForestStatusBar } from '../../components/StatusBarBand';
 import { Headline, Screen, TextLink, useScreenInsets } from '../../ui';
@@ -381,7 +381,7 @@ function TurnError({ error, onRetry }: { error: RomanApiError; onRetry: () => vo
     : error.kind === 'poolEmpty' ? ['', romanPoolEmpty('client'), false]
     : granted ? [ROMAN_AI_ON_ASK_AGAIN, '', false]
     : error.kind === 'rateLimited' ? [romanRateLimited(error.retryAfterSeconds), '', false]
-    : stored ? [ROMAN_STORED_NO_REPLY, '', false]
+    : stored ? [error.replyPending ? ROMAN_STILL_ANSWERING_COPILOT : ROMAN_STORED_NO_REPLY, '', false]
     : error.kind === 'offline' ? [ROMAN_OFFLINE_TITLE, ROMAN_OFFLINE_BODY, true]
     : [ROMAN_ERROR_TRANSIENT, '', true];
   return (

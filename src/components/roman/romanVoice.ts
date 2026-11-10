@@ -216,6 +216,18 @@ export const ROMAN_STORED_NO_REPLY =
   'Your message is saved above, but I could not answer it. Tap Send again to ask once more.';
 
 /**
+ * ROMAN-PENDING-WORDS-M: Send again was answered "still being written" (ROMAN_REPLY_PENDING): the message is stored and
+ * the first answer may still be stored. Nothing polls, so the remedy is the person's Send again; it never promises the
+ * answer will come (after the server's bound, Send again gets ROMAN_STORED_NO_REPLY). Spoken as written.
+ */
+export const ROMAN_STILL_ANSWERING =
+  'Your message is saved above, and I am still working on my answer. Tap Send again in a moment to see if it is ready.';
+
+/** The same on the Path Copilot card, whose screen has no "Send again" control: the question goes back in the composer. */
+export const ROMAN_STILL_ANSWERING_COPILOT =
+  'Your message is saved above, and I am still working on my answer. Send it again in a moment to see if it is ready.';
+
+/**
  * The coach's monthly AI credit pool is used up (backend 402
  * COACH_AI_BUDGET_EXHAUSTED, B-668-1). Sending again cannot help, so the copy
  * names what still works and offers no retry. A client never sees the

@@ -67,6 +67,7 @@ import {
   ROMAN_REPLY_ANNOUNCE_PREFIX,
   ROMAN_SEND_FAILED,
   ROMAN_STORED_NO_REPLY,
+  ROMAN_STILL_ANSWERING,
   ROMAN_AI_ON_ASK_AGAIN,
   ROMAN_ROOM_FOOTER,
   romanRoomOverline,
@@ -239,7 +240,7 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
           : sendError.kind === 'rateLimited'
             ? romanRateLimited(sendError.retryAfterSeconds)
             : sendError.turnStored
-              ? ROMAN_STORED_NO_REPLY
+              ? (sendError.replyPending ? ROMAN_STILL_ANSWERING : ROMAN_STORED_NO_REPLY)
               : ROMAN_SEND_FAILED;
 
   // Announce a send failure (and its remedy) to assistive tech the moment it
