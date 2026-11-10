@@ -89,7 +89,7 @@ export default function CoachDmThreadScreen(): React.ReactElement {
                 <Text style={[styles.day, { color: c.textMuted }]} accessibilityRole="header">{dayLabel(item.created_at)}</Text>
               ) : null}
               <View style={styles.messageRow}>
-                <View style={styles.flex}>
+                <View style={theirs ? styles.theirs : styles.flex}>
                   <MessageBubble message={item} myUserId={coach?.id ?? ''} showTime testID={`coach-dm-message-${item.id}`} />
                 </View>
                 {theirs ? (
@@ -125,5 +125,6 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   list: { paddingVertical: 8 },
   messageRow: { flexDirection: 'row', alignItems: 'center' },
+  theirs: { width: '84%' }, // Studio: Report and Block sit beside the client's bubble
   day: { fontFamily: 'Inter_600SemiBold', fontSize: 13, fontWeight: '600', textAlign: 'center', paddingTop: 12, paddingBottom: 4 },
 });

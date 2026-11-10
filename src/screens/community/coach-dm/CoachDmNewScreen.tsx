@@ -7,7 +7,7 @@
  * line says who closed it.
  */
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StackActions, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +18,7 @@ import { communityApi } from '../../../api/communityApi';
 import { describeCommunityFailure } from '../../../api/communityErrors';
 import { isClosedRefusal } from '../../../components/messaging/ConversationClosed';
 import { useCommunityMe } from '../../../hooks/useCommunity';
+import { useBlockedUsersStore } from '../../../store/blockedUsersStore';
 import { useTheme } from '../../../theme/useTheme';
 import { forestPop as fp, radius, spacing, withAlpha } from '../../../theme/tokens';
 import type { CoachCommunityNav } from '../coachCommunityNavTypes';
@@ -30,14 +31,15 @@ export default function CoachDmNewScreen(): React.ReactElement {
   const { semanticColors: c } = useTheme();
   const workspaceId = useCommunityMe().data?.workspace_id ?? '';
   const roster = useDmRoster();
+  const blocked = useBlockedUsersStore((s) => s.blocked); // KT-2: a client I blocked is not offered (Unblock in Settings)
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const clients = useMemo(
     () => [...(roster.data ?? new Map<string, RosterEntry>())]
-      .flatMap(([id, r]) => (r.archived || !r.name ? [] : [{ id, name: r.name }]))
+      .flatMap(([id, r]) => (r.archived || !r.name || blocked.some((b) => b.id === id) ? [] : [{ id, name: r.name }]))
       .sort((a, b) => a.name.localeCompare(b.name)),
-    [roster.data],
+    [roster.data, blocked],
   );
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const shown = clients.filter((k) => words.every((w) => k.name.toLowerCase().includes(w)));
@@ -69,22 +71,20 @@ export default function CoachDmNewScreen(): React.ReactElement {
     body = <DmState busy line="Loading…" testID="coach-dm-new-loading" />;
   } else {
     body = (
-      <FlatList
-        data={shown}
-        keyExtractor={(k) => k.id}
-        keyboardShouldPersistTaps="handled"
-        ListHeaderComponent={<Text style={[styles.section, { color: c.textMuted }]}>Your clients</Text>}
-        ListEmptyComponent={<Text style={[styles.empty, { color: c.textMuted }]}>{clients.length === 0 ? 'No clients yet' : `No clients match "${query.trim()}".`}</Text>}
-        renderItem={({ item }) => (
-          <HapticPressable intent="light" onPress={() => void openWith(item)} accessibilityRole="button" accessibilityLabel={item.name}
+      <ScrollView keyboardShouldPersistTaps="handled">
+        <Text style={[styles.section, { color: c.textMuted }]}>Your clients</Text>
+        {shown.length === 0 ? (
+          <Text style={[styles.empty, { color: c.textMuted }]}>{clients.length === 0 ? 'No clients yet' : `No clients match "${query.trim()}".`}</Text>
+        ) : shown.map((item) => (
+          <HapticPressable key={item.id} intent="light" onPress={() => void openWith(item)} accessibilityRole="button" accessibilityLabel={item.name}
             accessibilityState={{ busy: busy === item.id }} testID={`coach-dm-new-row-${item.id}`}
             style={[styles.row, { borderBottomColor: c.border }]}>
             <View style={styles.tile}><Text style={styles.tileText}>{initialsOf(item.name)}</Text></View>
             <Text style={[styles.name, { color: c.textPrimary }]} numberOfLines={1}>{item.name}</Text>
             {busy === item.id ? <ActivityIndicator color={c.accent} /> : null}
           </HapticPressable>
-        )}
-      />
+        ))}
+      </ScrollView>
     );
   }
 
@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   searchBand: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
   search: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 44, paddingHorizontal: spacing.md, borderRadius: radius.input, backgroundColor: withAlpha(fp.onDeep, 0.12) },
-  searchInput: { flex: 1, color: fp.onDeep, fontSize: 15, paddingVertical: spacing.sm },
+  searchInput: { flex: 1, minHeight: 44, color: fp.onDeep, fontSize: 15 },
   section: { fontFamily: 'Inter_600SemiBold', fontSize: 12, fontWeight: '600', letterSpacing: 1.2, textTransform: 'uppercase', paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.sm },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 56, paddingHorizontal: spacing.lg, borderBottomWidth: StyleSheet.hairlineWidth },
   tile: { width: 36, height: 36, borderRadius: radius.input, backgroundColor: fp.sage, alignItems: 'center', justifyContent: 'center' },

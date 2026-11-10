@@ -1276,7 +1276,6 @@ describe('completeness guards', () => {
       // m#945: present once the space chat lands.
       'screens/community/CommunitySpaceChatScreen.tsx': 'the messages of one space chat (rows inside one conversation)',
       'screens/community/coach-dm/CoachDmThreadScreen.tsx': 'the bubbles of one coach DM thread (rows inside one conversation)',
-      'screens/community/coach-dm/CoachDmNewScreen.tsx': 'New message: a picker of the coach\'s own roster; a row opens through POST /dms (coachDm.test.tsx case 10)',
     };
     const SURFACES: Record<string, string[]> = {
       'screens/community/CoachCommunityInboxScreen.tsx': ['A1', 'A2', 'A3', 'A4', 'A5'],

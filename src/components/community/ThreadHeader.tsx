@@ -66,7 +66,7 @@ export default function ThreadHeader({
         {subtitle ? (
           <View style={styles.titles}>
             {heading}
-            <Text style={styles.deepSub} numberOfLines={1}>{subtitle}</Text>
+            <Text style={styles.deepSub} numberOfLines={2}>{subtitle}</Text>
           </View>
         ) : heading}
         <View style={styles.slot}>{trailing}</View>
@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
   titles: { flex: 1, minWidth: 0 },
   stacked: { flex: 0 },
   deepSub: { fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 19, color: fp.onDeepMuted },
-  tile: { width: 40, height: 40, borderRadius: radius.input, backgroundColor: fp.sage, alignItems: 'center', justifyContent: 'center' },
+  tile: { width: 40, height: 40, marginRight: spacing.xs, borderRadius: radius.input, backgroundColor: fp.sage, alignItems: 'center', justifyContent: 'center' },
   tileText: { fontFamily: 'Inter_600SemiBold', fontSize: 14, fontWeight: '600', color: fp.deep },
   pressed: { opacity: 0.6 },
 });

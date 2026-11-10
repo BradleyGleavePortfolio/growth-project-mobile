@@ -662,3 +662,45 @@ describe('13. sign-out and another account on the same phone', () => {
     expect([...mockDisk.values()].some((v) => v.includes('A private note to Jordan'))).toBe(false);
   });
 });
+
+// ─── KT-2 (src/__tests__/memberContentAccess.test.tsx registry rows for screens/community/coach-dm) ──────────────────
+describe('KT-2: a blocked client leaks through no coach DM list, count or composer', () => {
+  it('KT-2: my block made elsewhere drops that client from the list and the count at once', async () => {
+    serve(base());
+    const view = await openList();
+    await waitFor(() => expect(view.getByTestId(`coach-dm-row-${RILEY}`)).toBeTruthy());
+    const { registerBlockSyncClient, blockPlaced } = require('../../../../lib/blockSync');
+    registerBlockSyncClient(qc);
+    await act(async () => { blockPlaced(RILEY, { displayName: 'Riley Park', role: 'client' }); });
+    await waitFor(() => expect(view.queryByTestId(`coach-dm-row-${RILEY}`)).toBeNull());
+    expect(view.getByTestId(`coach-dm-row-${JORDAN}`)).toBeTruthy();
+    await act(async () => { fireEvent.press(view.getByTestId('coach-dm-list-header-back')); }); // the home's count, from the same list
+    await waitFor(() => expect(within(view.getByTestId('coach-dm-entry')).getByText('2 conversations')).toBeTruthy());
+  });
+  it('KT-2: my block made elsewhere closes the open thread at once: no box, no words', async () => {
+    serve(base({ [msgsUrl(JORDAN)]: { messages: CONVERSATION } }));
+    const view = await openThread(JORDAN, 'Jordan Lee');
+    await waitFor(() => expect(view.getByTestId('coach-dm-thread-composer-field')).toBeTruthy());
+    await act(async () => { await useBlockedUsersStore.getState().block({ id: JORDAN, displayName: 'Jordan Lee', role: 'client' }); });
+    await waitFor(() => expect(view.queryByTestId('coach-dm-thread-composer-field')).toBeNull());
+    expect(view.queryAllByTestId(/^coach-dm-message-/)).toEqual([]);
+    expect(view.getByLabelText('You blocked them. Unblock in Settings')).toBeTruthy();
+  });
+  it('KT-2: New message leaves out a client I blocked; one who blocked me opens only the closed thread', async () => {
+    useBlockedUsersStore.setState({ blocked: [{ id: MAYA, displayName: 'Maya Chen', role: 'client', blockedAt: '2026-11-01T00:00:00.000Z' }] });
+    serve(base({ [msgsUrl(PRIYA)]: BLOCKED_BY_THEM }));
+    mockPost.mockRejectedValue(BLOCKED_BY_THEM);
+    const view = await openList();
+    await waitFor(() => expect(view.getByTestId('coach-dm-new')).toBeTruthy());
+    await act(async () => { fireEvent.press(view.getByTestId('coach-dm-new')); });
+    await waitFor(() => expect(view.getByText('Your clients')).toBeTruthy());
+    await fireEvent.changeText(view.getByTestId('coach-dm-new-search'), 'maya');
+    expect(view.queryByTestId(`coach-dm-new-row-${MAYA}`)).toBeNull();
+    await fireEvent.changeText(view.getByTestId('coach-dm-new-search'), 'priya');
+    await waitFor(() => expect(view.getByTestId(`coach-dm-new-row-${PRIYA}`)).toBeTruthy());
+    await act(async () => { fireEvent.press(view.getByTestId(`coach-dm-new-row-${PRIYA}`)); });
+    await waitFor(() => expect(view.getByText('Priya Shah has blocked you')).toBeTruthy());
+    expect(current()?.name).toBe('CommunityDmThread');
+    expect(view.queryByTestId('coach-dm-thread-composer-field')).toBeNull();
+  });
+});
