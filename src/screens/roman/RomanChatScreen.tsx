@@ -323,7 +323,9 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
       const quoted = !fromChip && replyTarget ? replyTarget : null;
       // SEND-ONCE-PHONE (b#1228): the draft's send-once key; Send again with the same words after a failure that
       // keeps it (lib/sendOnce.ts) replays it, so the server answers from what the first send stored.
-      const words = text.trim();
+      // LO-963R1 N7: the key belongs to the exact words sent, quote included (m#953, lib/sendOnce.ts).
+      const body = quoted ? withRomanQuote(quoted.content, text) : text;
+      const words = body.trim();
       const held = keyFor(words);
       const key = held ?? generateIdempotencyKey();
       // The key goes with these words before the request (LS-953R2 B1): a Back, a reopen or a restart before this
@@ -333,7 +335,7 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
         else keepFailed(words, key);
       }
       let kept = false;
-      const outcome = await send(quoted ? withRomanQuote(quoted.content, text) : text, { key, keep: () => { kept = true; } });
+      const outcome = await send(body, { key, keep: () => { kept = true; } });
       // Clear the composer ONLY when the turn actually persisted; on a send
       // failure the draft is preserved so the user can retry without retyping
       // (brief §3 / F5 RomanSendOutcome). A chip never clears a typed draft;
@@ -352,8 +354,9 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
       } else if (outcome === 'sent' || outcome === 'stored-no-reply') {
         if (outcome === 'sent') setDraft('');
         // The quote goes once: a turn the server stored (answered or not) carries it,
-        // so only the reply that went drops it; a failed send keeps both.
-        if (quoted) setReplyTarget((r) => (r?.id === quoted.id ? null : r));
+        // so only the reply that went drops it; a failed send keeps both. While a stored turn's key is kept, the quote
+        // stays too, so Send again rebuilds the same words.
+        if (quoted && (outcome === 'sent' || !kept)) setReplyTarget((r) => (r?.id === quoted.id ? null : r));
       }
       if (outcome === 'noop') {
         if (!held && keyFor(words) === key) dropFailed(words); // nothing was sent under the new key
