@@ -387,6 +387,18 @@ const ROWS: Row[] = [
     flagged(uuid(203), 'voice_note', uuid(303), 'Voice note', { media: { kind: 'voice_note', url: 'https://audio.example/n.m4a', duration_ms: 42000, mime_type: 'audio/mp4' } }),
   ),
   moderationInPlace('B4', 'flagged win', 'win', flagged(uuid(204), 'win', uuid(304), 'New PR today')),
+  {
+    // A captionless reported photo: content "", the photo drawn (FlaggedPhoto), decisions beside it (community-moderation.service.ts:938-945 image).
+    id: 'B2p', title: 'flagged captionless photo', role: 'coach', host: COACH_COMMUNITY_HOST,
+    http: { ...EMPTY_STATES, '/community/moderation/flagged': { items: [flagged(uuid(205), 'message', uuid(305), '', { image: { url: 'https://img.example/p.jpg', width: 600, height: 800, expires_at: '2026-11-09T18:00:00.000Z' } })] } },
+    screen: () => <CoachCommunityModerationScreen navigation={mockNavObject as never} />,
+    tap: { testID: `coach-community-flagged-row-${uuid(205)}` },
+    expected: { kind: 'inPlace', reason: 'a reported photo is drawn whole with the decisions beside it, so the row names nothing it does not show', drawn: (ctx) => {
+      expect(ctx.view.getByTestId(`coach-community-flagged-photo-${uuid(205)}`)).toBeTruthy();
+      expect(ctx.view.getByTestId(`coach-community-flagged-hide-${uuid(205)}`)).toBeTruthy();
+      expect(ctx.view.queryByTestId(`coach-community-flagged-content-${uuid(205)}`)).toBeNull();
+    } },
+  },
 ];
 
 function moderationInPlace(id: string, title: string, target: string, item: { id: string }): Row {
@@ -404,6 +416,7 @@ function moderationInPlace(id: string, title: string, target: string, item: { id
       drawn: (ctx) => {
         expect(ctx.view.getByTestId(`coach-community-flagged-row-${item.id}`)).toBeTruthy();
         expect(ctx.view.getByTestId(`coach-community-flagged-hide-${item.id}`)).toBeTruthy();
+        expect(ctx.view.getByTestId(`coach-community-flagged-content-${item.id}`).props.accessibilityState?.disabled).toBe(true);
       },
     },
   };
@@ -661,7 +674,7 @@ ROWS.push(
     http: {
       '/community/me': ME('client'),
       // A removed post keeps its place (communityRemovedRows.ts; community-posts.service.ts removal view): title and body null, removed_at, removed_by.
-      [POSTS_URL]: { posts: [post(uuid(72), null, null, { removed_at: CREATED, removed_by: { user_id: COACH_USER, name: 'Kim' } })], next_before: null },
+      [POSTS_URL]: { posts: [post(uuid(72), null, null, { removed_at: CREATED, removed_by: { role: 'coach', user_id: COACH_USER, name: 'Kim' } })], next_before: null },
     },
     screen: spaceScreen, tap: { testID: `post-removed-${uuid(72)}` },
     expected: { kind: 'noRow', reason: 'CommunitySpaceScreen.tsx:325-333 draws one quiet line, no card', absent: [`post-card-${uuid(72)}`], present: `post-removed-line-${uuid(72)}` },
@@ -670,9 +683,9 @@ ROWS.push(
     id: 'F7', title: 'an optimistic post is disabled', role: 'client', host: CLIENT_COMMUNITY_HOST,
     http: { '/community/me': ME('client'), [POSTS_URL]: PENDING },
     before: () => undefined,
-    seedQueries: (qc) => qc.setQueryData(['community', 'posts', WS], [post('optimistic-1', 'Sending', 'body')]),
-    screen: spaceScreen, tap: { testID: 'post-card-optimistic-1' },
-    expected: { kind: 'disabled', testID: 'post-card-optimistic-1', reason: 'CommunitySpaceScreen.tsx:274: the row is pressable only once the post has a server id' },
+    seedQueries: (qc) => qc.setQueryData(['community', 'posts', WS], [post('optimistic:1', 'Sending', 'body')]),
+    screen: spaceScreen, tap: { testID: 'post-card-optimistic:1' },
+    expected: { kind: 'disabled', testID: 'post-card-optimistic:1', reason: 'CommunitySpaceScreen.tsx:274: the row is pressable only once the post has a server id' },
   },
   {
     id: 'F8', title: 'DM row', role: 'client', host: CLIENT_COMMUNITY_HOST,
@@ -787,6 +800,7 @@ ROWS.push(
   },
   {
     id: 'W3', title: 'coach wearable prompt card', role: 'coach', host: COACH_COMMUNITY_HOST,
+    before: () => { mockRouteParams = { clientId: CLIENT, clientName: 'Dana' }; },
     http: {
       '/community/me': ME('coach'),
       '/me/feature-flags': SERVER_FLAGS({ coach_community_wearable_prompts: true }),
@@ -800,6 +814,26 @@ ROWS.push(
     } },
   },
 );
+
+ROWS.push({
+  id: 'W4', title: 'Hall voice note', role: 'client', host: CLIENT_COMMUNITY_HOST,
+  http: {
+    '/community/me': ME('client'),
+    [POSTS_URL]: { posts: [post(uuid(113), 'a post', 'b')], next_before: null },
+    // community-voice.dto.ts:202-226 VoiceNoteViewSchema (GET /community/workspaces/:id/voice-notes).
+    [`/community/workspaces/${WS}/voice-notes`]: { voice_notes: [{
+      id: uuid(114), workspace_id: WS, cohort_id: null, conversation_id: null, author_id: CLIENT_2,
+      url: 'https://audio.example/n.m4a', duration_ms: 42000, bytes: 1000, mime_type: 'audio/mp4', has_waveform: false,
+      created_at: CREATED, author_name: 'Sam', author_is_coach: false, waveform_peaks: null, heard_at: null, message_id: null,
+    }], next_cursor: null },
+  },
+  screen: spaceScreen,
+  tap: { testID: `community-space-voice-note-${uuid(114)}` },
+  expected: { kind: 'inPlace', reason: 'a Hall voice note plays in place with Report and Block in its own menu; the row itself has no press', drawn: (ctx) => {
+    expect(ctx.view.getByTestId(`community-space-voice-note-${uuid(114)}`).props.onPress).toBeUndefined();
+    expect(ctx.view.getByTestId(`community-space-voice-menu-${uuid(114)}`)).toBeTruthy();
+  } },
+});
 
 // ─── N: notification center (real normalizer, real routePushTap, fake navigator) ─────────────────────────────────────
 
@@ -932,6 +966,8 @@ function respond(http: Record<string, unknown>) {
     const key = url.split('?')[0];
     if (key in http) {
       if (http[key] === PENDING) return new Promise(() => undefined);
+      const value = http[key] as { __withHeaders?: boolean; headers?: object; data?: unknown };
+      if (value?.__withHeaders) return { data: value.data, headers: value.headers };
       return { data: http[key], headers: {} };
     }
     throw Object.assign(new Error(`no fixture for ${url}`), { response: { status: 404 } });
@@ -960,7 +996,7 @@ const findRow2 = (view: Awaited<ReturnType<typeof render>>, row: Row) => {
 /** The row on screen and tapped once. */
 async function tapRow(row: Row): Promise<RowCtx> {
   const view = await renderRow(row);
-  row.beforeTap?.(view);
+  if (row.beforeTap) await waitFor(() => row.beforeTap!(view), { timeout: 8000 });
   await waitFor(() => expect(findRow2(view, row)).toBeTruthy(), { timeout: 8000 });
   await act(async () => {
     fireEvent.press(findRow2(view, row));
@@ -1055,5 +1091,135 @@ describe.each(ROWS.filter((r) => r.expected.kind === 'disabled'))('$id $title', 
     const { view } = await tapRow(row);
     expect(view.getByTestId(want.testID).props.accessibilityState?.disabled ?? view.getByTestId(want.testID).props.disabled).toBe(true);
     expect(mockNavigate).not.toHaveBeenCalled();
+  });
+});
+
+// ─── Negatives ───────────────────────────────────────────────────────────────────────────────────────────────────────
+
+describe('rows that must not exist or must not move', () => {
+  it('a row kind the mapper skips draws no row; a row with no kind is a text row (coachCommunityApi.ts:673-675)', async () => {
+    const unknown = inboxMessage(uuid(140), 'text', 'x', { kind: 'carrier_pigeon' });
+    const noVoiceObject = inboxMessage(uuid(141), 'voice', 'Voice note');
+    const older = inboxMessage(uuid(142), 'text', 'from an older server');
+    delete (older as { kind?: string }).kind;
+    const row: Row = {
+      id: 'A-neg', title: '', role: 'coach', host: COACH_COMMUNITY_HOST,
+      http: { ...EMPTY_STATES, '/community/me/coach-inbox': inboxPage(unknown, noVoiceObject, older) },
+      screen: inboxScreen, tap: { testID: `coach-community-inbox-row-${uuid(142)}` }, expected: opens('x'),
+    };
+    const { view } = await tapRow(row);
+    expect(view.queryByTestId(`coach-community-inbox-row-${uuid(140)}`)).toBeNull();
+    expect(view.queryByTestId(`coach-community-inbox-row-${uuid(141)}`)).toBeNull();
+    if (SPACE_CHAT_SHIPPED) expect(mockNavigate).toHaveBeenCalledWith('CommunitySpaceChat', { cohortId: COHORT, messageId: uuid(142) });
+    else expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('a closed coach chat draws no SpaceTree coach row, so no tap exists (SpaceTree.tsx:67-69)', async () => {
+    const row: Row = {
+      id: 'F-neg', title: '', role: 'client', host: CLIENT_COMMUNITY_HOST,
+      http: { ...HOME_HTTP, '/messages': { __withHeaders: true, headers: { 'x-conversation-closed': '1' }, data: {} } },
+      screen: () => <CommunityHomeScreen />, tap: { testID: `space-row-${COHORT}` }, expected: opens('x'),
+    };
+    const view = await renderRow(row);
+    await waitFor(() => expect(view.getByTestId(`space-row-${COHORT}`)).toBeTruthy());
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/messages?limit=1'));
+    await act(async () => { await new Promise((r) => setTimeout(r, 100)); });
+    expect(view.queryByTestId('space-row-coach')).toBeNull();
+  });
+});
+
+// ─── Completeness guards ─────────────────────────────────────────────────────────────────────────────────────────────
+
+const notInTable = (missing: string[]) => {
+  if (missing.length > 0) throw new Error(`not in the row table: ${missing.join(', ')}`);
+};
+const rowIds = new Set(ROWS.map((r) => r.id));
+
+describe('completeness guards', () => {
+  it('every COACH_INBOX_ROW_KINDS value has a row under each row type the mapper lets through', () => {
+    const seen = new Set<string>();
+    for (const row of ROWS) {
+      const page = row.http['/community/me/coach-inbox'] as { items?: { type: string; kind: string }[] } | undefined;
+      for (const item of page?.items ?? []) seen.add(`${item.type}:${item.kind}`);
+    }
+    // The server writes a post row with kind 'text' only (community-coach-inbox.service.ts:142-160); the mapper would pass others.
+    const POST_NOT_SENT = new Set(['post:voice', 'post:photo']);
+    const missing: string[] = [];
+    for (const kind of COACH_INBOX_ROW_KINDS) {
+      for (const type of ['message', 'post']) {
+        const combo = `${type}:${kind}`;
+        if (!seen.has(combo) && !POST_NOT_SENT.has(combo)) missing.push(combo);
+      }
+    }
+    notInTable(missing);
+  });
+
+  it('every COACH_MOD_TARGET_TYPES value has a row', () => {
+    const seen = new Set<string>();
+    for (const row of ROWS) {
+      const list = row.http['/community/moderation/flagged'] as { items?: { target_type: string }[] } | undefined;
+      for (const item of list?.items ?? []) seen.add(item.target_type);
+    }
+    notInTable(COACH_MOD_TARGET_TYPES.filter((t) => !seen.has(t)));
+  });
+
+  it('every search kind and SpaceTarget kind has a row', () => {
+    const seenSearch = new Set<string>();
+    for (const row of ROWS) {
+      const search = row.http[`/community/workspaces/${WS}/search`] as { results?: { kind: string }[] } | undefined;
+      for (const result of search?.results ?? []) seenSearch.add(result.kind);
+    }
+    notInTable(SEARCH_KINDS.filter((k) => !seenSearch.has(k)));
+
+    const tree = fs.readFileSync(path.join(SRC, 'components/community/SpaceTree.tsx'), 'utf8');
+    const union = tree.slice(tree.indexOf('export type SpaceTarget'), tree.indexOf('type IconName'));
+    const kinds = [...union.matchAll(/kind: '(\w+)'/g)].map((m) => m[1]);
+    const routeNames = [...union.matchAll(/name: '(\w+)'(?: \| '(\w+)')*/g)].flatMap((m) => [m[1], m[2]]).filter(Boolean);
+    const targetRow: Record<string, string> = { space: 'F1', coach: 'F2', Leaderboard: 'F3', CommunityClassroom: 'F4' };
+    notInTable([...kinds.filter((k) => k !== 'route'), ...routeNames].filter((k) => !(k in targetRow) || !rowIds.has(targetRow[k])));
+  });
+
+  it('every file the universe search finds is a row surface or named outside with its reason', () => {
+    const OUTSIDE: Record<string, string> = {
+      'screens/community/CommunityThreadScreen.tsx': 'the comments under one post (rows inside one conversation)',
+      'screens/community/CommunityDmThreadScreen.tsx': 'the bubbles of one DM thread (rows inside one conversation)',
+      'screens/community/CommunityChallengeDetailScreen.tsx': 'one challenge\'s comments and leaderboard (rows inside one conversation)',
+    };
+    const SURFACES: Record<string, string[]> = {
+      'screens/community/CoachCommunityInboxScreen.tsx': ['A1', 'A2', 'A3', 'A4', 'A5'],
+      'screens/community/CoachCommunityModerationScreen.tsx': ['B1', 'B2', 'B2p', 'B3', 'B4'],
+      'screens/community/CoachCommunityCohortsScreen.tsx': ['C5'],
+      'screens/community/CoachCommunityCohortDetailScreen.tsx': ['C6'],
+      'screens/community/CoachCommunityEventsScreen.tsx': ['C7'],
+      'screens/community/CommunitySpaceScreen.tsx': ['F5', 'F6', 'F7', 'W4'],
+      'screens/community/CommunityDmListScreen.tsx': ['F8'],
+      'screens/community/CommunityFindScreen.tsx': ['F9', 'F10', 'F11', 'F12', 'F13a', 'F13b'],
+      'screens/community/CommunityChallengesScreen.tsx': ['F14'],
+      'screens/community/CommunityClassroomScreen.tsx': ['F15'],
+      'screens/community/CommunityWearablePromptsScreen.tsx': ['W3'],
+      'screens/notifications/NotificationCenterScreen.tsx': ['N1', 'N2', 'N2c', 'N3', 'N3c', 'N4', 'N5', 'N6', 'N7', 'N8', 'N8c'],
+      'screens/coach/CoachInboxV2.tsx': ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7'],
+      'screens/coach/MessagesScreen.tsx': ['D8'],
+      'screens/coach/command-center/InboxScreen.tsx': ['D9'],
+      'screens/client/CommunityScreen.tsx': ['W1'],
+      'screens/client/NotificationsScreen.tsx': ['W2'],
+    };
+    const listFiles = (dir: string): string[] =>
+      fs.readdirSync(path.join(SRC, dir), { withFileTypes: true }).flatMap((e) => {
+        if (e.name === '__tests__') return [];
+        const rel = path.join(dir, e.name);
+        return e.isDirectory() ? listFiles(rel) : /\.(ts|tsx)$/.test(e.name) ? [rel] : [];
+      });
+    const universe = [
+      ...listFiles('screens/community'),
+      ...listFiles('components/community'),
+      ...listFiles('screens/notifications'),
+      ...['screens/coach/CoachInboxV2.tsx', 'screens/coach/MessagesScreen.tsx', 'screens/coach/command-center/InboxScreen.tsx', 'screens/client/MessagesInboxScreen.tsx', 'screens/client/CommunityScreen.tsx', 'screens/client/NotificationsScreen.tsx'],
+    ].filter((f) => /FlatList|SectionList|FlashList/.test(fs.readFileSync(path.join(SRC, f), 'utf8')));
+    expect(universe.length).toBeGreaterThanOrEqual(20);
+    notInTable(universe.filter((f) => !(f in SURFACES) && !(f in OUTSIDE)));
+    notInTable(Object.entries(SURFACES).filter(([f, ids]) => !universe.includes(f) || ids.some((id) => !rowIds.has(id))).map(([f]) => `${f} (stale surface or missing row)`));
+    // MessagesInboxScreen is drawn without a list (universe line 2 of the brief): its rows are E1 to E5.
+    expect(['E1', 'E2', 'E3', 'E4', 'E5'].every((id) => rowIds.has(id))).toBe(true);
   });
 });
