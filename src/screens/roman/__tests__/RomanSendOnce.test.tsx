@@ -293,14 +293,14 @@ it('LS-953R2 B1: reopening while the first answer is pending replays the kept dr
   expect(retry).toEqual(first);
 });
 
-// FIX-953R2: B2 needs a server change. Backend main answers a same-key resend whose first send is still being written
-// and one that ended with no reply the same way (roman.controller.ts:300-302; roman.service.ts:849-864), so the phone
-// cannot keep the key for one and drop it for the other. `it.failing` keeps this test running: it turns red the day
-// the server tells the two apart and the phone keeps the key while the answer is still being written (then make it `it`).
-it.failing('LS-953R2 B2: Send again after an in-flight no-reply replay never creates a second stored turn', async () => {
-  // Backend main roman.controller.ts:179-181,290-303: same key + a stored
-  // user turn without a reply answers ROMAN_UNAVAILABLE, including while
-  // its first model request is still answering. A new key creates a new turn.
+// FIX-953R3: backend main f239683f tells the two apart (b#1233, CONTRACT 6754738036): a same-key resend whose first
+// send may still store its reply answers the coded ROMAN_REPLY_PENDING frame (roman.controller.ts:307-309,
+// roman-sse-error.ts:33-37, roman.service.ts:869-872); one that ended with no reply answers ROMAN_UNAVAILABLE, as
+// before. The phone keeps the key on the pending code only, so this runs as a plain `it`.
+it('LS-953R2 B2: Send again after an in-flight no-reply replay never creates a second stored turn', async () => {
+  // Backend main f239683f roman.controller.ts:179-181,297-311: same key + a stored
+  // user turn without a reply answers ROMAN_REPLY_PENDING while its first
+  // send may still store the reply. A new key creates a new turn.
   const stored = new Map<string, string>();
   let firstKey: string | undefined;
   let firstReplyReady = false;
@@ -312,7 +312,7 @@ it.failing('LS-953R2 B2: Send again after an in-flight no-reply replay never cre
     const initial = firstKey === undefined;
     if (initial) firstKey = key;
     const body = replay && key === firstKey && !firstReplyReady
-      ? ('text' in NO_REPLY_FRAME ? String(NO_REPLY_FRAME.text) : '')
+      ? 'event: error\ndata: {"code":"ROMAN_REPLY_PENDING","message":"Roman is not available right now."}\n\n'
       : DONE('Swap it.');
     return {
       ok: true,
