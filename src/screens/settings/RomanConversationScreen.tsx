@@ -62,7 +62,7 @@ export default function RomanConversationScreen({
   api = defaultApi,
   sessionUserId = defaultSessionUserId,
 }: RomanConversationScreenProps): React.ReactElement {
-  const { colors } = useTheme();
+  const { colors, semanticColors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { id, ownerId, binding, startedAt, surface, messageCount } = route.params;
   const when = chatDateLabel({ startedAt });
@@ -324,7 +324,11 @@ export default function RomanConversationScreen({
                 {item.role === 'assistant' ? <RomanAvatar crop="neutral" size={24} testID="roman-bubble-avatar" /> : null}
                 <Text style={styles.speakerLabel}>{item.role === 'user' ? 'YOU' : 'ROMAN'}</Text>
               </View>
-              {quoted ? <RomanQuoteStrip quote={quoted.quote} testID={`roman-transcript-message-${item.id}-quote`} /> : null}
+              {/* QUOTE-STRIP-950: at the right with the words it quotes, at the room bubble's width, on its surface. */}
+              {quoted ? (
+                <RomanQuoteStrip quote={quoted.quote} fill={semanticColors.bgSurface} style={styles.userQuote}
+                  testID={`roman-transcript-message-${item.id}-quote`} />
+              ) : null}
               <Text style={[styles.body, item.role === 'user' && styles.userText]}
                 accessibilityLabel={`${item.role === 'user' ? 'You' : 'Roman'} said: ${said}`}>{said}</Text>
               {item.interrupted && item.role === 'assistant' ? <Text style={styles.caption}>{ROMAN_INTERRUPTED_NOTE}</Text> : null}
@@ -427,6 +431,7 @@ function makeStyles(colors: ThemeColors) {
     speakerLabel: { ...typography.eyebrow, color: colors.textSecondary },
     userTurn: { justifyContent: 'flex-end' },
     userText: { textAlign: 'right' },
+    userQuote: { alignSelf: 'flex-end', maxWidth: '82%' },
     caption: { fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 19, color: colors.textSecondary },
     notice: { gap: 8 },
     noticeText: { fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20, color: colors.textPrimary },
