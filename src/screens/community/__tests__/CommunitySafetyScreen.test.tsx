@@ -5,10 +5,14 @@
 import { SUPPORT_EMAIL } from '../../../constants/support';
 import React from 'react';
 import { Alert, Linking, type AlertButton } from 'react-native';
-import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render, fireEvent, waitFor, act, within } from '@testing-library/react-native';
+import { QueryClient, QueryClientProvider, dehydrate, hydrate } from '@tanstack/react-query';
+import { AxiosError, AxiosHeaders, type InternalAxiosRequestConfig } from 'axios';
 import CommunitySafetyScreen, { COMMUNITY_SAFETY_EMAIL_SUBJECT } from '../CommunitySafetyScreen';
 import { SUPPORT_EMAIL_COPY } from '../../../components/support/SupportEmailFallback';
+import { CommunityApiError } from '../../../api/apiCall';
+import { communitySafetyKeys } from '../../../api/communitySafetyApi';
+import { QUERY_CACHE_BUSTER, serializePersistedClient } from '../../../services/queryClient';
 
 const SAFETY_MAILTO = `mailto:${SUPPORT_EMAIL}?subject=Community%20safety`;
 
@@ -72,8 +76,7 @@ const APPROVED_GUIDELINES = [
 const APPROVED_COMMITMENT =
   'Reports are reviewed within 24 hours, every day, by your coach and The Growth Project team. Content that breaks these guidelines is removed, and people who break them repeatedly lose access. If you block someone, they can no longer see your posts or message you. In a direct message they see that you blocked them; nobody else is told.';
 
-async function renderScreen() {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+async function renderScreen(qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   return await render(
     <QueryClientProvider client={qc}>
       <CommunitySafetyScreen />
@@ -318,5 +321,59 @@ describe('CommunitySafetyScreen — moderation notices (B-314-6)', () => {
     fireEvent.press(getByTestId('community-safety-notices-retry'));
     await waitFor(() => expect(queryByTestId('community-safety-notices-error')).toBeNull());
     expect(mockListNotices).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('CommunitySafetyScreen — a block list error restored from the phone cache (TOKEN-CACHE-M)', () => {
+  const OFFLINE = 'You appear to be offline. Check your connection, then try again.';
+
+  /**
+   * The cache as the persister writes it (serializePersistedClient, the
+   * persister's serialize) and reads it back (JSON.parse, then hydrate): the
+   * block list, then a refetch that failed with no answer.
+   */
+  async function restoredClient(): Promise<{ qc: QueryClient; json: string }> {
+    const before = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    before.setQueryData(communitySafetyKeys.blocks, [
+      { user_id: 'u-1', name: 'Sam', blocked_at: '2026-11-01T00:00:00Z' },
+    ]);
+    const config = {
+      url: '/v1/community/blocks',
+      method: 'get',
+      headers: new AxiosHeaders({ Authorization: 'Bearer FAKE.TEST.TOKEN' }),
+    } as InternalAxiosRequestConfig;
+    const failure = new CommunityApiError(
+      'network',
+      0,
+      'community request failed (network)',
+      new AxiosError('Network Error', 'ERR_NETWORK', config, {}),
+    );
+    await before.prefetchQuery({
+      queryKey: communitySafetyKeys.blocks,
+      queryFn: () => Promise.reject(failure),
+      staleTime: 0,
+    });
+    const json = serializePersistedClient({
+      buster: QUERY_CACHE_BUSTER,
+      timestamp: Date.now(),
+      clientState: dehydrate(before, { shouldDehydrateQuery: () => true }),
+    });
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    hydrate(qc, JSON.parse(json).clientState);
+    return { qc, json };
+  }
+
+  it('(c) still shows the offline copy for a saved request failure, and nothing saved holds the token', async () => {
+    mockGetInfo.mockRejectedValue(new Error('offline'));
+    mockListBlocks.mockReturnValue(new Promise(() => undefined)); // the refetch on open never answers
+    const { qc, json } = await restoredClient();
+    expect(json).not.toContain('FAKE.TEST.TOKEN');
+    expect(json).not.toMatch(/authorization|bearer/i);
+    expect(qc.getQueryState(communitySafetyKeys.blocks)?.status).toBe('error');
+
+    const { findByTestId } = await renderScreen(qc);
+    const shown = await findByTestId('community-safety-blocks-error');
+    expect(within(shown).getByText(OFFLINE)).toBeTruthy();
+    expect(mockListBlocks).toHaveBeenCalledTimes(1);
   });
 });
