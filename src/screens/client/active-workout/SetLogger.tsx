@@ -302,7 +302,7 @@ export function SetLogger({
           setEditing(false);
           onToggleComplete(exIdx, setIdx);
         }}
-        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+        hitSlop={{ top: 6, bottom: tools ? 0 : 6, left: 6, right: 6 }}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: set.completed }}
         // LO-917R3 C3: the pill's words are in its name.
