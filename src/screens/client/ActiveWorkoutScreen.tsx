@@ -161,7 +161,10 @@ export default function ActiveWorkoutScreen() {
   // cached catalog read (GET /exercises/:id equipment) the name lookup makes.
   const exerciseIdsKey = sessionExercises.map((e) => e.exerciseId).join('\u0000');
   const exerciseIds = useMemo(() => (exerciseIdsKey ? exerciseIdsKey.split('\u0000') : []), [exerciseIdsKey]);
-  const bodyWeight = useBodyWeightExercises(exerciseIds);
+  // BW-LOCAL-M: with each row's name, an id the catalog can never answer (an
+  // Add or Swap from the phone's list, a saved routine) reads the phone's list.
+  const exerciseNames = Object.fromEntries(sessionExercises.map((e) => [e.exerciseId, e.exerciseName]));
+  const bodyWeight = useBodyWeightExercises(exerciseIds, exerciseNames);
   const [workoutNotes, setWorkoutNotes] = useState('');
   const [history, setHistory] = useState<LoggedWorkout[]>([]);
   const [historyState, setHistoryState] = useState<'loading' | 'loaded' | 'unavailable'>('loading');

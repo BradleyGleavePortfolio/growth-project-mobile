@@ -62,6 +62,7 @@ import {
 } from '../../api/communityChallengesApi';
 import { CommunityApiError } from '../../api/communityApi';
 import { contentRejectedMessage } from '../../api/communitySafetyApi';
+import { leadsWithCrisisLine } from '../../lib/communityCrisisLine';
 import SafetyMenu from '../../components/community/SafetyMenu';
 import VoiceRemovedPlaceholder from '../../components/community/removed/VoiceRemovedPlaceholder';
 import { removedRowLine } from '../../components/community/removed/removedRowLine';
@@ -862,7 +863,9 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
           intent="light"
           onPress={() => setActionError(null)}
           accessibilityRole="button"
-          accessibilityLabel="Dismiss this message"
+          // CRISIS-TEXT-M: a banner that leads with the 911 / 988 line is spoken whole; any other keeps today's label.
+          accessibilityLabel={leadsWithCrisisLine(actionError) ? actionError : 'Dismiss this message'}
+          accessibilityHint={leadsWithCrisisLine(actionError) ? 'Dismiss this message' : undefined}
           // The failure banner is announced to assistive tech: `polite`
           // re-reads it on mount, and the effect's announceForAccessibility
           // covers focus that is elsewhere on the screen.
