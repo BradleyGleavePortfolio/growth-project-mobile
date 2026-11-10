@@ -883,7 +883,7 @@ ROWS.push({
 const clientTabs = () => [...navigatorScreens('Tab@ClientNavigator')];
 const coachTabs = () => [...navigatorScreens('Tab@CoachNavigator')];
 const attach = (role: Role) => {
-  const nav: PushNavigator = { isReady: () => true, navigate: mockNavigate, getRootState: () => ({ routeNames: role === 'client' ? clientTabs() : coachTabs() }) };
+  const nav: PushNavigator = { isReady: () => true, navigate: mockNavigate, getRootState: () => ({ routeNames: role === 'client' ? clientTabs() : coachTabs(), routes: [] }) };
   attachPushNavigator(nav);
   setPushSession({ kind: 'app', userId: role === 'client' ? CLIENT : COACH_USER, role: role === 'client' ? 'student' : 'coach' });
 };
@@ -962,11 +962,16 @@ ROWS.push(
     before: () => attach('client'), screen: centerScreen, tap: { label: /New message from Alex/ },
     expected: opens('Home', { screen: 'Messages' }),
   },
-  notifGap('N8c', 'message_received (coach: lands on the inbox, see Owner decisions)', 'coach',
-    { id: 'n-msg-c', kind: 'message_received', body: 'New message from Dana', deep_link: `tgp://messages/${CLIENT}`, channel: 'inapp', read_at: null, created_at: CREATED, payload: { senderName: 'Dana', threadId: CLIENT } } as never,
-    NESTED('Messages', 'ClientMessages', { clientId: CLIENT, clientName: 'Dana' }),
-    'the coach row opens the Messages inbox (a hub), not that client\'s chat: pushTapRouter.ts:134-135 COACH-CHAT-BACK',
-    () => { expect(mockNavigate).toHaveBeenCalledTimes(1); expect(mockNavigate).toHaveBeenCalledWith('Messages', { screen: 'MessagesInbox', pop: true }); }),
+  {
+    id: 'N8c', title: 'message_received (coach): opens that client\'s chat (owner 203-D4)', role: 'coach', host: ['Tab@CoachNavigator'],
+    // COACH-ROW-CHAT (m#957): notificationsApi.ts messageChatParams maps payload {threadId, senderName} to {clientId, clientName}; pushTapRouter.ts deliver opens a coach's chat through chatTarget and openTarget.
+    http: NOTIF_HTTP(
+      communityRow('n-neighbour', 'message_received', 'neighbour message_received', `tgp://messages/${CLIENT}`, { type: 'x', id: uuid(120) }),
+      { id: 'n-msg-c', kind: 'message_received', body: 'New message from Dana', deep_link: `tgp://messages/${CLIENT}`, channel: 'inapp', read_at: null, created_at: CREATED, payload: { senderName: 'Dana', threadId: CLIENT } },
+    ),
+    before: () => attach('coach'), screen: centerScreen, tap: { label: /New message from Dana/ },
+    expected: NESTED('Messages', 'ClientMessages', { clientId: CLIENT, clientName: 'Dana' }),
+  },
 );
 
 // ─── Reading the navigators (the registration check) ─────────────────────────────────────────────────────────────────
