@@ -228,10 +228,12 @@ const tokens = jest.requireActual('../../../../theme/tokens');
 const { forestPop: fp, colors, brand, neutral, lightTokens } = tokens;
 const { dayLabel } = require('../coachDm');
 const schedulingApi = require('../../../../api/schedulingApi');
-const flat = (el: { props: { style?: unknown } }) => StyleSheet.flatten(el.props.style as never) ?? {};
+const flat = (el: { props: { style?: unknown } }): Record<string, unknown> =>
+  (StyleSheet.flatten(el.props.style as never) ?? {}) as Record<string, unknown>;
 type Found = { props: Record<string, unknown> };
-const iconIn = (scope: { UNSAFE_queryAllByType: (t: string) => Found[] }, name: string) =>
-  scope.UNSAFE_queryAllByType('Icon').find((i) => i.props.name === name) ?? null;
+/** The icon drawn with `name` inside a rendered scope (the mock draws a host element named Icon). */
+const iconIn = (scope: unknown, name: string): Found | null =>
+  (scope as { UNSAFE_queryAllByType: (t: unknown) => Found[] }).UNSAFE_queryAllByType('Icon').find((i) => i.props.name === name) ?? null;
 
 const atLocal = (daysAgo: number, h: number, m: number) => {
   const d = new Date();
