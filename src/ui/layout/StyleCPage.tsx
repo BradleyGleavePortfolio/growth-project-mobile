@@ -1,8 +1,9 @@
 /**
  * Style C page (C2 section 5; frames C_kitchen, C_recipe, C_grocery, C_loading, C_error): a forest
  * masthead (surface.forestBand, the frames' #2C4A36) with a 1 pt gold rule under its words, and a
- * paper sheet whose 24 pt top corners overlap it. The screen keeps its Screen wrapper, which owns the
- * inset top (insets.top + 12); useStyleCScreen() turns that wrapper forest. Also the round check,
+ * paper sheet whose 24 pt top corners overlap it. The screen keeps its Screen wrapper; useStyleCScreen() turns it
+ * forest and lifts its column 8 pt, so the column starts at insets.top + 4 (KITCHEN-TITLE-954). That assumes a Screen
+ * with edges including 'top' and a statusBarGap of at least 8 (tokens layout.statusBarGap is 12). Also the round check,
  * the warm notice and the static loading lines those frames draw. Gold is only ever the rule here, never text on light.
  * BEAUTY-929: the paper is the app's page colour (bgPrimary, bone #F7FAF7, owner #197-E6 "we keep the toothpaste color
  * for v1"), not the frames' cream; the row picture tile (C_kitchen) and the empty state with its line drawing live here too.
@@ -15,7 +16,7 @@ import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useStatusBarBand } from '../../components/StatusBarBand';
 import { useTheme } from '../../theme/ThemeProvider';
-import { gold, layout, radius, typography, withAlpha } from '../../theme/tokens';
+import { colors as palette, gold, layout, radius, typography, withAlpha } from '../../theme/tokens';
 import { HapticService } from '../haptics/haptics.service';
 
 // The kitchen drawing's 14pt tile/notice sits between the semantic action and
@@ -119,7 +120,9 @@ export function StyleCSheet({ visible, icon, title, body, action, onAction, link
   const buttonHeight = 56 * Math.max(1, useWindowDimensions().fontScale * 0.9);
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <Pressable style={[s.scrim, { backgroundColor: withAlpha(sc.surface.masthead, 0.45) }]} onPress={onClose} accessible={false} importantForAccessibility="no" />
+      {/* REFINE-959 (ctx#457 prep-added .dim, rgba(26,26,24,.42) over the whole page): ink at 0.42, running under the
+          sheet's rounded top so its corners show against the dim. */}
+      <Pressable testID="stylec-scrim" style={[s.scrim, { backgroundColor: withAlpha(sc.textPrimary, 0.42) }]} onPress={onClose} accessible={false} importantForAccessibility="no" />
       <View accessibilityViewIsModal style={[s.sheet, { backgroundColor: sc.bgPrimary, paddingBottom: bottom + 12 }]}>
         <View style={[s.grab, { backgroundColor: sc.border }]} />
         <StyleCThumb icon={icon} size={72} />
@@ -182,12 +185,13 @@ export function StyleCCheck({ checked }: { checked: boolean }) {
 }
 
 /** Warm notice (C_error): one alert region; the error haptic plays once when it appears. With a title, the title
- *  is the first line in the medium sans and the children the line under it, as the frame draws it. */
+ *  is the first line in the medium sans and the children the line under it, as the frame draws it.
+ *  REFINE-959: trackLight at 0.45 over the paper is #F2EEE7, the frame's #F2EEE6 within one level. */
 export function StyleCNotice({ children, title }: { children?: React.ReactNode; title?: string }) {
   const sc = useTheme().semanticColors;
   useEffect(() => { void HapticService.error(); }, []);
   return (
-    <View accessible accessibilityRole="alert" accessibilityLiveRegion="polite" style={[s.notice, { backgroundColor: withAlpha(sc.data.trackLight, 0.5), borderLeftColor: gold[500] }]}>
+    <View accessible accessibilityRole="alert" accessibilityLiveRegion="polite" style={[s.notice, { backgroundColor: withAlpha(sc.data.trackLight, 0.45), borderLeftColor: gold[500] }]}>
       {title ? <Text style={[typography.h4, s.noticeTitle, { color: sc.textPrimary }]}>{title}</Text> : null}
       {children ? <Text style={[typography.body, s.noticeBody, { color: sc.textPrimary }]}>{children}</Text> : null}
     </View>
@@ -199,12 +203,16 @@ export function StyleCNotice({ children, title }: { children?: React.ReactNode; 
 export function StyleCLoadingLines({ rows = 4, label, lead }: { rows?: number; label?: string; lead?: 'tile' | 'ring' }) {
   const sc = useTheme().semanticColors;
   const fill = { backgroundColor: sc.data.trackLight };
+  // REFINE-959 (ctx#457 shopping-loading): lighter row lines (#ECE7DF: border at 0.5 is #EAE8E2) and a stone ring
+  // (#CFC8BD: stone at 0.62 is #CCC7C0) than the loaded rows draw.
+  const line = { borderColor: withAlpha(sc.border, 0.5) };
+  const ring = { borderColor: withAlpha(palette.stone, 0.62) };
   return (
     <View accessible={label != null} accessibilityLabel={label} style={lead ? s.leadLines : s.lines}>
       {Array.from({ length: rows }, (_, i) => lead === 'ring' ? (
-        <View key={i} style={[s.ringRow, s.leadRow, { borderColor: sc.border }]}><View style={[s.check, { borderColor: sc.border }]} /><View style={[s.ringBar, fill]} /><View testID="stylec-loading-spacer" style={s.grow} /><View style={[s.ringAmt, fill]} /></View>
+        <View key={i} style={[s.ringRow, s.leadRow, line]}><View style={[s.check, ring]} /><View style={[s.ringBar, fill]} /><View testID="stylec-loading-spacer" style={s.grow} /><View style={[s.ringAmt, fill]} /></View>
       ) : (
-        <View key={i} style={lead ? [s.tileRow, s.leadRow, { borderColor: sc.border }] : undefined}>
+        <View key={i} style={lead ? [s.tileRow, s.leadRow, line] : undefined}>
           {lead ? <View style={[s.tilePh, fill]} /> : null}
           <View style={[s.lineRow, s.grow]}><View style={[s.lineShort, lead && s.leadShort, fill]} /><View style={[s.lineLong, lead && s.leadLong, fill]} /></View>
         </View>
@@ -232,7 +240,7 @@ const s = StyleSheet.create({
   prog: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginTop: 10 },
   dashes: { flexDirection: 'row', gap: 5, flexShrink: 1, minWidth: 0 },
   dash: { width: 22, flexShrink: 1, minWidth: 0, height: 4, borderRadius: radius.chip },
-  scrim: { flex: 1 },
+  scrim: { flex: 1, marginBottom: -radius.sheet },
   sheet: { alignItems: 'center', borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, paddingHorizontal: layout.gutter, paddingTop: 10 },
   grab: { width: 40, height: 5, borderRadius: radius.chip, marginBottom: 22 },
   bigTitle: { fontSize: 27, lineHeight: 32.4, letterSpacing: 0 },
