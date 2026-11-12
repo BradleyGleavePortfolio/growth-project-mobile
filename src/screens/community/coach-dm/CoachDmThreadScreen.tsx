@@ -10,13 +10,14 @@ import React from 'react';
 import { Alert, FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { useQueryClient } from '@tanstack/react-query';
 import { ComposerInput, MessageBubble, ThreadHeader } from '../../../components/community';
 import SafetyMenu from '../../../components/community/SafetyMenu';
 import { ForestStatusBar } from '../../../components/StatusBarBand';
 import { ConversationClosedLine, useClosedBy, useConversationClosed, useServerAnswered } from '../../../components/messaging/ConversationClosed';
 import { describeCommunityFailure } from '../../../api/communityErrors';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
-import { useCommunityMe, useDmMessages, useSendDm } from '../../../hooks/useCommunity';
+import { communityKeys, useCommunityMe, useDmMessages, useSendDm } from '../../../hooks/useCommunity';
 import { useTheme } from '../../../theme/useTheme';
 import { forestPop as fp } from '../../../theme/tokens';
 import type { CoachCommunityNav, CoachCommunityRoute } from '../coachCommunityNavTypes';
@@ -30,6 +31,7 @@ export default function CoachDmThreadScreen(): React.ReactElement {
   const navigation = useNavigation<CoachCommunityNav>();
   const route = useRoute<CoachCommunityRoute<'CommunityDmThread'>>();
   const { semanticColors: c } = useTheme();
+  const qc = useQueryClient();
   const recipientId = route.params?.recipientId ?? '';
   const coach = useCurrentUser();
   const community = useCommunityMe();
@@ -50,7 +52,11 @@ export default function CoachDmThreadScreen(): React.ReactElement {
 
   const onSend = (body: string, idempotencyKey: string) =>
     sendDm.mutateAsync({ body, idempotencyKey }).then(
-      () => undefined,
+      () => {
+        // LS-962R1 B2: a send is what lists a thread (the server's POST /dms writes nothing), so the list and the home
+        // row read the server's new answer now, not after they go stale. The dms prefix covers the ?limit=100 key.
+        void qc.invalidateQueries({ queryKey: communityKeys.dmThreads(workspaceId) });
+      },
       (err: unknown) => {
         if (!close(err)) {
           const failure = describeCommunityFailure(err, 'send_message');
