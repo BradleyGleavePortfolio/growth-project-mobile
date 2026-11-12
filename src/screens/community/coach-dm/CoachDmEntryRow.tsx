@@ -10,7 +10,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../../../components/HapticPressable';
 import { featureFlags } from '../../../config/featureFlags';
-import { colors, radius, spacing } from '../../../theme/tokens';
+import { colors, forestPop as fp, radius } from '../../../theme/tokens';
 import type { CoachCommunityNav } from '../coachCommunityNavTypes';
 import { COACH_DM_LIMIT, useCoachDms } from './coachDm';
 
@@ -27,20 +27,21 @@ function EntryRow(): React.ReactElement {
   return (
     <HapticPressable intent="light" onPress={() => navigation.navigate('CoachCommunityDmList')} accessibilityRole="button"
       accessibilityLabel={count ? `Direct messages, ${count}` : 'Direct messages'} testID="coach-dm-entry" style={styles.card}>
-      <Ionicons name="chatbubbles-outline" size={24} color={colors.forest} />
+      <Ionicons name="chatbox-outline" size={22} color={fp.forest} />
       <View style={styles.text}>
         <Text style={styles.title}>Direct messages</Text>
         {count ? <Text style={styles.sub} testID="coach-dm-entry-count">{count}</Text> : null}
       </View>
-      <Ionicons name="chevron-forward" size={20} color={colors.graphite} />
+      <Ionicons name="chevron-forward" size={20} color={fp.n700} />
     </HapticPressable>
   );
 }
 
-// The K2 home's own nav card (CoachCommunityHomeScreen.tsx navCard, the Events card): one light palette in both themes.
+// Studio's Direct messages row (S_entry_ios.html .row :56 on #E0EBE4, .nm :57, .meta :58; operator ruling "962 entry row
+// as built", #203-E31), inside today's home column, which keeps its corners (01:2x). One light palette in both themes.
 const styles = StyleSheet.create({
-  card: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.cream },
+  card: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 8, paddingHorizontal: 18, borderRadius: radius.lg, backgroundColor: fp.sage },
   text: { flex: 1, gap: 2 },
-  title: { fontFamily: 'Inter_600SemiBold', fontSize: 16, color: colors.ink },
-  sub: { fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.graphite },
+  title: { fontFamily: 'Inter_600SemiBold', fontSize: 16.5, fontWeight: '600', color: colors.ink },
+  sub: { fontFamily: 'Inter_400Regular', fontSize: 13.5, color: fp.n700 },
 });
