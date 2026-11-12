@@ -21,7 +21,7 @@ import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { typography, radius, gold, brand, withAlpha } from '../../theme/tokens';
 import { PrimaryButton, Screen } from '../../ui';
 import {
-  StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCMastText, StyleCNotice, StyleCPaper, StyleCSheet, StyleCThumb, useBottomInset, useStyleCScreen,
+  StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCMastText, StyleCNotice, StyleCPaper, StyleCSheet, StyleCThumb, useBottomInset, usePullToRefresh, useStyleCScreen,
 } from '../../ui/layout/StyleCPage';
 import { getLocalWeekStart } from '../../utils/date';
 import { RecipeAllergenFields, recipeAllergenSummary } from '../../lib/recipeAllergens';
@@ -90,7 +90,8 @@ export default function PrepGuideScreen() {
   // The confirmation sheet after Add all (ctx#457 prep-added): how many were added, null when closed.
   const [added, setAdded] = useState<number | null>(null);
   // At 130% text the tile is 52 pt and the kcal joins the meta line (ctx#457 android360 130%).
-  const big = useWindowDimensions().fontScale > 1.15;
+  const { fontScale } = useWindowDimensions();
+  const big = fontScale > 1.15;
   const bottomInset = useBottomInset();
 
   const weekStart = getLocalWeekStart(weekOffset);
@@ -100,6 +101,7 @@ export default function PrepGuideScreen() {
     queryFn: () => prepGuideApi.getWeeklyGuide(weekStart).then((r) => r.data as PrepGuideData),
     staleTime: 5 * 60 * 1000,
   });
+  const { pulling, onRefresh } = usePullToRefresh(refetch);
 
   const shown = !isLoading && !isError && data && data.recipes.length > 0 ? data : null;
   const fromPlan = data?.source === 'plan';
@@ -157,8 +159,8 @@ export default function PrepGuideScreen() {
         refreshControl={
           <RefreshControl
             testID="list-refresh"
-            refreshing={isRefetching}
-            onRefresh={refetch}
+            refreshing={pulling}
+            onRefresh={onRefresh}
             tintColor={sc.textOnAccent}
           />
         }
@@ -202,7 +204,7 @@ export default function PrepGuideScreen() {
             <View style={styles.prepDayRow}>
               {shown.prep_day_suggestions.map((day) => (
                 <View key={day} style={[styles.prepDayBadge, { borderColor: sc.surface.forestBandLine }]}>
-                  <Ionicons name="calendar-outline" size={16} color={sc.textOnAccent} />
+                  <Ionicons name="calendar-outline" size={16} color={gold[300]} />
                   <Text style={styles.prepDayText}>{day}</Text>
                 </View>
               ))}
@@ -299,7 +301,7 @@ export default function PrepGuideScreen() {
           <TouchableOpacity
             accessibilityRole="button" accessibilityLabel="Add all ingredients"
             accessibilityState={{ disabled: addToGroceryMutation.isPending || shown.aggregated_ingredients.length === 0, busy: addToGroceryMutation.isPending }}
-            style={[styles.addToGroceryBtn, (addToGroceryMutation.isPending || shown.aggregated_ingredients.length === 0) && styles.addToGroceryBtnDisabled]}
+            style={[styles.addToGroceryBtn, { minHeight: 56 * Math.max(1, fontScale * 0.9) }, (addToGroceryMutation.isPending || shown.aggregated_ingredients.length === 0) && styles.addToGroceryBtnDisabled]}
             onPress={handleAddToGrocery}
             activeOpacity={0.8}
             disabled={addToGroceryMutation.isPending || shown.aggregated_ingredients.length === 0}
@@ -337,23 +339,23 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
   weekSelector: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: -10, marginTop: 14 },
   weekArrow: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   weekLabel: { alignItems: 'center', gap: 4 },
-  weekLabelText: { ...typography.bodyMd, color: colors.textOnPrimary, fontVariant: ['tabular-nums'] },
+  weekLabelText: { ...typography.bodyMd, lineHeight: 19.36, letterSpacing: 0, color: colors.textOnPrimary, fontVariant: ['tabular-nums'] },
   weekCurrentBadge: {
-    ...typography.micro, fontSize: 11, color: brand[800], backgroundColor: gold[300],
+    ...typography.micro, fontSize: 11, letterSpacing: 0.3, color: brand[800], backgroundColor: gold[300],
     paddingHorizontal: 10, paddingVertical: 3, borderRadius: radius.chip, overflow: 'hidden',
   },
 
   content: { flex: 1 },
   contentFlow: { flexGrow: 1 },
-  // The paper's padding (34 = the 12 + 22 it had over the list before); it grows to the foot when the list is short.
-  contentInner: { paddingHorizontal: 24, paddingTop: 34, paddingBottom: 24, gap: 26 },
+  // ctx#457 .scroll: 22 pt above the content, 24 pt gutters.
+  contentInner: { paddingHorizontal: 24, paddingTop: 22, paddingBottom: 24, gap: 26 },
 
-  errorBlock: { paddingTop: 12, gap: 16 },
-  loadingContainer: { paddingTop: 12, gap: 16 },
-  loadingText: { ...typography.bodySmall, color: colors.textMuted },
+  errorBlock: { gap: 16 },
+  loadingContainer: { gap: 6 },
+  loadingText: { ...typography.bodySmall, lineHeight: 20.3, color: colors.textMuted },
 
   section: { gap: 0 },
-  sectionTitle: { ...typography.eyebrow, color: colors.textMuted, fontVariant: ['tabular-nums'] },
+  sectionTitle: { ...typography.eyebrow, fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 11.5, lineHeight: 14, letterSpacing: 2, color: colors.textMuted, fontVariant: ['tabular-nums'] },
 
   // Prep day chips on the forest masthead: a light outline (forestBandLine), light words.
   prepDayRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginTop: 10 },
@@ -363,12 +365,12 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
   // The picture tile at the left of each row (C_kitchen), hairline between rows.
   recipeRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 16, paddingVertical: 14, minHeight: 44, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   recipeInfo: { flex: 1 },
-  recipeName: { ...typography.h3, fontSize: 21, lineHeight: 27, color: colors.textPrimary },
-  recipeMetaText: { ...typography.bodySmall, lineHeight: 20, color: colors.textMuted, fontVariant: ['tabular-nums'], marginTop: 3 },
-  recipeAllergens: { ...typography.bodySmall, fontSize: 13, lineHeight: 19, color: colors.textMuted },
+  recipeName: { ...typography.h3, fontSize: 21, lineHeight: 26.25, letterSpacing: 0, color: colors.textPrimary },
+  recipeMetaText: { ...typography.bodySmall, lineHeight: 20.3, color: colors.textMuted, fontVariant: ['tabular-nums'], marginTop: 3 },
+  recipeAllergens: { ...typography.bodySmall, fontSize: 13, lineHeight: 18.85, marginTop: 1, color: colors.textMuted },
   kcal: { alignItems: 'flex-end', paddingTop: 4 },
-  kcalNum: { ...typography.h4, fontFamily: 'Inter_600SemiBold', fontWeight: '600', color: colors.textPrimary, fontVariant: ['tabular-nums'] },
-  kcalUnit: { ...typography.caption, fontFamily: 'Inter_400Regular', letterSpacing: 0.4, color: colors.textMuted },
+  kcalNum: { fontSize: 17, fontFamily: 'Inter_600SemiBold', fontWeight: '600', letterSpacing: 0, color: colors.textPrimary, fontVariant: ['tabular-nums'] },
+  kcalUnit: { fontSize: 12, fontFamily: 'Inter_400Regular', letterSpacing: 0.4, color: colors.textMuted, fontVariant: ['tabular-nums'] },
 
   foot: { paddingHorizontal: 24, paddingTop: 12 },
   addToGroceryBtn: {
@@ -376,12 +378,12 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
     backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 12, borderRadius: radius.card,
   },
   addToGroceryBtnDisabled: { opacity: 0.6 },
-  addToGroceryBtnText: { ...typography.h4, fontFamily: 'Inter_600SemiBold', fontWeight: '600', color: colors.textOnPrimary },
+  addToGroceryBtnText: { ...typography.h4, fontFamily: 'Inter_600SemiBold', fontWeight: '600', letterSpacing: 0, color: colors.textOnPrimary },
 
   ingredientRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, paddingTop: 12, minHeight: 44 },
   // A dotted leader (ctx#457): a thin box with every border dotted draws as one dotted line on both platforms.
   leader: { flex: 1, minWidth: 16, height: 1.5, marginBottom: 8, borderWidth: 1, borderStyle: 'dotted', borderColor: withAlpha(colors.textMuted, 0.5) },
-  ingredientName: { ...typography.body, flexShrink: 1, color: colors.textPrimary },
-  ingredientAmount: { ...typography.body, color: colors.textPrimary, fontVariant: ['tabular-nums'], textAlign: 'right' },
+  ingredientName: { ...typography.body, lineHeight: 22.4, letterSpacing: 0, flexShrink: 1, color: colors.textPrimary },
+  ingredientAmount: { fontFamily: typography.body.fontFamily, fontSize: 16, letterSpacing: 0, color: colors.textPrimary, fontVariant: ['tabular-nums'], textAlign: 'right' },
 
   });

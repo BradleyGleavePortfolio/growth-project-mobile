@@ -357,6 +357,19 @@ export function decodeFirstPayment(raw: unknown): FirstPaymentEvent | null {
   return { amount: amount / 10 ** digits, currency: code, clientId: clientId.trim() };
 }
 
+/**
+ * COACH-ROW-CHAT (owner 203-D4): a message row names its chat (payload.threadId, the client's id) and its sender
+ * (payload.senderName, the user's trimmed name), so a coach's row can open that client's chat (pushTapRouter). The
+ * server writes 'Your coach' when the name is blank or unreadable (messaging.service.ts resolveSenderName): that is no
+ * client's name, so such a row carries no chat and opens the inbox, never a chat with a made-up name.
+ */
+function messageChatParams(payload: Record<string, unknown>): Record<string, string> | undefined {
+  const { threadId, senderName } = payload;
+  const name = typeof senderName === 'string' ? senderName.trim() : '';
+  if (typeof threadId !== 'string' || !name || name === 'Your coach') return undefined;
+  return stringParams({ clientId: threadId, clientName: name });
+}
+
 /** Backend row or AppNotification -> AppNotification; null when unusable. */
 export function normalizeNotification(raw: unknown): AppNotification | null {
   const r = asRecord(raw);
@@ -393,7 +406,9 @@ export function normalizeNotification(raw: unknown): AppNotification | null {
     stringParams(r.actionParams ?? payload.actionParams) ??
     (rawKind === 'drip_released' && actionScreen === 'Deliverables'
       ? stringParams({ purchaseId: payload.client_purchase_id })
-      : undefined);
+      : rawKind === 'message_received' && actionScreen === 'Messages'
+        ? messageChatParams(payload)
+        : undefined);
   const deepLink = r.deepLink ?? r.deep_link ?? payload.deepLink ?? payload.deep_link;
   const firstPayment = rawKind === FIRST_PAYMENT_KIND ? decodeFirstPayment(payload) : null;
   if (rawKind === FIRST_PAYMENT_KIND && !firstPayment) {
