@@ -181,8 +181,8 @@ function SettingsStackNavigator() {
 }
 const ref = createNavigationContainerRef<ParamListBase>();
 let qc: QueryClient;
-async function mount() {
-  qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 0, gcTime: Infinity } } });
+async function mount(keep?: QueryClient) { // keep: the same client as the case before it (case 13, LS-962R1 C4)
+  qc = keep ?? new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 0, gcTime: Infinity } } });
   return await render(
     <QueryClientProvider client={qc}>
       <NavigationContainer ref={ref}>
@@ -202,8 +202,8 @@ async function openThread(recipientId: string, name?: string) {
   await go('CommunityDmThread', name ? { recipientId, name } : { recipientId });
   return view;
 }
-async function openList() {
-  const view = await mount();
+async function openList(keep?: QueryClient) {
+  const view = await mount(keep);
   await waitFor(() => expect(ref.isReady()).toBe(true));
   await go('CoachCommunityDmList');
   return view;
@@ -413,7 +413,7 @@ describe('6. thread content', () => {
     await act(async () => { fireEvent.press(view.getByTestId(`coach-dm-message-safety-${uuid(905)}`)); });
     await waitFor(() => expect(view.getByTestId(`coach-dm-message-safety-${uuid(905)}-report`)).toBeTruthy());
     expect(view.getByTestId(`coach-dm-message-safety-${uuid(905)}-block`)).toBeTruthy();
-    expect(view.getByLabelText('Block Jordan Lee')).toBeTruthy();
+    expect(view.getByLabelText('Block Jordan')).toBeTruthy(); // REFINE-962 CLOSE i: Studio's "Block Jordan" (the bar keeps the full name)
   });
 
   it('opened by link with no name: the thread reads the roster for the header', async () => {
@@ -594,7 +594,7 @@ describe('11. the coach\'s DM notification row', () => {
     tap(dmRow('n5', `tgp://community/dm/${JORDAN}`));
     expect(nav).toHaveBeenCalledWith('ClientsStack', { screen: 'NotificationCenter', params: undefined });
   });
-  it('the device push (no link, no sender id) keeps today\'s landing', () => {
+  it('a push with no link keeps today\'s landing', () => {
     attach('coach', COACH);
     router.routePushTap('Community', undefined, 'push-1');
     expect(nav).toHaveBeenCalledWith('ClientsStack', { screen: 'NotificationCenter', params: undefined });
@@ -651,14 +651,16 @@ describe('13. sign-out and another account on the same phone', () => {
     // signOut's cache and draft steps (authActions.ts:644 settleAndClearQueryCache; 'logout' empties chatDrafts.ts:54-63).
     await act(async () => { await settleAndClearQueryCache(qc); authEvents.emit('logout'); });
     await a.unmount();
+    const same = qc; // LS-962R1 C4: one QueryClient across the sign-out, so a key without the coach's id would show
     mockUser = { id: COACH_B, role: 'coach', name: 'Kim Ode', firstName: 'Kim', coach_id: null };
     mockGetClients.mockImplementation(async () => ({ data: [] }));
     serve({ '/community/me': ME(), [LIST_URL]: { threads: [] }, [msgsUrl(JORDAN)]: NOT_FOUND });
-    const b = await openList();
+    const b = await openList(same);
     await waitFor(() => expect(b.getByText('No conversations yet')).toBeTruthy());
     expect(b.queryByText('Jordan Lee')).toBeNull();
     await go('CommunityDmThread', { recipientId: JORDAN });
     await waitFor(() => expect(b.getByText('This conversation is closed')).toBeTruthy());
+    expect(within(b.getByTestId('coach-dm-thread-header')).queryByText('Jordan Lee')).toBeNull(); // no name from coach A's roster
     expect(b.queryByText(/Should I still do my own run/)).toBeNull();
     expect(b.queryByDisplayValue('A private note to Jordan')).toBeNull();
     expect([...mockDisk.values()].some((v) => v.includes('A private note to Jordan'))).toBe(false);
@@ -704,5 +706,112 @@ describe('KT-2: a blocked client leaks through no coach DM list, count or compos
     await waitFor(() => expect(view.getByText('Priya Shah has blocked you')).toBeTruthy());
     expect(current()?.name).toBe('CommunityDmThread');
     expect(view.queryByTestId('coach-dm-thread-composer-field')).toBeNull();
+  });
+});
+
+// ─── REFINE-962 (fix round 1): LS-962R1 C1, LO N2, and the B1 and B2 classes ────────────────────────────────────────
+describe('LS-962R1 C1: a failed background read keeps a loaded list', () => {
+  it.each([
+    ['/community/me', (fail: () => boolean) => ({ '/community/me': () => (fail() ? OFFLINE : ME()) }), ['community', 'me']],
+    ['the DM list', (fail: () => boolean) => ({ [LIST_URL]: () => (fail() ? OFFLINE : { threads: THREE }) }), ['community', 'dms']],
+  ])('a loaded list, then a failed %s read: the rows stay', async (_label, answers, key) => {
+    let failing = false;
+    serve(base(answers(() => failing)));
+    const view = await openList();
+    await waitFor(() => expect(view.getByTestId(`coach-dm-row-${JORDAN}`)).toBeTruthy());
+    failing = true;
+    await act(async () => { await qc.refetchQueries({ queryKey: key }); });
+    await waitFor(() => expect(qc.getQueryCache().findAll({ queryKey: key }).some((q) => q.state.status === 'error')).toBe(true));
+    expect(view.getByTestId(`coach-dm-row-${JORDAN}`)).toBeTruthy();
+    expect(view.queryByTestId('coach-dm-list-error')).toBeNull();
+  });
+  it('a loaded list, then a failed roster read: the rows and their names stay', async () => {
+    serve(base());
+    const view = await openList();
+    await waitFor(() => expect(view.getByText('Jordan Lee')).toBeTruthy());
+    mockGetClients.mockRejectedValue(OFFLINE);
+    await act(async () => { await qc.refetchQueries({ queryKey: ['coach', 'dm-roster'] }); });
+    await waitFor(() => expect(qc.getQueryCache().findAll({ queryKey: ['coach', 'dm-roster'] }).some((q) => q.state.status === 'error')).toBe(true));
+    expect(view.getByText('Jordan Lee')).toBeTruthy();
+    expect(view.queryByTestId('coach-dm-list-error')).toBeNull();
+  });
+});
+
+describe('LO N2: one off rule for the entry, the list and the thread', () => {
+  it('dmOn: on only when the server says community_dm true for a workspace', () => {
+    const { dmOn } = require('../coachDm');
+    expect(dmOn(ME(true))).toBe(true);
+    expect(dmOn(ME(false))).toBe(false);
+    expect(dmOn(ME(true, null))).toBe(false);
+    expect(dmOn({ ...ME(true), flags: {} })).toBe(false); // a /community/me with no flag
+    expect(dmOn(undefined)).toBe(false);
+  });
+  it('the server switch off: the list and the thread both draw the off state', async () => {
+    serve(base({ '/community/me': ME(false), [msgsUrl(JORDAN)]: { messages: CONVERSATION } }));
+    const view = await openList();
+    await waitFor(() => expect(view.getByTestId('coach-dm-list-off')).toBeTruthy());
+    await go('CommunityDmThread', { recipientId: JORDAN, name: 'Jordan Lee' });
+    await waitFor(() => expect(view.getByTestId('coach-dm-thread-off')).toBeTruthy());
+  });
+});
+
+describe('B1 class: every coach DM read draws the same after the app\'s own save and restore', () => {
+  const restart = async (open: () => Promise<void>) => {
+    const { dehydrate, hydrate } = require('@tanstack/react-query');
+    const { serializePersistedClient, QUERY_CACHE_BUSTER } = require('../../../../services/queryClient');
+    const saved = serializePersistedClient({
+      timestamp: Date.now(), buster: QUERY_CACHE_BUSTER,
+      clientState: dehydrate(qc, { shouldDehydrateQuery: (q: { meta?: { persist?: unknown } }) => q.meta?.persist !== false }),
+    });
+    const restored = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 30_000, gcTime: Infinity } } });
+    hydrate(restored, JSON.parse(saved).clientState);
+    // After the restart nothing answers: what draws comes from the restored cache only.
+    serve({ '/community/me': PENDING, [LIST_URL]: PENDING, [msgsUrl(JORDAN)]: PENDING });
+    mockGetClients.mockImplementation(() => new Promise(() => undefined));
+    const view = await mount(restored);
+    await waitFor(() => expect(ref.isReady()).toBe(true));
+    await open();
+    return view;
+  };
+  it('a thread opened by a link with no name, and its messages', async () => {
+    serve(base({ [msgsUrl(JORDAN)]: { messages: CONVERSATION } }));
+    const first = await openList();
+    await waitFor(() => expect(first.getByText('Jordan Lee')).toBeTruthy());
+    await go('CommunityDmThread', { recipientId: JORDAN });
+    await waitFor(() => expect(first.getByTestId(`coach-dm-message-${uuid(905)}`)).toBeTruthy());
+    await first.unmount();
+    const view = await restart(() => go('CommunityDmThread', { recipientId: JORDAN }));
+    await waitFor(() => expect(within(view.getByTestId('coach-dm-thread-header')).getByText('Jordan Lee')).toBeTruthy());
+    expect(view.getByTestId(`coach-dm-message-${uuid(905)}`)).toBeTruthy();
+  });
+  it('New message lists the roster', async () => {
+    serve(base());
+    const first = await openList();
+    await waitFor(() => expect(first.getByText('Jordan Lee')).toBeTruthy());
+    await first.unmount();
+    const view = await restart(() => go('CoachCommunityDmNew'));
+    await waitFor(() => expect(view.getByText('Your clients')).toBeTruthy());
+    await fireEvent.changeText(view.getByTestId('coach-dm-new-search'), 'maya');
+    await waitFor(() => expect(view.getByTestId(`coach-dm-new-row-${MAYA}`)).toBeTruthy());
+  });
+});
+
+describe('B2 class: after a coach send, Back shows the server\'s new list at once', () => {
+  it('a reply moves that client\'s row to the top with its new time', async () => {
+    let threads = THREE;
+    serve(base({ [LIST_URL]: () => ({ threads }), [msgsUrl(MAYA)]: { messages: [] } }));
+    mockPost.mockImplementation(async () => {
+      threads = [thread(MAYA, new Date().toISOString()), THREE[0], THREE[1]];
+      return { data: { message: msg(960, COACH, MAYA, 'See you Saturday', new Date().toISOString()) }, headers: {} };
+    });
+    const view = await openList();
+    await waitFor(() => expect(view.getByTestId(`coach-dm-row-${MAYA}`)).toBeTruthy());
+    await act(async () => { fireEvent.press(view.getByTestId(`coach-dm-row-${MAYA}`)); });
+    await waitFor(() => expect(view.getByTestId('coach-dm-thread-composer-field')).toBeTruthy());
+    await fireEvent.changeText(view.getByTestId('coach-dm-thread-composer-field'), 'See you Saturday');
+    await act(async () => { fireEvent.press(view.getByTestId('coach-dm-thread-composer-send')); });
+    await act(async () => { fireEvent.press(view.getByTestId('coach-dm-thread-header-back')); });
+    await waitFor(() => expect(view.getAllByTestId(/^coach-dm-row-/).map((r) => r.props.testID)[0]).toBe(`coach-dm-row-${MAYA}`));
+    expect(within(view.getByTestId(`coach-dm-row-${MAYA}`)).getByText('Active now')).toBeTruthy();
   });
 });
