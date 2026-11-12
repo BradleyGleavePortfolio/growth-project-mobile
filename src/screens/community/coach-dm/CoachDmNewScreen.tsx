@@ -120,8 +120,9 @@ const styles = StyleSheet.create({
   searchBand: { paddingHorizontal: spacing.lg, paddingBottom: 14 },
   search: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44, paddingHorizontal: 14, borderRadius: radius.input, backgroundColor: withAlpha(fp.onDeep, 0.12) },
   searchInput: { flex: 1, minHeight: 44, color: fp.onDeep, fontSize: 15 },
-  // Studio .sect, .row (min-height 58px here), .mono.cl.sm, .nm at 500 (S_start_ios.html:52-:59).
-  section: { fontFamily: 'Inter_600SemiBold', fontSize: 11.5, fontWeight: '700', letterSpacing: 1.6, textTransform: 'uppercase', paddingHorizontal: 18, paddingTop: 16, paddingBottom: 8 },
+  // Studio .sect, .row (min-height 58px here), .mono.cl.sm, .nm at 500 (S_start_ios.html:52-:59). The section stays at
+  // 600, not Studio's heavier caps: the app's quiet-luxury doctrine allows no heavier weight (quietLuxuryDoctrine.test.ts).
+  section: { fontFamily: 'Inter_600SemiBold', fontSize: 11.5, fontWeight: '600', letterSpacing: 1.6, textTransform: 'uppercase', paddingHorizontal: 18, paddingTop: 16, paddingBottom: 8 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 58, paddingHorizontal: 18, borderBottomWidth: 1 },
   tile: { width: 40, height: 40, borderRadius: 11, borderWidth: 1, borderColor: fp.sageLine, backgroundColor: fp.sage, alignItems: 'center', justifyContent: 'center' },
   tileText: { fontFamily: 'Inter_600SemiBold', fontSize: 14, fontWeight: '600', color: fp.forest },

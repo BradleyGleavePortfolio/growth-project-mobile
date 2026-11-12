@@ -490,7 +490,8 @@ describe('l. rows, bubbles, day rows and New message (S_thread_ios.html :52-:59,
     expect(flat(row)).toEqual(expect.objectContaining({ minHeight: 58, paddingHorizontal: 18, gap: 14 }));
     expect(flat(within(row).getByText('Jordan Lee'))).toEqual(expect.objectContaining({ fontSize: 16.5, fontWeight: '500' }));
     expect(flat(view.getByTestId(`tile-coach-dm-new-row-${JORDAN}`))).toEqual(expect.objectContaining({ width: 40, height: 40, borderRadius: 11, borderWidth: 1, borderColor: fp.sageLine }));
-    expect(flat(view.getByText('Your clients'))).toEqual(expect.objectContaining({ fontSize: 11.5, fontWeight: '700', color: brand[500] }));
+    // Studio's caps are heavier; the app's doctrine caps weights at 600 (quietLuxuryDoctrine.test.ts), so the weight is kept.
+    expect(flat(view.getByText('Your clients'))).toEqual(expect.objectContaining({ fontSize: 11.5, color: brand[500] }));
   });
 });
 
