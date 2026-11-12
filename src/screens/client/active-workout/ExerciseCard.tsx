@@ -17,6 +17,7 @@ export function ExerciseCard({
   onUpdateSet,
   onToggleSetComplete,
   onAddSet,
+  onRemoveSet,
   onRemoveExercise,
   onOpenExerciseDetail,
   colors,
@@ -38,6 +39,8 @@ export function ExerciseCard({
   onUpdateSet: <K extends keyof SessionSet>(exIdx: number, setIdx: number, field: K, value: SessionSet[K]) => void;
   onToggleSetComplete: (exIdx: number, setIdx: number) => void;
   onAddSet: (exIdx: number) => void;
+  /** SET-EDIT-M: removes one set; `removed` is called once it has gone (after the ask for a logged set). */
+  onRemoveSet?: (exIdx: number, setIdx: number, removed: () => void) => void;
   onRemoveExercise: (exIdx: number) => void;
   onOpenExerciseDetail: (exercise: SessionExercise) => void;
   colors: ThemeColors;
@@ -59,6 +62,10 @@ export function ExerciseCard({
   bodyWeight?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  // SET-EDIT-M: rows are keyed by index and hold their own state (open fields,
+  // a typed draft); after a removal they remount, so none of it moves onto the
+  // set that takes the removed one's place. Nothing here is saved.
+  const [cuts, setCuts] = useState(0);
   const folded = foldable && !open;
   const waiting = notStarted && !open && !active;
   const done = exercise.sets.length > 0 && exercise.sets.every((set) => set.completed);
@@ -187,7 +194,7 @@ export function ExerciseCard({
 
       {exercise.sets.map((set, setIdx) => (
         <SetLogger
-          key={setIdx}
+          key={`${cuts}-${setIdx}`}
           set={set}
           setIdx={setIdx}
           exIdx={exIdx}
@@ -200,6 +207,8 @@ export function ExerciseCard({
           nextUp={setIdx === nextSet}
           timed={exercise.unit === 'seconds'}
           bodyWeight={bodyWeight}
+          onRemove={onRemoveSet ? (ex, at) => onRemoveSet(ex, at, () => setCuts((n) => n + 1)) : undefined}
+          exerciseName={exercise.exerciseName}
         />
       ))}
 
