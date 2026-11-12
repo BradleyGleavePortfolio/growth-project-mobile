@@ -22,7 +22,8 @@ import { useTheme } from '../../../theme/useTheme';
 import { forestPop as fp } from '../../../theme/tokens';
 import type { CoachCommunityNav, CoachCommunityRoute } from '../coachCommunityNavTypes';
 import {
-  DmState, NO_NAME, OFF_LINE, OFF_SEND_LINE, OFF_TITLE, dayKey, dayLabel, dmOn, firstNameOf, initialsOf, isDmOff, rosterOf, useDmRoster,
+  DmState, NO_NAME, OFF_LINE, OFF_SEND_LINE, OFF_TITLE, dayKey, dayLabel, dmOn, firstNameOf, initialsOf, isDmOff, rosterOf,
+  useDmRoster, useStudioInk,
 } from './coachDm';
 
 const DM_MAX = 4000; // backend SendDmDto (body 1..4000), as the client's thread
@@ -31,6 +32,7 @@ export default function CoachDmThreadScreen(): React.ReactElement {
   const navigation = useNavigation<CoachCommunityNav>();
   const route = useRoute<CoachCommunityRoute<'CommunityDmThread'>>();
   const { semanticColors: c } = useTheme();
+  const ink = useStudioInk();
   const qc = useQueryClient();
   const recipientId = route.params?.recipientId ?? '';
   const coach = useCurrentUser();
@@ -67,7 +69,7 @@ export default function CoachDmThreadScreen(): React.ReactElement {
     );
 
   let body: React.ReactElement;
-  if (off) body = <DmState icon="chatbubble-outline" title={OFF_TITLE} line={OFF_LINE} testID="coach-dm-thread-off" />;
+  if (off) body = <DmState icon="chatbox-outline" title={OFF_TITLE} line={OFF_LINE} testID="coach-dm-thread-off" />;
   else if (closed) body = <View style={styles.flex} />; // closed: no messages, the line below says why
   else if (reading || failed) {
     body = reading
@@ -76,7 +78,7 @@ export default function CoachDmThreadScreen(): React.ReactElement {
           outlined onAction={() => void (meFailed ? community.refetch() : messages.refetch())} testID="coach-dm-thread-state" actionTestID="coach-dm-thread-retry" />;
   } else if (data.length === 0) {
     body = (
-      <DmState icon="chatbubble-outline" title="Say hello" testID="coach-dm-thread-new"
+      <DmState icon="chatbox-outline" title="Say hello" testID="coach-dm-thread-new"
         line={`Nothing here yet. Only ${first ?? 'they'} ${first ? 'sees' : 'see'} what you write here.`} />
     );
   } else {
@@ -88,18 +90,21 @@ export default function CoachDmThreadScreen(): React.ReactElement {
         contentContainerStyle={styles.list}
         renderItem={({ item, index }) => {
           const older = data[index + 1];
-          const theirs = item.sender_user_id !== coach?.id && !item.deleted;
+          const mine = !!coach?.id && item.sender_user_id === coach.id;
+          const theirs = !mine && !item.deleted;
           return (
             <View>
               {!older || dayKey(older.created_at) !== dayKey(item.created_at) ? (
-                <Text style={[styles.day, { color: c.textMuted }]} accessibilityRole="header">{dayLabel(item.created_at)}</Text>
+                <Text style={[styles.day, { color: ink.body }]} accessibilityRole="header">{dayLabel(item.created_at)}</Text>
               ) : null}
-              <View style={styles.messageRow}>
-                <View style={theirs ? styles.theirs : styles.flex}>
-                  <MessageBubble message={item} myUserId={coach?.id ?? ''} showTime testID={`coach-dm-message-${item.id}`} />
+              <View style={[styles.messageRow, mine ? styles.mineRow : null]}>
+                {/* Studio .bub max-width 74%: the box takes the bubble's width, so Report and Block sits at its edge. */}
+                <View style={styles.bubbleBox} testID={`coach-dm-bubble-box-${item.id}`}>
+                  <MessageBubble message={item} myUserId={coach?.id ?? ''} showTime studio testID={`coach-dm-message-${item.id}`} />
                 </View>
                 {theirs ? (
-                  <SafetyMenu targetType="message" targetId={item.id} authorUserId={item.sender_user_id} authorName={name}
+                  // Studio's "Block Jordan": the first name; the bar above keeps the full roster name.
+                  <SafetyMenu targetType="message" targetId={item.id} authorUserId={item.sender_user_id} authorName={first}
                     viewerUserId={coach?.id} viewerCoachId={coach?.coach_id} onBlocked={() => navigation.goBack()}
                     testID={`coach-dm-message-safety-${item.id}`} />
                 ) : null}
@@ -115,11 +120,11 @@ export default function CoachDmThreadScreen(): React.ReactElement {
     <SafeAreaView style={[styles.flex, { backgroundColor: fp.deep }]} edges={['top']} testID="coach-dm-thread">
       <ForestStatusBar />
       <KeyboardAvoidingView style={[styles.flex, { backgroundColor: c.bgPrimary }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ThreadHeader tone="deep" title={name ?? NO_NAME} subtitle={name ? NO_NAME : undefined} initials={initialsOf(name)}
+        <ThreadHeader tone="deep" studio title={name ?? NO_NAME} subtitle={name ? NO_NAME : undefined} initials={initialsOf(name)}
           onBack={() => navigation.goBack()} testID="coach-dm-thread-header" />
         {body}
-        {closed ? <ConversationClosedLine by={by} name={name} testID="coach-dm-thread-closed" /> : open && !off ? (
-          <ComposerInput placeholder="Message" maxLength={DM_MAX} sending={sendDm.isPending} onSubmit={onSend}
+        {closed ? <ConversationClosedLine studio by={by} name={name} testID="coach-dm-thread-closed" /> : open && !off ? (
+          <ComposerInput studio placeholder="Message" maxLength={DM_MAX} sending={sendDm.isPending} onSubmit={onSend}
             draftKey={recipientId && workspaceId ? `dm:${workspaceId}:${recipientId}` : undefined} testID="coach-dm-thread-composer" />
         ) : null}
       </KeyboardAvoidingView>
@@ -129,8 +134,10 @@ export default function CoachDmThreadScreen(): React.ReactElement {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  list: { paddingVertical: 8 },
-  messageRow: { flexDirection: 'row', alignItems: 'center' },
-  theirs: { width: '84%' }, // Studio: Report and Block sit beside the client's bubble
-  day: { fontFamily: 'Inter_600SemiBold', fontSize: 13, fontWeight: '600', textAlign: 'center', paddingTop: 12, paddingBottom: 4 },
+  // Studio .msgs padding 6px 16px 8px, gap 6px; .mrow2; .sep margin 10px 0 6px (S_thread_ios.html:69-:73)
+  list: { paddingTop: 6, paddingBottom: 8 },
+  messageRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 3 },
+  mineRow: { justifyContent: 'flex-end' },
+  bubbleBox: { maxWidth: '74%', flexShrink: 1 },
+  day: { fontFamily: 'Inter_600SemiBold', fontSize: 13, fontWeight: '600', textAlign: 'center', paddingTop: 10, paddingBottom: 6 },
 });
