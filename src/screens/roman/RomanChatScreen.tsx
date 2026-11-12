@@ -652,8 +652,10 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
           <CreditPoolEmptyLinks inset={spacing.xl + 28 + spacing.sm} />
         ) : null}
 
-        {/* ROMAN-HOLD-M: the people's chat hold menu and report sheet, reused as they are. */}
+        {/* ROMAN-HOLD-M: the people's chat hold menu and report sheet; REFINE-950: drawn as their GOAL frames draw them
+            (dm-menu P3 b05, mobile-879-05) through look="roman", which only this room passes. */}
         <MessageActionSheet
+          look="roman"
           visible={actionTarget != null}
           messagePreview={actionTarget ? romanQuoteExcerpt(actionTarget.content) : undefined}
           onReply={onReply}
@@ -666,6 +668,7 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
         {/* LO-950R2 N3: keyed by chat, so a chat change also drops the sheet's pick, words and error. */}
         <ReportMessageSheet
           key={chat}
+          look="roman"
           visible={reportTarget != null}
           messagePreview={reportTarget ? romanQuoteExcerpt(reportTarget.content, 400) : ''}
           onSubmit={onSubmitReport}
