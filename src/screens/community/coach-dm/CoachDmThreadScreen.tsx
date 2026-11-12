@@ -22,7 +22,7 @@ import { useTheme } from '../../../theme/useTheme';
 import { forestPop as fp } from '../../../theme/tokens';
 import type { CoachCommunityNav, CoachCommunityRoute } from '../coachCommunityNavTypes';
 import {
-  DmState, NO_NAME, OFF_LINE, OFF_SEND_LINE, OFF_TITLE, dayKey, dayLabel, firstNameOf, initialsOf, isDmOff, rosterOf, useDmRoster,
+  DmState, NO_NAME, OFF_LINE, OFF_SEND_LINE, OFF_TITLE, dayKey, dayLabel, dmOn, firstNameOf, initialsOf, isDmOff, rosterOf, useDmRoster,
 } from './coachDm';
 
 const DM_MAX = 4000; // backend SendDmDto (body 1..4000), as the client's thread
@@ -44,7 +44,7 @@ export default function CoachDmThreadScreen(): React.ReactElement {
   const sendDm = useSendDm(workspaceId, recipientId, coach?.id ?? '');
   const { closed, open, close } = useConversationClosed(recipientId, [messages.error], useServerAnswered(messages) && workspaceId.length > 0);
   const by = useClosedBy(recipientId, closed, { errors: [messages.error] });
-  const off = isDmOff(messages.error) || (community.isSuccess && (!workspaceId || community.data?.flags.community_dm === false));
+  const off = isDmOff(messages.error) || (!!community.data && !dmOn(community.data)); // LO-962R1 N2: the list's rule
   const meFailed = !community.data && community.isError;
   const reading = messages.isLoading || (!community.data && !community.isError);
   const failed = meFailed || (messages.isError && !open);

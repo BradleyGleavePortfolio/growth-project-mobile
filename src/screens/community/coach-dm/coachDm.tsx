@@ -18,6 +18,7 @@ import HapticPressable from '../../../components/HapticPressable';
 import { useTheme } from '../../../theme/useTheme';
 import { forestPop as fp, radius, spacing } from '../../../theme/tokens';
 import { calendarDateInZone, formatDayLabel } from '../../../calendar/calendarTime';
+import type { CommunityMeResponse } from '../../../api/communityApi';
 import { resolveClientTimezone } from '../../../api/schedulingApi';
 
 /** The most rows GET .../dms answers (b#1243 community-dms.service.ts:28-29, no cursor): a shorter page is the whole list. */
@@ -83,13 +84,16 @@ export function dmCode(err: unknown): string | null {
 /** DMs off: 403 community.dm.disabled (the community's setting) or 503 community.disabled (the server switch). */
 export const isDmOff = (err: unknown): boolean => ['community.dm.disabled', 'community.disabled'].includes(dmCode(err) ?? '');
 
+/** The one off rule (LO-962R1 N2): DMs are on only when the server says community_dm true for the coach's workspace. */
+export const dmOn = (me: Pick<CommunityMeResponse, 'workspace_id' | 'flags'> | null | undefined): boolean =>
+  !!me?.workspace_id && me.flags?.community_dm === true;
+
 /** The coach's workspace (GET /community/me: the one they own) and their DM list, read with ?limit=100. */
 export function useCoachDms() {
   const me = useCommunityMe();
-  const workspaceId = me.data?.workspace_id ?? null;
-  const on = !!me.data?.flags.community_dm && !!workspaceId;
-  const threads = useDmThreads(on ? workspaceId : null, { limit: COACH_DM_LIMIT });
-  return { me, threads, off: (me.isSuccess && !on) || isDmOff(threads.error) };
+  const on = dmOn(me.data);
+  const threads = useDmThreads(on ? me.data?.workspace_id : null, { limit: COACH_DM_LIMIT });
+  return { me, threads, off: (!!me.data && !on) || isDmOff(threads.error) };
 }
 
 export function initialsOf(name: string | null): string | null {
