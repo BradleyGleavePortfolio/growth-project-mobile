@@ -22,7 +22,8 @@ export default function CoachDmListScreen(): React.ReactElement {
   const { semanticColors: c } = useTheme();
   const { me, threads, off } = useCoachDms();
   const roster = useDmRoster();
-  const failed = !off && (me.isError || threads.isError || roster.isError);
+  // LS-962R1 C1: a read that failed in the background while its data is held keeps the list (as the thread does).
+  const failed = !off && ((me.isError && !me.data) || (threads.isError && !threads.data) || (roster.isError && !roster.data));
   const loading = !off && !failed && (me.isLoading || threads.isLoading || roster.isLoading || !threads.data || !roster.data);
   const rows = [...(threads.data ?? [])].sort((a, b) => (b.last_message_at ?? '').localeCompare(a.last_message_at ?? ''));
   const startNew = () => navigation.navigate('CoachCommunityDmNew');
