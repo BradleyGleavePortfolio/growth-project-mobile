@@ -56,9 +56,13 @@ export default function DmRow({
   onPress,
   testID,
 }: DmRowProps): React.ReactElement {
-  const { semanticColors } = useTheme();
+  const { semanticColors, colorScheme } = useTheme();
   const time = relativeTime(thread.last_message_at);
   const studio = initials !== undefined;
+  // REFINE-962: Studio's row (S_list_ios.html .row :56, .mono.cl :52/:54, .nm :57, .meta :58) for the coach's list only;
+  // a dark theme keeps its own text and lines.
+  const studioLight = studio && colorScheme !== 'dark';
+  const meta = studioLight ? forestPop.n700 : semanticColors.textMuted;
 
   return (
     <HapticPressable
@@ -67,11 +71,12 @@ export default function DmRow({
       accessibilityRole="button"
       accessibilityLabel={`Open conversation with ${participantLabel}`}
       testID={testID}
-      style={[styles.row, { borderBottomColor: semanticColors.border }]}
+      style={[styles.row, { borderBottomColor: semanticColors.border },
+        studio ? styles.studioRow : null, studioLight ? { borderBottomColor: forestPop.sageLine } : null]}
     >
       {studio ? (
-        <View style={[styles.tile, { backgroundColor: forestPop.sage }]}>
-          {initials ? <Text style={[styles.tileText, { color: forestPop.deep }]}>{initials}</Text> : null}
+        <View style={[styles.tile, { backgroundColor: forestPop.sage }]} testID={testID ? `tile-${testID}` : undefined}>
+          {initials ? <Text style={[styles.tileText, { color: forestPop.forest }]}>{initials}</Text> : null}
         </View>
       ) : isCoach ? (
         <RomanAvatar crop="monogram" size={40} testID="dm-row-roman" />
@@ -89,18 +94,18 @@ export default function DmRow({
       )}
       <View style={styles.body}>
         <Text
-          style={[styles.name, { color: semanticColors.textPrimary }]}
+          style={[styles.name, { color: semanticColors.textPrimary }, studio ? styles.studioName : null]}
           numberOfLines={1}
         >
           {participantLabel}
           {isCoach ? '  ·  your coach' : ''}
         </Text>
-        <Text style={[styles.time, { color: semanticColors.textMuted }]}>
+        <Text style={[styles.time, { color: semanticColors.textMuted }, studio ? [styles.studioTime, { color: meta }] : null]}>
           {time === 'now' && studio ? 'Active now' : time ? `Active ${time} ago` : 'No messages yet'}
         </Text>
       </View>
       <UnreadBadge count={unread} corner={false} testID="dm-row-badge" />
-      {chevron ? <Ionicons name="chevron-forward" size={20} color={semanticColors.textMuted} /> : null}
+      {chevron ? <Ionicons name="chevron-forward" size={20} color={studio ? meta : semanticColors.textMuted} /> : null}
     </HapticPressable>
   );
 }
@@ -126,8 +131,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  tile: { width: 40, height: 40, borderRadius: radius.input, justifyContent: 'center', alignItems: 'center' },
+  // Coach rows only (`initials` set): Studio .mono.cl 44 pt, radius 12, a 1 pt sage line.
+  tile: { width: 44, height: 44, borderRadius: radius.input, borderWidth: 1, borderColor: forestPop.sageLine, justifyContent: 'center', alignItems: 'center' },
   tileText: { fontSize: 14, fontWeight: '600' },
+  studioRow: { minHeight: 64, gap: 14, paddingVertical: 8, paddingHorizontal: 18, borderBottomWidth: 1 },
+  studioName: { fontSize: 16.5 },
+  studioTime: { fontSize: 13.5 },
   body: {
     flex: 1,
     gap: 2,
