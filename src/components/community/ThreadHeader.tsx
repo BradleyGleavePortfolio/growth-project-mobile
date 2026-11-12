@@ -32,6 +32,9 @@ export interface ThreadHeaderProps {
   subtitle?: string;
   initials?: string | null;
   backKind?: 'back' | 'close';
+  /** REFINE-962 (Studio bar, S_list_ios.html:49-:50): an 18 pt title, Studio's padding and gap, a 26 pt Back. Only the
+   * coach's DM screens pass it; unset, the deep bar draws as before (20 pt). */
+  studio?: boolean;
   testID?: string;
 }
 
@@ -44,25 +47,26 @@ export default function ThreadHeader({
   subtitle,
   initials,
   backKind = 'back',
+  studio = false,
   testID,
 }: ThreadHeaderProps): React.ReactElement {
   const { semanticColors } = useTheme();
   if (tone === 'deep') {
     const close = backKind === 'close';
     const heading = (
-      <Text style={[styles.deepTitle, subtitle ? styles.stacked : null]} numberOfLines={1} accessibilityRole="header">{title}</Text>
+      <Text style={[styles.deepTitle, studio ? styles.studioTitle : null, subtitle ? styles.stacked : null]} numberOfLines={1} accessibilityRole="header">{title}</Text>
     );
     return (
-      <View style={styles.deep} testID={testID}>
+      <View style={[styles.deep, studio ? styles.studioBar : null]} testID={testID}>
         <View style={styles.slot}>
           {onBack ? (
             <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel={close ? 'Close' : 'Back'} hitSlop={4}
               testID={testID ? `${testID}-${close ? 'close' : 'back'}` : undefined} style={({ pressed }) => [styles.slot, pressed && styles.pressed]}>
-              <Ionicons name={close ? 'close' : 'chevron-back'} size={24} color={fp.onDeep} />
+              <Ionicons name={close ? 'close' : 'chevron-back'} size={studio ? 26 : 24} color={fp.onDeep} />
             </Pressable>
           ) : null}
         </View>
-        {initials ? <View style={styles.tile}><Text style={styles.tileText}>{initials}</Text></View> : null}
+        {initials ? <View style={styles.tile} testID={testID ? `${testID}-tile` : undefined}><Text style={styles.tileText}>{initials}</Text></View> : null}
         {subtitle ? (
           <View style={styles.titles}>
             {heading}
@@ -118,7 +122,11 @@ const styles = StyleSheet.create({
   titles: { flex: 1, minWidth: 0 },
   stacked: { flex: 0 },
   deepSub: { fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 19, color: fp.onDeepMuted },
-  tile: { width: 40, height: 40, marginRight: spacing.xs, borderRadius: radius.input, backgroundColor: fp.sage, alignItems: 'center', justifyContent: 'center' },
-  tileText: { fontFamily: 'Inter_600SemiBold', fontSize: 14, fontWeight: '600', color: fp.deep },
+  // Studio .mono.cl (S_thread_ios.html:52, :54): 44 pt, radius 12, a 1 pt sage line, forest letters.
+  tile: { width: 44, height: 44, borderRadius: radius.input, borderWidth: 1, borderColor: fp.sageLine, backgroundColor: fp.sage, alignItems: 'center', justifyContent: 'center' },
+  tileText: { fontFamily: 'Inter_600SemiBold', fontSize: 14, fontWeight: '600', color: fp.forest },
+  // REFINE-962 `studio`: .brow padding 6px 12px 12px 6px, gap 10px; .btitle 18px, 600, line-height 1.2.
+  studioBar: { gap: 10, paddingLeft: 6, paddingRight: 12, paddingTop: 6, paddingBottom: 12 },
+  studioTitle: { fontSize: 18, lineHeight: 22 },
   pressed: { opacity: 0.6 },
 });
