@@ -2,11 +2,12 @@
 //
 // Renders a themed in-app banner at the top of the screen when a push
 // notification arrives while the app is in the foreground. Automatically
-// dismisses after 4 seconds. Tapping routes to the notification's destination
-// and dismisses. Swiping up also dismisses (via Animated slide-out).
+// dismisses after 4 seconds. Tapping dismisses and hands the push's tap
+// (pushTapOf, the device tap's own mapping) to routePushTap, so it lands where
+// the device tap of the same push lands. Swiping up also dismisses.
 //
-// Mount this component once, inside the NavigationContainer, at the root
-// layout level so it floats above all screens.
+// Mounted once by RootNavigator, over the signed-in client and coach apps
+// (FOREGROUND-BANNER-M).
 
 import React, { useCallback, useEffect, useRef } from 'react';
 import {
@@ -18,23 +19,24 @@ import {
   StyleSheet,
   Platform,
 } from 'react-native';
-import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useForegroundBanner } from '../store/foregroundBannerStore';
+import { useForegroundBanner, type BannerPayload } from '../store/foregroundBannerStore';
 import { useTheme } from '../theme/ThemeProvider';
 import type { IoniconName } from '../types/common';
-import { featureFlags } from '../config/featureFlags';
 import { routePushTap } from '../services/pushTapRouter';
 
 const AUTO_DISMISS_MS = 4000;
 
 export default function ForegroundNotificationBanner() {
+  const banner = useForegroundBanner((s) => s.banner);
+  return banner ? <Banner banner={banner} /> : null;
+}
+
+function Banner({ banner }: { banner: BannerPayload }) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const banner = useForegroundBanner((s) => s.banner);
   const dismiss = useForegroundBanner((s) => s.dismissBanner);
-  const navigation = useNavigation<NavigationProp<ParamListBase>>();
 
   const translateY = useRef(new Animated.Value(-100)).current;
   const autoDismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -95,25 +97,9 @@ export default function ForegroundNotificationBanner() {
 
   const handleTap = useCallback(() => {
     if (autoDismissTimer.current) clearTimeout(autoDismissTimer.current);
-    const actionScreen = banner?.actionScreen;
-    const actionParams = banner?.actionParams;
-    animateOut(() => {
-      if (banner?.deepLink !== undefined) {
-        routePushTap(actionScreen, actionParams, banner.notificationId, banner.deepLink);
-      } else if (actionScreen === 'AIGuide') {
-        navigation.navigate('MoreTab', {
-          screen: featureFlags.romanChat ? 'RomanChat' : 'MoreIndex', initial: false,
-        });
-      } else if (actionScreen) {
-        (navigation.navigate as (screen: string, params?: Record<string, string>) => void)(
-          actionScreen,
-          actionParams,
-        );
-      }
-    });
-  }, [banner, animateOut, navigation.navigate]);
-
-  if (!banner) return null;
+    const { actionScreen, actionParams, notificationId, deepLink } = banner;
+    animateOut(() => routePushTap(actionScreen, actionParams, notificationId, deepLink));
+  }, [banner, animateOut]);
 
   return (
     <Animated.View
@@ -173,7 +159,8 @@ export default function ForegroundNotificationBanner() {
             if (autoDismissTimer.current) clearTimeout(autoDismissTimer.current);
             animateOut();
           }}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          // [P06] 44 pt: 18 pt icon plus slop, inside the row (its top padding is 12).
+          hitSlop={{ top: 12, bottom: 14, left: 13, right: 13 }}
           accessibilityRole="button"
           accessibilityLabel="Dismiss notification"
         >
@@ -191,8 +178,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 999,
-    borderBottomLeftRadius: 4,
-    borderBottomRightRadius: 4,
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
     paddingBottom: 0,
   },
   inner: {
@@ -205,7 +192,7 @@ const styles = StyleSheet.create({
   iconWrap: {
     width: 34,
     height: 34,
-    borderRadius: 2,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,

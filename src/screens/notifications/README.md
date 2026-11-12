@@ -126,7 +126,7 @@ Rows without `payload.title` use their kind's push title: "New content" (`drip_r
 | --- | --- | --- |
 | `NotificationBadge` | `src/components/NotificationBadge.tsx` | Bell icon badge; count capped at "99+"; theme accent background |
 | Center row | `NotificationCenterScreen.tsx` | Scoped hairline row; read/unread dot, outline kind icon, full title/body, relative time |
-| `ForegroundNotificationBanner` | `src/components/ForegroundNotificationBanner.tsx` | In-app banner for foreground pushes; auto-dismisses after 4 s; swipe-up to dismiss |
+| `ForegroundNotificationBanner` | `src/components/ForegroundNotificationBanner.tsx` | In-app banner for foreground pushes, mounted once by `RootNavigator` over the signed-in client and coach apps; shows the notification's own title and body; its tap is the device tap; auto-dismisses after 4 s; swipe-up to dismiss |
 
 ---
 
@@ -134,8 +134,11 @@ Rows without `payload.title` use their kind's push title: "New content" (`drip_r
 
 `src/services/pushNotifications.ts` (extended in Phase 9):
 
-- `installForegroundHandler()` — call once from `App.tsx` after the navigation tree mounts. Suppresses the native system alert and writes the payload to `foregroundBannerStore` instead. `ForegroundNotificationBanner` renders from that store.
+- `installForegroundHandler()` — call once from `App.tsx` after the navigation tree mounts. Suppresses the native system alert and writes the notification's title and body, with its tap from `pushTapOf`, to `foregroundBannerStore` instead (a notification with no title and no body writes nothing). `ForegroundNotificationBanner` renders from that store.
 - `installNotificationResponseHandler()` — handles taps on background/killed-state notifications; routes via `onResponse` callback.
+- `pushTapOf(data)` — the one content-to-tap mapping (FOREGROUND-BANNER-M): the screen (`actionScreen`, a `plan_renewal` push's renewal pop-up, else the kind's fallback screen), the decoded params and the link. A device tap, a cold-start tap and the banner's tap all hand its three outputs to `routePushTap`, so the banner lands exactly where the device tap of the same push lands.
+
+Where the banner shows: `RootNavigator` mounts it inside the `NavigationContainer` and inside `PersistedQueryCacheGate`'s children, only while `pushSessionFor(authState, sessionUserId)` is `app` (student, package_prompt, coach). It is not drawn while signed out, in onboarding, the age check, the coach wizard or the Day-1 win, on the startup pending or error views, while a user's cache restores, or behind the biometric lock. Sign-out clears it (`resetUserScopedStores`).
 
 The Zustand store is `src/store/foregroundBannerStore.ts`.
 
