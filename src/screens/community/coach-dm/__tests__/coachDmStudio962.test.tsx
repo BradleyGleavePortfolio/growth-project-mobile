@@ -459,7 +459,7 @@ describe('l. rows, bubbles, day rows and New message (S_thread_ios.html :52-:59,
     const row = view.getByTestId(`coach-dm-row-${JORDAN}`);
     expect(flat(row)).toEqual(expect.objectContaining({ minHeight: 64, paddingHorizontal: 18, gap: 14, borderBottomWidth: 1, borderBottomColor: fp.sageLine }));
     expect(flat(within(row).getByText('JL')).color).toBe(fp.forest);
-    expect(flat(view.getByTestId(`coach-dm-row-${JORDAN}-tile`))).toEqual(expect.objectContaining({ width: 44, height: 44, borderWidth: 1, borderColor: fp.sageLine }));
+    expect(flat(view.getByTestId(`tile-coach-dm-row-${JORDAN}`))).toEqual(expect.objectContaining({ width: 44, height: 44, borderWidth: 1, borderColor: fp.sageLine }));
     expect(flat(within(row).getByText('Jordan Lee')).fontSize).toBe(16.5);
     expect(flat(within(row).getByText('Active 1h ago'))).toEqual(expect.objectContaining({ fontSize: 13.5, color: fp.n700 }));
   });
@@ -469,8 +469,8 @@ describe('l. rows, bubbles, day rows and New message (S_thread_ios.html :52-:59,
     await waitFor(() => expect(view.getByTestId(`coach-dm-message-${uuid(905)}`)).toBeTruthy());
     const words = within(view.getByTestId(`coach-dm-message-${uuid(905)}`)).getByText(CONVERSATION[0].body);
     expect(flat(words)).toEqual(expect.objectContaining({ fontSize: 16, lineHeight: 22 }));
-    expect(flat(view.getByTestId(`coach-dm-message-${uuid(905)}-bubble`))).toEqual(expect.objectContaining({ borderRadius: 18, borderWidth: 1.5, borderColor: fp.sageLine, backgroundColor: neutral[0] }));
-    expect(flat(view.getByTestId(`coach-dm-message-${uuid(904)}-bubble`))).toEqual(expect.objectContaining({ borderRadius: 18, borderBottomRightRadius: 4 }));
+    expect(flat(view.getByTestId(`bubble-coach-dm-message-${uuid(905)}`))).toEqual(expect.objectContaining({ borderRadius: 18, borderWidth: 1.5, borderColor: fp.sageLine, backgroundColor: neutral[0] }));
+    expect(flat(view.getByTestId(`bubble-coach-dm-message-${uuid(904)}`))).toEqual(expect.objectContaining({ borderRadius: 18, borderBottomRightRadius: 4 }));
     const time = within(view.getByTestId(`coach-dm-message-${uuid(904)}`)).getByText(new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date(CONVERSATION[1].created_at)));
     expect(flat(time)).toEqual(expect.objectContaining({ fontSize: 12.5, marginTop: 6, color: fp.onDeepMuted }));
   });
@@ -489,7 +489,7 @@ describe('l. rows, bubbles, day rows and New message (S_thread_ios.html :52-:59,
     const row = view.getByTestId(`coach-dm-new-row-${JORDAN}`);
     expect(flat(row)).toEqual(expect.objectContaining({ minHeight: 58, paddingHorizontal: 18, gap: 14 }));
     expect(flat(within(row).getByText('Jordan Lee'))).toEqual(expect.objectContaining({ fontSize: 16.5, fontWeight: '500' }));
-    expect(flat(view.getByTestId(`coach-dm-new-row-${JORDAN}-tile`))).toEqual(expect.objectContaining({ width: 40, height: 40, borderRadius: 11, borderWidth: 1, borderColor: fp.sageLine }));
+    expect(flat(view.getByTestId(`tile-coach-dm-new-row-${JORDAN}`))).toEqual(expect.objectContaining({ width: 40, height: 40, borderRadius: 11, borderWidth: 1, borderColor: fp.sageLine }));
     expect(flat(view.getByText('Your clients'))).toEqual(expect.objectContaining({ fontSize: 11.5, fontWeight: '700', color: brand[500] }));
   });
 });
