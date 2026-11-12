@@ -163,7 +163,8 @@ describe("KitchenTitle954: on all five kitchen screens the Back row's top sits 4
     expect(flat(m.back).minHeight).toBeGreaterThanOrEqual(44);
     expect(flat(m.back).minWidth).toBeGreaterThanOrEqual(44);
     expect(m.rowUnderInset).toBeGreaterThanOrEqual(0);
-    if (m.host) expect(topBelow(m.row, m.host)).toBeGreaterThanOrEqual(0);
+    // REFINE-959 (LO-959 N2): counting the host's own margin, so a host pulled up by a negative margin is caught too.
+    if (m.host) expect(topBelow(m.row, m.host) + top(m.host)).toBeGreaterThanOrEqual(0);
     if (m.save) expect(flat(m.save).height).toBeGreaterThanOrEqual(44);
   });
 });
