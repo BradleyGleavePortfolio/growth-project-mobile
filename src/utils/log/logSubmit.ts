@@ -87,7 +87,9 @@ export function buildFoodPayload(food: SearchResult) {
 /** FR-916 F1: the log fields of a search or Recent add, and its intent (foodSaveIntent), shared online and queued. */
 function searchSave(args: SearchLogArgs) {
   const { food, date, mealType, multiplier, originalQuantity, originalUnit, link } = args;
-  const needsCreate = !food.id || food.id.startsWith('off_');
+  // OFF-PHOTO-M: an off_<code> id is sent as is, like usda_ and stored ids: the server logs its one shared food
+  // with the product's photo (b#1244). Only a pick with no id makes a food.
+  const needsCreate = !food.id;
   const log = {
     date,
     meal_type: mealType,
