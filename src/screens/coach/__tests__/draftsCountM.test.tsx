@@ -8,7 +8,7 @@
  * Fixture: the renders harness's 'plan' state, 2 workouts, 1 meal plan, 3 nudges and 2 plan changes.
  */
 import React from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { StyleSheet, Text, type ViewStyle } from 'react-native';
 import { act, render, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -135,7 +135,7 @@ function findJ(node: unknown, id: string): J | null {
 }
 /** The loading ghost of Roman's card (InboxSkeleton hero: the 200 pt shape) under the inbox's loading state. */
 const ghosts = (view: View) => (findJ(view.toJSON(), 'inbox-loading')?.children ?? [])
-  .filter((c) => typeof c !== 'string' && StyleSheet.flatten(c.props.style as object)?.height === 200).length;
+  .filter((c) => typeof c !== 'string' && (StyleSheet.flatten(c.props.style as ViewStyle) as ViewStyle | undefined)?.height === 200).length;
 
 beforeEach(() => {
   qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -157,7 +157,7 @@ afterEach(() => {
 });
 
 describe('case 1: flag on, both lists answered', () => {
-  it.each([['CoachInboxV2', true], ['the legacy list', false]])('the card on %s counts the workout changes as Home does', async (_name, v2) => {
+  it.each([['CoachInboxV2', true], ['the legacy list', false]] as [string, boolean][])('the card on %s counts the workout changes as Home does', async (_name, v2) => {
     mockServerFlags.messaging_core_v2 = v2;
     mockListPending.mockImplementation(() => listed(SIX));
     mockPath.mockImplementation(() => answer(PLAN));
@@ -177,7 +177,7 @@ describe('case 2: flag on, only plan changes wait', () => {
   it.each([
     [PLAN, 'Roman has 2 drafts ready', '2 Workout changes'],
     [PLAN.slice(0, 1), 'Roman has 1 draft ready', '1 Workout change'],
-  ])('the card shows them (%#)', async (rows, title, chip) => {
+  ] as [unknown[], string, string][])('the card shows them (%#)', async (rows, title, chip) => {
     mockListPending.mockImplementation(() => listed([]));
     mockPath.mockImplementation(() => answer(rows));
     const view = await render(wrap(<RomanDraftsHero />));
