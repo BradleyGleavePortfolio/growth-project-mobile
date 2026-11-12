@@ -20,15 +20,16 @@ import { isClosedRefusal } from '../../../components/messaging/ConversationClose
 import { useCommunityMe } from '../../../hooks/useCommunity';
 import { useBlockedUsersStore } from '../../../store/blockedUsersStore';
 import { useTheme } from '../../../theme/useTheme';
-import { forestPop as fp, radius, spacing, withAlpha } from '../../../theme/tokens';
+import { brand, forestPop as fp, radius, spacing, withAlpha } from '../../../theme/tokens';
 import type { CoachCommunityNav } from '../coachCommunityNavTypes';
-import { DmState, OFF_SEND_LINE, dmCode, initialsOf, isDmOff, rosterOf, useDmRoster } from './coachDm';
+import { DmState, OFF_SEND_LINE, dmCode, initialsOf, isDmOff, rosterOf, useDmRoster, useStudioInk } from './coachDm';
 
 const notJoinedLine = (name: string) => `${name} has not joined your community yet. You can message them here once they do.`;
 
 export default function CoachDmNewScreen(): React.ReactElement {
   const navigation = useNavigation<CoachCommunityNav>();
-  const { semanticColors: c } = useTheme();
+  const { semanticColors: c, colorScheme } = useTheme();
+  const ink = useStudioInk();
   const workspaceId = useCommunityMe().data?.workspace_id ?? '';
   const roster = useDmRoster();
   const blocked = useBlockedUsersStore((s) => s.blocked); // KT-2: a client I blocked is not offered (Unblock in Settings)
@@ -72,14 +73,14 @@ export default function CoachDmNewScreen(): React.ReactElement {
   } else {
     body = (
       <ScrollView keyboardShouldPersistTaps="handled">
-        <Text style={[styles.section, { color: c.textMuted }]}>Your clients</Text>
+        <Text style={[styles.section, { color: colorScheme === 'dark' ? c.textMuted : brand[500] }]}>Your clients</Text>
         {shown.length === 0 ? (
           <Text style={[styles.empty, { color: c.textMuted }]}>{clients.length === 0 ? 'No clients yet' : `No clients match "${query.trim()}".`}</Text>
         ) : shown.map((item) => (
           <HapticPressable key={item.id} intent="light" onPress={() => void openWith(item)} accessibilityRole="button" accessibilityLabel={item.name}
             accessibilityState={{ busy: busy === item.id }} testID={`coach-dm-new-row-${item.id}`}
-            style={[styles.row, { borderBottomColor: c.border }]}>
-            <View style={styles.tile}><Text style={styles.tileText}>{initialsOf(item.name)}</Text></View>
+            style={[styles.row, { borderBottomColor: ink.line }]}>
+            <View style={styles.tile} testID={`tile-coach-dm-new-row-${item.id}`}><Text style={styles.tileText}>{initialsOf(item.name)}</Text></View>
             <Text style={[styles.name, { color: c.textPrimary }]} numberOfLines={1}>{item.name}</Text>
             {busy === item.id ? <ActivityIndicator color={c.accent} /> : null}
           </HapticPressable>
@@ -91,7 +92,7 @@ export default function CoachDmNewScreen(): React.ReactElement {
   return (
     <SafeAreaView style={[styles.flex, { backgroundColor: fp.deep }]} edges={['top']} testID="coach-dm-new-screen">
       <ForestStatusBar />
-      <ThreadHeader tone="deep" title="New message" subtitle="Choose a client. Only they see it." backKind="close"
+      <ThreadHeader tone="deep" studio title="New message" subtitle="Choose a client. Only they see it." backKind="close"
         onBack={() => navigation.goBack()} testID="coach-dm-new-header" />
       <View style={styles.searchBand}>
         <View style={styles.search}>
@@ -115,14 +116,16 @@ export default function CoachDmNewScreen(): React.ReactElement {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  searchBand: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
-  search: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 44, paddingHorizontal: spacing.md, borderRadius: radius.input, backgroundColor: withAlpha(fp.onDeep, 0.12) },
+  // Studio .search (S_start_ios.html:91): margin 0 16px 14px, padding 0 14px, gap 10px.
+  searchBand: { paddingHorizontal: spacing.lg, paddingBottom: 14 },
+  search: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44, paddingHorizontal: 14, borderRadius: radius.input, backgroundColor: withAlpha(fp.onDeep, 0.12) },
   searchInput: { flex: 1, minHeight: 44, color: fp.onDeep, fontSize: 15 },
-  section: { fontFamily: 'Inter_600SemiBold', fontSize: 12, fontWeight: '600', letterSpacing: 1.2, textTransform: 'uppercase', paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.sm },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 56, paddingHorizontal: spacing.lg, borderBottomWidth: StyleSheet.hairlineWidth },
-  tile: { width: 36, height: 36, borderRadius: radius.input, backgroundColor: fp.sage, alignItems: 'center', justifyContent: 'center' },
-  tileText: { fontFamily: 'Inter_600SemiBold', fontSize: 13, fontWeight: '600', color: fp.deep },
-  name: { flex: 1, fontSize: 15 },
+  // Studio .sect, .row (min-height 58px here), .mono.cl.sm, .nm at 500 (S_start_ios.html:52-:59).
+  section: { fontFamily: 'Inter_600SemiBold', fontSize: 11.5, fontWeight: '700', letterSpacing: 1.6, textTransform: 'uppercase', paddingHorizontal: 18, paddingTop: 16, paddingBottom: 8 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 58, paddingHorizontal: 18, borderBottomWidth: 1 },
+  tile: { width: 40, height: 40, borderRadius: 11, borderWidth: 1, borderColor: fp.sageLine, backgroundColor: fp.sage, alignItems: 'center', justifyContent: 'center' },
+  tileText: { fontFamily: 'Inter_600SemiBold', fontSize: 14, fontWeight: '600', color: fp.forest },
+  name: { flex: 1, fontFamily: 'Inter_500Medium', fontSize: 16.5, fontWeight: '500' },
   empty: { fontSize: 14, textAlign: 'center', padding: spacing.xl },
   notice: { flexDirection: 'row', gap: spacing.sm, margin: spacing.lg, padding: spacing.md, borderRadius: radius.card, borderWidth: StyleSheet.hairlineWidth },
   noticeText: { flex: 1, fontSize: 14, lineHeight: 20 },
