@@ -161,7 +161,10 @@ export default function ActiveWorkoutScreen() {
   // cached catalog read (GET /exercises/:id equipment) the name lookup makes.
   const exerciseIdsKey = sessionExercises.map((e) => e.exerciseId).join('\u0000');
   const exerciseIds = useMemo(() => (exerciseIdsKey ? exerciseIdsKey.split('\u0000') : []), [exerciseIdsKey]);
-  const bodyWeight = useBodyWeightExercises(exerciseIds);
+  // BW-LOCAL-M: with each row's name, an id the catalog can never answer (an
+  // Add or Swap from the phone's list, a saved routine) reads the phone's list.
+  const exerciseNames = Object.fromEntries(sessionExercises.map((e) => [e.exerciseId, e.exerciseName]));
+  const bodyWeight = useBodyWeightExercises(exerciseIds, exerciseNames);
   const [workoutNotes, setWorkoutNotes] = useState('');
   const [history, setHistory] = useState<LoggedWorkout[]>([]);
   const [historyState, setHistoryState] = useState<'loading' | 'loaded' | 'unavailable'>('loading');
@@ -618,6 +621,33 @@ export default function ActiveWorkoutScreen() {
         { text: 'Remove', style: 'destructive', onPress: drop },
       ],
     );
+  };
+
+  // SET-EDIT-M: one set out of the workout. A set not ticked goes at once; a
+  // logged set asks first, as the exercise trash does. Finish then saves only
+  // the sets left (the POST and the coach's completion read the list as is).
+  const removeSet = (exIdx: number, setIdx: number, removed: () => void) => {
+    const target = sessionExercises[exIdx]?.sets[setIdx];
+    if (!target) return;
+    const drop = () => {
+      // The set ticked last: its rest stops, as an untick does.
+      const latest = Math.max(0, ...sessionExercises.flatMap((e) => e.sets.map((s) => (s.completed ? s.doneOrder ?? 0 : 0))));
+      if (target.completed && (target.doneOrder ?? 0) === latest && restActive) {
+        if (restIntervalRef.current) clearInterval(restIntervalRef.current);
+        restIntervalRef.current = null;
+        setRestActive(false);
+      }
+      setSessionExercises((prev) => prev.map((e, i) => (i === exIdx ? { ...e, sets: e.sets.filter((_, j) => j !== setIdx) } : e)));
+      removed();
+    };
+    if (!target.completed) {
+      drop();
+      return;
+    }
+    Alert.alert(`Remove set ${setIdx + 1}?`, 'This logged set will be removed from this workout.', [
+      { text: 'Keep', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: drop },
+    ]);
   };
 
   const openExerciseDetail = (exercise: SessionExercise) => {
@@ -1339,6 +1369,7 @@ export default function ActiveWorkoutScreen() {
             onUpdateSet={updateSet}
             onToggleSetComplete={toggleSetComplete}
             onAddSet={addSet}
+            onRemoveSet={removeSet}
             onRemoveExercise={removeExercise}
             onOpenExerciseDetail={openExerciseDetail}
             colors={colors}

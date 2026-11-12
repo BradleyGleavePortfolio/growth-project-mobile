@@ -93,7 +93,7 @@ describe('B30 chips send fixed prompts (prototype 70-73)', () => {
     const r = await render(<RomanChatScreen surface="client" />);
     await fireEvent.changeText(r.getByTestId('roman-composer-input'), 'My own words');
     await fireEvent.press(r.getByTestId('roman-quick-start-0'));
-    expect(state.send).toHaveBeenCalledWith('Explain my targets');
+    expect(state.send).toHaveBeenCalledWith('Explain my targets', expect.objectContaining({ key: expect.any(String) }));
     expect(r.getByTestId('roman-composer-input').props.value).toBe('My own words');
     expect(r.getByTestId('roman-quick-start-0').props.accessibilityState).toMatchObject({ selected: true });
   });
@@ -113,7 +113,7 @@ describe('B30 chips send fixed prompts (prototype 70-73)', () => {
     const r = await render(<RomanChatScreen surface="client" />);
     await fireEvent.changeText(r.getByTestId('roman-composer-input'), 'My own words');
     await fireEvent.press(r.getByTestId('roman-quick-start-2'));
-    expect(state.send).toHaveBeenCalledWith(ROMAN_QUICK_STARTS[2]);
+    expect(state.send).toHaveBeenCalledWith(ROMAN_QUICK_STARTS[2], expect.objectContaining({ key: expect.any(String) }));
     expect(r.getByTestId('roman-composer-input').props.value).toBe('My own words');
   });
 });

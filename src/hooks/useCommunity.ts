@@ -190,14 +190,23 @@ export function isOptimisticId(id: string): boolean {
 }
 
 /**
+ * SEND-ONCE-PHONE (b#1228): what a member can send again carries its draft's Idempotency-Key, so Send again after a
+ * lost answer replays the first send's key and the server answers with the first row (lib/sendOnce.ts).
+ */
+export interface SendOnceBody {
+  body: string;
+  idempotencyKey: string;
+}
+
+/**
  * Create a Hall/Lab post with an optimistic insert at the top of the feed,
  * rolling back the snapshot if the server rejects.
  */
 export function useCreatePost(workspaceId: string, authorUserId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { title: string; body: string }) =>
-      communityApi.createPost(workspaceId, input),
+    mutationFn: ({ title, body, idempotencyKey }: { title: string; body: string; idempotencyKey: string }) =>
+      communityApi.createPost(workspaceId, { title, body }, idempotencyKey),
     onMutate: async (input) => {
       const key = communityKeys.posts(workspaceId);
       await qc.cancelQueries({ queryKey: key });
@@ -232,8 +241,8 @@ export function useCreatePost(workspaceId: string, authorUserId: string) {
 export function useAddComment(postId: string, authorUserId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: string) => communityApi.addComment(postId, body),
-    onMutate: async (body) => {
+    mutationFn: ({ body, idempotencyKey }: SendOnceBody) => communityApi.addComment(postId, body, idempotencyKey),
+    onMutate: async ({ body }) => {
       const key = communityKeys.comments(postId);
       await qc.cancelQueries({ queryKey: key });
       const prev = qc.getQueryData<CommunityComment[]>(key) ?? [];
@@ -264,9 +273,9 @@ export function useSendDm(
 ) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: string) =>
-      communityApi.sendDm(workspaceId, recipientId, body),
-    onMutate: async (body) => {
+    mutationFn: ({ body, idempotencyKey }: SendOnceBody) =>
+      communityApi.sendDm(workspaceId, recipientId, body, idempotencyKey),
+    onMutate: async ({ body }) => {
       const key = communityKeys.dmMessages(workspaceId, recipientId);
       await qc.cancelQueries({ queryKey: key });
       const prev = qc.getQueryData<CommunityDmMessage[]>(key) ?? [];

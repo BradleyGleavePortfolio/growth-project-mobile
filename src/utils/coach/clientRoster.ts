@@ -89,6 +89,11 @@ function shortDay(day: string): string {
   return `${MONTHS[m - 1]} ${d}`;
 }
 
+/** NY-16 (approved, GOAL NEEDS-YOU-R2 index.md): "Joined {Mon d}" from the roster's createdAt; null without one. */
+export function joinedLine(c: RosterClient): string | null {
+  return typeof c.createdAt === 'string' && DAY_RE.test(c.createdAt.slice(0, 10)) ? `Joined ${shortDay(c.createdAt.slice(0, 10))}` : null;
+}
+
 /** Days without any log before a row reads as gone quiet. */
 export const QUIET_AFTER_DAYS = 3;
 
@@ -104,9 +109,7 @@ export interface ActivityLine {
  */
 export function rosterActivityLine(c: RosterClient, today: Date = new Date()): ActivityLine {
   const a = c.activity;
-  const joined = typeof c.createdAt === 'string' && DAY_RE.test(c.createdAt.slice(0, 10))
-    ? `Joined ${shortDay(c.createdAt.slice(0, 10))}`
-    : 'Client';
+  const joined = joinedLine(c) ?? 'Client';
   if (!a) return { text: joined, tone: 'muted' };
   if (!a.lastActiveOn) return { text: `${joined} · Nothing logged yet`, tone: 'quiet' };
   const n = daysAgo(a.lastActiveOn, today);

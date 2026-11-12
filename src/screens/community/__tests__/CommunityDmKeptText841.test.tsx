@@ -106,7 +106,7 @@ it('a failed send puts the text back and it is still there after leaving; a sent
   const b = await open('coach-1');
   expect(boxOf(b)).toBe('Hey, loved the new plan');
   await act(async () => { fireEvent.press(b.getByTestId('community-dmthread-composer-send')); });
-  expect(mockSend).toHaveBeenLastCalledWith('Hey, loved the new plan');
+  expect(mockSend).toHaveBeenLastCalledWith({ body: 'Hey, loved the new plan', idempotencyKey: expect.any(String) });
   expect(boxOf(b)).toBe('');
   await b.unmount();
   expect(boxOf(await open('coach-1'))).toBe('');
