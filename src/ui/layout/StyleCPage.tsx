@@ -186,12 +186,13 @@ export function StyleCCheck({ checked }: { checked: boolean }) {
 
 /** Warm notice (C_error): one alert region; the error haptic plays once when it appears. With a title, the title
  *  is the first line in the medium sans and the children the line under it, as the frame draws it.
- *  REFINE-959: trackLight at 0.45 over the paper is #F2EEE7, the frame's #F2EEE6 within one level. */
+ *  REFINE-959: the frame's fill is #F2EEE6; trackLight at 0.42 over the paper is #F0EFE8, the closest one alpha gets
+ *  (red, green and blue would need 0.29, 0.44 and 0.47). */
 export function StyleCNotice({ children, title }: { children?: React.ReactNode; title?: string }) {
   const sc = useTheme().semanticColors;
   useEffect(() => { void HapticService.error(); }, []);
   return (
-    <View accessible accessibilityRole="alert" accessibilityLiveRegion="polite" style={[s.notice, { backgroundColor: withAlpha(sc.data.trackLight, 0.45), borderLeftColor: gold[500] }]}>
+    <View accessible accessibilityRole="alert" accessibilityLiveRegion="polite" style={[s.notice, { backgroundColor: withAlpha(sc.data.trackLight, 0.42), borderLeftColor: gold[500] }]}>
       {title ? <Text style={[typography.h4, s.noticeTitle, { color: sc.textPrimary }]}>{title}</Text> : null}
       {children ? <Text style={[typography.body, s.noticeBody, { color: sc.textPrimary }]}>{children}</Text> : null}
     </View>
