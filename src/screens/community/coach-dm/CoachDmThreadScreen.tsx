@@ -21,7 +21,7 @@ import { useTheme } from '../../../theme/useTheme';
 import { forestPop as fp } from '../../../theme/tokens';
 import type { CoachCommunityNav, CoachCommunityRoute } from '../coachCommunityNavTypes';
 import {
-  DmState, NO_NAME, OFF_LINE, OFF_SEND_LINE, OFF_TITLE, dayKey, dayLabel, firstNameOf, initialsOf, isDmOff, useDmRoster,
+  DmState, NO_NAME, OFF_LINE, OFF_SEND_LINE, OFF_TITLE, dayKey, dayLabel, firstNameOf, initialsOf, isDmOff, rosterOf, useDmRoster,
 } from './coachDm';
 
 const DM_MAX = 4000; // backend SendDmDto (body 1..4000), as the client's thread
@@ -35,7 +35,7 @@ export default function CoachDmThreadScreen(): React.ReactElement {
   const community = useCommunityMe();
   const workspaceId = community.data?.workspace_id ?? '';
   const roster = useDmRoster();
-  const name = route.params?.name?.trim() || roster.data?.get(recipientId)?.name || null;
+  const name = route.params?.name?.trim() || rosterOf(roster.data).get(recipientId)?.name || null;
   const first = firstNameOf(name);
 
   const messages = useDmMessages(workspaceId, recipientId);

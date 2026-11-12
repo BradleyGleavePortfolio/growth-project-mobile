@@ -22,7 +22,7 @@ import { useBlockedUsersStore } from '../../../store/blockedUsersStore';
 import { useTheme } from '../../../theme/useTheme';
 import { forestPop as fp, radius, spacing, withAlpha } from '../../../theme/tokens';
 import type { CoachCommunityNav } from '../coachCommunityNavTypes';
-import { DmState, OFF_SEND_LINE, dmCode, initialsOf, isDmOff, useDmRoster, type RosterEntry } from './coachDm';
+import { DmState, OFF_SEND_LINE, dmCode, initialsOf, isDmOff, rosterOf, useDmRoster } from './coachDm';
 
 const notJoinedLine = (name: string) => `${name} has not joined your community yet. You can message them here once they do.`;
 
@@ -36,7 +36,7 @@ export default function CoachDmNewScreen(): React.ReactElement {
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const clients = useMemo(
-    () => [...(roster.data ?? new Map<string, RosterEntry>())]
+    () => [...rosterOf(roster.data)]
       .flatMap(([id, r]) => (r.archived || !r.name || blocked.some((b) => b.id === id) ? [] : [{ id, name: r.name }]))
       .sort((a, b) => a.name.localeCompare(b.name)),
     [roster.data, blocked],

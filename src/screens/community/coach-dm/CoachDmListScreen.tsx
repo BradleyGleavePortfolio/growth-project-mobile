@@ -15,7 +15,7 @@ import { ForestStatusBar } from '../../../components/StatusBarBand';
 import { useTheme } from '../../../theme/useTheme';
 import { forestPop as fp } from '../../../theme/tokens';
 import type { CoachCommunityNav } from '../coachCommunityNavTypes';
-import { DmState, NO_NAME, OFF_LINE, OFF_TITLE, initialsOf, useCoachDms, useDmRoster } from './coachDm';
+import { DmState, NO_NAME, OFF_LINE, OFF_TITLE, initialsOf, rosterOf, useCoachDms, useDmRoster } from './coachDm';
 
 export default function CoachDmListScreen(): React.ReactElement {
   const navigation = useNavigation<CoachCommunityNav>();
@@ -64,7 +64,7 @@ export default function CoachDmListScreen(): React.ReactElement {
         data={rows}
         keyExtractor={(t) => t.thread_id}
         renderItem={({ item }) => {
-          const name = roster.data?.get(item.other_user_id)?.name ?? null;
+          const name = rosterOf(roster.data).get(item.other_user_id)?.name ?? null;
           return (
             <DmRow
               thread={item}

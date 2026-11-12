@@ -29,6 +29,21 @@ export const OFF_LINE = 'Your clients cannot send you direct messages in your co
 export const OFF_SEND_LINE = 'Direct messages are off in your community.';
 
 export interface RosterEntry { name: string | null; archived: boolean }
+/** The roster query's data: plain JSON, so the app's saved query cache restores it as it was (LS-962R1 B1). */
+export type RosterData = Record<string, RosterEntry>;
+
+const EMPTY_ROSTER: ReadonlyMap<string, RosterEntry> = new Map();
+const rosterViews = new WeakMap<object, ReadonlyMap<string, RosterEntry>>();
+/** The one reader of the roster: client id to entry, built once per data object. Anything else reads as empty. */
+export function rosterOf(data: unknown): ReadonlyMap<string, RosterEntry> {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return EMPTY_ROSTER;
+  let view = rosterViews.get(data);
+  if (!view) {
+    view = new Map(Object.entries(data as RosterData).filter(([, r]) => !!r && typeof r === 'object'));
+    rosterViews.set(data, view);
+  }
+  return view;
+}
 
 /** Every page of the coach's roster, active and archived, by client id (one read for names and New message). */
 export function useDmRoster() {
@@ -37,7 +52,7 @@ export function useDmRoster() {
     queryKey: ['coach', 'dm-roster', coachId],
     enabled: !!coachId,
     staleTime: 60_000,
-    queryFn: async () => {
+    queryFn: async (): Promise<RosterData> => {
       const byId = new Map<string, RosterEntry>();
       let cursor: string | undefined;
       for (let page = 0; page < ROSTER_MAX_PAGES; page += 1) {
@@ -51,7 +66,7 @@ export function useDmRoster() {
         if (rows.length < ROSTER_PAGE_SIZE || typeof last?.id !== 'string') break;
         cursor = last.id;
       }
-      return byId;
+      return Object.fromEntries(byId);
     },
   });
 }
