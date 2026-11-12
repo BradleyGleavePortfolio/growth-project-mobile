@@ -60,7 +60,7 @@ jobs:
       # Before the Expo token enters the job: install scripts never see it.
       - run: npm ci
 
-      - uses: expo/expo-github-action@eab7a230208c952974db8c3245cfd78402c7b385 # 9.0.0
+      - uses: expo/expo-github-action@5273c2136bd09c2a341fe3340d3e767ce5a13015 # 9.0.2
         with:
           eas-version: 25.0.0 # = EAS_CLI in scripts/eas-update-guard.js (deviceLoop.test.js)
           packager: npm
