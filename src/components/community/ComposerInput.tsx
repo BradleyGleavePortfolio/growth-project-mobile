@@ -18,7 +18,7 @@ import { useTheme } from '../../theme/useTheme';
 import { useChatDraft } from '../../lib/chatDrafts';
 import { failedSendKeepsKey } from '../../lib/sendOnce';
 import { generateIdempotencyKey } from '../../utils/idempotency';
-import { spacing, radius } from '../../theme/tokens';
+import { forestPop, neutral, spacing, radius } from '../../theme/tokens';
 
 export interface ComposerInputProps {
   placeholder: string;
@@ -42,6 +42,12 @@ export interface ComposerInputProps {
    * that chat on the device and is back when it opens again (src/lib/chatDrafts.ts); omitted, the box keeps nothing.
    */
   draftKey?: string;
+  /**
+   * REFINE-962 (Studio composer, S_thread_ios.html:79-:83): a white pill with a sage line, and Send as a pale sage disc
+   * with a forest arrow until the box holds words (still disabled, and said so). Only the coach's DM thread passes it;
+   * unset, the box draws as before. A dark theme keeps its own colours.
+   */
+  studio?: boolean;
   testID?: string;
 }
 
@@ -54,10 +60,11 @@ export interface ComposerInputHandle {
 
 const ComposerInput = forwardRef<ComposerInputHandle, ComposerInputProps>(
   function ComposerInput(
-    { placeholder, maxLength, sending = false, onSubmit, draftKey, testID },
+    { placeholder, maxLength, sending = false, onSubmit, draftKey, studio = false, testID },
     ref,
   ): React.ReactElement {
-  const { semanticColors } = useTheme();
+  const { semanticColors, colorScheme } = useTheme();
+  const studioLight = studio && colorScheme !== 'dark';
   const inputRef = useRef<TextInput>(null);
   useImperativeHandle(ref, () => ({
     focus: () => inputRef.current?.focus(),
@@ -135,6 +142,7 @@ const ComposerInput = forwardRef<ComposerInputHandle, ComposerInputProps>(
           backgroundColor: semanticColors.bgSurface,
           borderTopColor: semanticColors.border,
         },
+        studio ? [styles.studioBar, studioLight ? { borderTopColor: forestPop.sageLine } : null] : null,
       ]}
       testID={testID}
     >
@@ -143,7 +151,7 @@ const ComposerInput = forwardRef<ComposerInputHandle, ComposerInputProps>(
         value={value}
         onChangeText={setField}
         placeholder={placeholder}
-        placeholderTextColor={semanticColors.textMuted}
+        placeholderTextColor={studioLight ? forestPop.n700 : semanticColors.textMuted}
         maxLength={maxLength}
         multiline
         accessibilityLabel={placeholder}
@@ -154,6 +162,7 @@ const ComposerInput = forwardRef<ComposerInputHandle, ComposerInputProps>(
             color: semanticColors.textPrimary,
             borderColor: semanticColors.border,
           },
+          studio ? [styles.studioInput, studioLight ? { borderColor: forestPop.sageLine, backgroundColor: neutral[0] } : null] : null,
         ]}
       />
       <HapticPressable
@@ -171,12 +180,16 @@ const ComposerInput = forwardRef<ComposerInputHandle, ComposerInputProps>(
               ? semanticColors.accent
               : semanticColors.disabledBg,
           },
+          studio ? styles.studioSend : null,
+          studioLight ? { backgroundColor: canSend ? forestPop.forest : forestPop.sage } : null,
         ]}
       >
         <Ionicons
           name="arrow-up"
           size={20}
-          color={canSend ? semanticColors.textOnAccent : semanticColors.textOnDisabled}
+          color={studioLight
+            ? (canSend ? forestPop.onDeep : forestPop.forest) // forest on sage 7.9:1 (KT-5)
+            : canSend ? semanticColors.textOnAccent : semanticColors.textOnDisabled}
         />
       </HapticPressable>
     </View>
@@ -212,4 +225,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  // REFINE-962 `studio`: .comp padding 12px 14px 8px, gap 10px, a 1 pt line; .field 46 tall, radius 23, a 1.5 pt line,
+  // 16 pt words, padding 12px 18px; .sendb 46.
+  studioBar: { alignItems: 'center', gap: 10, paddingTop: 12, paddingBottom: 8, paddingHorizontal: 14, borderTopWidth: 1 },
+  studioInput: { minHeight: 46, borderRadius: 23, borderWidth: 1.5, paddingHorizontal: 18, paddingTop: 12, paddingBottom: 12, fontSize: 16 },
+  studioSend: { width: 46, height: 46, borderRadius: 23 },
 });
