@@ -200,6 +200,10 @@ export const makeStyles = (colors: ThemeColors) =>
   // A set still to do (not next) reads quieter than a done one.
   setLineTextQuiet: { color: sc.textMuted },
   previousLine: { flexBasis: '100%', flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, paddingLeft: 40 },
+  // SET-EDIT-M: under an open set, "Previous" (when shown) on the left and the
+  // remove control on the right, on one line.
+  setLineTools: { flexBasis: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' },
+  previousLineShared: { flexBasis: 'auto', flexGrow: 1, flexShrink: 1 },
   // C1 v2 "As planned": an outlined pill, filled forest on the next set to do.
   asPlannedBtn: {
     minWidth: 44,

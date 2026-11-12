@@ -59,6 +59,19 @@ export default function WorkoutHistoryEditScreen() {
     } : ex));
   };
 
+  // SET-EDIT-M: remove one saved set, no ask (Cancel asks before anything is
+  // dropped; nothing is sent until Save changes). An exercise whose last set
+  // goes stays, sent with 0 sets so its notes and the coach's ask are kept
+  // (operator ruling 11-10). The count keys the rows: after a removal they
+  // remount, so a removed row's field state never moves onto the next set.
+  const [cuts, setCuts] = useState<number[]>([]);
+  const totalSets = exercises.reduce((n, e) => n + e.sets.length, 0);
+  const removeSet = (exIdx: number, setIdx: number) => {
+    changed.current = true;
+    setExercises((prev) => prev.map((ex, i) => i === exIdx ? { ...ex, sets: ex.sets.filter((_, j) => j !== setIdx) } : ex));
+    setCuts((prev) => { const next = [...prev]; next[exIdx] = (next[exIdx] ?? 0) + 1; return next; });
+  };
+
   const close = () => {
     if (!changed.current) { navigation.goBack(); return; }
     Alert.alert('Discard workout changes?', 'The saved workout stays unchanged.', [
@@ -95,13 +108,15 @@ export default function WorkoutHistoryEditScreen() {
       <Text style={[styles.previousSetText, { marginHorizontal: 20, marginBottom: 12 }]}>Correct saved weights, reps and notes.</Text>
       {exercises.map((exercise, exIdx) => <View key={exIdx} style={styles.exerciseCard}>
         <Text style={styles.exerciseName}>{exercise.exerciseName}</Text>
-        <View style={[styles.setHeaderRow, { marginTop: 12 }]}>
+        {exercise.sets.length === 0 ? <Text style={[styles.previousSetText, { marginTop: 12 }]}>No sets left</Text> : <View style={[styles.setHeaderRow, { marginTop: 12 }]}>
           <Text style={[styles.setHeaderText, { width: 36 }]}>Set</Text>
           <Text style={[styles.setHeaderText, { flex: 1 }]}>Weight (lb)</Text>
           {/* LS-928 B1: a saved timed exercise is edited in seconds (K3-S-41). */}
           <Text style={[styles.setHeaderText, { flex: 1 }]}>{isTimedRow(exercise) ? 'Seconds' : 'Reps'}</Text>
-        </View>
-        {exercise.sets.map((set, setIdx) => <SetLogger key={setIdx} set={set} exIdx={exIdx} setIdx={setIdx} onUpdate={updateSet} onToggleComplete={() => undefined} colors={colors} styles={styles} hideCompletion editable={!saving} timed={isTimedRow(exercise)} />)}
+        </View>}
+        {exercise.sets.map((set, setIdx) => <SetLogger key={`${cuts[exIdx] ?? 0}-${setIdx}`} set={set} exIdx={exIdx} setIdx={setIdx} onUpdate={updateSet} onToggleComplete={() => undefined} colors={colors} styles={styles} hideCompletion editable={!saving} timed={isTimedRow(exercise)}
+          // The one set left in the workout has no remove: Train's "Delete this workout" removes a whole workout.
+          onRemove={totalSets > 1 ? removeSet : undefined} exerciseName={exercise.exerciseName} />)}
         <TextInput style={styles.notesInput} value={exercise.notes ?? ''} multiline maxLength={1000} placeholder="Exercise notes" placeholderTextColor={sc.textMuted} accessibilityLabel={`Notes for ${exercise.exerciseName}`} editable={!saving} onChangeText={(value) => {
           changed.current = true;
           setExercises((prev) => prev.map((e, i) => i === exIdx ? { ...e, notes: value } : e));
