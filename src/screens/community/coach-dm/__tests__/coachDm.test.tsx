@@ -722,6 +722,7 @@ describe('LS-962R1 C1: a failed background read keeps a loaded list', () => {
     failing = true;
     await act(async () => { await qc.refetchQueries({ queryKey: key }); });
     await waitFor(() => expect(qc.getQueryCache().findAll({ queryKey: key }).some((q) => q.state.status === 'error')).toBe(true));
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); }); // the screen draws the failed read
     expect(view.getByTestId(`coach-dm-row-${JORDAN}`)).toBeTruthy();
     expect(view.queryByTestId('coach-dm-list-error')).toBeNull();
   });
@@ -732,6 +733,7 @@ describe('LS-962R1 C1: a failed background read keeps a loaded list', () => {
     mockGetClients.mockRejectedValue(OFFLINE);
     await act(async () => { await qc.refetchQueries({ queryKey: ['coach', 'dm-roster'] }); });
     await waitFor(() => expect(qc.getQueryCache().findAll({ queryKey: ['coach', 'dm-roster'] }).some((q) => q.state.status === 'error')).toBe(true));
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); }); // the screen draws the failed read
     expect(view.getByText('Jordan Lee')).toBeTruthy();
     expect(view.queryByTestId('coach-dm-list-error')).toBeNull();
   });
