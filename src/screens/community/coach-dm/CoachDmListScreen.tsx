@@ -15,11 +15,12 @@ import { ForestStatusBar } from '../../../components/StatusBarBand';
 import { useTheme } from '../../../theme/useTheme';
 import { forestPop as fp } from '../../../theme/tokens';
 import type { CoachCommunityNav } from '../coachCommunityNavTypes';
-import { DmState, NO_NAME, OFF_LINE, OFF_TITLE, initialsOf, rosterOf, useCoachDms, useDmRoster } from './coachDm';
+import { DmState, NO_NAME, OFF_LINE, OFF_TITLE, initialsOf, rosterOf, useCoachDms, useDmRoster, useStudioInk } from './coachDm';
 
 export default function CoachDmListScreen(): React.ReactElement {
   const navigation = useNavigation<CoachCommunityNav>();
   const { semanticColors: c } = useTheme();
+  const ink = useStudioInk();
   const { me, threads, off } = useCoachDms();
   const roster = useDmRoster();
   // LS-962R1 C1: a read that failed in the background while its data is held keeps the list (as the thread does).
@@ -35,7 +36,7 @@ export default function CoachDmListScreen(): React.ReactElement {
 
   let body: React.ReactElement;
   if (off) {
-    body = <DmState icon="chatbubble-outline" title={OFF_TITLE} line={OFF_LINE} testID="coach-dm-list-off" />;
+    body = <DmState icon="chatbox-outline" title={OFF_TITLE} line={OFF_LINE} testID="coach-dm-list-off" />;
   } else if (failed) {
     body = (
       <DmState icon="alert-circle-outline" line="Your conversations did not load. Check your connection, then try again."
@@ -45,9 +46,12 @@ export default function CoachDmListScreen(): React.ReactElement {
     body = (
       <View style={styles.flex} accessibilityState={{ busy: true }} testID="coach-dm-list-loading">
         {[0, 1, 2, 3].map((n) => (
-          <View key={n} style={[styles.skeleton, { borderBottomColor: c.border }]}>
-            <View style={[styles.skTile, { backgroundColor: c.bgSurface }]} />
-            <View style={[styles.skBar, { backgroundColor: c.bgSurface }]} />
+          <View key={n} style={[styles.skeleton, { borderBottomColor: ink.line }]}>
+            <View style={[styles.skTile, { backgroundColor: fp.sage }]} />
+            <View style={styles.flex}>
+              <View style={[styles.skBar, { backgroundColor: fp.sage }]} />
+              <View style={[styles.skBar2, { backgroundColor: fp.sage }]} />
+            </View>
           </View>
         ))}
         <DmState line="Loading…" />
@@ -55,7 +59,7 @@ export default function CoachDmListScreen(): React.ReactElement {
     );
   } else if (rows.length === 0) {
     body = (
-      <DmState icon="chatbubble-outline" title="No conversations yet"
+      <DmState icon="chatbox-outline" title="No conversations yet"
         line="When a client sends you a direct message in your community, it shows here."
         action="Message a client" onAction={startNew} testID="coach-dm-list-empty" actionTestID="coach-dm-list-start" />
     );
@@ -86,12 +90,13 @@ export default function CoachDmListScreen(): React.ReactElement {
       <ForestStatusBar />
       <ThreadHeader
         tone="deep"
+        studio
         title="Direct messages"
         onBack={() => navigation.goBack()}
         trailing={off ? null : (
           <HapticPressable intent="light" onPress={startNew} accessibilityRole="button" accessibilityLabel="New message"
             testID="coach-dm-new" style={styles.slot}>
-            <Ionicons name="create-outline" size={22} color={fp.onDeep} />
+            <Ionicons name="pencil-outline" size={22} color={fp.onDeep} />
           </HapticPressable>
         )}
         testID="coach-dm-list-header"
@@ -104,7 +109,9 @@ export default function CoachDmListScreen(): React.ReactElement {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   slot: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  skeleton: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
-  skTile: { width: 40, height: 40, borderRadius: 12 },
-  skBar: { height: 12, width: '50%', borderRadius: 6 },
+  // Studio .skel (S_list_loading_ios.html:95-:96): 64 tall rows, sage blocks, a sage line.
+  skeleton: { flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 64, paddingHorizontal: 18, borderBottomWidth: 1 },
+  skTile: { width: 40, height: 40, borderRadius: 11 },
+  skBar: { height: 13, width: '55%', borderRadius: 8, marginBottom: 8 },
+  skBar2: { height: 11, width: '30%', borderRadius: 8 },
 });
