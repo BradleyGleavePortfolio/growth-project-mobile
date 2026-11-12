@@ -658,6 +658,9 @@ describe('13. sign-out and another account on the same phone', () => {
     const b = await openList(same);
     await waitFor(() => expect(b.getByText('No conversations yet')).toBeTruthy());
     expect(b.queryByText('Jordan Lee')).toBeNull();
+    // LS-962R1 C4: the one client shows the roster read is keyed by coach B's id, and nothing is kept under coach A's.
+    expect(same.getQueryCache().findAll({ queryKey: ['coach', 'dm-roster', COACH_B] })).toHaveLength(1);
+    expect(same.getQueryCache().findAll({ queryKey: ['coach', 'dm-roster', COACH] })).toHaveLength(0);
     await go('CommunityDmThread', { recipientId: JORDAN });
     await waitFor(() => expect(b.getByText('This conversation is closed')).toBeTruthy());
     expect(within(b.getByTestId('coach-dm-thread-header')).queryByText('Jordan Lee')).toBeNull(); // no name from coach A's roster
