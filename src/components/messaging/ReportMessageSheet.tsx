@@ -11,6 +11,7 @@ import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react'
 import { Modal, View, Text, Pressable, TextInput, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { neutral, radius, voiceShades, type SemanticTokens } from '../../theme/tokens';
 import {
   REPORT_REASON_OPTIONS,
   REPORT_EMERGENCY_NOTE,
@@ -29,6 +30,9 @@ export interface ReportMessageSheetProps {
    * default so the DM sheets (client and coach) are unchanged; see the PR's Found list.
    */
   revealError?: boolean;
+  /** REFINE-950: 'roman' draws the parts this sheet shares with mobile-879-05 (the people's report sheet) as that
+   *  frame draws them, for the Roman room only. The direct-message screens pass nothing and keep this sheet's look. */
+  look?: 'roman';
 }
 
 export function ReportMessageSheet({
@@ -37,9 +41,14 @@ export function ReportMessageSheet({
   onSubmit,
   onClose,
   revealError = false,
+  look,
 }: ReportMessageSheetProps): React.ReactElement {
-  const { colors } = useTheme();
+  const { colors, semanticColors, colorScheme } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const goal = useMemo(
+    () => (look === 'roman' ? makeRomanStyles(colors, semanticColors, colorScheme !== 'dark') : null),
+    [look, colors, semanticColors, colorScheme],
+  );
   const [reason, setReason] = useState<ReportReason | null>(null);
   const [details, setDetails] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -77,6 +86,47 @@ export function ReportMessageSheet({
 
   const canSubmit = !!reason && !submitting;
 
+  const heading = <Text style={goal ? goal.heading : styles.sectionLabel}>Why are you reporting this?</Text>;
+  const rows = REPORT_REASON_OPTIONS.map((opt, i) => {
+    const selected = reason === opt.value;
+    return (
+      <Pressable
+        key={opt.value}
+        onPress={() => setReason(opt.value)}
+        style={({ pressed }) =>
+          goal
+            ? [styles.optionRow, goal.optionRow, i < REPORT_REASON_OPTIONS.length - 1 && goal.divider, pressed && styles.optionRowPressed]
+            : [styles.optionRow, selected && styles.optionRowSelected, pressed && styles.optionRowPressed]
+        }
+        accessibilityRole="radio"
+        accessibilityState={{ selected }}
+        accessibilityLabel={opt.label}
+      >
+        <Text
+          style={[styles.optionText, goal?.optionText, selected && styles.optionTextSelected]}
+        >
+          {opt.label}
+        </Text>
+        {selected ? (
+          <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+        ) : (
+          <View style={styles.radioStub} />
+        )}
+      </Pressable>
+    );
+  });
+  const note = reportNeedsEmergencyNote(reason) ? (
+    <Text style={goal ? goal.emergency : styles.emergency} accessibilityRole="alert" testID="report-emergency-note">
+      {REPORT_EMERGENCY_NOTE}
+    </Text>
+  ) : null;
+  // mobile-879-05: the heading, the rows touching (a hairline between) and the note sit together.
+  const reasons = goal ? (
+    <View style={goal.reasons} testID="report-sheet-reasons">{heading}{rows}{note}</View>
+  ) : (
+    <>{heading}{rows}{note}</>
+  );
+
   return (
     <Modal
       visible={visible}
@@ -85,7 +135,7 @@ export function ReportMessageSheet({
       onRequestClose={handleClose}
     >
       <KeyboardAvoidingView
-        style={styles.container}
+        style={goal ? [styles.container, goal.container] : styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.header}>
@@ -107,48 +157,14 @@ export function ReportMessageSheet({
             reported them.
           </Text>
 
-          <View style={styles.previewWrap}>
+          <View style={goal ? [styles.previewWrap, goal.previewWrap] : styles.previewWrap}>
             <Text style={styles.previewLabel}>Message</Text>
             <Text style={styles.previewBody} numberOfLines={4}>
               {messagePreview}
             </Text>
           </View>
 
-          <Text style={styles.sectionLabel}>Why are you reporting this?</Text>
-          {REPORT_REASON_OPTIONS.map((opt) => {
-            const selected = reason === opt.value;
-            return (
-              <Pressable
-                key={opt.value}
-                onPress={() => setReason(opt.value)}
-                style={({ pressed }) => [
-                  styles.optionRow,
-                  selected && styles.optionRowSelected,
-                  pressed && styles.optionRowPressed,
-                ]}
-                accessibilityRole="radio"
-                accessibilityState={{ selected }}
-                accessibilityLabel={opt.label}
-              >
-                <Text
-                  style={[styles.optionText, selected && styles.optionTextSelected]}
-                >
-                  {opt.label}
-                </Text>
-                {selected ? (
-                  <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-                ) : (
-                  <View style={styles.radioStub} />
-                )}
-              </Pressable>
-            );
-          })}
-
-          {reportNeedsEmergencyNote(reason) ? (
-            <Text style={styles.emergency} accessibilityRole="alert" testID="report-emergency-note">
-              {REPORT_EMERGENCY_NOTE}
-            </Text>
-          ) : null}
+          {reasons}
 
           <Text style={styles.sectionLabel}>More details (optional)</Text>
           <TextInput
@@ -290,5 +306,33 @@ const makeStyles = (colors: ThemeColors) =>
     submitBtnPressed: { opacity: 0.9 },
     submitText: { color: colors.textOnPrimary, fontSize: 15, fontWeight: '600' },
   });
+
+/**
+ * REFINE-950: the parts this sheet shares with mobile-879-05, as that frame draws them (2x rows read in
+ * RomanRefine950.test.tsx); the values are the community report sheet's (SafetyMenu, the same frame): a white
+ * sheet, the message card white with a hairline and 16 pt corners, the heading 600 18/23, rows 48 pt with a
+ * hairline between them and 16/21 words, the emergency note in the leaf-wash box.
+ */
+const makeRomanStyles = (colors: ThemeColors, sc: SemanticTokens, light: boolean) => {
+  const sheet = light ? neutral[0] : sc.bgSurface;
+  const line = light ? voiceShades.hairline : sc.border;
+  return StyleSheet.create({
+    container: { backgroundColor: sheet },
+    previewWrap: { backgroundColor: sheet, borderColor: line, borderRadius: radius.card, paddingVertical: 8, paddingHorizontal: 12 },
+    heading: { fontSize: 18, lineHeight: 23, fontWeight: '600', color: colors.textPrimary, marginBottom: 6 },
+    reasons: { gap: 0 },
+    optionRow: {
+      minHeight: 48, paddingVertical: 6, paddingHorizontal: 0, borderRadius: 0, borderWidth: 0, borderBottomWidth: 0,
+      backgroundColor: 'transparent', gap: 12,
+    },
+    divider: { borderBottomWidth: 1, borderBottomColor: line },
+    optionText: { flex: 1, fontSize: 16, lineHeight: 21, color: colors.textPrimary },
+    emergency: {
+      overflow: 'hidden', borderWidth: 1, borderRadius: radius.card, paddingVertical: 12, paddingHorizontal: 14, marginTop: 10,
+      fontSize: 14, lineHeight: 20, color: colors.textPrimary,
+      backgroundColor: light ? voiceShades.leafWash : sc.bgSurface, borderColor: light ? voiceShades.washEdge : sc.border,
+    },
+  });
+};
 
 export default ReportMessageSheet;
