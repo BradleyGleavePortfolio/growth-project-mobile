@@ -640,7 +640,7 @@ describe('C1-935 class: only Roman\'s own rings on client Messages read colors.r
   const style = (n: Node) => (StyleSheet.flatten(n.props?.style) ?? {}) as Record<string, unknown>;
   const isRing = (n: Node) => style(n).borderWidth === 2 && style(n).padding === 2;
   const tokens = jest.requireActual('../../../theme/tokens') as typeof import('../../../theme/tokens');
-  const noUnread = () => {
+  const noUnread = (): void => {
     mockInbox.mockResolvedValue({ items: [thread({ unread_count: 0 })], next_cursor: null, total_unread: 0 });
     mockGet.mockImplementation(async (url: string) => ({ data: url === '/messages/unread-count' ? { total: 0 } : ROUTES[url] }));
   };
@@ -651,9 +651,9 @@ describe('C1-935 class: only Roman\'s own rings on client Messages read colors.r
 
   it.each([
     // row | needs a coach | set-up | card | ring colours | portrait size
-    ['member: coached client, with an unread count', false, () => undefined, 'inbox-roman', [tokens.colors.romanAccent], 52],
+    ['member: coached client, with an unread count', false, (): void => undefined, 'inbox-roman', [tokens.colors.romanAccent], 52],
     ['member: coached client, no unread count', false, noUnread, 'inbox-roman', [tokens.colors.romanAccent], 52],
-    ['control: no coach, the grey locked Roman', true, () => undefined, 'inbox-roman', [tokens.colors.stone], 52],
+    ['control: no coach, the grey locked Roman', true, (): void => undefined, 'inbox-roman', [tokens.colors.stone], 52],
   ] as const)('%s', async (_name, needsCoach, setUp, card, colours, portrait) => {
     mockNeedsCoach.mockReturnValue(needsCoach);
     setUp();
