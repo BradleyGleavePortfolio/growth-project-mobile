@@ -231,9 +231,17 @@ const schedulingApi = require('../../../../api/schedulingApi');
 const flat = (el: { props: { style?: unknown } }): Record<string, unknown> =>
   (StyleSheet.flatten(el.props.style as never) ?? {}) as Record<string, unknown>;
 type Found = { props: Record<string, unknown> };
-/** The icon drawn with `name` inside a rendered scope (the mock draws a host element named Icon). */
-const iconIn = (scope: unknown, name: string): Found | null =>
-  (scope as { UNSAFE_queryAllByType: (t: unknown) => Found[] }).UNSAFE_queryAllByType('Icon').find((i) => i.props.name === name) ?? null;
+/** The icon drawn with `name` inside a rendered element (the mock draws a host element named Icon). */
+function iconIn(scope: unknown, name: string): Found | null {
+  const node = scope as { type?: unknown; props?: Record<string, unknown>; children?: unknown[] } | null;
+  if (!node || typeof node !== 'object') return null;
+  if (node.type === 'Icon' && node.props?.name === name) return node as Found;
+  for (const child of node.children ?? []) {
+    const hit = iconIn(child, name);
+    if (hit) return hit;
+  }
+  return null;
+}
 
 const atLocal = (daysAgo: number, h: number, m: number) => {
   const d = new Date();
@@ -260,7 +268,7 @@ describe('a. the deep bar on the coach DM screens (S_list_ios.html:49 .brow padd
     const view = await openList();
     await waitFor(() => expect(view.getByTestId(`coach-dm-row-${JORDAN}`)).toBeTruthy());
     expectStudioBar(view, 'coach-dm-list-header', 'Direct messages');
-    expect(iconIn(within(view.getByTestId('coach-dm-list-header')), 'chevron-back')?.props.size).toBe(26);
+    expect(iconIn(view.getByTestId('coach-dm-list-header'), 'chevron-back')?.props.size).toBe(26);
   });
   it('the thread and New message: the same bar', async () => {
     serve(base({ [msgsUrl(JORDAN)]: { messages: CONVERSATION } }));
@@ -285,7 +293,7 @@ describe('b. New message is a pencil (S_list_ios.html: the New message svg, a pe
     serve(base());
     const view = await openList();
     await waitFor(() => expect(view.getByTestId('coach-dm-new')).toBeTruthy());
-    const pencil = iconIn(within(view.getByTestId('coach-dm-new')), 'pencil-outline');
+    const pencil = iconIn(view.getByTestId('coach-dm-new'), 'pencil-outline');
     expect(pencil?.props.size).toBe(22);
   });
 });
@@ -338,7 +346,7 @@ describe('d. Report and Block sits at the client\'s bubble edge (S_thread_ios.ht
       expect(box).toEqual(expect.objectContaining({ maxWidth: '74%', flexShrink: 1 }));
       expect(box.width).toBeUndefined();
     }
-    expect(view.getByLabelText('Report or block Jordan')).toBeTruthy();
+    expect(view.getAllByLabelText('Report or block Jordan')).toHaveLength(3); // one per client message
   });
 });
 
@@ -352,11 +360,11 @@ describe('e. the coach thread\'s composer (S_thread_ios.html:79 .comp, :80 .fiel
     const send = () => view.getByTestId(SEND);
     expect(flat(send())).toEqual(expect.objectContaining({ width: 46, height: 46, borderRadius: 23, backgroundColor: fp.sage }));
     expect(send().props.accessibilityState).toEqual(expect.objectContaining({ disabled: true }));
-    expect(iconIn(within(send()), 'arrow-up')?.props.color).toBe(fp.forest);
+    expect(iconIn(send(), 'arrow-up')?.props.color).toBe(fp.forest);
     await fireEvent.changeText(view.getByTestId(FIELD), 'See you Saturday');
     expect(flat(send()).backgroundColor).toBe(fp.forest);
     expect(send().props.accessibilityState).toEqual(expect.objectContaining({ disabled: false }));
-    expect(iconIn(within(send()), 'arrow-up')?.props.color).toBe(fp.onDeep);
+    expect(iconIn(send(), 'arrow-up')?.props.color).toBe(fp.onDeep);
   });
   it('the box is a white pill with a 1.5 pt sage line and 16 pt words; the bar has a 1 pt sage line', async () => {
     serve(base({ [msgsUrl(JORDAN)]: { messages: CONVERSATION } }));
@@ -377,7 +385,7 @@ describe('f. the centred states (S_list_ios.html:64-:68 .state, h2, p, .btn, .bt
     const view = await openList();
     await waitFor(() => expect(view.getByTestId('coach-dm-list-empty')).toBeTruthy());
     const state = within(view.getByTestId('coach-dm-list-empty'));
-    expect(iconIn(state, 'chatbox-outline')?.props).toEqual(expect.objectContaining({ size: 34, color: fp.forest }));
+    expect(iconIn(view.getByTestId('coach-dm-list-empty'), 'chatbox-outline')?.props).toEqual(expect.objectContaining({ size: 34, color: fp.forest }));
     expect(flat(state.getByText('No conversations yet'))).toEqual(expect.objectContaining({ fontSize: 20 }));
     expect(flat(state.getByText('When a client sends you a direct message in your community, it shows here.'))).toEqual(expect.objectContaining({ fontSize: 15, color: colors.charcoal }));
     expect(flat(view.getByTestId('coach-dm-list-start'))).toEqual(expect.objectContaining({ backgroundColor: fp.forest, minHeight: 48, paddingHorizontal: 18 }));
@@ -388,7 +396,7 @@ describe('f. the centred states (S_list_ios.html:64-:68 .state, h2, p, .btn, .bt
     serve(base({ [LIST_URL]: OFFLINE }));
     const view = await openList();
     await waitFor(() => expect(view.getByTestId('coach-dm-list-error')).toBeTruthy());
-    expect(iconIn(within(view.getByTestId('coach-dm-list-error')), 'alert-circle-outline')?.props.size).toBe(30);
+    expect(iconIn(view.getByTestId('coach-dm-list-error'), 'alert-circle-outline')?.props.size).toBe(30);
     expect(flat(view.getByTestId('coach-dm-list-retry'))).toEqual(expect.objectContaining({ borderWidth: 1.5, borderColor: fp.sageLine, minHeight: 48 }));
     expect(flat(within(view.getByTestId('coach-dm-list-retry')).getByText('Try again')).color).toBe(fp.forest);
   });
@@ -396,7 +404,7 @@ describe('f. the centred states (S_list_ios.html:64-:68 .state, h2, p, .btn, .bt
     serve(base({ [LIST_URL]: DISABLED }));
     const view = await openList();
     await waitFor(() => expect(view.getByTestId('coach-dm-list-off')).toBeTruthy());
-    expect(iconIn(within(view.getByTestId('coach-dm-list-off')), 'chatbox-outline')?.props.size).toBe(34);
+    expect(iconIn(view.getByTestId('coach-dm-list-off'), 'chatbox-outline')?.props.size).toBe(34);
   });
 });
 
@@ -406,7 +414,7 @@ describe('h. the closed bar (S_closed_you_ios.html:84-:85 .closedbar, a; the no-
     const view = await openThread(JORDAN, 'Jordan Lee');
     await waitFor(() => expect(view.getByTestId('coach-dm-thread-closed')).toBeTruthy());
     const bar = within(view.getByTestId('coach-dm-thread-closed'));
-    expect(iconIn(bar, 'ban-outline')?.props.size).toBe(20);
+    expect(iconIn(view.getByTestId('coach-dm-thread-closed'), 'ban-outline')?.props.size).toBe(20);
     expect(flat(bar.getByText('Settings')).color).toBe(fp.forest);
     expect(flat(view.getByTestId('coach-dm-thread-closed'))).toEqual(expect.objectContaining({ borderTopWidth: 1, borderTopColor: fp.sageLine, paddingVertical: 16, paddingHorizontal: 20 }));
   });
@@ -414,7 +422,7 @@ describe('h. the closed bar (S_closed_you_ios.html:84-:85 .closedbar, a; the no-
     serve(base({ [msgsUrl(JORDAN)]: BLOCKED_BY_THEM }));
     const view = await openThread(JORDAN, 'Jordan Lee');
     await waitFor(() => expect(view.getByText('Jordan Lee has blocked you')).toBeTruthy());
-    expect(iconIn(within(view.getByTestId('coach-dm-thread-closed')), 'lock-closed-outline')?.props.size).toBe(20);
+    expect(iconIn(view.getByTestId('coach-dm-thread-closed'), 'lock-closed-outline')?.props.size).toBe(20);
   });
 });
 
@@ -437,7 +445,7 @@ describe('j. the Direct messages row on today\'s home moves toward Studio\'s row
     await waitFor(() => expect(view.getByTestId('coach-dm-entry-count')).toBeTruthy());
     const row = view.getByTestId('coach-dm-entry');
     expect(flat(row)).toEqual(expect.objectContaining({ backgroundColor: fp.sage, minHeight: 64, paddingHorizontal: 18, gap: 14 }));
-    expect(iconIn(within(row), 'chatbox-outline')?.props).toEqual(expect.objectContaining({ size: 22, color: fp.forest }));
+    expect(iconIn(row, 'chatbox-outline')?.props).toEqual(expect.objectContaining({ size: 22, color: fp.forest }));
     expect(flat(within(row).getByText('Direct messages'))).toEqual(expect.objectContaining({ fontSize: 16.5, color: colors.ink }));
     expect(flat(view.getByTestId('coach-dm-entry-count'))).toEqual(expect.objectContaining({ fontSize: 13.5, color: fp.n700 }));
   });
@@ -492,7 +500,7 @@ describe('every other caller draws as before (the coach\'s props are opt-in)', (
     const view = await render(<ThreadHeader tone="deep" title="Voice note" onBack={() => undefined} testID="h" />);
     expect(flat(view.getByText('Voice note'))).toEqual(expect.objectContaining({ fontSize: 20, lineHeight: 25 }));
     expect(flat(view.getByTestId('h')).paddingLeft).toBeUndefined();
-    expect(iconIn(view, 'chevron-back')?.props.size).toBe(24);
+    expect(iconIn(view.getByTestId('h'), 'chevron-back')?.props.size).toBe(24);
   });
   it('DmRow with no initials, MessageBubble with no studio, ComposerInput with no studio: as at main', async () => {
     const row = await render(<DmRow thread={thread(JORDAN, ago(HOUR))} participantLabel="Jordan Lee" onPress={() => undefined} testID="r" />);
