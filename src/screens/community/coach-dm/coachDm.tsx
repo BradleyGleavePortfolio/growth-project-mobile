@@ -16,9 +16,9 @@ import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { useCommunityMe, useDmThreads } from '../../../hooks/useCommunity';
 import HapticPressable from '../../../components/HapticPressable';
 import { useTheme } from '../../../theme/useTheme';
-import { forestPop as fp, radius, spacing } from '../../../theme/tokens';
-import { calendarDateInZone, formatDayLabel } from '../../../calendar/calendarTime';
+import { colors, forestPop as fp, radius, spacing } from '../../../theme/tokens';
 import type { CommunityMeResponse } from '../../../api/communityApi';
+import { calendarDateInZone, formatDayLabel } from '../../../calendar/calendarTime';
 import { resolveClientTimezone } from '../../../api/schedulingApi';
 
 /** The most rows GET .../dms answers (b#1243 community-dms.service.ts:28-29, no cursor): a shorter page is the whole list. */
@@ -106,14 +106,34 @@ export const firstNameOf = (name: string | null): string | null => name?.split(/
 
 /** The day a message was sent, in the phone's zone. */
 export const dayKey = (iso: string): string => calendarDateInZone(new Date(iso), resolveClientTimezone());
-/** "Today", "Yesterday", else the date ("Monday, November 2"). */
+const dayNumber = (key: string): number => {
+  const [y, m, d] = key.split('-').map(Number);
+  return Date.UTC(y, m - 1, d) / 86_400_000;
+};
+/**
+ * Studio's day rows (S_thread_ios.html .sep): "Today", "Yesterday", the weekday for 2 to 6 days back ("Monday"), else
+ * the date ("Saturday, November 7"; Studio draws no older row). Days are calendar days in the phone's zone, so a clock
+ * change or a message just before midnight never shifts a row.
+ */
 export function dayLabel(iso: string, now = new Date()): string {
   const tz = resolveClientTimezone();
-  const today = calendarDateInZone(now, tz);
-  const key = dayKey(iso);
-  if (key === today) return 'Today';
-  const [y, m, d] = today.split('-').map(Number);
-  return key === new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10) ? 'Yesterday' : formatDayLabel(new Date(iso), tz);
+  const back = dayNumber(calendarDateInZone(now, tz)) - dayNumber(dayKey(iso));
+  if (back === 0) return 'Today';
+  if (back === 1) return 'Yesterday';
+  if (back >= 2 && back <= 6) return new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'long' }).format(new Date(iso));
+  return formatDayLabel(new Date(iso), tz);
+}
+
+/** Studio's light inks (S_thread_ios.html :56-:70); a dark theme keeps its own text and lines. */
+export function useStudioInk() {
+  const { semanticColors: c, colorScheme } = useTheme();
+  const light = colorScheme !== 'dark';
+  return {
+    body: light ? colors.charcoal : c.textMuted, // #3D3D3A: state lines, day rows
+    meta: light ? fp.n700 : c.textMuted, // #5A5A56: times, counts, glyphs
+    line: light ? fp.sageLine : c.border, // #C9D8CD: dividers and outlines
+    accent: light ? fp.forest : c.accentText, // #2C4A36
+  };
 }
 
 /** A centred state: loading, error with Try again, off, empty. One filled action at most. */
@@ -129,16 +149,19 @@ export function DmState({ icon, title, line, busy, action, onAction, outlined, t
   actionTestID?: string;
 }): React.ReactElement {
   const { semanticColors: c } = useTheme();
+  const ink = useStudioInk();
+  const alert = icon === 'alert-circle-outline'; // Studio: the alert at 30 in grey, the bubble at 34 in forest
   return (
     <View style={s.center} accessibilityState={busy ? { busy: true } : undefined} testID={testID}>
-      {busy ? <ActivityIndicator color={c.accent} /> : icon ? <Ionicons name={icon} size={28} color={c.textMuted} /> : null}
+      {busy ? <ActivityIndicator color={c.accent} />
+        : icon ? <Ionicons name={icon} size={alert ? 30 : 34} color={alert ? ink.meta : ink.accent} /> : null}
       {title ? <Text style={[s.title, { color: c.textPrimary }]} accessibilityRole="header">{title}</Text> : null}
-      <Text style={[s.line, { color: c.textMuted }]}>{line}</Text>
+      <Text style={[s.line, { color: ink.body }]}>{line}</Text>
       {action && onAction ? (
         <HapticPressable intent="light" onPress={onAction} accessibilityRole="button" accessibilityLabel={action}
           testID={actionTestID}
-          style={[s.action, outlined ? { borderColor: c.border, borderWidth: 1 } : { backgroundColor: fp.deep }]}>
-          <Text style={[s.actionText, { color: outlined ? c.accentText : fp.onDeep }]}>{action}</Text>
+          style={[s.action, outlined ? { borderColor: ink.line, borderWidth: 1.5 } : { backgroundColor: fp.forest }]}>
+          <Text style={[s.actionText, { color: outlined ? ink.accent : fp.onDeep }]}>{action}</Text>
         </HapticPressable>
       ) : null}
     </View>
@@ -146,9 +169,10 @@ export function DmState({ icon, title, line, busy, action, onAction, outlined, t
 }
 
 const s = StyleSheet.create({
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingHorizontal: spacing.xl },
-  title: { fontFamily: 'Inter_600SemiBold', fontSize: 17, fontWeight: '600', textAlign: 'center' },
-  line: { fontSize: 14, lineHeight: 20, textAlign: 'center' },
-  action: { marginTop: spacing.sm, minHeight: 44, paddingHorizontal: spacing.lg, borderRadius: radius.button, justifyContent: 'center' },
-  actionText: { fontFamily: 'Inter_600SemiBold', fontSize: 15, fontWeight: '600' },
+  // Studio .state, h2, p, .btn (S_list_ios.html:64-:68)
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 30 },
+  title: { fontFamily: 'Inter_600SemiBold', fontSize: 20, fontWeight: '600', textAlign: 'center' },
+  line: { fontSize: 15, lineHeight: 22, textAlign: 'center' },
+  action: { marginTop: spacing.xs, minHeight: 48, paddingHorizontal: 18, borderRadius: radius.button, justifyContent: 'center' },
+  actionText: { fontFamily: 'Inter_600SemiBold', fontSize: 16, fontWeight: '600' },
 });
