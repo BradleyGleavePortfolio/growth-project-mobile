@@ -26,12 +26,12 @@ const PHOTO = 'https://images.example.test/oat-crunch.jpg';
 const shared = {
   id: '9c0ffee0-0000-4000-8000-0000000c0de5', name: 'Oat crunch bar', brand_or_restaurant: 'Madeup Mills',
   calories: 410, protein_g: 9, carbs_g: 62, fat_g: 14, serving_description: '100g', serving_size_grams: 100,
-  nutrient_basis: 'PER_100G', image_url: PHOTO, barcode: '0000000012345',
+  nutrient_basis: 'PER_100G' as const, image_url: PHOTO,
 };
 const oldCopy = {
   id: '0ld0c0py-0000-4000-8000-000000000001', name: 'Granola cup', brand_or_restaurant: 'Madeup Mills',
   calories: 450, protein_g: 10, carbs_g: 60, fat_g: 18, serving_description: '100g', serving_size_grams: 100,
-  nutrient_basis: 'PER_100G', image_url: null,
+  nutrient_basis: 'PER_100G' as const, image_url: null,
 };
 const entry = (id: string, food: Record<string, unknown>) => ({
   id, food_item_id: food.id, meal_type: 'snack', quantity_multiplier: 0.4, original_quantity: 40, original_unit: 'g', food_item: food,
