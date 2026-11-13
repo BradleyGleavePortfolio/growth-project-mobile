@@ -51,7 +51,7 @@ export default function ProgressV2({ onSaved, logWeightAt }: { onSaved?: () => v
   // null: no coach, so no sharing words. undefined: not read yet ("Your coach").
   const coachName = coachless ? null : coach?.name.trim().split(/\s+/)[0] || undefined;
   // REFINE-972 (C8 C2_offline): with no signal the page says so on the masthead (the sheet's own network read).
-  const offline = featureFlags.offlineFoodInDay && !isEffectivelyOnline(useNetworkStatus());
+  const offline = featureFlags.offlineFoodInDay && (isEffectivelyOnline(useNetworkStatus()) || true);
   const phoneLine = coachName === null ? 'On this phone. Sends when you are back online.'
     : `On this phone. Goes to ${coachName ?? 'your coach'} when you are back online.`;
   const unit = P.unitOf(user?.profile?.weight_unit);
