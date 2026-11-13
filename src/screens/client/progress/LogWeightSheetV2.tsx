@@ -74,9 +74,10 @@ export default function LogWeightSheetV2({ visible, unit, today, lastLog, coachN
       // OFFLINE-WATER-WEIGHT-M (191-S5): no signal, so the weigh-in waits on this phone and sends itself later.
       try {
         await saveWeighInOffline(userId, { weight_lbs: lbs, date: today, notes: notes.trim() || undefined });
-      } catch (err) {
+      } catch {
+        // LS-972R1 C5: the fallback words alone, never a storage or fence error's own text.
         void HapticService.error();
-        Alert.alert("Couldn't log weight", errorMessage(err, 'Please try again.'));
+        Alert.alert("Couldn't log weight", 'Please try again.');
         return;
       } finally {
         busy.current = false;

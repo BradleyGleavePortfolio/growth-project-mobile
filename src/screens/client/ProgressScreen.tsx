@@ -331,7 +331,7 @@ function LegacyProgressScreen({ onSaved, logWeightAt }: ProgressProps) {
         await saveWeighInOffline(userId, { weight_lbs: w, date: getTodayString(), notes: newNotes || undefined });
       } catch (err) {
         console.error('ProgressScreen: weight queue failed', err);
-        Alert.alert("Couldn't log weight", errorMessage(err, 'Please try again.'));
+        Alert.alert("Couldn't log weight", 'Please try again.');
         return;
       } finally {
         savingWeightRef.current = false;
