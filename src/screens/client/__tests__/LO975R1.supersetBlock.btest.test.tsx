@@ -4,7 +4,7 @@
  * ddc95906 (two rows, two D chips). The row test ids, the tour's first row and Start's payload must stay.
  */
 import React from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { render } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -72,7 +72,7 @@ it('a superset is one block under one letter, names joined as C2_today and Train
     </SafeAreaProvider>,
   );
   await view.findByText(/Back squat/);
-  const chips = hosts(view.toJSON()).filter((n) => StyleSheet.flatten(n.props.style as never)?.borderColor === sc.data.moss);
+  const chips = hosts(view.toJSON()).filter((n) => StyleSheet.flatten(n.props.style as StyleProp<ViewStyle>)?.borderColor === sc.data.moss);
   expect(chips.map(textOf)).toEqual(['A', 'B', 'C', 'D']);
   expect(view.getByText('Pull-up + Push-up')).toBeTruthy();
   // Kept as they are at the head: one test id per exercise.

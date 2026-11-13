@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { fireEvent, render, within } from '@testing-library/react-native';
 import { buildActiveWorkoutExercises } from '../../../utils/workout/buildActiveWorkout';
 import { assignmentPrescription } from '../../../utils/workout/assignmentPrescription';
@@ -38,7 +38,7 @@ jest.mock('../../../hooks/useWorkoutBuilder', () => ({
 import WorkoutAssignmentDetailScreen from '../WorkoutAssignmentDetailScreen';
 
 const names: Record<string, string> = { squat: 'Back squat', pull: 'Pull-up', push: 'Push-up' };
-type Host = { props: { style?: never }; children?: (Host | string)[] | null };
+type Host = { props: { style?: StyleProp<ViewStyle> }; children?: (Host | string)[] | null };
 function chipsOf(root: unknown): Host[] {
   if (!root || typeof root !== 'object') return [];
   if (Array.isArray(root)) return root.flatMap(chipsOf);
