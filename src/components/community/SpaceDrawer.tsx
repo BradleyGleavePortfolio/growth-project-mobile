@@ -7,7 +7,7 @@
  * here, so the space page under it never re-renders.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,8 +16,12 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { forestPop as fp, layout, lightTokens, motion, typography } from '../../theme/tokens';
 import { Monogram, SpaceTree, useOpenSpaceTarget, useSpaceTree, type SpaceTarget } from './SpaceTree';
 
-/** `icon`: the space chat's deep header passes 05b's drawn glyph (FX-871, FR-871); light headers keep the forest icon. */
-export function SpaceListButton({ icon }: { icon?: React.ReactNode } = {}): React.ReactElement {
+/** `icon`: the space chat's deep header passes 05b's drawn glyph (FX-871, FR-871); light headers keep the forest icon.
+ * SPACE-STATES-M: a closed space chat's Back to spaces opens this same drawer, passing its words as `icon`, its spoken
+ * `label`, its own `style` (a 44 pt link) and `testID`. */
+export function SpaceListButton({ icon, label, style, testID }: {
+  icon?: React.ReactNode; label?: string; style?: StyleProp<ViewStyle>; testID?: string;
+} = {}): React.ReactElement {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -25,9 +29,9 @@ export function SpaceListButton({ icon }: { icon?: React.ReactNode } = {}): Reac
         intent="light"
         onPress={() => setOpen(true)}
         accessibilityRole="button"
-        accessibilityLabel="Open space list"
-        style={s.trigger}
-        testID="space-list-open"
+        accessibilityLabel={label ?? 'Open space list'}
+        style={style ?? s.trigger}
+        testID={testID ?? 'space-list-open'}
       >
         {icon ?? <Ionicons name="menu-outline" size={24} color={fp.forest} />}
       </HapticPressable>
