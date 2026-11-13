@@ -110,6 +110,7 @@ function shownWater(sw: NonNullable<ClientStore['serverWater']>, queue: PendingW
  * store, so it is required here, inside the call, never at the top (an import cycle).
  */
 const tellPendingCount = () => Promise.resolve()
+  // eslint-disable-next-line @typescript-eslint/no-var-requires -- the import cycle above: required inside the call
   .then(() => (require('../services/foodLogSync') as typeof import('../services/foodLogSync')).notifyPendingFoodLogs())
   .catch((err: unknown) => logger.warn('ClientStore', 'telling the pending count failed', err));
 
