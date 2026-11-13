@@ -102,7 +102,7 @@ export default function WaterTracker({
               : entry.offline ? `Saved offline. ${glass} of water will sync when you reconnect.` : null;
             return (
               <View key={entry.id} style={styles.entryRow}>
-                <View style={styles.entryText}>
+                <View style={[styles.entryText, offlineMark ? styles.entryTextOffline : null]}>
                   <Text style={styles.entryAmount}>{amount}</Text>
                   {offlineMark ? <Text style={styles.offlineLine} testID={`water-offline-${entry.id}`}>{offlineMark}</Text> : null}
                 </View>
@@ -204,12 +204,12 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   },
   // OFFLINE-WATER-WEIGHT-M: the amount and, for a glass saved offline, its line under it (MealSectionCard's foodMacros).
   entryText: { flex: 1 },
+  entryTextOffline: { paddingVertical: 10, paddingRight: 12 },
   offlineLine: {
     fontSize: 13,
     lineHeight: 19,
     color: sc.textMuted,
     marginTop: 2,
-    marginBottom: 8,
   },
   entryAmount: {
     fontSize: 15,
