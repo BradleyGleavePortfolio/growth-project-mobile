@@ -20,7 +20,7 @@ import { foregroundBannerStore } from '../store/foregroundBannerStore';
 import { Colors } from '../constants/colors';
 import { decodePushParams } from './pushTapRouter';
 import { incomingLinkPath, resolveAppLink } from '../navigation/incomingLinks';
-import { refreshMealPlanToday } from '../hooks/useMealTemplates';
+import { refreshMealPlanToday } from './mealPlanRefresh';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

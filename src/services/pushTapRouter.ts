@@ -29,7 +29,7 @@ import { featureFlags } from '../config/featureFlags';
 import { creditPacksHidden } from '../config/purchaseSurfaces';
 import { incomingLinkPath, isPublicLinkPath, resolveAppLink, UUID } from '../navigation/incomingLinks';
 import { chatTarget, openTarget } from '../navigation/coachInbox';
-import { refreshMealPlanToday } from '../hooks/useMealTemplates';
+import { refreshMealPlanToday } from './mealPlanRefresh';
 
 export interface PushNavigator {
   isReady(): boolean;
