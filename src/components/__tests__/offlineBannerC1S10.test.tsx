@@ -23,8 +23,9 @@ it.each([{ role: 'client' }, { role: 'student' }, {}, null])('a client (or no sa
   const view = await render(<OfflineBanner />);
   expect(view.getByText(C1_S_10)).toBeTruthy();
   // The band that holds the line: an alert, read out politely (as main's).
-  let band: { props: Record<string, unknown>; parent: unknown } | null = view.getByText(C1_S_10) as never;
-  while (band && band.props.accessibilityRole !== 'alert') band = band.parent as typeof band;
+  type HostNode = { props: Record<string, unknown>; parent: HostNode | null };
+  let band = view.getByText(C1_S_10) as unknown as HostNode | null;
+  while (band && band.props.accessibilityRole !== 'alert') band = band.parent;
   expect(band?.props.accessibilityLiveRegion).toBe('polite');
 });
 
