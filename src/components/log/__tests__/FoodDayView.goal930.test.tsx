@@ -5,7 +5,7 @@
 // "Evening"; :88 Inter 500 12 muted), hidden from the screen reader. D3: C_usual's time beside each usual meal still
 // to eat (C_usual.html :155, "12:30 pm" and "7:00 pm").
 import React from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { StyleSheet, Text, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { fireEvent, render, screen, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { FoodDayGate } from '../FoodDayView';
@@ -54,7 +54,8 @@ async function show(over: Over = {}) {
     </QueryClientProvider>,
   );
 }
-const flat = (node: { props: { style?: unknown } }) => StyleSheet.flatten(node.props.style as never) ?? {};
+const flat = (node: { props: { style?: unknown } }) =>
+  StyleSheet.flatten(node.props.style as StyleProp<ViewStyle & TextStyle>) ?? {};
 const log = (id: string, mealType: FoodLog['mealType'], foodName: string, hhmm: string, extra: Partial<FoodLog> = {}): FoodLog => ({
   id, userId: 'u', coachId: '', date: today, mealType, foodName, calories: 380, protein: 20, carbs: 30, fat: 10,
   quantity: 1, unit: 'serving', createdAt: `${today}T${hhmm}:00`, ...extra,

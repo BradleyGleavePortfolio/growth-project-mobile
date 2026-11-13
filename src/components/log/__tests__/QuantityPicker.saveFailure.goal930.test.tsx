@@ -6,7 +6,7 @@
 // passed only by the Food tab; absent, the sheet draws as at main, and so does the coach's meal picker
 // (MealPickerScreen.tsx:157-160), which passes confirmLabel and its own failure as `notice`.
 import React, { useState } from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { fireEvent, render, screen, within } from '@testing-library/react-native';
 import { QuantityPickerContent } from '../QuantityPickerModal';
 import { colors } from '../../../theme/tokens';
@@ -19,7 +19,8 @@ const chicken: SearchResult = {
 };
 const LOG_FAILED = { title: "Couldn't log food", message: 'This food was not added. Check the connection and try again.' };
 type Failure = React.ComponentProps<typeof QuantityPickerContent> extends { saveFailure?: infer F } ? F : never;
-const flat = (node: { props: { style?: unknown } }) => StyleSheet.flatten(node.props.style as never) ?? {};
+const flat = (node: { props: { style?: unknown } }) =>
+  StyleSheet.flatten(node.props.style as StyleProp<ViewStyle & TextStyle>) ?? {};
 
 function Sheet(p: { failure?: Failure; onConfirm?: () => void; onAddAnother?: () => void }) {
   const [qty, setQty] = useState('150');
