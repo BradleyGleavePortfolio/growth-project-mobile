@@ -50,7 +50,7 @@ function chipsOf(root: unknown): Host[] {
 }
 const row = (order: number, id: string, group: string | null = null) => ({
   exercise_external_id: id, order, sets: 3, reps_or_duration_seconds: order === 2 ? 45 : 8,
-  exercise_type: order === 2 ? 'timed' : 'reps', weight_lbs: order === 1 ? 95 : null,
+  unit: order === 2 ? 'seconds' : 'reps', weight_lbs: order === 1 ? 95 : null,
   rest_seconds: 90, superset_group_id: group, notes: `Coach note ${order}`,
 });
 const cases = [
@@ -82,6 +82,7 @@ it.each(cases)('$name: one chip per block, every prescription and note, first-bl
     const inner = within(view.getByTestId(`assignment-row-${ex.order}`));
     expect(inner.getByText(ex.notes)).toBeTruthy();
     expect(inner.getByText(/sets ×/)).toBeTruthy();
+    expect(inner.getByText(new RegExp(`sets × ${ex.reps_or_duration_seconds} ${ex.unit === 'seconds' ? 'sec' : 'reps'}`))).toBeTruthy();
     expect(inner.queryByTestId(`assignment-adjusted-${ex.order}`) !== null).toBe(ex.order === 2);
   }
   await fireEvent.press(view.getByTestId('assignment-start'));
