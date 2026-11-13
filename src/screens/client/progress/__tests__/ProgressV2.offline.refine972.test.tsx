@@ -145,18 +145,20 @@ describe('REFINE-972 B1: Progress V2 with no signal (C8 C2_offline)', () => {
     await waitFor(() => expect(v.queryByTestId('progress-offline-card')).toBeNull());
   });
 
-  it('"Updated {time}" in place of the period sentence after a good read (C2_offline "Updated 8:12 am"; RF972-W2); none with no good read', async () => {
+  it('"Updated {time}" in place of the period sentence after a good read (C2_offline "Updated 8:12 am"; RF972-W2)', async () => {
     const v = await render(<ProgressScreen />);
     await waitFor(() => expect(v.getByText('lb trend')).toBeTruthy());
     expect(v.queryByTestId('progress-updated')).toBeNull();
     await setOffline(true);
     expect((await v.findByTestId('progress-updated')).props.children).toMatch(/^Updated \d{1,2}:\d{2} (am|pm)$/);
-    v.unmount();
-    // A page opened with no signal has no good read: no "Updated", the card over main's "did not load" frame.
-    const w = await render(<ProgressScreen />);
-    await waitFor(() => expect(w.getByText('The weight chart did not load. Pull down to try again.')).toBeTruthy());
-    expect(w.getByTestId('progress-offline-card')).toBeTruthy();
-    expect(w.queryByTestId('progress-updated')).toBeNull();
+  });
+
+  it('no good read in this mount: no "Updated"; the card shows over main\'s "did not load" frame (no frame draws this pair)', async () => {
+    await setOffline(true);
+    const v = await render(<ProgressScreen />);
+    await waitFor(() => expect(v.getByText('The weight chart did not load. Pull down to try again.')).toBeTruthy());
+    expect(v.getByTestId('progress-offline-card')).toBeTruthy();
+    expect(v.queryByTestId('progress-updated')).toBeNull();
   });
 
   it('an offline Save: no alert, one spoken status (the line\'s words), the success haptic, no saved block (index-v2.md:232)', async () => {

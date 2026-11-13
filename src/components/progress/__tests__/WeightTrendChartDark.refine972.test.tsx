@@ -34,6 +34,7 @@ jest.mock('react-native-gesture-handler', () => ({
 }));
 
 const LINE = 'On this phone. Goes to Sam when you are back online.';
+const HIDDEN = { includeHiddenElements: true };
 /** Server weigh-ins, and one kept on this phone dated today (`through`). */
 const waiting = [{ x: D, y: 170 }, { x: 2 * D, y: 169 }, { x: 5 * D, y: 168.6 }, { x: 6 * D, y: 168.4, pending: true }];
 
@@ -41,33 +42,34 @@ describe('REFINE-972 B1: the chart for a weigh-in kept on this phone', () => {
   it('today\'s waiting weigh-in: the dashed ring and its callout "{weight} lb today" (RF972-W3), not focusable', async () => {
     const v = await render(<WeightTrendChartDark data={waiting} through={6 * D} />);
     expect(v.getByTestId('weight-pending')).toBeTruthy();
-    const callout = v.getByTestId('weight-today-callout');
-    expect(v.getByText('168.4 lb today')).toBeTruthy();
+    // Hidden from screen readers on purpose (the ring's spoken day says ", on this phone"), so queried with hidden ones.
+    const callout = v.getByTestId('weight-today-callout', HIDDEN);
+    expect(v.getByText('168.4 lb today', HIDDEN)).toBeTruthy();
     expect(callout.props.accessible).toBe(false);
     expect(callout.props.importantForAccessibility).toBe('no-hide-descendants');
   });
 
   it('in kilograms for a kg client (the chart\'s own unit)', async () => {
     const v = await render(<WeightTrendChartDark data={waiting} through={6 * D} unit="kg" />);
-    expect(v.getByText('76.4 kg today')).toBeTruthy();
-    expect(v.queryByText(/ lb today/)).toBeNull();
+    expect(v.getByText('76.4 kg today', HIDDEN)).toBeTruthy();
+    expect(v.queryByText(/ lb today/, HIDDEN)).toBeNull();
   });
 
   it('a waiting weigh-in of an earlier day: the ring only, no callout (no frame draws one)', async () => {
     const v = await render(<WeightTrendChartDark data={waiting} through={8 * D} />);
     expect(v.getByTestId('weight-pending')).toBeTruthy();
-    expect(v.queryByTestId('weight-today-callout')).toBeNull();
-    expect(v.queryByText(/today$/)).toBeNull();
+    expect(v.queryByTestId('weight-today-callout', HIDDEN)).toBeNull();
+    expect(v.queryByText(/today$/, HIDDEN)).toBeNull();
   });
 
   it('the callout hides while the touch chip shows', async () => {
     const v = await render(<WeightTrendChartDark data={waiting} through={6 * D} />);
-    expect(v.getByTestId('weight-today-callout')).toBeTruthy();
+    expect(v.getByTestId('weight-today-callout', HIDDEN)).toBeTruthy();
     await act(async () => {
       fireEvent(v.getByRole('adjustable'), 'accessibilityAction', { nativeEvent: { actionName: 'decrement' } });
     });
     expect(v.getByTestId('weight-touch-chip')).toBeTruthy();
-    expect(v.queryByTestId('weight-today-callout')).toBeNull();
+    expect(v.queryByTestId('weight-today-callout', HIDDEN)).toBeNull();
   });
 
   it('the line under the chart, on the masthead, with its phone glyph (RF972-W4)', async () => {
@@ -80,8 +82,8 @@ describe('REFINE-972 B1: the chart for a weigh-in kept on this phone', () => {
     const plain = waiting.map(({ x, y }) => ({ x, y }));
     const v = await render(<WeightTrendChartDark data={plain} through={6 * D} />);
     expect(v.queryByTestId('weight-pending')).toBeNull();
-    expect(v.queryByTestId('weight-today-callout')).toBeNull();
+    expect(v.queryByTestId('weight-today-callout', HIDDEN)).toBeNull();
     expect(v.queryByTestId('weight-phone-line')).toBeNull();
-    expect(v.queryByText(/today$/)).toBeNull();
+    expect(v.queryByText(/today$/, HIDDEN)).toBeNull();
   });
 });
