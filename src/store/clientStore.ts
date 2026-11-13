@@ -224,10 +224,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
           featureFlags.offlineFoodInDay ? Promise.all([readQueue(), readSent()]).catch(() => null) : null,
         ]);
         phone = phoneAgain;
-        if (foodsAgain) {
-          rev = revAgain;
-          foodsAt = foodsAgain;
-        }
+        void foodsAgain; void revAgain;
         if (mine !== session || get().selectedDate !== d) return;
       }
       const data = foodResponse.data;
