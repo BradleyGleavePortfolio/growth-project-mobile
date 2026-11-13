@@ -6,6 +6,7 @@ import { StyleSheet } from 'react-native';
 import { render, screen } from '@testing-library/react-native';
 import FoodImage from '../FoodImage';
 import { radius } from '../../theme/tokens';
+import { getFoodImageUrl } from '../../utils/foodImages';
 
 type HostNode = { type: string; props: Record<string, unknown>; children: Array<HostNode | string> | null };
 /** The host Image elements in a rendered tree (RNTL 14 has no UNSAFE_ type queries). */
@@ -51,5 +52,9 @@ describe('OFF-PHOTO-M case 12: no logo overlay on the food tile', () => {
     const view = await render(<FoodImage name={name} brand={brand} />);
     expect(imagesIn(view.toJSON()).length).toBeLessThanOrEqual(1);
     expect(JSON.stringify(view.toJSON())).not.toMatch(/clearbit|logo\./i);
+    // REFINE-968 (LO-968R1 C1): the one tile is the food's own stock photo from any host only by name, else the letter.
+    const photo = getFoodImageUrl(name);
+    expect(imagesIn(view.toJSON()).map((img) => (img.props.source as { uri: string }).uri)).toEqual(photo ? [photo] : []);
+    if (!photo) expect(screen.getByText(name.charAt(0).toUpperCase())).toBeTruthy();
   });
 });
