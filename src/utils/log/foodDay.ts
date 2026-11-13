@@ -200,7 +200,7 @@ export function buildUsualDay(past: PastDay[], logs: FoodLog[]): FoodDay {
     } : {
       ...base, name: joinNames(usual.meal.entries.map((x) => x.name)), kcal: usual.meal.calories, protein: usual.protein,
       carbs: usual.carbs, fat: usual.fat, foods: usual.foods, logs: [], status: null, usual: { meal: usual.meal, days: usual.days },
-      time: usual.time,
+      time: null,
     });
   }
   const used = new Set(slots.flatMap((x) => x.logs));
