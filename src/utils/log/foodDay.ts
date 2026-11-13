@@ -148,7 +148,7 @@ function usualMeal(meal: MealType, newestFirst: PastDay[]): Usual | null {
     if (rows.length === 0) continue;
     const signature = rows.map((r) => r.id).sort().join('|');
     const seen = groups.get(signature);
-    if (seen) { seen.days.push(day.date); continue; }
+    if (seen) { seen.days.push(day.date); seen.time = usualTime(rows) ?? seen.time; continue; }
     const entries = rows.map(({ e, food, id, k }) => ({
       foodItemId: id, name: food.name, calories: (Number(food.calories) || 0) * k, quantityMultiplier: k,
       originalQuantity: typeof e.original_quantity === 'number' ? e.original_quantity : undefined,
