@@ -61,7 +61,7 @@ mockAssignment = {
 const Stack = createNativeStackNavigator<any>();
 
 it('a superset is one block under one letter, names joined as C2_today and TrainDay draw it (ruling 5)', async () => {
-  const view = render(
+  const view = await render(
     <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, bottom: 34, left: 0, right: 0 } }}>
       <NavigationContainer>
         <Stack.Navigator>
