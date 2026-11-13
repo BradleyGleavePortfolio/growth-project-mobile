@@ -22,8 +22,10 @@ it.each([{ role: 'client' }, { role: 'student' }, {}, null])('a client (or no sa
   mockUser.current = user;
   const view = await render(<OfflineBanner />);
   expect(view.getByText(C1_S_10)).toBeTruthy();
-  const band = view.UNSAFE_getAllByProps({ accessibilityRole: 'alert' })[0];
-  expect(band.props.accessibilityLiveRegion).toBe('polite');
+  // The band that holds the line: an alert, read out politely (as main's).
+  let band: { props: Record<string, unknown>; parent: unknown } | null = view.getByText(C1_S_10) as never;
+  while (band && band.props.accessibilityRole !== 'alert') band = band.parent as typeof band;
+  expect(band?.props.accessibilityLiveRegion).toBe('polite');
 });
 
 it.each(['coach', 'sub_coach', 'owner'])('a %s keeps the coach line', async (role) => {
