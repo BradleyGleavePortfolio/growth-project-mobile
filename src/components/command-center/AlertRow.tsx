@@ -65,7 +65,7 @@ export default function AlertRow({
   actionLabel,
   quote,
   hideClientName = false,
-  tag,
+  tag = <View testID="safety-tag" />,
   testID,
   style,
 }: AlertRowProps) {
