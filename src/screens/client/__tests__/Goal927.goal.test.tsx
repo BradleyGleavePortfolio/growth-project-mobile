@@ -143,6 +143,19 @@ describe.each(SIZES)('meal plan toward C2 C_day, %s', (_size, dims) => {
   });
   afterEach(() => { jest.useRealTimers(); });
 
+  it.each(['loading', 'error', 'missing'] as const)('does not claim a next unlogged meal when the day log is %s', async (state) => {
+    mockLog = {
+      data: state === 'error' ? LOG : undefined,
+      isError: state === 'error',
+      isLoading: state === 'loading',
+    };
+    await render(<ClientDailyMealPlanScreen />);
+    expect(screen.queryByTestId('daily-meal-plan-next-card')).toBeNull();
+    expect(screen.queryByText('Ate it as planned')).toBeNull();
+    // A failed or not-yet-known read does not remove the original log actions.
+    expect(screen.getAllByText('Log this meal')).toHaveLength(DAY.length);
+  });
+
   it('a: the eyebrow is the day as the Food day writes it (C_day y 128-156 px, "TODAY, TUESDAY 13 OCTOBER")', async () => {
     await render(<ClientDailyMealPlanScreen />);
     expect(within(screen.getByTestId('daily-meal-plan-masthead')).getByText('TODAY, TUESDAY 13 OCTOBER')).toHaveStyle({
