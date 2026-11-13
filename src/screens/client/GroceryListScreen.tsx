@@ -5,6 +5,7 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
+  Pressable,
   TextInput,
   Alert,
   RefreshControl,
@@ -23,7 +24,7 @@ import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { colors as palette, layout, typography, radius, withAlpha } from '../../theme/tokens';
 import { PrimaryButton, TextLink, Screen } from '../../ui';
 import { HapticService } from '../../ui/haptics/haptics.service';
-import { StyleCCheck, StyleCDashes, StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCMastText, StyleCNotice, StyleCPaper, usePullToRefresh, useStyleCScreen } from '../../ui/layout/StyleCPage';
+import { StyleCCheck, StyleCDashes, StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCNotice, StyleCPaper, usePullToRefresh, useStyleCScreen } from '../../ui/layout/StyleCPage';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface ListItem {
@@ -68,8 +69,44 @@ const LISTS = {
   },
 } as const;
 type ListType = keyof typeof LISTS;
+const LIST_TYPES = Object.keys(LISTS) as ListType[];
 /** A row is on Shopping when it came from the shopping read (above), else on Grocery. */
 const onList = (type: ListType) => (item: ListItem) => fromShopping(item) === (type === 'shopping');
+const toGet = (rows: ListItem[], type: ListType) => rows.filter((item) => onList(type)(item) && !item.is_checked).length;
+
+/** ctx#527 style 1, the Masthead switch (src/build.py:120-123): two equal segments inside a 1 pt forest-band line, 4 pt
+ *  inset and gap; the chosen one bone with ink, a check and weight 600, so it is told by more than colour; each label
+ *  with its to-get count, wrapping under it at large text, never cut. Spoken as a tab: "Grocery, 4 to get". */
+function ListSwitch({ chosen, counts, onChoose }: { chosen: ListType; counts: Record<ListType, number>; onChoose: (type: ListType) => void }) {
+  const { semanticColors: sc } = useTheme();
+  return (
+    <View accessibilityRole="tablist" style={[switchStyles.bar, { borderColor: sc.surface.forestBandLine }]}>
+      {LIST_TYPES.map((type) => {
+        const on = type === chosen;
+        // The bone fill is bone in both themes, so its words stay ink (the theme's textPrimary turns light in dark mode).
+        const ink = on ? palette.ink : withAlpha(sc.textOnAccent, 0.86);
+        return (
+          <Pressable
+            key={type}
+            accessibilityRole="tab"
+            accessibilityLabel={`${LISTS[type].tab}, ${counts[type]} to get`}
+            accessibilityState={{ selected: on }}
+            onPress={() => onChoose(type)}
+            style={[switchStyles.segment, on && { backgroundColor: sc.textOnAccent }]}
+          >
+            {on ? (
+              <View importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+                <Ionicons name="checkmark" size={14} color={ink} />
+              </View>
+            ) : null}
+            <Text maxFontSizeMultiplier={1.3} style={[switchStyles.label, on && switchStyles.labelOn, { color: ink }]}>{LISTS[type].tab}</Text>
+            <Text maxFontSizeMultiplier={1.3} style={[switchStyles.label, switchStyles.count, { color: ink }]}>{counts[type]}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function GroceryListScreen() {
@@ -89,7 +126,7 @@ export default function GroceryListScreen() {
   const [newItemQty, setNewItemQty] = useState('1');
   const [newItemUnit, setNewItemUnit] = useState('');
   // The list on show: Grocery every time the screen opens (operator R2, every drawn frame), held while it stays mounted.
-  const [chosen] = useState<ListType>('grocery');
+  const [chosen, setChosen] = useState<ListType>('grocery');
   const list = LISTS[chosen];
 
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
@@ -103,6 +140,12 @@ export default function GroceryListScreen() {
   const items = rows.filter(onList(chosen));
   const unchecked = items.filter((i) => !i.is_checked);
   const checked = items.filter((i) => i.is_checked);
+
+  const choose = useCallback((type: ListType) => {
+    if (type === chosen) return;
+    void HapticService.selection(); // docs/HAPTICS.md: a tab switch is a selection tick
+    setChosen(type);
+  }, [chosen]);
 
   // The list rides with the add, so the row lands on the list chosen at the tap even if the client switches before it is sent.
   const addMutation = useMutation({
@@ -245,12 +288,16 @@ export default function GroceryListScreen() {
         style={{ backgroundColor: sc.bgPrimary }}
         ListHeaderComponent={(
         <View style={{ backgroundColor: sc.surface.forestBand }}>
-      <StyleCMasthead title="Grocery list" onBack={() => navigation.goBack()}>
-        {/* The summary on the masthead, as on the Shopping list (ctx#457): one look for both lists. */}
-        {!isLoading && !isError && items.length > 0 ? (
-          <StyleCDashes total={items.length} done={checked.length} label={unchecked.length > 0 ? `${unchecked.length} to get.` : 'All items checked.'} />
+      <StyleCMasthead title={list.title} onBack={() => navigation.goBack()}>
+        {/* ctx#527 style 1: the switch once the read has answered (operator R3), then the chosen list's summary. */}
+        {!isLoading && !isError ? (
+          <ListSwitch chosen={chosen} counts={{ grocery: toGet(rows, 'grocery'), shopping: toGet(rows, 'shopping') }} onChoose={choose} />
         ) : null}
-        {!isLoading && !isError && rows.some(fromShopping) ? <StyleCMastText kind="muted">Includes items from your shopping list.</StyleCMastText> : null}
+        {!isLoading && !isError && items.length > 0 ? (
+          <View style={switchStyles.summary}>
+            <StyleCDashes total={items.length} done={checked.length} label={unchecked.length > 0 ? `${unchecked.length} to get.` : 'All items checked.'} />
+          </View>
+        ) : null}
       </StyleCMasthead>
       <StyleCPaper scrolls style={styles.paper}>
 
@@ -469,3 +516,19 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
 
 /** The same rows and fields on the Shopping list (one look for both lists). */
 export const makeListStyles = makeStyles;
+
+// ctx#527 style 1 (src/build.py:120-123, :199-206): 16 pt under the title, 4 pt inset and gap, radius.card outside and
+// radius.input per segment, 44 pt segments, a 15 pt label over 19 that wraps; the count tabular at 0.72.
+const switchStyles = StyleSheet.create({
+  bar: { flexDirection: 'row', gap: 4, padding: 4, marginTop: 16, borderWidth: 1, borderRadius: radius.card },
+  segment: {
+    flex: 1, minHeight: layout.touchMin, minWidth: layout.touchMin, borderRadius: radius.input,
+    flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', alignContent: 'center', justifyContent: 'center',
+    columnGap: 6, paddingVertical: 6, paddingHorizontal: 8,
+  },
+  label: { fontFamily: typography.body.fontFamily, fontSize: 15, lineHeight: 19, letterSpacing: 0, textAlign: 'center' },
+  labelOn: { fontFamily: 'Inter_600SemiBold', fontWeight: '600' },
+  count: { fontVariant: ['tabular-nums'], opacity: 0.72 },
+  // The drawn summary sits 12 pt under the switch; StyleCDashes keeps its own 10 above it.
+  summary: { marginTop: 2 },
+});
