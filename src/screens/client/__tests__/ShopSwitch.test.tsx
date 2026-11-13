@@ -223,7 +223,7 @@ describe.each(SIZES)('SHOP-SWITCH-M on the grocery list at $size', (size) => {
     await ui.findByText('Salmon fillet');
     await press(ui, 'Shopping, 2 to get');
     await typeItem(ui, 'Bin bags');
-    act(() => onlineManager.setOnline(false));
+    await act(async () => { onlineManager.setOnline(false); });
     await fireEvent.press(ui.getByLabelText('Add item'));
     expect(listsApi.addItem).not.toHaveBeenCalled();
     await press(ui, 'Grocery, 4 to get');
@@ -443,14 +443,15 @@ describe('SHOP-SWITCH-M: the switch itself', () => {
     expect(within(grocery).getByText('4')).toBeTruthy();
     expect(within(shopping).getByText('Shopping')).toBeTruthy();
     expect(within(shopping).getByText('2')).toBeTruthy();
-    // More than colour (index.md:80): the chosen tab has the check glyph, hidden from screen readers, and weight 600.
-    const check = within(grocery).getByTestId('icon-checkmark') as unknown as Node;
+    // More than colour (index.md:80): the chosen tab has the check glyph, hidden from screen readers (so only a query
+    // that includes hidden elements finds it), and weight 600.
+    const check = within(grocery).getByTestId('icon-checkmark', { includeHiddenElements: true }) as unknown as Node;
     let hidden = false;
     for (let node: Node | null | undefined = check; node && node !== (grocery as unknown as Node); node = node.parent) {
       if (node.props.accessibilityElementsHidden === true && node.props.importantForAccessibility === 'no-hide-descendants') hidden = true;
     }
     expect(hidden).toBe(true);
-    expect(within(shopping).queryByTestId('icon-checkmark')).toBeNull();
+    expect(within(shopping).queryByTestId('icon-checkmark', { includeHiddenElements: true })).toBeNull();
     const weight = (node: unknown) => StyleSheet.flatten((node as Node).props.style);
     expect(weight(within(grocery).getByText('Grocery'))).toMatchObject({ fontFamily: 'Inter_600SemiBold', fontWeight: '600' });
     expect(weight(within(shopping).getByText('Shopping')).fontFamily).toBe('Inter_400Regular');
