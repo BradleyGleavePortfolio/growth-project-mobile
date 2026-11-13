@@ -1,7 +1,8 @@
 /**
  * FOREGROUND-BANNER-M case 11 and step 4: the banner, now drawn over every signed-in screen, reads whole to a screen
- * reader, keeps one title line and two body lines, and meets [P06]: 44 pt targets, radii from 12/16/24.
- * (This Mac runs no VoiceOver or TalkBack; the 320 pt and 130% look is in the renders.)
+ * reader, keeps two title lines and two body lines, and meets [P06]: 44 pt targets, radii from 12/16/24.
+ * REFINE-966 (the Masthead slip, #203-E44): the title now runs two lines, the close is its own 44 pt box beside the
+ * tap area, and the corners are the card's. (This Mac runs no VoiceOver or TalkBack; 320 pt and 130% are rendered.)
  */
 import React from 'react';
 import { act, render } from '@testing-library/react-native';
@@ -44,24 +45,26 @@ it('the screen reader hears the whole title and body', async () => {
   expect(view.getByLabelText(`${TITLE}. ${BODY}. Tap to view.`)).toBeTruthy();
 });
 
-it('the title keeps one line and the body two, cut with an ellipsis', async () => {
+it('the title keeps two lines and the body two, cut with an ellipsis', async () => {
   const view = await drawn();
-  expect(view.getByText(TITLE).props.numberOfLines).toBe(1);
+  expect(view.getByText(TITLE).props.numberOfLines).toBe(2);
   expect(view.getByText(BODY).props.numberOfLines).toBe(2);
   expect(view.getByText(TITLE).props.ellipsizeMode ?? 'tail').toBe('tail');
 });
 
-it('the close control is a 44 pt box around its icon', async () => {
+it('the close control is a 44 pt box of its own around its icon, beside the tap area', async () => {
   const view = await drawn();
   const close = view.getByLabelText('Dismiss notification') as unknown as Node;
   const size = close.queryAll((n) => typeof iconSize(n) === 'number').map(iconSize)[0] as number;
   expect(size).toBe(18);
-  const slop = (close.props.hitSlop ?? {}) as { top?: number; bottom?: number; left?: number; right?: number };
-  expect(size + (slop.top ?? 0) + (slop.bottom ?? 0)).toBeGreaterThanOrEqual(44);
-  expect(size + (slop.left ?? 0) + (slop.right ?? 0)).toBeGreaterThanOrEqual(44);
-  // Inside the row: the slop above the icon never reaches past the row's own top padding.
-  const row = flatten(view.getByLabelText(`${TITLE}. ${BODY}. Tap to view.`).props.style);
-  expect(slop.top ?? 0).toBeLessThanOrEqual(row.paddingVertical as number);
+  // Its own layout, no hit slop counted.
+  expect(close.props.hitSlop).toBeUndefined();
+  const box = flatten(close.props.style);
+  expect(box.width as number).toBeGreaterThanOrEqual(44);
+  expect(box.height as number).toBeGreaterThanOrEqual(44);
+  // Beside the row, never inside it (two elements to a screen reader).
+  const row = view.getByLabelText(`${TITLE}. ${BODY}. Tap to view.`) as unknown as Node;
+  expect(row.queryAll((n) => n === close)).toHaveLength(0);
 });
 
 it('the banner\'s own tap target is at least 44 pt tall', async () => {
@@ -69,15 +72,16 @@ it('the banner\'s own tap target is at least 44 pt tall', async () => {
   const row = flatten(view.getByLabelText(`${TITLE}. ${BODY}. Tap to view.`).props.style);
   const title = flatten(view.getByText(TITLE).props.style);
   const body = flatten(view.getByText(BODY).props.style);
-  expect((row.paddingVertical as number) * 2 + (title.lineHeight as number) + (body.lineHeight as number)).toBeGreaterThanOrEqual(44);
+  expect(row.minHeight as number).toBeGreaterThanOrEqual(44);
+  expect((row.paddingTop as number) + (row.paddingBottom as number) + (title.lineHeight as number) + (body.lineHeight as number)).toBeGreaterThanOrEqual(44);
 });
 
 it('its corners come from the [P06] radius set', async () => {
   const view = await drawn();
-  const container = flatten(view.root?.props.style);
-  expect(RADII).toContain(container.borderBottomLeftRadius);
-  expect(RADII).toContain(container.borderBottomRightRadius);
+  const card = flatten(view.getByTestId('foreground-banner-card').props.style);
+  expect(RADII).toContain(card.borderRadius);
   const root = view.root as unknown as Node;
-  const bell = root.queryAll((n) => { const f = flatten(n.props.style); return f.width === 34 && f.height === 34; })[0];
-  expect(RADII).toContain(flatten(bell.props.style).borderRadius);
+  // The kind's mark sits in a circle (radius.chip), the drawing's 38 pt ring.
+  const ring = root.queryAll((n) => { const f = flatten(n.props.style); return f.width === 38 && f.height === 38; })[0];
+  expect(flatten(ring.props.style).borderRadius as number).toBeGreaterThanOrEqual(38 / 2);
 });
