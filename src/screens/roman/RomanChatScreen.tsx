@@ -40,6 +40,7 @@ import {
   AccessibilityInfo,
   FlatList,
   Keyboard,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -157,6 +158,8 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
   // Last send-error message we announced, so a re-render does not re-announce
   // the same failure (R3 P1-2).
   const lastAnnouncedError = useRef<string | null>(null);
+  // ROMAN-RETRY-B-M: the empty room's scroll, drawn only while Roman's card sits under the greeting.
+  const emptyScrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -453,8 +456,24 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
       testID="roman-chat-screen"
     >
       <View style={styles.flex}>
-        {isEmpty ? (
+        {isEmpty && held == null ? (
           <View style={styles.flex}>
+            <RomanGreeting
+              surface={surface}
+              isFirstOpen={isFirstOpen}
+              firstName={user?.firstName}
+              testID="roman-empty-greeting"
+            />
+          </View>
+        ) : isEmpty ? (
+          // ROMAN-RETRY-B-M: the first send never stored, so the card sits under the greeting; at iPhone 320 with 130%
+          // text the greeting alone fills the room, so they scroll, and the card's arrival brings it into view.
+          <ScrollView
+            ref={emptyScrollRef}
+            style={styles.flex}
+            onContentSizeChange={() => emptyScrollRef.current?.scrollToEnd({ animated: !reduceMotion })}
+            testID="roman-empty-scroll"
+          >
             <RomanGreeting
               surface={surface}
               isFirstOpen={isFirstOpen}
@@ -463,7 +482,7 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
             />
             {held}
             {buyLinks}
-          </View>
+          </ScrollView>
         ) : (
           <FlatList
             ref={listRef}
