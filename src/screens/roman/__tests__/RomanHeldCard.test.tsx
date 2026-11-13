@@ -372,7 +372,8 @@ describe('case 10, Send again and the box', () => {
   it('re-sends the box\'s words under the draft\'s key and nothing else; typing clears the card and main\'s ceiling returns', async () => {
     const r = await openRoom('client');
     thread = [turn('m-q1', 'user', WORDS)];
-    wire = [UNAVAILABLE, UNAVAILABLE];
+    // A cut stream keeps the draft's key (lib/sendOnce.ts), so Send again replays it; ROMAN_UNAVAILABLE would end it.
+    wire = [CUT_STREAM, CUT_STREAM];
     await typeAndSend(r, WORDS);
     await waitFor(() => expect(r.queryByTestId('roman-send-retry')).toBeTruthy());
     expect(r.getByTestId('roman-send-retry').props.accessibilityState).toEqual({ disabled: false });
