@@ -491,3 +491,17 @@ describe('S12: the week ring', () => {
     expect(view.getByTestId('summary-totals')).toBeTruthy();
   });
 });
+
+describe('LO-974R1 B1: the not-sent page draws the week as C2_error draws it', () => {
+  it('no answer at Send: the ring keeps the read and today is not marked done (the workout is not sent)', async () => {
+    mockSaveAnswer = 'offline';
+    const view = await openScreen();
+    await openSummary(view);
+    await waitFor(() => expect(view.getByTestId('summary-ring')).toBeTruthy());
+    const before = view.getByTestId('summary-ring').props.accessibilityLabel as string;
+    await press(view, 'send-to-coach');
+    await waitFor(() => expect(view.getByText('Not sent to Sam yet')).toBeTruthy());
+    // C2_error_* and index-v2.md:32/:205/:207: the segment draws in on a successful Send; a failed save keeps "2 of 4".
+    expect(view.getByTestId('summary-ring').props.accessibilityLabel).toBe(before);
+  });
+});
