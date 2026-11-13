@@ -79,7 +79,8 @@ function hosts(root: unknown): Host[] {
 function textProblems(root: unknown) {
   const inButton = new Set<Host>();
   hosts(root).filter((n) => n.props.accessibilityRole === 'button').forEach((b) => hosts(b).forEach((n) => inButton.add(n)));
-  const glyph = (n: Host) => (StyleSheet.flatten(n.props.style as TextStyle) ?? {}).fontFamily === 'Ionicons';
+  const glyph = (n: Host) => (StyleSheet.flatten(n.props.style as TextStyle) ?? {}).fontFamily === 'Ionicons'
+    || (n.children ?? []).every((c) => typeof c === 'string' && /^[\uE000-\uF8FF]+$/.test(c));
   return hosts(root).filter((n) => n.type === 'Text' && !inButton.has(n) && !glyph(n) && JSON.stringify(n.children) !== '[""]'
     && (n.props.numberOfLines || n.props.adjustsFontSizeToFit || n.props.allowFontScaling === false))
     .map((n) => JSON.stringify(n.children));

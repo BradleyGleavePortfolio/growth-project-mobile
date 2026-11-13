@@ -261,7 +261,9 @@ describe.each(DEVICES)('at $name', (device) => {
   it('edit: each exercise is the open block card, sage, 1 pt sage line, 16 pt corners and padding (C2_logger rows 462-1065, cols 48-82)', async () => {
     const view = await mount(device, 'Edit', WorkoutHistoryEditScreen, { workout: JSON.stringify(SAVED) });
     await view.findByText('Bench press');
-    const cards = hosts(view.toJSON()).filter((n) => styleOf(n).backgroundColor === sc.surface.sage);
+    // The card: sage with the card corners (a saved set's row is sage too, without them).
+    const cards = hosts(view.toJSON()).filter((n) => styleOf(n).backgroundColor === sc.surface.sage
+      && styleOf(n).borderRadius === radius.card);
     expect(cards.length).toBe(1);
     const st = styleOf(cards[0]);
     expect(st.borderColor).toBe(sc.surface.sageLine);
