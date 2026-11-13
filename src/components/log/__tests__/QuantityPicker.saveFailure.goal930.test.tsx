@@ -8,7 +8,7 @@
 import React, { useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { fireEvent, render, screen, within } from '@testing-library/react-native';
-import QuantityPickerModal, { QuantityPickerContent } from '../QuantityPickerModal';
+import { QuantityPickerContent } from '../QuantityPickerModal';
 import { colors } from '../../../theme/tokens';
 import type { SearchResult } from '../../../utils/log/types';
 
@@ -103,21 +103,22 @@ describe('GOAL-930-M D4: with the prop absent the sheet draws as at main', () =>
     expect(screen.queryByTestId('portion-save-failure')).toBeNull();
     expect(screen.queryAllByRole('alert')).toHaveLength(0);
     expect(screen.getByRole('button', { name: 'Log food' })).toBeTruthy();
-    absent.unmount();
-    const nulled = await render(<Sheet failure={null} />);
-    expect(JSON.stringify(nulled.toJSON())).toBe(a);
+    await absent.rerender(<Sheet failure={null} />);
+    expect(JSON.stringify(absent.toJSON())).toBe(a);
   });
 
   it('the coach\'s meal picker sheet (MealPickerScreen.tsx:157-160) draws as at main: its notice, its words, no card', async () => {
     const onConfirm = jest.fn();
+    // QuantityPickerModal passes every prop but `visible` straight to QuantityPickerContent (QuantityPickerModal.tsx:50-60).
     await render(
-      <QuantityPickerModal visible selectedFood={chicken} quantityInput="150" selectedUnit="g" onQuantityChange={jest.fn()}
+      <QuantityPickerContent selectedFood={chicken} quantityInput="150" selectedUnit="g" onQuantityChange={jest.fn()}
         onUnitChange={jest.fn()} onConfirm={onConfirm} onCancel={jest.fn()} saving={false} mealLabel="Pre-workout"
         confirmLabel="Use this food" emptyHint="Enter a quantity greater than zero to use this food." blocked={false}
         notice="The food could not be saved. Check the connection and try again." />,
     );
     expect(screen.queryByTestId('portion-save-failure')).toBeNull();
-    const notice = screen.getByRole('alert');
+    const notice = screen.getByText('The food could not be saved. Check the connection and try again.');
+    expect(notice.props.accessibilityRole).toBe('alert');
     expect(notice.props.children).toBe('The food could not be saved. Check the connection and try again.');
     expect(flat(notice)).toEqual(expect.objectContaining({ fontSize: 14, lineHeight: 20.02, marginTop: 4 }));
     expect(screen.getByText('Cancel')).toBeTruthy();

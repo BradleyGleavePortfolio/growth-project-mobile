@@ -20,6 +20,12 @@ jest.mock('../../../services/api', () => ({
 }));
 jest.mock('../../../entitlements/EntitlementProvider', () => ({ useEntitlement: () => ({ messageCoach: jest.fn() }) }));
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate: jest.fn() }), useFocusEffect: jest.fn() }));
+// The icon set drawn as its name and size, so the glyph and its place in the tile can be read.
+jest.mock('@expo/vector-icons', () => {
+  const { createElement } = jest.requireActual('react');
+  const { Text: T } = jest.requireActual('react-native');
+  return { Ionicons: ({ name, size }: { name: string; size: number }) => createElement(T, { testID: `icon-${name}` }, `${name}:${size}`) };
+});
 // The [R41] phone sizes: 390 and 320 wide, 100 and 130 percent text.
 let mockWindow = { width: 390, height: 844, scale: 2, fontScale: 1 };
 jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({ __esModule: true, default: () => mockWindow }));
@@ -94,8 +100,9 @@ describe('D1 C_first: the drawn tool tiles, with the one tile whose feature is o
       paddingVertical: 8, paddingHorizontal: 12, gap: 6, alignItems: 'flex-start', justifyContent: 'center' }));
     expect(s.flexDirection ?? 'column').toBe('column');
     // The app's create-outline at the drawn 24, above the words (C2-S-28, main's).
-    const glyph = screen.UNSAFE_getByProps({ name: 'create-outline' });
-    expect(glyph.props.size).toBe(24);
+    expect(within(tile).getByTestId('icon-create-outline').props.children).toBe('create-outline:24');
+    const json = JSON.stringify(screen.toJSON());
+    expect(json.indexOf('"create-outline:24"')).toBeLessThan(json.indexOf('["Enter manually"]'));
     const words = within(tile).getByText('Enter manually');
     const type = flat(words);
     expect(type.fontFamily).toBe('Inter_500Medium');
