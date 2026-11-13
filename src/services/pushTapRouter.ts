@@ -354,6 +354,7 @@ export function resolvePushTarget(role: PushRole, screen: string): Target {
  * root (its ROLE_ANCHOR, as flushPendingPushTap checks it): the route it opens and the params it passes, following
  * routePushTap's link rule, flushPendingPushTap and deliver without routing (no navigate, hold, dedupe or after()).
  * null when the tap opens nothing. A root that keeps open work (pop) still answers its screen: no exact match there.
+ * MERGEUP-966: a coach's community DM link is followed through COACH-DM-M's coachDmLink, as flushPendingPushTap does.
  */
 export function pushTapLanding(
   routeNames: readonly string[],
@@ -390,6 +391,11 @@ export function pushTapLanding(
     }
   }
   if (!actionScreen || !SCREEN_NAME.test(actionScreen)) return null;
+  const dm = coachDmLink(actionScreen, deepLink, sessionUserId(session));
+  if (dm.path !== undefined && dm.linkFor === role) {
+    const target = resolveAppLink(dm.path, role);
+    if (target) return land(target, target.params);
+  }
   return onScreen(actionScreen, decodePushParams(actionParams));
 }
 
