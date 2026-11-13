@@ -31,6 +31,7 @@ import { errorMessage } from '../../../types/common';
 import { logger } from '../../../utils/logger';
 import type { WeightLog } from '../../../types';
 import { parseWeightLogRow, weightHistoryRows } from './weightHistory';
+import { settleWeighInsHeld, useSentWeighInKeys, useWeighInsOnPhone } from './offlineWeighIn';
 import LogWeightSheetV2 from './LogWeightSheetV2';
 import * as P from './progressV2';
 
@@ -50,7 +51,9 @@ export default function ProgressV2({ onSaved, logWeightAt }: { onSaved?: () => v
   const coachName = coachless ? null : coach?.name.trim().split(/\s+/)[0] || undefined;
   const unit = P.unitOf(user?.profile?.weight_unit);
   const today = getTodayString();
-  const [logs, setLogs] = useState<WeightLog[] | null>(null);
+  const [read, setLogs] = useState<WeightLog[] | null>(null);
+  // OFFLINE-WATER-WEIGHT-M: this phone's weigh-ins (waiting, and sent until a read holds their key) count once.
+  const logs = useWeighInsOnPhone(read, user?.id);
   const [failed, setFailed] = useState(false);
   const [sessions, setSessions] = useState<P.Session[]>([]);
   const [plan, setPlan] = useState<WorkoutWeek | null>(null);
@@ -65,15 +68,20 @@ export default function ProgressV2({ onSaved, logWeightAt }: { onSaved?: () => v
     if (!userId) return;
     await Promise.all([
       weightApi.getHistory(3650).then((res) => {
-        setLogs(weightHistoryRows(res.data).map((r) => parseWeightLogRow(r, userId))
-          .filter((l): l is WeightLog => l !== null).sort((a, b) => a.date.localeCompare(b.date)));
+        const rows = weightHistoryRows(res.data).map((r) => parseWeightLogRow(r, userId))
+          .filter((l): l is WeightLog => l !== null).sort((a, b) => a.date.localeCompare(b.date));
+        setLogs(rows);
         setFailed(false);
+        void settleWeighInsHeld(rows);
       }, (err: unknown) => { setFailed(true); fail('weight history')(err); }),
       workoutApi.getAll(P.SESSIONS).then((res) => setSessions(Array.isArray(res.data) ? res.data : []), fail('workouts')),
       coachless ? null : workoutBuilderApi.listMyAssignments().then((rows) => setPlan(P.trainingWeek(rows, getTodayString())), fail('assignments')),
     ]);
   }, [userId, coachless]);
   useEffect(() => { void load(); }, [load]);
+  // OFFLINE-WATER-WEIGHT-M (G2): a weigh-in this phone sent is read back once the history holds it.
+  const sentKeys = useSentWeighInKeys();
+  useEffect(() => { if (sentKeys) void load(); }, [sentKeys, load]);
 
   // The saved moment (index-v2 section 7): a 300 ms decelerating fade, 150 ms with Reduce Motion.
   const reduce = useReduceMotion();
@@ -83,7 +91,14 @@ export default function ProgressV2({ onSaved, logWeightAt }: { onSaved?: () => v
     fade.setValue(0);
     Animated.timing(fade, { toValue: 1, duration: reduce ? 150 : 300, easing: Easing.bezier(...motion.easing.decel), useNativeDriver: true }).start();
   }, [saved, reduce, fade]);
-  const logged = (lbs: number) => {
+  const logged = (lbs: number, queued?: boolean) => {
+    if (queued) {
+      // OFFLINE-WATER-WEIGHT-M: no saved moment for a weigh-in the coach cannot see yet; the "Saved offline" alert
+      // said it is on this phone, and the trend counts it from the phone.
+      setSheet(false);
+      onSaved?.();
+      return;
+    }
     const earlier = (logs ?? []).filter((l) => l.date !== today);
     const before = P.trendNow(earlier, today);
     const after = P.trendNow([...earlier, { id: '', userId: '', coachId: '', date: today, weight: lbs, unit: 'lbs', createdAt: '' }], today);
@@ -211,7 +226,7 @@ export default function ProgressV2({ onSaved, logWeightAt }: { onSaved?: () => v
         </View>
       </Screen>
       <LogWeightSheetV2 visible={sheet} unit={unit} today={today} lastLog={logs?.[logs.length - 1] ?? null} coachName={coachName}
-        onClose={() => setSheet(false)} onSaved={logged} />
+        onClose={() => setSheet(false)} onSaved={logged} userId={user?.id} />
     </>
   );
 }

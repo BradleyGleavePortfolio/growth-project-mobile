@@ -1,27 +1,30 @@
-// Food-log offline queue.
+// Offline queue: foods, glasses of water and weigh-ins saved with no signal.
 //
-// Scope (intentionally small for round 2):
-//   - Only food-log writes go through this queue. Water logs, weight logs, and
-//     habit logs are NOT queued. They can follow in a later round.
+// Scope:
+//   - Food logs (kinds 'search' and 'manual'), glasses of water (kind 'water')
+//     and weigh-ins (kind 'weight', OFFLINE-WATER-WEIGHT-M, 191-S5) go through
+//     this one queue. Habit logs are NOT queued.
 //   - Queue lives in AsyncStorage under a single JSON array key; no SQLite
 //     dependency. Each entry is sent with its id as `client_uuid`, and the
 //     server answers a resend of a key it holds with that same entry, so a
 //     replay after a crash or a lost answer never makes a second row.
+//   - Every reader of foods (readQueue, readSent, getQueueLength) sees foods
+//     only; glasses and weigh-ins are read with readWaterWeight and counted
+//     with countWaterWeight.
 //
 // AsyncStorage schema:
-//   Key:   `pending_food_logs_${userId}`  (or `pending_food_logs_anonymous`)
-//   Value: JSON string of PendingFoodLog[]
+//   Key:   `pending_food_logs_${userId}`  (or `pending_food_logs_anonymous`, foods only)
+//   Value: JSON string of (PendingFoodLog | PendingWaterWeightLog)[]
 //
-//   interface PendingFoodLog {
-//     id: string;        // crypto.randomUUID — idempotency key for the server
+//   { id: string;        // the idempotency key the server stores (client_uuid)
 //     createdAt: number; // Date.now() when enqueued
-//     kind: 'search' | 'manual';
-//     payload: Record<string, unknown>;
-//   }
+//     parkedAt?: number; // the server refused it: kept on the phone, never resent
+//     kind: 'search' | 'manual' | 'water' | 'weight';
+//     log: ... }         // the save's fields (see the interfaces below)
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { randomUUID } from 'expo-crypto';
-import { foodApi, logApi } from './api';
+import { foodApi, logApi, waterApi, weightApi } from './api';
 import { readUserCacheSync } from '../lib/userCache';
 import { logger } from '../utils/logger';
 import { emitTutorialSignal } from '../tutorial/tutorialEvents';
@@ -100,11 +103,42 @@ export type PendingFoodLog = (PendingSearchLog | PendingManualLog) & {
   parkedAt?: number;
 };
 
-const waiting = (queue: PendingFoodLog[]) => queue.filter((q) => !q.parkedAt);
+/** OFFLINE-WATER-WEIGHT-M: a glass of water saved with no signal (the amount the server stores, in ml). */
+export interface PendingWaterLog {
+  kind: 'water';
+  log: { date: string; amount_ml: number };
+}
+
+/** OFFLINE-WATER-WEIGHT-M: a weigh-in saved with no signal (pounds, as the server stores it). */
+export interface PendingWeightLog {
+  kind: 'weight';
+  log: { date: string; weight_lbs: number; notes?: string };
+}
+
+export type PendingWaterWeightLog = (PendingWaterLog | PendingWeightLog) & {
+  id: string;
+  createdAt: number;
+  parkedAt?: number;
+};
+
+/** Anything the queue holds. */
+type QueuedLog = PendingFoodLog | PendingWaterWeightLog;
+
+/** A glass or a weigh-in the server accepted at `sentAt`; a glass keeps the id its answer carried. */
+export type SentWaterWeightLog = PendingWaterWeightLog & { sentAt: number; answerId?: string };
+
+/** True for a food (kind 'search' or 'manual'); a glass or a weigh-in is never read as one. */
+export const isFoodLog = (item: { kind?: unknown } | null | undefined): item is PendingFoodLog =>
+  !!item && (item.kind === 'search' || item.kind === 'manual');
+
+const isWaterWeightLog = (item: { kind?: unknown } | null | undefined): item is PendingWaterWeightLog =>
+  !!item && (item.kind === 'water' || item.kind === 'weight');
+
+const waiting = <T extends { parkedAt?: number }>(queue: T[]) => queue.filter((q) => !q.parkedAt);
 
 // ─── Low-level helpers (always take an explicit key) ──────────────────────
 
-async function readQueueForKey(key: string): Promise<PendingFoodLog[]> {
+async function readQueueForKey(key: string): Promise<QueuedLog[]> {
   try {
     const raw = await AsyncStorage.getItem(key);
     if (!raw) return [];
@@ -118,7 +152,7 @@ async function readQueueForKey(key: string): Promise<PendingFoodLog[]> {
 
 async function writeQueueForKey(
   key: string,
-  queue: PendingFoodLog[],
+  queue: QueuedLog[],
 ): Promise<void> {
   await AsyncStorage.setItem(key, JSON.stringify(queue));
 }
@@ -151,7 +185,7 @@ export class FoodLogQueueOwnerChangedError extends Error {
 async function writeFenced(
   owner: string | undefined,
   key: string,
-  queue: PendingFoodLog[],
+  queue: QueuedLog[],
 ): Promise<void> {
   if (currentOwnerId() !== owner) throw new FoodLogQueueOwnerChangedError();
   await writeQueueForKey(key, queue);
@@ -162,7 +196,7 @@ async function writeFenced(
 let lastChange: Promise<unknown> = Promise.resolve();
 
 /** Apply `change` to the stored list under `key` of `owner` (fenced) and return the result. */
-function changeList<T extends PendingFoodLog>(owner: string | undefined, key: string, change: (q: T[]) => T[]) {
+function changeList<T extends QueuedLog>(owner: string | undefined, key: string, change: (q: T[]) => T[]) {
   const run = lastChange.then(async () => {
     const next = change((await readQueueForKey(key)) as T[]);
     await writeFenced(owner, key, next);
@@ -172,7 +206,7 @@ function changeList<T extends PendingFoodLog>(owner: string | undefined, key: st
   return run;
 }
 
-function changeQueue(owner: string | undefined, change: (q: PendingFoodLog[]) => PendingFoodLog[]) {
+function changeQueue(owner: string | undefined, change: (q: QueuedLog[]) => QueuedLog[]) {
   return changeList(owner, getQueueKey(owner), change);
 }
 
@@ -192,10 +226,10 @@ const getSentKey = (userId: string): string => `${SENT_KEY_PREFIX}${userId}`;
 /** A queued food the server accepted at `sentAt`, shown until a read of its day holds it. */
 export type SentFoodLog = PendingFoodLog & { sentAt: number };
 
-/** The signed-in owner's sent foods no read of their day has reached yet. */
+/** The signed-in owner's sent foods no read of their day has reached yet (foods only). */
 export async function readSent(): Promise<SentFoodLog[]> {
   const owner = currentOwnerId();
-  return owner ? ((await readQueueForKey(getSentKey(owner))) as SentFoodLog[]) : [];
+  return owner ? ((await readQueueForKey(getSentKey(owner))).filter(isFoodLog) as SentFoodLog[]) : [];
 }
 
 /**
@@ -205,8 +239,36 @@ export async function readSent(): Promise<SentFoodLog[]> {
 export async function settleSent(date: string, keep: (item: SentFoodLog) => boolean): Promise<SentFoodLog[]> {
   const owner = currentOwnerId();
   if (!owner) return [];
-  return changeList<SentFoodLog>(owner, getSentKey(owner), (sent) =>
-    sent.filter((s) => s && s.log && (s.log.date !== date || keep(s))));
+  // OFFLINE-WATER-WEIGHT-M (W9): a food read settles foods only; a sent glass or weigh-in waits for its own read.
+  const next = await changeList<QueuedLog>(owner, getSentKey(owner), (sent) =>
+    sent.filter((s) => s && s.log && (!isFoodLog(s) || s.log.date !== date || keep(s as SentFoodLog))));
+  return next.filter(isFoodLog) as SentFoodLog[];
+}
+
+/**
+ * OFFLINE-WATER-WEIGHT-M: a good water read of `date` reached the server holding the entry ids `held`: a sent glass of
+ * that day settles once the read holds the id its answer carried. A glass with no answer id settles on a read that
+ * began after it was sent (`readStartedAt`), as a food does. Returns the glasses and weigh-ins still held as sent.
+ */
+export async function settleSentWater(date: string, held: Set<string>, readStartedAt: number): Promise<SentWaterWeightLog[]> {
+  const owner = currentOwnerId();
+  if (!owner) return [];
+  const settled = (s: QueuedLog) => {
+    if (s.kind !== 'water' || s.log.date !== date) return false;
+    const sent = s as SentWaterWeightLog;
+    return sent.answerId ? held.has(sent.answerId) : sent.sentAt < readStartedAt;
+  };
+  const next = await changeList<QueuedLog>(owner, getSentKey(owner), (sent) => sent.filter((s) => s && s.log && !settled(s)));
+  return next.filter(isWaterWeightLog) as SentWaterWeightLog[];
+}
+
+/** OFFLINE-WATER-WEIGHT-M: a good weight history read holds these keys (client_uuid): those sent weigh-ins settle. */
+export async function settleSentWeighIns(held: Set<string>): Promise<SentWaterWeightLog[]> {
+  const owner = currentOwnerId();
+  if (!owner) return [];
+  const next = await changeList<QueuedLog>(owner, getSentKey(owner), (sent) =>
+    sent.filter((s) => s && s.log && !(s.kind === 'weight' && held.has(s.id))));
+  return next.filter(isWaterWeightLog) as SentWaterWeightLog[];
 }
 
 export async function enqueue(
@@ -227,15 +289,51 @@ export async function enqueue(
   emitTutorialSignal('meal_logged');
 }
 
-/** Foods waiting to be sent; `includeParked` also counts the ones the server refused. */
+/**
+ * OFFLINE-WATER-WEIGHT-M: a glass of water or a weigh-in saved with no signal, in `owner`'s queue. `owner` is the
+ * signed-in member the screen saves for: with none, or with another member signed in now, nothing is written (the
+ * queue's owner fence refuses it), so a glass or a weigh-in is never in the anonymous queue or another account's.
+ * `id`: the save's key when an online try already sent one (a kept key), so the server keeps one row.
+ */
+export async function enqueueWaterWeight(
+  owner: string,
+  entry: PendingWaterLog | PendingWeightLog,
+  id: string = `pfl_${randomUUID()}`,
+): Promise<void> {
+  if (!owner) throw new FoodLogQueueOwnerChangedError();
+  const item: PendingWaterWeightLog = { ...entry, id, createdAt: Date.now() };
+  await changeQueue(owner, (queue) => [...queue, item]);
+}
+
+/** Foods waiting to be sent; `includeParked` also counts the ones the server refused. Foods only. */
 export async function getQueueLength(opts: { includeParked?: boolean } = {}): Promise<number> {
-  const queue = await readQueueForKey(getQueueKey(currentOwnerId()));
+  const queue = (await readQueueForKey(getQueueKey(currentOwnerId()))).filter(isFoodLog);
   return (opts.includeParked ? queue : waiting(queue)).length;
 }
 
-/** OFFLINE-FOOD-M: every food on this phone for the signed-in owner, waiting and refused (parkedAt). */
+/** OFFLINE-FOOD-M: every food on this phone for the signed-in owner, waiting and refused (parkedAt). Foods only. */
 export async function readQueue(): Promise<PendingFoodLog[]> {
-  return readQueueForKey(getQueueKey(currentOwnerId()));
+  return (await readQueueForKey(getQueueKey(currentOwnerId()))).filter(isFoodLog);
+}
+
+/**
+ * OFFLINE-WATER-WEIGHT-M: the signed-in owner's glasses and weigh-ins on this phone: `queue` waiting and refused
+ * (parkedAt), `sent` accepted and not read back yet. Never the anonymous queue.
+ */
+export async function readWaterWeight(): Promise<{ queue: PendingWaterWeightLog[]; sent: SentWaterWeightLog[] }> {
+  const owner = currentOwnerId();
+  if (!owner) return { queue: [], sent: [] };
+  const [queue, sent] = await Promise.all([readQueueForKey(getQueueKey(owner)), readQueueForKey(getSentKey(owner))]);
+  return { queue: queue.filter(isWaterWeightLog), sent: sent.filter(isWaterWeightLog) as SentWaterWeightLog[] };
+}
+
+/** OFFLINE-WATER-WEIGHT-M: glasses and weigh-ins waiting to be sent; `includeParked` also counts refused ones. */
+export async function countWaterWeight(opts: { includeParked?: boolean } = {}): Promise<{ water: number; weighIns: number }> {
+  const owner = currentOwnerId();
+  if (!owner) return { water: 0, weighIns: 0 };
+  const all = (await readQueueForKey(getQueueKey(owner))).filter(isWaterWeightLog);
+  const left = opts.includeParked ? all : waiting(all);
+  return { water: left.filter((q) => q.kind === 'water').length, weighIns: left.filter((q) => q.kind === 'weight').length };
 }
 
 /**
@@ -247,7 +345,7 @@ export async function dropQueued(id: string): Promise<void> {
   const owner = currentOwnerId();
   await changeQueue(owner, (queue) => queue.filter((q) => q.id !== id));
   // A food already sent but not read back yet is held as sent: Remove takes it off this phone too.
-  if (owner) await changeList<SentFoodLog>(owner, getSentKey(owner), (sent) => sent.filter((q) => q.id !== id));
+  if (owner) await changeList<QueuedLog>(owner, getSentKey(owner), (sent) => sent.filter((q) => q.id !== id));
 }
 
 export async function clearQueue(): Promise<void> {
@@ -311,7 +409,7 @@ export async function flush(): Promise<{ flushed: number; remaining: number; par
    * (and leaves memory + disk untouched) when the owner changed: the item stays
    * queued for its real owner and the flush stops.
    */
-  const commit = async (change: (q: PendingFoodLog[]) => PendingFoodLog[]): Promise<boolean> => {
+  const commit = async (change: (q: QueuedLog[]) => QueuedLog[]): Promise<boolean> => {
     try {
       queue = await changeQueue(userId, change);
     } catch (err) {
@@ -324,11 +422,11 @@ export async function flush(): Promise<{ flushed: number; remaining: number; par
   };
 
   /** Keep an accepted item as sent (fenced). False when the owner changed: the flush stops. */
-  const keepSent = async (item: PendingFoodLog): Promise<boolean> => {
+  const keepSent = async (item: QueuedLog, answerId?: string): Promise<boolean> => {
     if (!userId) return true;
     try {
-      const sent: SentFoodLog = { ...item, sentAt: Date.now() };
-      await changeList<SentFoodLog>(userId, getSentKey(userId), (list) =>
+      const sent = { ...item, sentAt: Date.now(), ...(answerId ? { answerId } : {}) };
+      await changeList<QueuedLog>(userId, getSentKey(userId), (list) =>
         [...list.filter((x) => x.id !== item.id), sent].slice(-SENT_KEEP));
     } catch (err) {
       if (err instanceof FoodLogQueueOwnerChangedError) {
@@ -353,6 +451,18 @@ export async function flush(): Promise<{ flushed: number; remaining: number; par
       break;
     }
     try {
+      // OFFLINE-WATER-WEIGHT-M: a glass and a weigh-in are sent by their own call, with the entry's id as the key,
+      // and never reach the food branch below. Accepted, refused and "try again later" follow the same rule.
+      if (item.kind === 'water' || item.kind === 'weight') {
+        if (!userId) throw new FoodLogQueueOwnerChangedError();
+        const answer = item.kind === 'water'
+          ? await waterApi.log({ amount_ml: item.log.amount_ml, date: item.log.date }, item.id)
+          : await weightApi.log({ weight_lbs: item.log.weight_lbs, date: item.log.date, notes: item.log.notes }, item.id);
+        const answerId = (answer?.data as { id?: unknown } | undefined)?.id;
+        if (!(await keepSent(item, typeof answerId === 'string' ? answerId : undefined))) break;
+        if (await commit((q) => q.filter((x) => x.id !== item.id))) flushed++;
+        continue;
+      }
       let foodItemId: string | undefined;
       if (item.kind === 'search' && item.foodItemId) {
         foodItemId = item.foodItemId;
@@ -388,7 +498,7 @@ export async function flush(): Promise<{ flushed: number; remaining: number; par
           id: item.id,
           err,
         });
-        const park = (q: PendingFoodLog[]) => q.map((x) => (x.id === item.id ? { ...x, parkedAt: Date.now() } : x));
+        const park = (q: QueuedLog[]) => q.map((x) => (x.id === item.id ? { ...x, parkedAt: Date.now() } : x));
         if (await commit(park)) parked++;
         continue;
       }

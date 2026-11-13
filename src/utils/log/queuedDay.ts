@@ -11,7 +11,8 @@
 // A food the server refused (parked) stays visible, marked, and is not counted: it is in no total
 // until the member removes it and logs it again.
 import type { FoodLog } from '../../types';
-import type { PendingFoodLog, QueuedFoodShown } from '../../services/foodLogQueue';
+import type { WaterEntry } from '../../services/api';
+import type { PendingFoodLog, PendingWaterWeightLog, QueuedFoodShown, SentWaterWeightLog } from '../../services/foodLogQueue';
 import type { SearchResult } from './types';
 
 export interface DayTotals {
@@ -86,6 +87,8 @@ export function withQueuedFoods(
   const totals = { ...serverTotals };
   for (const item of queue) {
     if (!item || !item.log || item.log.date !== date || onServer.has(item.id)) continue;
+    // OFFLINE-WATER-WEIGHT-M (M2): a glass or a weigh-in is never a food of the day.
+    if (item.kind !== 'search' && item.kind !== 'manual') continue;
     if (added.some((a) => a.id === item.id)) continue;
     const row = queuedFoodLog(item, userId);
     if (!row) continue;
@@ -103,3 +106,34 @@ export function withQueuedFoods(
 
 /** True for a row that counts in the day's numbers (everything but a refused offline food). */
 export const countsInDay = (log: FoodLog): boolean => log.offline !== 'refused';
+
+/** OFFLINE-WATER-WEIGHT-M: a water entry as the water card lists it; a glass on this phone carries its state. */
+export type ShownWaterEntry = WaterEntry & { offline?: 'waiting' | 'refused' };
+
+const ML_PER_OZ = 29.5735;
+
+/**
+ * OFFLINE-WATER-WEIGHT-M (191-S5): the server's water read of `date` (its total and entries) with this phone's glasses
+ * of that day added: a waiting glass, or a sent one whose answer id the read does not hold yet, is listed and counted;
+ * a refused glass is listed (Remove) and counted nowhere. The join is the key: a sent glass is matched by the id its
+ * answer carried (the day read has no client_uuid), never by amount or time. The queue and the sent list share one
+ * id per glass, so it is added once.
+ */
+export function withQueuedWater(
+  server: { totalMl: number; entries: WaterEntry[] },
+  phone: (PendingWaterWeightLog | SentWaterWeightLog)[],
+  date: string,
+): { waterOz: number; waterEntries: ShownWaterEntry[] } {
+  const onServer = new Set(server.entries.map((e) => e.id));
+  const added: ShownWaterEntry[] = [];
+  let ml = server.totalMl;
+  for (const item of phone) {
+    if (!item || item.kind !== 'water' || !item.log || item.log.date !== date) continue;
+    const answerId = (item as SentWaterWeightLog).answerId;
+    if ((answerId && onServer.has(answerId)) || added.some((a) => a.id === item.id)) continue;
+    const offline = item.parkedAt ? 'refused' : 'waiting';
+    added.push({ id: item.id, amount_ml: item.log.amount_ml, logged_at: new Date(item.createdAt || Date.now()).toISOString(), offline });
+    if (offline === 'waiting') ml += item.log.amount_ml;
+  }
+  return { waterOz: Math.round(ml / ML_PER_OZ), waterEntries: added.length ? [...server.entries, ...added] : server.entries };
+}

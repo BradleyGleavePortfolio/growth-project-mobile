@@ -11,6 +11,7 @@ import { useMacroTargets } from '../../hooks/useMacroTargets';
 import { logApi, weightApi } from '../../services/api';
 import { macrosApi } from '../../api/macrosApi';
 import { parseWeightLogRow, weightHistoryRows } from './progress/weightHistory';
+import { useWeighInsOnPhone } from './progress/offlineWeighIn';
 import { WeightLog } from '../../types';
 import { getTodayString } from '../../utils/date';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
@@ -47,7 +48,9 @@ function LegacyReportScreen({ navigation }: { navigation: ReportNavigation }) {
     : serverTarget === 'none' ? savedTarget
     : serverTarget === 'error' ? macroTargets?.calories ?? savedTarget
     : undefined;
-  const [weeklyWeights, setWeeklyWeights] = useState<WeightLog[]>([]);
+  const [weeklyRead, setWeeklyWeights] = useState<WeightLog[]>([]);
+  // OFFLINE-WATER-WEIGHT-M: the week's weights count this phone's weigh-ins once (joined by key), today's included.
+  const weeklyWeights = (useWeighInsOnPhone(weeklyRead, currentUser?.id) ?? weeklyRead).slice(-7);
   const [todayMacros, setTodayMacros] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
   // Until today's log has been read the totals are unknown, not zero.
   const [macrosRead, setMacrosRead] = useState(false);

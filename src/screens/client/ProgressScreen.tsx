@@ -50,6 +50,8 @@ import { radius, typography, type SemanticTokens } from '../../theme/tokens';
 import { WeightLog } from '../../types';
 import { getTodayString, bucketDateLocal } from '../../utils/date';
 import { parseWeightLogRow, weightHistoryRows } from './progress/weightHistory';
+import { saveWeighInOffline, settleWeighInsHeld, useSentWeighInKeys, useWeighInsOnPhone, WEIGH_IN_SAVED_OFFLINE } from './progress/offlineWeighIn';
+import { isEffectivelyOnline, useNetworkStatus } from '../../hooks/useNetworkStatus';
 
 export { parseWeightLogRow, weightHistoryRows };
 import FadeInView from '../../components/FadeInView';
@@ -140,7 +142,7 @@ function LegacyProgressScreen({ onSaved, logWeightAt }: ProgressProps) {
 
   // Server-authoritative macro targets (AsyncStorage used only as cache).
   const macroTargets = useMacroTargets();
-  const [weightLogs, setWeightLogs] = useState<WeightLog[]>([]);
+  const [weightRead, setWeightLogs] = useState<WeightLog[]>([]);
   const [period, setPeriod] = useState<Period>('30D');
   const [showLogModal, setShowLogModal] = useState(false);
   // TIMELINE: Log weight on the Timeline's empty state opens this sheet.
@@ -157,12 +159,11 @@ function LegacyProgressScreen({ onSaved, logWeightAt }: ProgressProps) {
   // U3 (WEIGH-KB-128): until today's read lands (or if it fails) no number is claimed.
   const [todayState, setTodayState] = useState<TodayState>('loading');
   // U12 (WEIGH-KB-128): the first weigh-in ever, not the period's first.
-  const [firstLog, setFirstLog] = useState<WeightLog | null>(null);
-  const [lastLog, setLastLog] = useState<WeightLog | null>(null);
+  // OFFLINE-WATER-WEIGHT-M: every weigh-in read (the run below); First, Weight and the run count it with this phone's.
+  const [runRead, setRunRead] = useState<WeightLog[] | null>(null);
   // U2: the history response carries the profile height for BMI.
   const [heightCm, setHeightCm] = useState<number | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
-  const [loggingStreak, setLoggingStreak] = useState(0);
   // SHARE-A (featureFlags.shareSheetV2): the card the share sheet is open on, over this screen.
   const [shareCard, setShareCard] = useState<ShareCardContent | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -202,31 +203,14 @@ function LegacyProgressScreen({ onSaved, logWeightAt }: ProgressProps) {
       // are dropped rather than force-cast through a double assertion (R69).
       const logs = toLogs(res.data);
       setWeightLogs(logs);
+      void settleWeighInsHeld(logs);
       const h = (res.data as { height_cm?: unknown } | null)?.height_cm;
       setHeightCm(typeof h === 'number' && h > 0 ? h : null);
 
       // U12: Start, Change, goal progress and "Since" read every weigh-in
       // ("All" already has them), and so does the run below.
       const runLogs = period === 'All' ? logs : toLogs((await weightApi.getHistory(ALL_DAYS)).data);
-      setFirstLog(runLogs[0] ?? null);
-      setLastLog(runLogs[runLogs.length - 1] ?? null);
-
-      // Calculate logging streak — bucket every comparison day in the user's
-      // local timezone so a Sydney user who logs at 09:00 local doesn't see
-      // the streak reset because UTC is still on yesterday's date.
-      let streak = 0;
-      const now = new Date();
-      for (let i = 0; i < 60; i++) {
-        const d = new Date(now);
-        d.setDate(d.getDate() - i);
-        const dateStr = bucketDateLocal(d);
-        if (runLogs.some((l) => l.date === dateStr)) {
-          streak++;
-        } else if (i > 0) {
-          break;
-        }
-      }
-      setLoggingStreak(streak);
+      setRunRead(runLogs);
     } catch (err) {
       // The weight-history load failed. Record it so the chart slot renders an
       // honest retry state instead of the benign "log your weight" empty copy
@@ -263,6 +247,37 @@ function LegacyProgressScreen({ onSaved, logWeightAt }: ProgressProps) {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // OFFLINE-WATER-WEIGHT-M (191-S5): this phone's weigh-ins count once, joined by key; a sent one is read back once
+  // the history holds it (G2, G6).
+  const weightLogs = useWeighInsOnPhone(weightRead, userId ?? undefined) ?? weightRead;
+  const runLogs = useWeighInsOnPhone(runRead, userId ?? undefined);
+  const firstLog = runLogs?.[0] ?? null;
+  const lastLog = runLogs?.[runLogs.length - 1] ?? null;
+  const sentWeighIns = useSentWeighInKeys();
+  useEffect(() => {
+    if (sentWeighIns) void loadData();
+  }, [sentWeighIns, loadData]);
+  // Calculate logging streak — bucket every comparison day in the user's
+  // local timezone so a Sydney user who logs at 09:00 local doesn't see
+  // the streak reset because UTC is still on yesterday's date.
+  const loggingStreak = useMemo(() => {
+    if (!runLogs) return 0;
+    let streak = 0;
+    const now = new Date();
+    for (let i = 0; i < 60; i++) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const dateStr = bucketDateLocal(d);
+      if (runLogs.some((l) => l.date === dateStr)) {
+        streak++;
+      } else if (i > 0) {
+        break;
+      }
+    }
+    return streak;
+  }, [runLogs]);
+  const online = isEffectivelyOnline(useNetworkStatus());
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -309,6 +324,25 @@ function LegacyProgressScreen({ onSaved, logWeightAt }: ProgressProps) {
     Keyboard.dismiss();
     savingWeightRef.current = true;
     setSavingWeight(true);
+    if (!online && userId) {
+      // OFFLINE-WATER-WEIGHT-M (G6): no signal, so the weigh-in waits on this phone and sends itself later.
+      try {
+        await saveWeighInOffline(userId, { weight_lbs: w, date: getTodayString(), notes: newNotes || undefined });
+      } catch (err) {
+        console.error('ProgressScreen: weight queue failed', err);
+        Alert.alert("Couldn't log weight", errorMessage(err, 'Please try again.'));
+        return;
+      } finally {
+        savingWeightRef.current = false;
+        setSavingWeight(false);
+      }
+      Alert.alert(...WEIGH_IN_SAVED_OFFLINE);
+      setNewWeight('');
+      setNewNotes('');
+      setShowLogModal(false);
+      onSaved?.();
+      return;
+    }
     try {
       await weightApi.log({
         weight_lbs: w,

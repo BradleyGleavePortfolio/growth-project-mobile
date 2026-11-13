@@ -869,11 +869,18 @@ export const fastingApi = {
 // is the client store's (waterApi.log below).
 const weightKeys = saveKeys();
 
+type WeighInSave = { weight_lbs: number; date?: string; notes?: string };
+const weighInSave = (data: WeighInSave) => JSON.stringify([data.weight_lbs, data.date ?? null, data.notes ?? null]);
+
 export const weightApi = {
-  log: (data: { weight_lbs: number; date?: string; notes?: string }) =>
-    weightKeys.send(JSON.stringify([data.weight_lbs, data.date ?? null, data.notes ?? null]), (client_uuid) =>
-      api.post('/weight', { ...data, client_uuid }),
-    ),
+  // OFFLINE-WATER-WEIGHT-M: `key` is a queued weigh-in's id (foodLogQueue.flush), sent as is; without one, the
+  // save's own key (weightKeys) as before.
+  log: (data: WeighInSave, key?: string) =>
+    key
+      ? api.post('/weight', { ...data, client_uuid: key })
+      : weightKeys.send(weighInSave(data), (client_uuid) => api.post('/weight', { ...data, client_uuid })),
+  /** OFFLINE-WATER-WEIGHT-M (G7): the key an online try of this same weigh-in kept after a lost answer, if any. */
+  takeKeptKey: (data: WeighInSave) => weightKeys.take(weighInSave(data)),
   getHistory: (days = 30) =>
     api.get(`/weight/history?days=${days}`),
 };

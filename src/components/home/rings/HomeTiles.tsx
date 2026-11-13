@@ -25,6 +25,8 @@ import { PROVIDER_CONFIG } from '../../../api/wearablesConnectionsApi';
 import { STARTER_GOALS } from '../../../screens/client/wearables/starterGoals';
 import { seriesPoints } from '../../../screens/client/wearables/seriesSummary';
 import { parseWeightLogRow, weightHistoryRows } from '../../../screens/client/progress/weightHistory';
+import { settleWeighInsHeld, useSentWeighInKeys, useWeighInsOnPhone } from '../../../screens/client/progress/offlineWeighIn';
+import { isEffectivelyOnline, useNetworkStatus } from '../../../hooks/useNetworkStatus';
 import HomeTile from './HomeTile';
 import { checkInTile, habitsTile, proteinTile, stepsTile, waterTile, weightTile } from './homeTiles';
 
@@ -44,6 +46,8 @@ export default function HomeTiles({ day, checkIn, refreshing, noSource }: HomeTi
   const currentUser = useCurrentUser();
   const { settings, loaded } = useSettings();
   const { logWater } = useClientStore();
+  // OFFLINE-WATER-WEIGHT-M: food's send decision, the call site's network state (LogScreen).
+  const online = isEffectivelyOnline(useNetworkStatus());
   const today = getTodayString();
   const weight = useWeightHistory(30);
   const habits = useHabits();
@@ -73,9 +77,18 @@ export default function HomeTiles({ day, checkIn, refreshing, noSource }: HomeTi
   const metric = settings.unit === 'kg';
   const protein = proteinTile({ ready: day.ready, protein: day.protein, carbs: day.carbs, fat: day.fat, target: day.proteinTarget, simple: day.simple });
   const water = waterTile({ ready: day.ready && loaded, oz: day.waterOz, goalOz: settings.waterGoalOz, metric });
-  const rows = weight.isSuccess
-    ? weightHistoryRows(weight.data).map((r) => parseWeightLogRow(r, currentUser?.id ?? '')).filter((r) => r !== null)
-    : null;
+  const read = useMemo(() => (weight.isSuccess
+    ? weightHistoryRows(weight.data).map((r) => parseWeightLogRow(r, currentUser?.id ?? '')).filter((r): r is NonNullable<typeof r> => r !== null)
+    : null), [weight.isSuccess, weight.data, currentUser?.id]);
+  // OFFLINE-WATER-WEIGHT-M (G1, G2): this phone's weigh-ins count once, joined by key; one sent is read back.
+  const rows = useWeighInsOnPhone(read, currentUser?.id);
+  const sentWeighIns = useSentWeighInKeys();
+  useEffect(() => {
+    if (sentWeighIns) void refetchWeight();
+  }, [sentWeighIns, refetchWeight]);
+  useEffect(() => {
+    if (read) void settleWeighInsHeld(read);
+  }, [read]);
   const body = weightTile(loaded ? rows : null, metric);
   const habitView = habitsTile(habits.data, habitLogs.data, today);
   const stepsSeries = fitness.data?.series.find((s) => s.metric === 'STEPS');
@@ -94,7 +107,7 @@ export default function HomeTiles({ day, checkIn, refreshing, noSource }: HomeTi
   const waterReady = !!water.value && water.value !== '—';
   const addWater = async () => {
     if (!currentUser) return;
-    await logWater(currentUser.id, '', metric ? glass / 29.5735 : glass);
+    await logWater(currentUser.id, '', metric ? glass / 29.5735 : glass, online);
     if (useClientStore.getState().loadError?.endsWith(WATER_NOT_SAVED)) void HapticService.error();
     else void HapticService.success();
   };

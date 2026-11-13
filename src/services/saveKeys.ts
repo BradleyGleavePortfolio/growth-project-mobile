@@ -39,5 +39,15 @@ export function saveKeys() {
         throw err;
       }
     },
+    /**
+     * OFFLINE-WATER-WEIGHT-M (G7): the key a lost send of `save` keeps, taken (it leaves this list) for the same save
+     * queued with no signal, so the queue sends it and the server keeps one row. Undefined when none waits.
+     */
+    take(save: string): string | undefined {
+      const generation = sessionGeneration();
+      waiting = waiting.filter((w) => w.generation === generation);
+      const i = waiting.findIndex((w) => w.save === save);
+      return i < 0 ? undefined : waiting.splice(i, 1)[0].key;
+    },
   };
 }
