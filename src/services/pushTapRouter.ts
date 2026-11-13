@@ -106,14 +106,14 @@ export const CLIENT_PUSH_ROUTES: Record<string, Resolver> = {
   Timeline: () =>
     featureFlags.clientTimelineV2
       ? { root: 'MoreTab', screen: 'Timeline', beneath: ['MoreIndex', 'Progress'] }
-      : { root: 'MoreTab', screen: 'Timeline' },
+      : { root: 'MoreTab', screen: 'Timeline', initial: false },
   MoreIndex: () => ({ root: 'MoreTab', screen: 'MoreIndex', pop: true }),
   // Legacy Guidance notifications open Roman when available, otherwise You.
   AIGuide: () => ({
     root: 'MoreTab', screen: featureFlags.romanChat ? 'RomanChat' : 'MoreIndex', initial: false,
   }),
-  Membership: () => ({ root: 'MoreTab', screen: 'Membership' }),
-  Deliverables: () => ({ root: 'MoreTab', screen: 'Deliverables' }),
+  Membership: () => ({ root: 'MoreTab', screen: 'Membership', initial: false }),
+  Deliverables: () => ({ root: 'MoreTab', screen: 'Deliverables', initial: false }),
   UpdateCard: () => ({ root: 'MoreTab', screen: 'UpdateCard', initial: false }),
   WorkoutMain: () => ({ root: 'WorkoutTab', screen: 'WorkoutMain', pop: true }),
   Log: () => ({ root: 'Log' }),
@@ -123,11 +123,11 @@ export const CLIENT_PUSH_ROUTES: Record<string, Resolver> = {
   // Flag off: the tab does not exist, so land on the notification center.
   CalendarSession: () =>
     featureFlags.clientCalendar
-      ? { root: 'CalendarTab', screen: 'CalendarSession' }
+      ? { root: 'CalendarTab', screen: 'CalendarSession', initial: false }
       : { root: 'Home', screen: 'NotificationCenter' },
   CommunityEventDetail: () =>
     featureFlags.communityTab && featureFlags.communityEvents
-      ? { root: 'CommunityTab', screen: 'CommunityEventDetail' }
+      ? { root: 'CommunityTab', screen: 'CommunityEventDetail', initial: false }
       : null,
   // AUDIT-09-125: a community push (kind community_*) opens the Community tab.
   Community: () => (featureFlags.communityTab ? { root: 'CommunityTab' } : null),
@@ -170,11 +170,11 @@ export const COACH_PUSH_ROUTES: Record<string, Resolver> = {
       : { root: 'SettingsStack', screen: 'CreditPackCheckout', initial: false },
   CommunityEventDetail: () =>
     featureFlags.coachCommunity && featureFlags.communityEvents
-      ? { root: 'CommunityStack', screen: 'CoachCommunityEvents' }
+      ? { root: 'CommunityStack', screen: 'CoachCommunityEvents', initial: false }
       : null,
   CoachCommunityEvents: () =>
     featureFlags.coachCommunity && featureFlags.communityEvents
-      ? { root: 'CommunityStack', screen: 'CoachCommunityEvents' }
+      ? { root: 'CommunityStack', screen: 'CoachCommunityEvents', initial: false }
       : null,
 };
 
