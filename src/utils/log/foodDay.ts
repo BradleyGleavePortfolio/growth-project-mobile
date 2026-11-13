@@ -30,7 +30,10 @@ export interface DaySlot {
   /** UI-3c: the plan this meal is under (its name, and its place in the day's plans for its dot), set only with two or more plans. */
   plan?: string;
   planNo?: number;
-  /** FOOD-DAY-STYLEC-M: the coach's time for this plan meal ("HH:MM", DailyMealPlanSlot.time_of_day); none on a usual day. */
+  /**
+   * "HH:MM": FOOD-DAY-STYLEC-M, the coach's time for a plan meal (DailyMealPlanSlot.time_of_day); GOAL-930-M (C_usual),
+   * a usual meal's time, from when its usual version was last logged (usualTime). None when there is nothing to read.
+   */
   time?: string | null;
 }
 
@@ -46,6 +49,8 @@ export interface PastDay {
   entries: Array<RawLogEntry & {
     food_item_id?: string; meal_type?: MealType; quantity_multiplier?: number;
     original_quantity?: number | null; original_unit?: string | null;
+    /** When the server stored the row (LoggedFoodEntry.logged_at): a food saved offline carries its send time. */
+    logged_at?: string | null;
   }>;
 }
 
@@ -113,7 +118,22 @@ export const nextSlot = (day: FoodDay): DaySlot | null => day.slots.find((s) => 
 
 const sum = <T>(rows: T[], pick: (r: T) => number) => rows.reduce((t, r) => t + (Number(pick(r)) || 0), 0);
 
-type Usual = { days: string[]; meal: PastMeal; protein: number; carbs: number; fat: number; foods: DaySlot['foods'] };
+type Usual = { days: string[]; meal: PastMeal; protein: number; carbs: number; fat: number; foods: DaySlot['foods']; time: string | null };
+
+const two = (n: number) => String(n).padStart(2, '0');
+/**
+ * GOAL-930-M (C_usual): the phone's clock minute of the earliest of these rows' logged_at, as "HH:MM", so the timeline
+ * places and labels a usual meal as it does a plan meal the coach timed. No readable logged_at: no time.
+ */
+function usualTime(rows: Array<{ e: { logged_at?: string | null } }>): string | null {
+  const mins = rows.flatMap(({ e }) => {
+    const d = typeof e.logged_at === 'string' ? new Date(e.logged_at) : null;
+    return d && !Number.isNaN(d.getTime()) ? [d.getHours() * 60 + d.getMinutes()] : [];
+  });
+  if (mins.length === 0) return null;
+  const m = Math.min(...mins);
+  return `${two(Math.floor(m / 60))}:${two(m % 60)}`;
+}
 
 /** The foods logged to `meal` on two or more of the earlier days (the most days wins, then the newest), or null. */
 function usualMeal(meal: MealType, newestFirst: PastDay[]): Usual | null {
@@ -148,6 +168,8 @@ function usualMeal(meal: MealType, newestFirst: PastDay[]): Usual | null {
           : food.nutrient_basis === 'PER_SERVING' ? formatPortion(k, 'serving') : `${Math.round(k * 100)} g`;
         return { name: food.name, portion };
       }),
+      // The version's newest day (seen first, newest first): the day Repeat copies.
+      time: usualTime(rows),
     });
   }
   // Array sort is stable, so on a tie the newest version (seen first) stays first.
@@ -178,6 +200,7 @@ export function buildUsualDay(past: PastDay[], logs: FoodLog[]): FoodDay {
     } : {
       ...base, name: joinNames(usual.meal.entries.map((x) => x.name)), kcal: usual.meal.calories, protein: usual.protein,
       carbs: usual.carbs, fat: usual.fat, foods: usual.foods, logs: [], status: null, usual: { meal: usual.meal, days: usual.days },
+      time: usual.time,
     });
   }
   const used = new Set(slots.flatMap((x) => x.logs));
