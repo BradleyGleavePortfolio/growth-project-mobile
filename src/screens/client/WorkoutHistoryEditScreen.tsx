@@ -38,9 +38,7 @@ export default function WorkoutHistoryEditScreen() {
       exerciseCard: { ...base.exerciseCard, backgroundColor: sc.surface.sage, borderWidth: 1, borderColor: sc.surface.sageLine,
         borderBottomWidth: 1, borderBottomColor: sc.surface.sageLine, borderRadius: radius.card, padding: spacing.lg,
         paddingVertical: spacing.lg, marginBottom: spacing.lg },
-      // The card's title in Cormorant, as C2_logger draws "Bench press" (rows 509-556).
-      exerciseName: { ...base.exerciseName, ...typography.h2, color: sc.textPrimary },
-      notesBlock: { marginHorizontal: layout.gutter },
+      exerciseName: { ...base.exerciseName, color: sc.textPrimary },
       previousSetText: { ...base.previousSetText, color: sc.textMuted },
       addSetText: { ...base.addSetText, color: sc.textPrimary },
       setHeaderText: { ...base.setHeaderText, color: sc.textMuted },
@@ -54,6 +52,12 @@ export default function WorkoutHistoryEditScreen() {
         borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: sc.surface.sageLine },
     });
   }, [colors, sc, insetTop]);
+  // This screen's own shapes, outside the map SetLogger reads: the card's title in Cormorant, as C2_logger draws
+  // "Bench press" (rows 509-556), and the workout notes field on the page.
+  const own = useMemo(() => StyleSheet.create({
+    cardTitle: { ...typography.h2, color: sc.textPrimary },
+    notesBlock: { marginHorizontal: layout.gutter },
+  }), [sc]);
   const workout = useMemo(() => JSON.parse(route.params.workout) as LoggedWorkout, [route.params.workout]);
   const [exercises, setExercises] = useState(() => loggedWorkoutExercises(workout));
   const [notes, setNotes] = useState(workout.notes ?? '');
@@ -115,7 +119,7 @@ export default function WorkoutHistoryEditScreen() {
       <Text style={[typography.h2, { color: sc.textPrimary, marginHorizontal: spacing.xl, marginBottom: spacing.sm }]}>{workout.workout_name || 'Saved workout'}</Text>
       <Text style={[styles.previousSetText, { marginHorizontal: 20, marginBottom: 12 }]}>Correct saved weights, reps and notes.</Text>
       {exercises.map((exercise, exIdx) => <View key={exIdx} style={styles.exerciseCard}>
-        <Text style={styles.exerciseName}>{exercise.exerciseName}</Text>
+        <Text style={own.cardTitle}>{exercise.exerciseName}</Text>
         {exercise.sets.length === 0 ? <Text style={[styles.previousSetText, { marginTop: 12 }]}>No sets left</Text> : <View style={[styles.setHeaderRow, { marginTop: 12 }]}>
           <Text style={[styles.setHeaderText, { width: 36 }]}>Set</Text>
           <Text style={[styles.setHeaderText, { flex: 1 }]}>Weight (lb)</Text>
@@ -130,7 +134,7 @@ export default function WorkoutHistoryEditScreen() {
           setExercises((prev) => prev.map((e, i) => i === exIdx ? { ...e, notes: value } : e));
         }} />
       </View>)}
-      <View style={styles.notesBlock}>
+      <View style={own.notesBlock}>
         <TextInput style={styles.notesInput} value={notes} multiline maxLength={2000} placeholder="Workout notes" placeholderTextColor={sc.textMuted} accessibilityLabel="Workout notes" editable={!saving} onChangeText={(value) => { changed.current = true; setNotes(value); }} />
       </View>
     </ScrollView>
