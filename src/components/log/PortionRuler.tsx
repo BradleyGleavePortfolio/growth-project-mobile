@@ -1,7 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { View, StyleSheet, type AccessibilityActionEvent, type GestureResponderEvent, type LayoutChangeEvent } from 'react-native';
 import { colors, radius } from '../../theme/tokens';
-import { useTheme } from '../../theme/useTheme';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { formatPortion } from '../../utils/log/quickLog';
 
@@ -28,7 +27,6 @@ interface Props {
 
 /** Drag or tap to move by the unit's step; screen readers swipe up or down (adjustable). React Native views only. */
 export default function PortionRuler({ value, unit, label, onChange, disabled = false }: Props) {
-  const { semanticColors: sc } = useTheme();
   const [width, setWidth] = useState(0);
   const step = rulerStep(unit);
   const base = value ?? 0;
@@ -70,7 +68,8 @@ export default function PortionRuler({ value, unit, label, onChange, disabled = 
       const mark = tidy((first + i) * step);
       const x = half + ((mark - base) / step) * TICK_GAP;
       if (mark < 0 || x < 0 || x > width) continue;
-      ticks.push({ key: mark, x, fade: 1 - Math.min(1, Math.abs(x - half) / half) * 0.8 });
+      const fade = 0.55 * Math.max(0, Math.min(1, x / (width * 0.18), (width - x) / (width * 0.18)));
+      ticks.push({ key: mark, x, fade });
     }
   }
 
@@ -94,16 +93,17 @@ export default function PortionRuler({ value, unit, label, onChange, disabled = 
       style={styles.ruler}
     >
       {ticks.map((t) => (
-        <View key={t.key} pointerEvents="none" style={[styles.tick, { left: t.x, opacity: t.fade, backgroundColor: sc.textMuted }]} />
+        <View key={t.key} pointerEvents="none" style={[styles.tick, { left: t.x, opacity: t.fade }]} />
       ))}
-      <View pointerEvents="none" testID="portion-ruler-needle" style={[styles.needle, width ? { left: width / 2 - 1.5 } : styles.needleCentre]} />
+      <View pointerEvents="none" testID="portion-ruler-needle" style={[styles.needle, width ? { left: width / 2 - 1.25 } : styles.needleCentre]} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  ruler: { height: 72, justifyContent: 'center', marginTop: 4 },
-  tick: { position: 'absolute', top: 8, width: StyleSheet.hairlineWidth * 2, height: 56 },
-  needle: { position: 'absolute', top: 0, width: 3, height: 72, borderRadius: radius.control, backgroundColor: colors.forest },
+  // The drawing's 58 pt marks have 8 pt above and 6 pt below inside its 72 pt wrapper.
+  ruler: { height: 72, justifyContent: 'center', marginTop: 0, marginBottom: 0 },
+  tick: { position: 'absolute', top: 8, width: 1, height: 58, backgroundColor: colors.charcoal },
+  needle: { position: 'absolute', top: 0, width: 2.5, height: 72, borderRadius: radius.control, backgroundColor: colors.forest },
   needleCentre: { alignSelf: 'center' },
 });

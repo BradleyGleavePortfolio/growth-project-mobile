@@ -11,6 +11,8 @@ const mockBack = jest.fn(), mockNavigate = jest.fn(), mockRefetch = jest.fn();
 const recipe = { id: 'r1', title: 'Lentil soup', calories: 320, protein: 24, carbs: 40, fat: 8, prep_time_min: 5, cook_time_min: 20, servings: 2, tags: ['vegan'], ingredients: ['Lentils'], instructions: ['Simmer gently.'], isSaved: false };
 let mockData: unknown, mockError = false, mockLoading = false, mockRestrictions: string[] | undefined = [];
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: mockBack, navigate: mockNavigate }), useRoute: () => ({ params: { recipeId: 'r1' } }) }));
+// The Style C masthead paints the status bar on focus; no navigator here (STYLE-KITCHEN-M).
+jest.mock('../../../components/StatusBarBand', () => ({ useStatusBarBand: () => undefined }));
 jest.mock('@tanstack/react-query', () => ({ useQuery: () => ({ data: mockData, isError: mockError, isLoading: mockLoading, refetch: mockRefetch }), useQueryClient: () => ({ getQueryData: () => undefined, setQueryData: jest.fn(), invalidateQueries: jest.fn() }) }));
 jest.mock('../../../theme/ThemeProvider', () => ({ useTheme: () => ({ semanticColors: require('../../../theme/tokens').lightTokens, colors: new Proxy({}, { get: () => 'legacy' }) }) }));
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'client', profile: { diet_restrictions: mockRestrictions } }) }));
@@ -23,7 +25,7 @@ beforeEach(() => { jest.clearAllMocks(); mockError = false; mockLoading = false;
 it('keeps list navigation, all filters, search/clear, and refresh reachable as text rows', async () => {
   mockData = [recipe];
   const ui = await render(<RecipesScreen />);
-  expect(StyleSheet.flatten(ui.getByText('Lentil soup').props.style).fontFamily).toBe('Inter_500Medium');
+  expect(StyleSheet.flatten(ui.getByText('Lentil soup').props.style).fontFamily).toBe('CormorantGaramond_500Medium'); // Style C serif recipe name (STYLE-KITCHEN-M)
   expect(ui.getByText('320 kcal · 24 g protein per serving')).toBeTruthy();
   expect(ui.getByText('40 g carbs · 8 g fat per serving')).toBeTruthy();
   await fireEvent.press(ui.getByRole('button', { name: 'Open Lentil soup' }));
@@ -107,4 +109,16 @@ it('shows loading and list failure honestly and keeps stored zero nutrition', as
   mockData = { ...recipe, calories: null, protein: null, carbs: null, fat: null, prep_time_min: null };
   await ui.rerender(<RecipeDetailScreen />);
   expect(ui.queryByText(/kcal|min total|Calories|Protein|Carbs|Fat/)).toBeNull();
+});
+it('BEAUTY-929: every recipe row has its picture tile and a list failure has a Try again that refetches', async () => {
+  mockData = [recipe, { ...recipe, id: 'r2', title: 'Green salad', image_url: 'https://example.test/salad.jpg' }];
+  const ui = await render(<RecipesScreen />);
+  expect(ui.getAllByTestId('stylec-thumb', { includeHiddenElements: true })).toHaveLength(2);
+  mockData = []; mockError = true;
+  await ui.rerender(<RecipesScreen />);
+  expect(ui.getByRole('alert')).toBeTruthy();
+  expect(ui.getByText("Couldn't load recipes")).toBeTruthy();
+  expect(ui.getByText('Pull down to try again.')).toBeTruthy();
+  await fireEvent.press(ui.getByRole('button', { name: 'Try again' }));
+  expect(mockRefetch).toHaveBeenCalledTimes(1);
 });

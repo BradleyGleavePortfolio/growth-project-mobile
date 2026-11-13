@@ -7,10 +7,9 @@ import {
   TouchableOpacity,
   TextInput,
   RefreshControl,
-  ActivityIndicator,
-  Image,
   FlatList,
   ListRenderItem,
+  useWindowDimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,11 +24,11 @@ import {
   useRecipeAllergenGuide,
 } from '../../lib/recipeAllergens';
 
-import EmptyState from '../../components/EmptyState';
 import AllergySafetyPrompt from '../../components/AllergySafetyPrompt';
 import { useTheme } from '../../theme/ThemeProvider';
 import { typography, radius, SemanticTokens } from '../../theme/tokens';
-import { Screen } from '../../ui';
+import { PrimaryButton, Screen } from '../../ui';
+import { StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCNotice, StyleCPaper, StyleCThumb, usePullToRefresh, useStyleCScreen } from '../../ui/layout/StyleCPage';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { patchUserCache } from '../../lib/userCache';
 import { track } from '../../lib/analytics';
@@ -61,10 +60,12 @@ interface Recipe extends RecipeAllergenFields {
 function RecipeCard({ recipe, onPress }: { recipe: Recipe; onPress: () => void }) {
   const { semanticColors: colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  // The drawn kitchen row's 64 pt tile, 52 at large text as on the Prep guide (ctx#457 .big .rrow .tile).
+  const big = useWindowDimensions().fontScale > 1.15;
   const totalTime = Number.isFinite(recipe.prep_time_min) && Number.isFinite(recipe.cook_time_min)
     ? recipe.prep_time_min + recipe.cook_time_min : null;
   const nutrition = [
-    Number.isFinite(recipe.calories) ? `${Math.round(recipe.calories)} kcal` : '',
+    Number.isFinite(recipe.calories) ? `${Math.round(recipe.calories).toLocaleString('en-US')} kcal` : '',
     Number.isFinite(recipe.protein) ? `${Math.round(recipe.protein)} g protein` : '',
   ].filter(Boolean).join(' · ');
   const otherMacros = [
@@ -74,19 +75,11 @@ function RecipeCard({ recipe, onPress }: { recipe: Recipe; onPress: () => void }
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.8}
       accessibilityRole="button" accessibilityLabel={`Open ${recipe.title}`}>
-      {recipe.image_url ? (
-        <View style={styles.cardImageWrap}>
-          <Image
-            source={{ uri: recipe.image_url }}
-            style={styles.cardImage}
-            resizeMode="cover"
-          />
-        </View>
-      ) : null}
+      <View style={styles.cardThumb}><StyleCThumb uri={recipe.image_url || undefined} size={big ? 52 : 64} /></View>
       <View style={styles.cardBody}>
-        <Text style={styles.cardTitle} numberOfLines={2}>{recipe.title}</Text>
+        <Text style={styles.cardTitle}>{recipe.title}</Text>
         {recipe.description ? (
-          <Text style={styles.cardDesc} numberOfLines={2}>{recipe.description}</Text>
+          <Text style={styles.cardDesc}>{recipe.description}</Text>
         ) : null}
         <View style={styles.cardMeta}>
           {totalTime !== null && <View style={styles.cardMetaItem}>
@@ -100,7 +93,7 @@ function RecipeCard({ recipe, onPress }: { recipe: Recipe; onPress: () => void }
         </View>
         {nutrition ? <Text style={styles.cardMetaText}>{nutrition} per serving</Text> : null}
         {otherMacros ? <Text style={styles.cardMetaText}>{otherMacros} per serving</Text> : null}
-        <Text style={styles.cardMetaText}>{recipeAllergenSummary(recipe)}</Text>
+        <Text style={styles.cardAllergens}>{recipeAllergenSummary(recipe)}</Text>
         {recipe.tags.length > 0 ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagsRow}>
             {recipe.tags.slice(0, 4).map((tag) => (
@@ -125,6 +118,7 @@ const ALL_TAGS = [
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function RecipesScreen() {
+  const page = useStyleCScreen();
   const { semanticColors: colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
@@ -211,6 +205,7 @@ export default function RecipesScreen() {
     staleTime: 5 * 60 * 1000,
   });
   const { data, isLoading, isError, refetch, isRefetching } = showingSaved ? savedQuery : listQuery;
+  const { pulling, onRefresh } = usePullToRefresh(refetch);
 
   const recipes = data ?? [];
 
@@ -241,15 +236,9 @@ export default function RecipesScreen() {
   );
 
   return (
-    <Screen edges={['top']} scroll={false} contentStyle={styles.bare}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}
-          accessibilityRole="button" accessibilityLabel="Go back">
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Recipes</Text>
-      </View>
+    <Screen edges={['top']} scroll={false} {...page}>
+      <StyleCMasthead title="Recipes" onBack={() => navigation.goBack()} backLabel="Go back" />
+      <StyleCPaper style={styles.bare}>
 
       {/* Search */}
       <View style={styles.searchRow}>
@@ -294,10 +283,10 @@ export default function RecipesScreen() {
           flickers; the perceived win from virtualization is bigger than the
           mount-in animation. */}
       {isLoading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.accent} />
+        <ScrollView style={styles.list} contentContainerStyle={styles.loadingContainer}>
           <Text style={styles.loadingText}>Loading recipes…</Text>
-        </View>
+          <StyleCLoadingLines lead="tile" />
+        </ScrollView>
       ) : (
         <FlatList<Recipe>
           testID="recipes-list"
@@ -320,26 +309,28 @@ export default function RecipesScreen() {
           }
           refreshControl={
             <RefreshControl
-              refreshing={isRefetching}
-              onRefresh={refetch}
+              refreshing={pulling}
+              onRefresh={onRefresh}
               tintColor={colors.accent}
             />
           }
           ListEmptyComponent={
             isError ? (
-              <EmptyState
-                icon="alert-circle-outline"
-                title={showingSaved ? "Couldn't load saved recipes" : "Couldn't load recipes"}
-                subtitle="Pull down to try again."
-              />
+              // The warm notice and a Try again button (C_error), not a centred icon: the same words as before.
+              <View style={styles.errorBlock}>
+                <StyleCNotice title={showingSaved ? "Couldn't load saved recipes" : "Couldn't load recipes"}>
+                  Pull down to try again.
+                </StyleCNotice>
+                <PrimaryButton label="Try again" onPress={() => refetch()} disabled={isRefetching} haptic={false} />
+              </View>
             ) : showingSaved && !search ? (
-              <EmptyState
+              <StyleCEmpty
                 icon="bookmark-outline"
                 title="No saved recipes"
                 subtitle="Recipes you save from a recipe page appear here."
               />
             ) : (
-              <EmptyState
+              <StyleCEmpty
                 icon="restaurant-outline"
                 title={search || activeTag !== 'All' ? 'No matches' : 'No recipes yet'}
                 subtitle={
@@ -361,6 +352,7 @@ export default function RecipesScreen() {
         onSubmit={handleAllergySubmit}
         onLater={handleAllergyLater}
       />
+    </StyleCPaper>
     </Screen>
   );
 }
@@ -368,34 +360,23 @@ export default function RecipesScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const makeStyles = (colors: SemanticTokens) =>
   StyleSheet.create({
-  // Screen owns the inset top (insets.top + 12) and the page colour.
-  bare: { paddingHorizontal: 0, paddingBottom: 0 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    marginBottom: 16,
-    gap: 12,
-  },
-  backBtn: { width: 44, height: 44, justifyContent: 'center' },
-  title: { ...typography.h1, color: colors.textPrimary },
+  // Screen owns the inset top (forest via useStyleCScreen); the masthead and paper are Style C.
+  bare: { paddingTop: 24 },
 
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.bgPrimary,
-    borderRadius: radius.input,
+    // Underlined field (C_grocery "Add an item"), not a box.
     marginHorizontal: 24,
-    marginBottom: 12,
-    paddingHorizontal: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    height: 44,
+    marginBottom: 8,
+    borderBottomWidth: 1,
+    borderColor: colors.textPrimary,
+    minHeight: 48,
   },
-  searchIcon: { marginRight: 8 },
-  searchInput: { ...typography.body, flex: 1, color: colors.textPrimary, height: 44 },
+  searchIcon: { marginRight: 10 },
+  searchInput: { ...typography.body, fontSize: 17, flex: 1, color: colors.textPrimary, minHeight: 48 },
 
-  tagFilterRow: { maxHeight: 44, marginBottom: 8 },
+  tagFilterRow: { minHeight: 44, maxHeight: 44, flexGrow: 0, flexShrink: 0, marginBottom: 8 },
   tagFilterContent: { paddingHorizontal: 24, gap: 8, alignItems: 'center' },
   tagFilter: {
     paddingHorizontal: 16,
@@ -416,32 +397,21 @@ const makeStyles = (colors: SemanticTokens) =>
   listContent: { paddingHorizontal: 24, paddingBottom: 40 },
   hiddenNote: { ...typography.bodySmall, color: colors.textMuted, paddingVertical: 8 },
 
-  loadingContainer: { alignItems: 'center', paddingTop: 60, gap: 12 },
+  errorBlock: { paddingTop: 24, gap: 16 },
+  loadingContainer: { paddingHorizontal: 24, paddingTop: 24, gap: 16 },
   loadingText: { ...typography.bodySmall, color: colors.textMuted },
 
+  // A row with a cream thumb tile at the left (C_kitchen), hairline between rows.
   card: {
-    backgroundColor: colors.bgPrimary,
+    flexDirection: 'row',
+    gap: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     overflow: 'hidden',
   },
-  cardImagePlaceholder: {
-    height: 120,
-    backgroundColor: colors.bgPrimary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardImageWrap: {
-    height: 160,
-    marginTop: 20,
-    borderRadius: radius.card,
-    overflow: 'hidden',
-    backgroundColor: colors.bgSurface,
-  },
-  cardImage: {
-    width: '100%',
-    height: '100%',
-  },
+  // The picture tile (ctx#457 prep-plan .rrow: 64 pt, 52 at large text, 14 pt from the row's top): the photo when there
+  // is one, else the warm tile with the line drawing.
+  cardThumb: { paddingTop: 14 },
   caloriesBadge: {
     position: 'absolute',
     bottom: 10,
@@ -451,12 +421,14 @@ const makeStyles = (colors: SemanticTokens) =>
     paddingVertical: 4,
     borderRadius: radius.chip,
   },
-  cardBody: { paddingVertical: 20, gap: 6 },
-  cardTitle: { ...typography.bodyMd, color: colors.textPrimary },
+  cardBody: { flex: 1, paddingVertical: 14, gap: 6 },
+  cardTitle: { ...typography.h3, fontSize: 21, lineHeight: 26.25, color: colors.textPrimary },
   cardDesc: { ...typography.bodySmall, color: colors.textMuted },
   cardMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginTop: 2 },
   cardMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   cardMetaText: { ...typography.bodySmall, color: colors.textMuted, fontVariant: ['tabular-nums'] },
+  // The allergen line in the drawn smaller meta (ctx#457 .meta2, 13 pt), as on the Prep guide.
+  cardAllergens: { ...typography.bodySmall, fontSize: 13, lineHeight: 18.85, color: colors.textMuted },
   macroRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
   macroBadge: {
     flexDirection: 'row',
@@ -467,8 +439,10 @@ const makeStyles = (colors: SemanticTokens) =>
     borderRadius: radius.chip,
   },
   tagsRow: { marginTop: 6 },
+  // A hairline pill: the page is bgPrimary now, so a bgPrimary fill would vanish.
   tag: {
-    backgroundColor: colors.bgPrimary,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: radius.chip,

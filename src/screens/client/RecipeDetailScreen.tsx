@@ -7,8 +7,8 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  ScrollView,
 } from 'react-native';
-import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -18,8 +18,9 @@ import { RecipeAllergenFields, isHiddenForAllergens, recipeAllergenDetail } from
 
 import FadeInView from '../../components/FadeInView';
 import { useTheme } from '../../theme/ThemeProvider';
-import { typography, radius, SemanticTokens } from '../../theme/tokens';
-import { Screen } from '../../ui';
+import { gold, typography, radius, SemanticTokens } from '../../theme/tokens';
+import { PrimaryButton, Screen } from '../../ui';
+import { StyleCLoadingLines, StyleCMasthead, StyleCNotice, StyleCPaper, useStyleCScreen } from '../../ui/layout/StyleCPage';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Recipe extends RecipeAllergenFields {
@@ -49,7 +50,7 @@ function MacroCard({ label, value, unit }: {
   if (!Number.isFinite(value)) return null;
   return (
     <View style={styles.macroCard}>
-      <Text style={styles.macroValue}>{Math.round(value)} {unit}</Text>
+      <Text style={styles.macroValue}>{Math.round(value).toLocaleString('en-US')} {unit}</Text>
       <Text style={styles.macroLabel}>{label}</Text>
     </View>
   );
@@ -57,6 +58,7 @@ function MacroCard({ label, value, unit }: {
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function RecipeDetailScreen() {
+  const page = useStyleCScreen();
   const { semanticColors: colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
@@ -114,7 +116,7 @@ export default function RecipeDetailScreen() {
   }, [isSaved, saving, recipe, queryClient]);
 
   if (isLoading && !recipe) {
-    return <SkeletonScreen count={6} />;
+    return <Screen edges={['top']} scroll={false} {...page}><StyleCMasthead loading onBack={() => navigation.goBack()} backLabel="Go back" /><StyleCPaper style={styles.errorContainer}><StyleCLoadingLines rows={6} label="Loading" /></StyleCPaper></Screen>;
   }
 
   // A 404 wins over a cached copy (list cache or an earlier open): the recipe is
@@ -124,38 +126,32 @@ export default function RecipeDetailScreen() {
   if (!recipe || gone) {
     const unavailable = !recipeId || gone || !isError;
     return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>
+      <Screen edges={['top']} scroll={false} {...page}>
+        <StyleCMasthead onBack={() => navigation.goBack()} backLabel="Go back" />
+        <StyleCPaper style={styles.errorContainer}>
+        <StyleCNotice>
           {isHiddenForAllergens(error)
             ? 'This recipe is hidden because it lists an allergen saved on your profile.'
             : unavailable
             ? 'This recipe is no longer available.'
             : 'Could not load this recipe. Check your connection and try again.'}
-        </Text>
+        </StyleCNotice>
         {!unavailable && (
-          <TouchableOpacity onPress={() => void refetch()} accessibilityRole="button" accessibilityLabel="Retry recipe">
-            <Text style={styles.errorLink}>Try again</Text>
-          </TouchableOpacity>
+          <PrimaryButton label="Try again" accessibilityLabel="Retry recipe" onPress={() => void refetch()} haptic={false} />
         )}
         <TouchableOpacity onPress={() => navigation.goBack()} accessibilityRole="button">
           <Text style={styles.errorLink}>Go back</Text>
         </TouchableOpacity>
-      </View>
+        </StyleCPaper>
+      </Screen>
     );
   }
 
   return (
-    <Screen edges={['top']} contentStyle={styles.content}>
-      {/* Keep a stored image; without one, the title carries the screen. */}
-      <View style={styles.hero}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
+    <Screen edges={['top']} scroll={false} {...page}>
+    <ScrollView style={styles.page} contentContainerStyle={styles.content}>
+      {/* C_recipe: back, save and the title on the masthead; the recipe on the paper. */}
+      <StyleCMasthead compact title={recipe.title} onBack={() => navigation.goBack()} backLabel="Go back" trailing={
         <TouchableOpacity
           style={styles.saveBtn}
           onPress={handleToggleSave}
@@ -174,13 +170,11 @@ export default function RecipeDetailScreen() {
               color={colors.textOnAccent}
             />
           )}
-        </TouchableOpacity>
-      </View>
+        </TouchableOpacity>} />
 
+      <StyleCPaper scrolls>
       <FadeInView duration={250}>
         <View style={styles.section}>
-          {/* Title & meta */}
-          <Text style={styles.recipeTitle}>{recipe.title}</Text>
           {recipe.image_url ? <Image source={{ uri: recipe.image_url }} style={styles.heroImage} resizeMode="cover" accessibilityIgnoresInvertColors /> : null}
           {recipe.description ? (
             <Text style={styles.recipeDesc}>{recipe.description}</Text>
@@ -242,12 +236,14 @@ export default function RecipeDetailScreen() {
       <FadeInView duration={250}>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>INGREDIENTS</Text>
-          {recipe.ingredients.map((ingredient, i) => (
-            <View key={i} style={styles.listItem}>
-              <View style={styles.bullet} />
-              <Text style={styles.listItemText}>{ingredient}</Text>
-            </View>
-          ))}
+          {/* A hairline row per ingredient (C_recipe), not a bullet; the rows sit flush, without the section gap. */}
+          <View>
+            {recipe.ingredients.map((ingredient, i) => (
+              <View key={i} style={styles.ingredientRow}>
+                <Text style={styles.listItemText}>{ingredient}</Text>
+              </View>
+            ))}
+          </View>
         </View>
       </FadeInView>
 
@@ -265,6 +261,8 @@ export default function RecipeDetailScreen() {
           ))}
         </View>
       </FadeInView>
+      </StyleCPaper>
+    </ScrollView>
     </Screen>
   );
 }
@@ -272,47 +270,34 @@ export default function RecipeDetailScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const makeStyles = (colors: SemanticTokens) =>
   StyleSheet.create({
-  content: { paddingHorizontal: 0, paddingBottom: 60 },
-
-  // Top bar under the inset top that Screen supplies (was a fixed top: 56).
-  hero: {
-    minHeight: 48,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-  },
+  // Screen owns the inset top (forest via useStyleCScreen); the masthead scrolls with the recipe.
+  page: { flex: 1, backgroundColor: colors.surface.forestBand },
+  content: { flexGrow: 1, backgroundColor: colors.surface.forestBand, paddingBottom: 0 },
   heroImage: {
     width: '100%',
     height: 200,
     borderRadius: radius.card,
-  },
-  heroIcon: { opacity: 0.8 },
-  backBtn: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
   },
   saveBtn: {
     width: 44,
     height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.accent,
+    // Light ring on the masthead (a forest fill would vanish on the forest).
+    borderWidth: 1,
+    borderColor: colors.textOnMastheadMuted,
     borderRadius: radius.button,
   },
 
   section: {
-    backgroundColor: colors.bgPrimary,
     marginHorizontal: 24,
     paddingVertical: 24,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     gap: 10,
   },
-  lastSection: { marginBottom: 0 },
+  lastSection: { borderBottomWidth: 0, paddingBottom: 60 },
 
-  recipeTitle: { ...typography.h1, color: colors.textPrimary },
   recipeDesc: { ...typography.bodySmall, color: colors.textMuted },
 
   metaRow: { flexDirection: 'row', gap: 16, flexWrap: 'wrap', marginTop: 2 },
@@ -342,15 +327,7 @@ const makeStyles = (colors: SemanticTokens) =>
   macroValue: { ...typography.h2, color: colors.textPrimary, fontVariant: ['tabular-nums'] },
   macroLabel: { ...typography.bodySmall, color: colors.textMuted },
 
-  listItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  bullet: {
-    width: 6,
-    height: 6,
-    borderRadius: radius.chip,
-    backgroundColor: colors.accent,
-    marginTop: 7,
-    flexShrink: 0,
-  },
+  ingredientRow: { paddingVertical: 12, minHeight: 44, justifyContent: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   listItemText: { ...typography.body, flex: 1, color: colors.textPrimary },
 
   stepItem: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
@@ -363,11 +340,12 @@ const makeStyles = (colors: SemanticTokens) =>
     flexShrink: 0,
     marginTop: 1,
   },
-  stepNumberText: { ...typography.body, color: colors.textMuted, fontVariant: ['tabular-nums'] },
+  // Serif numerals in gold, as C_recipe draws them: gold 700 is 4.78:1 on the paper, past 4.5:1 (gold 500 would be 2.94:1).
+  stepNumberText: { ...typography.h3, color: gold[700] },
   stepText: { ...typography.body, flex: 1, color: colors.textPrimary },
 
-  errorContainer: { flex: 1, backgroundColor: colors.bgPrimary, padding: 24, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  errorText: { ...typography.body, color: colors.textMuted },
-  errorLink: { ...typography.bodyMd, minHeight: 44, paddingVertical: 10, color: colors.accent },
+  // Try again 16 pt under the notice, as drawn (ctx#457 shopping-error) and as the other four kitchen screens.
+  errorContainer: { padding: 24, gap: 16 },
+  errorLink: { ...typography.bodyMd, minHeight: 44, paddingVertical: 10, color: colors.accent, textAlign: 'center', textDecorationLine: 'underline' },
 
   });

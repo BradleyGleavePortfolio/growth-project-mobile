@@ -86,7 +86,7 @@ describe('ComposerInput — synchronous double-submit guard (P2-C2)', () => {
     });
 
     expect(onSubmit).toHaveBeenCalledTimes(1);
-    expect(onSubmit).toHaveBeenCalledWith('hello');
+    expect(onSubmit).toHaveBeenCalledWith('hello', expect.any(String));
   });
 
   it('clears the guard after the promise SETTLES so a later send works', async () => {
@@ -125,13 +125,13 @@ describe('ComposerInput — synchronous double-submit guard (P2-C2)', () => {
     await fireEvent.changeText(field, 'second');
     await fireEvent.press(send);
     expect(onSubmit).toHaveBeenCalledTimes(2);
-    expect(onSubmit).toHaveBeenNthCalledWith(2, 'second');
+    expect(onSubmit).toHaveBeenNthCalledWith(2, 'second', expect.any(String));
   });
 
   it('clears the guard after a REJECTED send and restores the draft when the field is still empty', async () => {
     let rejectSend: ((err: Error) => void) | undefined;
     const onSubmit = jest.fn(
-      () =>
+      (_value: string, _idempotencyKey: string) =>
         new Promise<void>((_resolve, reject) => {
           rejectSend = reject;
         }),
@@ -159,10 +159,12 @@ describe('ComposerInput — synchronous double-submit guard (P2-C2)', () => {
     });
 
     // Draft-restore semantics intact: field was still empty, so the draft comes
-    // back; the guard cleared on the failure path so a retry send works.
+    // back; the guard cleared on the failure path so a retry send works. SEND-ONCE-PHONE: a failure with no answer
+    // keeps the draft's key, so the retry sends the same one.
     await waitFor(() => expect(field.props.value).toBe('draft'));
     await fireEvent.press(send);
     expect(onSubmit).toHaveBeenCalledTimes(2);
-    expect(onSubmit).toHaveBeenNthCalledWith(2, 'draft');
+    expect(onSubmit).toHaveBeenNthCalledWith(2, 'draft', onSubmit.mock.calls[0][1]);
+    expect(onSubmit.mock.calls[0][1]).toEqual(expect.any(String));
   });
 });

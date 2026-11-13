@@ -62,6 +62,7 @@ import {
 } from '../../api/communityChallengesApi';
 import { CommunityApiError } from '../../api/communityApi';
 import { contentRejectedMessage } from '../../api/communitySafetyApi';
+import { leadsWithCrisisLine } from '../../lib/communityCrisisLine';
 import SafetyMenu from '../../components/community/SafetyMenu';
 import VoiceRemovedPlaceholder from '../../components/community/removed/VoiceRemovedPlaceholder';
 import { removedRowLine } from '../../components/community/removed/removedRowLine';
@@ -375,8 +376,9 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
   });
 
   const commentMutation = useMutation({
-    mutationFn: (body: string) =>
-      communityChallengesApi.addComment(challengeId, body),
+    // SEND-ONCE-PHONE: the composer's draft key travels with the words, so Send again replays it.
+    mutationFn: ({ body, idempotencyKey }: { body: string; idempotencyKey: string }) =>
+      communityChallengesApi.addComment(challengeId, body, idempotencyKey),
     onMutate: () => setActionError(null),
     onSuccess: () => {
       void queryClient.invalidateQueries({
@@ -861,7 +863,9 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
           intent="light"
           onPress={() => setActionError(null)}
           accessibilityRole="button"
-          accessibilityLabel="Dismiss this message"
+          // CRISIS-TEXT-M: a banner that leads with the 911 / 988 line is spoken whole; any other keeps today's label.
+          accessibilityLabel={leadsWithCrisisLine(actionError) ? actionError : 'Dismiss this message'}
+          accessibilityHint={leadsWithCrisisLine(actionError) ? 'Dismiss this message' : undefined}
           // The failure banner is announced to assistive tech: `polite`
           // re-reads it on mount, and the effect's announceForAccessibility
           // covers focus that is elsewhere on the screen.
@@ -899,8 +903,8 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
 
       {closed ? <ConversationClosedLine testID="community-challenge-closed" /> : !open ? null : <ComposerInput
         ref={composerRef}
-        onSubmit={async (body) => {
-          await commentMutation.mutateAsync(body);
+        onSubmit={async (body, idempotencyKey) => {
+          await commentMutation.mutateAsync({ body, idempotencyKey });
         }}
         maxLength={COMMENT_MAX}
         sending={commentMutation.isPending}

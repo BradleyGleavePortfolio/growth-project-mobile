@@ -22,7 +22,7 @@ import VoiceReportedFold, { markVoiceNoteReported, useReportedVoiceNotes } from 
 import { formatDuration } from '../voiceFormat';
 import SpaceVoiceNote from './SpaceVoiceNote';
 import SpaceRemovedPlaceholder, { type SpaceRemovedLine } from './removed/SpaceRemovedPlaceholder';
-import SpaceReplyQuote, { spokenQuote, type SpaceQuote } from './SpaceReplyQuote';
+import SpaceReplyQuote, { PHOTO_WORD, photoLine, spokenQuote, type SpaceQuote } from './SpaceReplyQuote';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { brand, colors, forestPop as fp, neutral, radius, spacing, typography, voiceShades } from '../../../theme/tokens';
 import type { SpaceMessage } from './spaceChatApi';
@@ -111,8 +111,7 @@ function MessageBody(p: SpaceChatRowProps & { folded: boolean }): React.ReactEle
     </>
   );
 }
-/** The photo's spoken word: the inbox's approved one (owner 10-26, UPDATE 2; coachCommunityApi PHOTO_PREVIEW). */
-export const PHOTO_WORD = 'Photo';
+export { PHOTO_WORD };
 
 const STATE_WORD: Record<'sending' | 'waiting' | 'failed', string> = { sending: 'Sending…', waiting: 'Waiting to send', failed: 'Not sent' };
 
@@ -182,7 +181,7 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
             viewerUserId={p.viewerUserId}
             viewerCoachId={p.isCoach && !isOwn ? p.authorId : p.viewerCoachId}
             contentNoun={p.voice ? 'voice note' : 'message'}
-            context={{ name: p.name, detail: p.voice ? `voice note · ${formatDuration(p.voice.duration_ms)}` : (p.body ?? '') }}
+            context={{ name: p.name, detail: p.voice ? `voice note · ${formatDuration(p.voice.duration_ms)}` : p.image !== undefined ? photoLine(p.body) : (p.body ?? '') }}
             reported={reported}
             onReported={() => markVoiceNoteReported(reportId)}
             onDelete={isOwn ? p.onDelete : undefined}

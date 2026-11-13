@@ -9,6 +9,7 @@ import type { SessionExercise, SessionSet } from './types';
 import type { ActiveWorkoutStyles } from './styles';
 import { SetLogger } from './SetLogger';
 import { blockLetter } from './blockLetter';
+import { readsBW } from '../../../utils/workout/bodyWeight';
 
 export function ExerciseCard({
   exercise,
@@ -16,6 +17,7 @@ export function ExerciseCard({
   onUpdateSet,
   onToggleSetComplete,
   onAddSet,
+  onRemoveSet,
   onRemoveExercise,
   onOpenExerciseDetail,
   colors,
@@ -30,12 +32,15 @@ export function ExerciseCard({
   active = false,
   foldable = false,
   notStarted = false,
+  bodyWeight = false,
 }: {
   exercise: SessionExercise;
   exIdx: number;
   onUpdateSet: <K extends keyof SessionSet>(exIdx: number, setIdx: number, field: K, value: SessionSet[K]) => void;
   onToggleSetComplete: (exIdx: number, setIdx: number) => void;
   onAddSet: (exIdx: number) => void;
+  /** SET-EDIT-M: removes one set; `removed` is called once it has gone (after the ask for a logged set). */
+  onRemoveSet?: (exIdx: number, setIdx: number, removed: () => void) => void;
   onRemoveExercise: (exIdx: number) => void;
   onOpenExerciseDetail: (exercise: SessionExercise) => void;
   colors: ThemeColors;
@@ -53,8 +58,14 @@ export function ExerciseCard({
   foldable?: boolean;
   /** C1 v2: a later block with no set done yet is one line with its plan until tapped. */
   notStarted?: boolean;
+  /** FIX-928-BW (#197-E10): a body-weight exercise; its unloaded sets read BW. */
+  bodyWeight?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  // SET-EDIT-M: rows are keyed by index and hold their own state (open fields,
+  // a typed draft); after a removal they remount, so none of it moves onto the
+  // set that takes the removed one's place. Nothing here is saved.
+  const [cuts, setCuts] = useState(0);
   const folded = foldable && !open;
   const waiting = notStarted && !open && !active;
   const done = exercise.sets.length > 0 && exercise.sets.every((set) => set.completed);
@@ -76,11 +87,11 @@ export function ExerciseCard({
   );
   // C1 v2: "C  Romanian deadlift  3 × 8 · 135 lb", one tap opens the block.
   if (waiting) {
-    const plan = planLine(exercise.sets);
+    const plan = planLine(exercise.sets, exercise.unit === 'seconds', bodyWeight);
     return (
       <HapticPressable intent="light" style={styles.exerciseCard} onPress={() => setOpen(true)}
         accessibilityRole="button" accessibilityState={{ expanded: false }}
-        accessibilityLabel={`Show sets for ${exercise.exerciseName}${plan ? `, ${plan}` : ''}`}
+        accessibilityLabel={`Show sets for ${exercise.exerciseName}${plan ? `, ${plan.replace(/ · BW$/, ' · body weight')}` : ''}`}
         testID={`exercise-waiting-${exIdx}`}>
         <View style={[styles.exerciseHeader, local.foldedHeader]}>
           {letter}
@@ -183,7 +194,7 @@ export function ExerciseCard({
 
       {exercise.sets.map((set, setIdx) => (
         <SetLogger
-          key={setIdx}
+          key={`${cuts}-${setIdx}`}
           set={set}
           setIdx={setIdx}
           exIdx={exIdx}
@@ -194,6 +205,10 @@ export function ExerciseCard({
           previous={previous?.[setIdx]}
           editable={!disabled}
           nextUp={setIdx === nextSet}
+          timed={exercise.unit === 'seconds'}
+          bodyWeight={bodyWeight}
+          onRemove={onRemoveSet ? (ex, at) => onRemoveSet(ex, at, () => setCuts((n) => n + 1)) : undefined}
+          exerciseName={exercise.exerciseName}
         />
       ))}
 
@@ -217,12 +232,16 @@ export function ExerciseCard({
   );
 }
 
-/** C1 v2 plan line from the block's first set: "3 × 8 · 135 lb"; a coach's zero stays "0 lb". */
-export function planLine(sets: SessionSet[]): string {
+/**
+ * C1 v2 plan line from the block's first set: "3 × 8 · 135 lb"; a coach's zero
+ * stays "0 lb". TIMED-SETS-M: a timed block reads "3 × 60 sec". FIX-928-BW: a
+ * body-weight exercise's zero reads "BW" ("3 × 60 sec · BW").
+ */
+export function planLine(sets: SessionSet[], timed = false, bodyWeight = false): string {
   const first = sets[0];
   if (!first) return '';
-  const weight = first.weight > 0 || first.prescribedZero ? ` · ${first.weight} lb` : '';
-  return first.reps > 0 ? `${sets.length} × ${first.reps}${weight}` : `${sets.length} ${sets.length === 1 ? 'set' : 'sets'}${weight}`;
+  const weight = first.weight > 0 || first.prescribedZero ? ` · ${readsBW(bodyWeight, first.weight) ? 'BW' : `${first.weight} lb`}` : '';
+  return first.reps > 0 ? `${sets.length} × ${first.reps}${timed ? ' sec' : ''}${weight}` : `${sets.length} ${sets.length === 1 ? 'set' : 'sets'}${weight}`;
 }
 
 export { blockLetter };

@@ -16,7 +16,9 @@ import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../HapticPressable';
 import { useTheme } from '../../theme/useTheme';
 import { useChatDraft } from '../../lib/chatDrafts';
-import { spacing, radius } from '../../theme/tokens';
+import { failedSendKeepsKey } from '../../lib/sendOnce';
+import { generateIdempotencyKey } from '../../utils/idempotency';
+import { forestPop, neutral, spacing, radius } from '../../theme/tokens';
 
 export interface ComposerInputProps {
   placeholder: string;
@@ -30,13 +32,22 @@ export interface ComposerInputProps {
    * still empty (the user has not typed something new while the send was in
    * flight) — so a failed send never silently loses what the user typed, and
    * never clobbers a newer draft typed meanwhile.
+   * SEND-ONCE-PHONE (b#1228): `idempotencyKey` is this draft's send-once key. The same words sent again after a
+   * failed send that may have reached the server get the same key (kept with the draft, lib/sendOnce.ts); new words,
+   * a success or a 400 / 409 answer get a new one.
    */
-  onSubmit: (value: string) => void | Promise<void>;
+  onSubmit: (value: string, idempotencyKey: string) => void | Promise<void>;
   /**
    * CHAT-DISCARD (owner 10-21): the chat this box belongs to (e.g. `dm:<userId>`). Given, half-typed text stays with
    * that chat on the device and is back when it opens again (src/lib/chatDrafts.ts); omitted, the box keeps nothing.
    */
   draftKey?: string;
+  /**
+   * REFINE-962 (Studio composer, S_thread_ios.html:79-:83): a white pill with a sage line, and Send as a pale sage disc
+   * with a forest arrow until the box holds words (still disabled, and said so). Only the coach's DM thread passes it;
+   * unset, the box draws as before. A dark theme keeps its own colours.
+   */
+  studio?: boolean;
   testID?: string;
 }
 
@@ -49,15 +60,16 @@ export interface ComposerInputHandle {
 
 const ComposerInput = forwardRef<ComposerInputHandle, ComposerInputProps>(
   function ComposerInput(
-    { placeholder, maxLength, sending = false, onSubmit, draftKey, testID },
+    { placeholder, maxLength, sending = false, onSubmit, draftKey, studio = false, testID },
     ref,
   ): React.ReactElement {
-  const { semanticColors } = useTheme();
+  const { semanticColors, colorScheme } = useTheme();
+  const studioLight = studio && colorScheme !== 'dark';
   const inputRef = useRef<TextInput>(null);
   useImperativeHandle(ref, () => ({
     focus: () => inputRef.current?.focus(),
   }));
-  const [value, setValue] = useChatDraft(draftKey ?? null);
+  const [value, setValue, sendKey] = useChatDraft(draftKey ?? null);
   // Tracks the current field text without forcing the catch handler to re-run
   // when `value` changes (avoids a stale closure restoring over a newer draft).
   const valueRef = useRef('');
@@ -90,12 +102,24 @@ const ComposerInput = forwardRef<ComposerInputHandle, ComposerInputProps>(
     // typed something new meanwhile, keep theirs and never clobber it. The sync
     // path keeps the existing immediate-clear behaviour.
     const draft = trimmed;
-    const result = onSubmit(draft);
+    const key = sendKey.keyFor(draft) ?? generateIdempotencyKey();
+    // The key goes with these words before the request, beside the box that clears now (LS-953R2 B1): the same
+    // words sent again before this send ends (typed again, after a Back, a reopen or a restart) send it again.
+    sendKey.keepAside(draft, key);
+    const result = onSubmit(draft, key);
     if (result && typeof result.then === 'function') {
       setField('');
       result
-        .catch(() => {
-          if (valueRef.current === '') setField(draft);
+        .then(() => sendKey.dropFailed(draft), (err: unknown) => {
+          const keep = failedSendKeepsKey(err);
+          sendKey.dropFailed(draft);
+          // A new draft typed meanwhile: the words do not come back, and a kept key stays beside the box.
+          if (valueRef.current !== '') {
+            if (keep) sendKey.keepAside(draft, key);
+            return;
+          }
+          setField(draft);
+          if (keep) sendKey.keepFailed(draft, key);
         })
         .finally(() => {
           // Cleared only after the promise settles so the guard spans the whole
@@ -104,6 +128,7 @@ const ComposerInput = forwardRef<ComposerInputHandle, ComposerInputProps>(
         });
     } else {
       setField('');
+      sendKey.dropFailed(draft); // the call is already complete: nothing is left to send again
       // Synchronous path: the call is already complete, so release immediately.
       submittingRef.current = false;
     }
@@ -117,6 +142,7 @@ const ComposerInput = forwardRef<ComposerInputHandle, ComposerInputProps>(
           backgroundColor: semanticColors.bgSurface,
           borderTopColor: semanticColors.border,
         },
+        studio ? [styles.studioBar, studioLight ? { borderTopColor: forestPop.sageLine } : null] : null,
       ]}
       testID={testID}
     >
@@ -125,7 +151,7 @@ const ComposerInput = forwardRef<ComposerInputHandle, ComposerInputProps>(
         value={value}
         onChangeText={setField}
         placeholder={placeholder}
-        placeholderTextColor={semanticColors.textMuted}
+        placeholderTextColor={studioLight ? forestPop.n700 : semanticColors.textMuted}
         maxLength={maxLength}
         multiline
         accessibilityLabel={placeholder}
@@ -136,6 +162,7 @@ const ComposerInput = forwardRef<ComposerInputHandle, ComposerInputProps>(
             color: semanticColors.textPrimary,
             borderColor: semanticColors.border,
           },
+          studio ? [styles.studioInput, studioLight ? { borderColor: forestPop.sageLine, backgroundColor: neutral[0] } : null] : null,
         ]}
       />
       <HapticPressable
@@ -153,12 +180,16 @@ const ComposerInput = forwardRef<ComposerInputHandle, ComposerInputProps>(
               ? semanticColors.accent
               : semanticColors.disabledBg,
           },
+          studio ? styles.studioSend : null,
+          studioLight ? { backgroundColor: canSend ? forestPop.forest : forestPop.sage } : null,
         ]}
       >
         <Ionicons
           name="arrow-up"
           size={20}
-          color={canSend ? semanticColors.textOnAccent : semanticColors.textOnDisabled}
+          color={studioLight
+            ? (canSend ? forestPop.onDeep : forestPop.forest) // forest on sage 7.9:1 (KT-5)
+            : canSend ? semanticColors.textOnAccent : semanticColors.textOnDisabled}
         />
       </HapticPressable>
     </View>
@@ -194,4 +225,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  // REFINE-962 `studio`: .comp padding 12px 14px 8px, gap 10px, a 1 pt line; .field 46 tall, radius 23, a 1.5 pt line,
+  // 16 pt words, padding 12px 18px; .sendb 46.
+  studioBar: { alignItems: 'center', gap: 10, paddingTop: 12, paddingBottom: 8, paddingHorizontal: 14, borderTopWidth: 1 },
+  studioInput: { minHeight: 46, borderRadius: 23, borderWidth: 1.5, paddingHorizontal: 18, paddingTop: 12, paddingBottom: 12, fontSize: 16 },
+  studioSend: { width: 46, height: 46, borderRadius: 23 },
 });

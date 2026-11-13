@@ -600,7 +600,7 @@ describe('CommunityChallengeDetailScreen — comment draft retention (P2-C3)', (
     await fireEvent.changeText(field, 'Proud of you.');
     await fireEvent.press(screen.getByTestId('community-challenge-composer-send'));
 
-    await waitFor(() => expect(api.addComment).toHaveBeenCalledWith('ch-1', 'Proud of you.'));
+    await waitFor(() => expect(api.addComment).toHaveBeenCalledWith('ch-1', 'Proud of you.', expect.any(String))); // SEND-ONCE-PHONE
     await waitFor(() =>
       expect(
         screen.getByTestId('community-challenge-composer-field').props.value,

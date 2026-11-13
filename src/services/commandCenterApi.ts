@@ -13,6 +13,7 @@
 //   POST /coach/command-center/action-queue/:alertId/dismiss — dismiss an alert
 
 import api from './api';
+import { splitRomanQuote } from '../components/roman/romanQuoteSplit';
 // `LtvMetrics` is currently defined alongside the dashboard component; the
 // `import type` ensures no runtime cycle.
 import type { LtvMetrics } from '../components/command-center/CoachLtvDashboard';
@@ -118,9 +119,13 @@ export function isSafetyAlert(
   return SAFETY_ALERT_TYPES.includes(item.alert_type);
 }
 
-/** Owner #ROMAN-CRISIS-ALERT: a crisis alert never shows the client's words. */
+/**
+ * Owner #ROMAN-CRISIS-ALERT: a crisis alert never shows the client's words.
+ * LO-950R3 C2: a turn sent as a reply carries Roman's words as its first line; the coach reads only the client's.
+ */
 export function safetyQuote(alertType: string, quote: string | null | undefined): string | null {
-  return alertType === 'roman_crisis_reply' ? null : quote ?? null;
+  if (alertType === 'roman_crisis_reply' || quote == null) return null;
+  return splitRomanQuote(quote)?.body ?? quote;
 }
 
 export interface ActionQueueResponse {
@@ -354,10 +359,11 @@ export const commandCenterApi = {
   /**
    * GET /coach/command-center/action-queue
    * Returns pending coach alerts requiring action, sorted by created_at desc.
+   * `page`: the server's existing paging (`limit` up to 100, default 50; `before` = the last row's created_at).
    */
-  getActionQueue: async (): Promise<{ data: ActionQueueResponse }> => {
+  getActionQueue: async (page?: { limit?: number; before?: string }): Promise<{ data: ActionQueueResponse }> => {
     if (__USING_MOCK_DATA) return mockDelay(MOCK_ACTION_QUEUE);
-    return api.get<ActionQueueResponse>(`${BASE}/action-queue`);
+    return page ? api.get<ActionQueueResponse>(`${BASE}/action-queue`, { params: page }) : api.get<ActionQueueResponse>(`${BASE}/action-queue`);
   },
 
   /**

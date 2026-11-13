@@ -21,6 +21,7 @@ import { captureError } from '../services/sentry';
 import { extractRequestId, REQUEST_ID_HEADER } from '../utils/correlation';
 import { randomUuid } from '../utils/idempotency';
 import { SUPPORT_EMAIL } from '../constants/support';
+import { withCrisisLine } from '../lib/communityCrisisLine';
 
 /**
  * Published support path when /community/safety has not loaded: the app's one
@@ -223,10 +224,33 @@ interface ResponseLike {
   headers?: unknown;
 }
 
+/**
+ * TOKEN-CACHE-M: a failed query saved on the phone comes back as a plain
+ * record with its plain fields only, never its cause or request config
+ * (persistableError in src/services/queryClient.ts). Before that rule the
+ * saved request config made a saved request failure read as a request that
+ * got no answer, and it still reads that way. A request failure is a saved
+ * AxiosError, or a saved CommunityApiError built from one: call() and the API
+ * files that copy it give those every kind but 'contract' and a status of 0
+ * or more ('unknown' with -1 is a failure that was not a request).
+ */
+function savedRequestFailure(err: unknown): boolean {
+  if (!err || typeof err !== 'object' || err instanceof Error) return false;
+  const e = err as { name?: unknown; kind?: unknown; status?: unknown };
+  if (e.name === 'AxiosError') return true;
+  return (
+    e.name === 'CommunityApiError' &&
+    e.kind !== 'contract' &&
+    typeof e.status === 'number' &&
+    e.status >= 0
+  );
+}
+
 /** Walk an error and its `.cause` chain to the first axios-like error. */
 function axiosLike(
   err: unknown,
 ): { response?: ResponseLike; config?: { headers?: unknown } } | null {
+  if (savedRequestFailure(err)) return {};
   let cur: unknown = err;
   for (let i = 0; i < 4 && cur && typeof cur === 'object'; i += 1) {
     const e = cur as {
@@ -281,9 +305,10 @@ export function describeCommunityFailure(
   const serverMessage =
     typeof body?.message === 'string' && body.message.trim() ? body.message : null;
 
+  // CRISIS-TEXT-M: a refusal of the poster's own text that the crisis check flagged leads with the 911 / 988 line.
   const known = (message: string): CommunityFailure => ({
     title: code === 'community.content.rejected' ? 'Please rephrase' : title,
-    message,
+    message: withCrisisLine(message, err),
     reference: null,
     code,
     status,
@@ -329,7 +354,10 @@ export function describeCommunityFailure(
   });
   return {
     title,
-    message: `The app could not ${VERBS[action]} because of a server problem. Try again in a few minutes. If it keeps happening, email ${supportEmail} and quote reference ${reference}.`,
+    message: withCrisisLine(
+      `The app could not ${VERBS[action]} because of a server problem. Try again in a few minutes. If it keeps happening, email ${supportEmail} and quote reference ${reference}.`,
+      err,
+    ),
     reference,
     code,
     status,

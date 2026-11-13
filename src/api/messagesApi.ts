@@ -26,6 +26,7 @@ import type { AxiosResponse } from 'axios';
 import { emitTutorialSignal } from '../tutorial/tutorialEvents';
 import { blockPlaced, blockLifted } from '../lib/blockSync';
 import { blockListOwner } from '../store/blockedUsersStore';
+import { CRISIS_LINE_911_988 } from '../constants/crisisLines';
 
 /**
  * The categories the report sheet offers. The backend DTO
@@ -72,7 +73,7 @@ export const REPORT_WIRE_REASON: Readonly<Record<ReportReason, ReportWireReason>
 
 /** Shown with reasons that can mean someone is at risk right now. */
 export const REPORT_EMERGENCY_NOTE =
-  'Reports are not for emergencies. If you are in danger, call 911. If you are struggling emotionally, call or text 988.';
+  `Reports are not for emergencies. ${CRISIS_LINE_911_988}`; // #202-S5: its 911 / 988 sentences live in constants/crisisLines
 
 export function reportNeedsEmergencyNote(reason: ReportReason | null): boolean {
   return reason === 'self_harm' || reason === 'violence';
@@ -121,11 +122,12 @@ export interface SendReplyResponse {
   parent_message_id?: string | null;
 }
 
-async function report(
-  messageId: string,
-  payload: ReportMessagePayload,
-): Promise<ReportMessageResponse> {
-  if (!messageId) throw new Error('messageId required');
+/**
+ * The wire reason and details for a report sheet answer. Shared by the DM
+ * report and the Roman reply report (ROMAN-HOLD-M), which take the same
+ * reason list and 1000-character details cap on the server.
+ */
+export function reportWireBody(payload: ReportMessagePayload): { reason: ReportWireReason; details?: string } {
   const wire = REPORT_WIRE_REASON[payload.reason];
   // A category the backend folds into a wider reason keeps its label first in
   // details so the reviewer still sees what was picked.
@@ -134,11 +136,15 @@ async function report(
       ? null
       : REPORT_REASON_OPTIONS.find((o) => o.value === payload.reason)?.label ?? null;
   const details = label ? (payload.details ? `${label}. ${payload.details}` : `${label}.`) : payload.details;
-  const body = {
-    messageId,
-    reason: wire,
-    details: details?.slice(0, DETAILS_MAX),
-  };
+  return { reason: wire, details: details?.slice(0, DETAILS_MAX) };
+}
+
+async function report(
+  messageId: string,
+  payload: ReportMessagePayload,
+): Promise<ReportMessageResponse> {
+  if (!messageId) throw new Error('messageId required');
+  const body = { messageId, ...reportWireBody(payload) };
   const res: AxiosResponse<unknown> = await api.post('/messages/report', body);
   const data = (res.data ?? {}) as { id?: string; report_id?: string };
   return { ok: true, report_id: data.report_id ?? data.id };

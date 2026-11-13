@@ -31,13 +31,13 @@ describe.each([320, 360, 375, 390, 430])('PORTION-WRAP-M: at %i pt', (width) => 
   it.each(NAMES.flatMap((n) => [[n, 1], [n, 1.3]] as const))('"%s" fits one line at %f text, never under 24 pt', async (name, scale) => {
     const st = flat((await header(name, width, scale)).props.style);
     expect(st.fontSize).toBeGreaterThanOrEqual(24);
-    expect(st.fontSize).toBeLessThanOrEqual(30 * scale);
+    expect(st.fontSize).toBeLessThanOrEqual(24 * scale);
     expect(EM[name] * st.fontSize + LETTER_SPACING * name.length).toBeLessThanOrEqual(width - 2 * layout.gutter);
     expect(st.lineHeight).toBeGreaterThanOrEqual(1.2 * st.fontSize);
   });
 });
 
-it.each([[1, 30], [1.3, 39]])('PORTION-WRAP-M: a name that fits keeps its own size at %f text (%i pt), as before', async (scale, size) => {
+it.each([[1, 24], [1.3, 24 * 1.3]])('PORTION-WRAP-M: a name that fits keeps its drawn size at %f text (%f pt)', async (scale, size) => {
   expect(flat((await header('Chicken breast', 430, scale)).props.style).fontSize).toBe(size);
 });
 
@@ -51,7 +51,7 @@ it('PORTION-WRAP-M: a hyphenated word never splits at its hyphen; the screen rea
 it('PORTION-WRAP-M: a name too long for one line at 24 pt wraps between words at its own size, never ellipsized', async () => {
   const name = 'Chicken thigh, roasted, skin removed, with garlic and herb butter';
   const h = await header(name, 320, 1.3);
-  expect(flat(h.props.style).fontSize).toBe(39);
+  expect(flat(h.props.style).fontSize).toBe(24 * 1.3);
   expect(h.props.numberOfLines ?? null).toBeNull();
   expect(fitTitle(name, sheetRoom(320), 1.3).oneLine).toBe(false);
 });

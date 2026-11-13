@@ -34,6 +34,7 @@ import {
 } from '../../hooks/useCoachCommunity';
 import type { CoachCommunityNav } from './coachCommunityNavTypes';
 import { InboxNoticeCard } from './CoachCommunityInboxScreen';
+import CoachDmEntry from './coach-dm/CoachDmEntryRow';
 
 // K2 Style B: one light palette in both themes, named by role.
 const semanticColors = {
@@ -117,6 +118,7 @@ export default function CoachCommunityHomeScreen(): React.ReactElement {
           testID="coach-community-home-error"
           flush
         />
+        <CoachDmEntry />
       </ScrollView>
     );
   }
@@ -134,6 +136,7 @@ export default function CoachCommunityHomeScreen(): React.ReactElement {
           result={emptyState}
           testID="coach-community-home-empty"
         />
+        <CoachDmEntry />
       </ScrollView>
     );
   }
@@ -247,6 +250,8 @@ export default function CoachCommunityHomeScreen(): React.ReactElement {
           />
         </HapticPressable>
       ) : null}
+      {/* COACH-DM-M (203-D3): the coach's community direct messages, one row (operator ruling 01:2x). */}
+      <CoachDmEntry />
     </ScrollView>
   );
 }
