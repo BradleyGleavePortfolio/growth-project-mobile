@@ -37,7 +37,8 @@ const mockChats = Object.fromEntries(['space-a', 'space-b'].map((id, n) => [id, 
     created_at: `2026-11-${n ? '01' : '10'}T10:0${k}:00.000Z`, sender: { name: 'Author' },
   })),
   list: { isSuccess: true, isLoading: false, isError: false, hasNextPage: false, data: { pages: [{}] } },
-  pending: [], noAccess: false, readSettled: true, readCursor: null,
+  pending: [], noAccess: false, readSettled: true,
+  readCursor: null as null | { last_read_at: string | null; last_read_message_id: string | null },
   reply: null, held: null, setReply: jest.fn(), setHeld: jest.fn(), readable: jest.fn(),
   markRead: (messageId: string) => mockMarkRead(id, messageId),
 }]));
@@ -151,5 +152,29 @@ it.each([
     mockPurpose.current = undefined;
     mockPurpose.role = 'client';
     mockPurpose.kind = 'chat';
+  }
+});
+
+it('LS945 B3: losing access removes a New messages control that was already visible', async () => {
+  const chat = mockChats['space-a'];
+  const messages = chat.messages;
+  try {
+    const r = await render(<Screen />);
+    await reportVisible(r, 'space-a-1');
+    await waitFor(() => expect(mockMarkRead).toHaveBeenCalledWith('space-a', 'space-a-1'));
+    chat.readCursor = { last_read_at: '2026-11-10T10:00:00.000Z', last_read_message_id: null };
+    chat.messages = [{ ...messages[0], id: 'space-a-4', created_at: '2026-11-10T10:04:00.000Z' }, ...messages];
+    await r.rerender(<Screen />);
+    expect(r.getByTestId('space-chat-pill')).toBeTruthy();
+    // A refused poll/send sets noAccess while React Query retains the previous message and read-cursor data.
+    chat.noAccess = true;
+    await r.rerender(<Screen />);
+    expect(r.getByTestId('space-chat-closed-note')).toBeTruthy();
+    expect(r.queryByTestId('space-chat-list')).toBeNull();
+    expect(Boolean(r.queryByTestId('space-chat-pill'))).toBe(false);
+  } finally {
+    chat.messages = messages;
+    chat.readCursor = null;
+    chat.noAccess = false;
   }
 });
