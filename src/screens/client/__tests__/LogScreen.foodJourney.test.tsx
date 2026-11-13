@@ -154,7 +154,7 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     const view = await render(<LogScreen onSaved={onSaved} />);
     await fireEvent.press(screen.getAllByText('Add food')[0]);
     if (flow === 'manual') {
-      await fireEvent.press(screen.getByText('Enter manually'));
+      await fireEvent.press(screen.getByText('Quick add'));
       await fireEvent.changeText(screen.getByPlaceholderText('Food name'), 'Rolled oats');
       for (const [index, value] of ['379', '13', '68', '6.5'].entries()) {
         await fireEvent.changeText(screen.getAllByPlaceholderText('0')[index], value);
@@ -310,7 +310,7 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     await fireEvent.press(await screen.findByText('Banana'));
     await fireEvent.press(screen.getByText('Cancel'));
     await fireEvent.press(screen.getByLabelText('Clear food search'));
-    await fireEvent.press(screen.getByText('Enter manually'));
+    await fireEvent.press(screen.getByText('Quick add'));
     for (const input of screen.getAllByPlaceholderText('0')) await fireEvent.changeText(input, '0');
     await fireEvent.press(screen.getByText('Log food'));
     expect(alert).toHaveBeenCalledWith('Missing info', 'Enter at least a food name and calories.');
@@ -325,7 +325,7 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     expect(onSaved).toHaveBeenCalledTimes(1);
     expect(foodApi.create).toHaveBeenCalledWith(expect.objectContaining({ name: 'Lunch label', serving_size_grams: 2 }));
     await fireEvent.press(screen.getAllByText('Add food')[0]);
-    await fireEvent.press(screen.getByText('Enter manually'));
+    await fireEvent.press(screen.getByText('Quick add'));
     await fireEvent.press(screen.getByText('Back to search'));
     await fireEvent.press(screen.getByRole('button', { name: 'Close food search' }));
     expect(onSaved).toHaveBeenCalledTimes(1);

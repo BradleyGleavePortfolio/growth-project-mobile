@@ -134,7 +134,7 @@ it('UI-3d: the meal choice also works on a coached plan day, and a manual entry 
   await fireEvent.press(await screen.findByTestId('food-day-add'));
   expect(await screen.findByTestId('food-search-meal')).toHaveTextContent('Snacks');
   await fireEvent.press(meal('Dinner'));
-  await fireEvent.press(await screen.findByText('Enter manually'));
+  await fireEvent.press(await screen.findByText('Quick add'));
   expect(meal('Dinner').props.accessibilityState.checked).toBe(true);
   await fireEvent.changeText(screen.getByPlaceholderText('Food name'), 'Toast');
   for (const input of screen.getAllByPlaceholderText('0')) await fireEvent.changeText(input, '5');

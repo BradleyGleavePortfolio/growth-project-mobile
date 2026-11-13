@@ -2,8 +2,8 @@
  * REFINE-968 (owner #203-E49, fix round 1 on m#968): the food Add sheet rebuilt from the C2 Style C add sheet
  * (context a9434a53 planning/MOCKUP3/C2/style-c/C_add_*; markup handoffs/op-144/ops144/shots/MOCK-C2/html/C_add.html,
  * whose CSS line each case quotes). Operator rulings 23:5x PST 11-12: the sheet over the day (2), "Add at {time}" only
- * when a save now files under today (3), the drawn three-column tool row with main's one tile (4; its drawn "Quick add"
- * words wait: renaming it turns unlisted tests red), Frequent kept (5), the bowl on rows with no photo (6), the sheet
+ * when a save now files under today (3), the drawn three-column tool row with main's one tile (4; it reads the drawn
+ * "Quick add" with the drawn bolt, QUICKADD-968), Frequent kept (5), the bowl on rows with no photo (6), the sheet
  * fill sc.bgSurface (9). No tile, tab or control for a feature phone main lacks: no Photo of a meal, Scan a barcode,
  * Favourites or Saved meals in any state.
  */
@@ -255,13 +255,13 @@ describe('the drawn parts (C_add.html)', () => {
     const cells = kids(grid);
     expect(cells).toHaveLength(3);
     expect(cells.map((c) => flat(c).flex)).toEqual([1, 1, 1]);
-    const tile = screen.getByRole('button', { name: 'Enter manually' });
+    const tile = screen.getByRole('button', { name: 'Quick add, enter a food manually' });
     expect(tile.parent).toBe(cells[0]);
     // Columns 2 and 3 hold their place for MEAL-PHOTO-M and a later barcode tile: empty, nothing to press.
     expect(cells.slice(1).map((c) => c.children.length)).toEqual([0, 0]);
   });
 
-  it('past 100% text the manual tile takes two shares, so its one long word stays inside the tile', async () => {
+  it('past 100% text the manual tile takes two shares, so its words stay inside the tile', async () => {
     expect(Dimensions.get('window').fontScale).toBeGreaterThan(1); // the jest window reads a larger text size
     await show();
     expect(kids(screen.getByTestId('food-tools')).map((c) => flat(c).flex)).toEqual([2, 1, 1]);
@@ -269,15 +269,35 @@ describe('the drawn parts (C_add.html)', () => {
 
   it('main\'s manual tile in the drawn shape: .c-big2 a :122 1 pt forest border, corner 16, 72 tall, glyph 24 above the label, Inter 500 15/19 forest', async () => {
     await show();
-    const tile = screen.getByRole('button', { name: 'Enter manually' });
+    const tile = screen.getByRole('button', { name: 'Quick add, enter a food manually' });
     expect(flat(tile)).toMatchObject({ borderWidth: 1, borderColor: lightTokens.accent, borderRadius: radius.card, minHeight: 72,
       gap: 6, paddingVertical: 8, paddingHorizontal: 12, alignItems: 'flex-start', justifyContent: 'center' });
     const inside = kids(tile);
-    expect(inside[0].props).toMatchObject({ iconName: 'create-outline', size: 24, color: lightTokens.accentText });
-    expect(inside[1]).toHaveTextContent('Enter manually');
+    expect(inside[0].props).toMatchObject({ svgKind: 'Svg', width: 24, height: 24, stroke: lightTokens.accentText, strokeWidth: 1.6 });
+    expect(svgsIn(inside[0], 'Path').map((p) => p.props.d)).toEqual(['M13 3.5L6 13h5l-1 7.5 7-9.5h-5z']);
+    expect(inside[1]).toHaveTextContent('Quick add');
     expect(flat(inside[1])).toMatchObject({ fontFamily: 'Inter_500Medium', fontSize: 15, lineHeight: 19, color: lightTokens.accentText });
     await fireEvent.press(tile);
     expect(handlers.onEnterManualMode).toHaveBeenCalledTimes(1);
+  });
+
+  it('the manual tile reads Quick add and its spoken label says it opens manual entry (RF968-W3, RF968-W4)', async () => {
+    await show();
+    const tools = screen.getByTestId('food-tools');
+    const tile = within(tools).getByRole('button', { name: 'Quick add, enter a food manually' });
+    expect(tile.props.accessibilityRole).toBe('button');
+    expect(tile.props.accessibilityLabel).toBe('Quick add, enter a food manually');
+    expect(within(tile).getByText('Quick add').props.children).toBe('Quick add');
+    expect(within(tools).queryAllByText(/Enter manually/i, { includeHiddenElements: true })).toHaveLength(0);
+    await fireEvent.press(tile);
+    expect(handlers.onEnterManualMode).toHaveBeenCalledTimes(1);
+  });
+
+  it('Recent could not load: the line names the tile by its words, and the tile is on screen (RF968-W3)', async () => {
+    await show({ recentFoods: [], browseUnavailable: true });
+    expect(screen.getByText('Recent foods could not load')).toBeTruthy();
+    expect(screen.getByText('Check the connection, or tap Quick add to save this food now.')).toBeTruthy();
+    expect(within(screen.getByTestId('food-tools')).getByText('Quick add')).toBeTruthy();
   });
 
   it('the search line: .c-search :112 gap 10, 1.5 pt ink underline, 50 tall, Inter 17 muted placeholder, 22 pt magnifier', async () => {
@@ -364,9 +384,9 @@ describe('no control for a feature phone main lacks, in any state (negatives)', 
     ['a past day', { savesToday: () => false }],
     ['saving', { saving: true }],
   ];
-  it.each(states)('%s: no Photo of a meal, Scan a barcode, Favourites, Saved meals or Quick add', async (_name, over) => {
+  it.each(states)('%s: no Photo of a meal, Scan a barcode, Favourites or Saved meals', async (_name, over) => {
     await show(over);
-    const missing = /Photo of a meal|Scan a barcode|Favourites|Favorites|Saved meals|Quick add/i;
+    const missing = /Photo of a meal|Scan a barcode|Favourites|Favorites|Saved meals/i;
     expect(screen.queryAllByText(missing, { includeHiddenElements: true })).toHaveLength(0);
     expect(screen.queryAllByLabelText(missing, { includeHiddenElements: true })).toHaveLength(0);
   });
