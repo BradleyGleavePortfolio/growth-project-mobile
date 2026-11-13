@@ -290,6 +290,34 @@ const REGISTRY: Surface[] = [
     proof: { by: 'suite', file: '__tests__/notificationCenter.blockReturn.test.tsx', titles: [
       'does not retain the blocked coach words when the existing centre regains focus; unrelated rows stay',
     ] } },
+  // COACH-DM-M (m#962): the coach's community direct messages. The server (b#1243) lists and opens only the coach's
+  // threads with their own current clients and leaves out a block either way, a ban and a departure; on the phone a
+  // block drops the row at once (blockSync, the DM list key prefix) and a closed thread draws no words and no box.
+  ...((): Surface[] => {
+    const file = 'screens/community/coach-dm/__tests__/coachDm.test.tsx';
+    const dir = 'screens/community/coach-dm/';
+    const BLOCK = 'KT-2: my block made elsewhere drops that client from the list and the count at once';
+    const OPEN_BLOCK = 'KT-2: my block made elsewhere closes the open thread at once: no box, no words';
+    const NEW = 'KT-2: New message leaves out a client I blocked; one who blocked me opens only the closed thread';
+    const CLOSED = ['404: BAM-1, no composer, no messages', '403 blocked_by_you: BAM-2a, and Settings opens Settings > Blocked users',
+      '403 blocked_by_them: BAM-2b with the roster name'];
+    return [
+      { file: `${dir}CoachDmThreadScreen.tsx`, kind: 'composer', what: 'a DM to one client: typed text (ComposerInput -> useSendDm)',
+        how: 'useConversationClosed(client, [thread read, send]) + ConversationClosedLine, as the client thread: my block from the block store, theirs, a ban or a departure from the read refusal; nothing editable before the read answers (useServerAnswered)',
+        proof: { by: 'suite', file, titles: [...CLOSED, OPEN_BLOCK] } },
+      { file: `${dir}CoachDmThreadScreen.tsx`, kind: 'list', what: 'one client\'s DM messages',
+        how: 'closed (either block, a ban, a departure) draws none of the client\'s words', proof: { by: 'suite', file, titles: [CLOSED[0], OPEN_BLOCK] } },
+      { file: `${dir}CoachDmListScreen.tsx`, kind: 'list', what: 'the coach\'s DM rows: roster name, last active',
+        how: 'blockSync drops a blocked client\'s row from the cached list at once (communityKeys.dmThreads prefix); the server leaves out theirs, bans and departures',
+        proof: { by: 'suite', file, titles: [BLOCK] } },
+      { file: `${dir}CoachDmEntryRow.tsx`, kind: 'list', what: '"{n} conversations" on the coach Community home',
+        how: 'counts the same cached list, so a block drops it at once', proof: { by: 'suite', file, titles: [BLOCK] } },
+      { file: `${dir}coachDm.tsx`, kind: 'list', what: 'useCoachDms: the coach\'s DM list read (useDmThreads with ?limit=100)',
+        how: 'the client\'s hook under the same key prefix, which blockSync filters; the row stops nothing (exports: []), so each caller is named on its own', proof: { by: 'suite', file, titles: [BLOCK] }, exports: [] },
+      { file: `${dir}CoachDmNewScreen.tsx`, kind: 'composer', what: 'New message: opens a DM with one client (communityApi.openDmThread); sends no words',
+        how: 'leaves out clients in my block store; a refusal either way opens only the closed thread, whose box is gated', proof: { by: 'suite', file, titles: [NEW] } },
+    ];
+  })(),
   // FR-911: named by the fail-closed scan (a send through services/messageOutbox, a coach inbox drawn in a FlatList).
   { file: 'components/share/ShareSheet.tsx', kind: 'composer', what: '"Send to {coach}": a share card sent into the coaching chat (sendCardViaOutbox)',
     how: 'none before the send: a refused card leaves the outbox and Send goes away (shareB156), but nothing asks whether the chat is closed first',

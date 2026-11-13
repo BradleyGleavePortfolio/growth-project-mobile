@@ -23,7 +23,7 @@ import * as ReactNavigation from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
 import HapticPressable from '../HapticPressable';
 import { useTheme } from '../../theme/useTheme';
-import { spacing, typography } from '../../theme/tokens';
+import { colors, forestPop, spacing, typography } from '../../theme/tokens';
 import { useBlockedUsersStore } from '../../store/blockedUsersStore';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { useFeatureFlags } from '../../hooks/useFeatureFlags';
@@ -222,15 +222,21 @@ export function ConversationClosedLine({
   line: given,
   by = null,
   name,
+  studio = false,
 }: {
   testID?: string;
   style?: StyleProp<ViewStyle>;
+  /** REFINE-962 (Studio closed bar, S_closed_you_ios.html:84-:85): a 20 pt glyph (no-entry when I blocked them, the lock
+   * otherwise, as Studio draws), 15 pt charcoal words, a forest Settings link, a 1 pt sage line. Only the coach's DM
+   * thread passes it; unset, the bar draws as before. A dark theme keeps its own colours. */
+  studio?: boolean;
   /** The words, by prop, so the role lines (#169-5) can pass theirs. */
   line?: string;
   by?: ClosedBy;
   name?: string | null;
 }): React.ReactElement {
-  const { semanticColors } = useTheme();
+  const { semanticColors, colorScheme } = useTheme();
+  const studioLight = studio && colorScheme !== 'dark';
   const openBlocked = useOpenBlockedList();
   const who = name?.trim();
   const line = given ?? (by === 'me' ? BLOCKED_BY_ME_LINE : by === 'them' && who ? blockedYouLine(who) : CLOSED_LINE);
@@ -240,16 +246,21 @@ export function ConversationClosedLine({
     announceUntil = 0;
     AccessibilityInfo.announceForAccessibility?.(line); // LO C4: the words this bar shows, not always BAM-1
   }, [line]);
-  const bar = [styles.bar, { backgroundColor: semanticColors.bgSurface, borderTopColor: semanticColors.border }, style];
-  const muted = [typography.bodySmall, styles.line, { color: semanticColors.textMuted }];
-  const icon = <Ionicons name="lock-closed-outline" size={16} color={semanticColors.textMuted} />;
+  const bar = [styles.bar, { backgroundColor: semanticColors.bgSurface, borderTopColor: semanticColors.border },
+    studio ? styles.studioBar : null, studioLight ? { borderTopColor: forestPop.sageLine } : null, style];
+  const muted = [typography.bodySmall, styles.line, { color: semanticColors.textMuted },
+    studio ? styles.studioLine : null, studioLight ? { color: colors.charcoal } : null];
+  const icon = (
+    <Ionicons name={studio && !given && by === 'me' ? 'ban-outline' : 'lock-closed-outline'} size={studio ? 20 : 16}
+      color={studioLight ? forestPop.n700 : semanticColors.textMuted} />
+  );
   if (link) {
     return (
       <HapticPressable testID={testID} accessibilityRole="link" accessibilityLabel={line} onPress={link} style={bar}>
         {icon}
         <Text style={muted}>
           {line.slice(0, -SETTINGS_WORD.length)}
-          <Text style={[styles.link, { color: semanticColors.textPrimary }]}>{SETTINGS_WORD}</Text>
+          <Text style={[styles.link, { color: studioLight ? forestPop.forest : semanticColors.textPrimary }]}>{SETTINGS_WORD}</Text>
         </Text>
       </HapticPressable>
     );
@@ -276,4 +287,7 @@ const styles = StyleSheet.create({
   // FR-877 (LO C1): a line that wraps (360 wide, 130% text) stays centred and inside the bar on native.
   line: { flexShrink: 1, textAlign: 'center' },
   link: { textDecorationLine: 'underline', fontWeight: '600' },
+  // REFINE-962 `studio`: .closedbar padding 16px 20px, min-height 64px, a 1 pt line; 15px words, line-height 1.45.
+  studioBar: { paddingVertical: 16, paddingHorizontal: 20, minHeight: 64, borderTopWidth: 1 },
+  studioLine: { fontSize: 15, lineHeight: 22 },
 });
