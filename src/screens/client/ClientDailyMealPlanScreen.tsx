@@ -154,7 +154,8 @@ export default function ClientDailyMealPlanScreen() {
   }, [checklist, log, shown, shownDay]);
   const isDone = (id: string) => checklist && (eaten.get(id)?.logs.length ?? 0) > 0;
   // The Food day's nextSlot over the shown plans in shown order; today only (the button logs to today).
-  const next = checklist && isToday ? stops.find((x) => !isDone(x.slot.id))?.slot.id ?? null : null;
+  // An unknown day log cannot establish which meal is next; keep the ordinary log actions available.
+  const next = checklist && isToday && log ? stops.find((x) => !isDone(x.slot.id))?.slot.id ?? null : null;
   // RULING 5: the now line today, once every shown meal has a time, after the last meal at or before the clock.
   const mins = stops.map((x) => minutesOf(x.slot.time_of_day));
   const nowMin = isToday && stops.length > 0 && mins.every((m) => m != null) ? nowMinutes() : null;
