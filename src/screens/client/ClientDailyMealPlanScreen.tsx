@@ -41,7 +41,7 @@
  * already makes; the eaten rule is the Food day's own (buildPlanDay).
  */
 
-import React, { useCallback, useMemo, type ReactNode } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   RefreshControl,
   ScrollView,
@@ -202,7 +202,7 @@ export default function ClientDailyMealPlanScreen() {
 
       <PaperPage bg={sc.bgSurface}>
         {isLoading ? (
-          <LoadingTimeline sc={sc} styles={styles} timeW={timeW} />
+          <LoadingTimeline sc={sc} styles={styles} />
         ) : isError ? (
           <View style={[planStyleC.card, styles.cardFill, styles.state]} accessibilityLiveRegion="polite" accessibilityRole="alert">
             <Text style={[typography.body, { color: sc.textPrimary }]}>
@@ -276,7 +276,7 @@ function PlanSection({ assignment, stops, italic, onMasthead, ctx }: {
   const { sc, styles } = ctx;
   const plan = assignment.daily_meal_plan;
   const dayTotal = onMasthead ? null : formatDayTotal(plan.slots);
-  const nowRow = (key: string): ReactNode => (ctx.nowMin != null
+  const nowRow = (key: string): React.ReactNode => (ctx.nowMin != null
     ? <NowRow key={key} clock={clockOf(ctx.nowMin)} width={ctx.timeW} line={colors.stone} ink={sc.accentText} testID="daily-meal-plan-now" />
     : null);
   const firstPlan = ctx.nowAfter === 'start' && stops.length > 0 && stops[0].slot.id === ctx.firstId;
@@ -365,7 +365,8 @@ function MealStop({ stop, ctx }: { stop: Stop; ctx: DayCtx }) {
  * Reduce Motion) and are hidden from readers; the block says main's "Loading".
  * Local to this screen: the shared SkeletonScreen is unchanged.
  */
-function LoadingTimeline({ sc, styles, timeW }: { sc: SemanticTokens; styles: Styles; timeW: number }) {
+function LoadingTimeline({ sc, styles }: { sc: SemanticTokens; styles: Styles }) {
+  const timeW = useTimeColumn();
   return (
     <View testID="daily-meal-plan-loading" accessible accessibilityLabel="Loading">
       <View style={styles.timeline} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>

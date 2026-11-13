@@ -3,12 +3,12 @@ import { logApi, waterApi, type WaterEntry } from '../services/api';
 import { getTodayString } from '../utils/date';
 import { MealType, FoodLog } from '../types';
 import { logger } from '../utils/logger';
+import { foodLogFromDailyEntry, type DailyLogEntry } from '../utils/log/dailyEntry';
 import { forgetSaveKeys, waterDayShown, withSaveKey } from '../utils/log/saveKey';
 import { dayForNewLog } from '../utils/logDay';
 import { featureFlags } from '../config/featureFlags';
 import { readQueue, readSent, settleSent, type PendingFoodLog, type SentFoodLog } from '../services/foodLogQueue';
 import { withQueuedFoods } from '../utils/log/queuedDay';
-import { foodLogFromDailyEntry, type DailyLogEntry } from '../utils/log/dailyEntry';
 
 interface DailyTotals {
   calories: number;
