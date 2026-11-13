@@ -8,7 +8,7 @@ import React from 'react';
 import * as fs from 'fs';
 import * as path from 'path';
 import { AxiosHeaders } from 'axios';
-import { StyleSheet, type ViewStyle } from 'react-native';
+import { StyleSheet, type TextStyle, type ViewStyle } from 'react-native';
 import { render } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -74,12 +74,13 @@ function hosts(root: unknown): Host[] {
   walk(root as Host | Host[] | null);
   return out;
 }
-// Text the screens own: a shared button's own label (src/ui PrimaryButton) and SetLogger's empty measuring text are
-// the shared parts' rules, outside this job (listed under "Found, not fixed").
+// Text the screens own: a shared button's own label (src/ui PrimaryButton), SetLogger's empty measuring text and an
+// Ionicons glyph (a fixed-size icon, not text) are the shared parts' rules, outside this job ("Found, not fixed").
 function textProblems(root: unknown) {
   const inButton = new Set<Host>();
   hosts(root).filter((n) => n.props.accessibilityRole === 'button').forEach((b) => hosts(b).forEach((n) => inButton.add(n)));
-  return hosts(root).filter((n) => n.type === 'Text' && !inButton.has(n) && JSON.stringify(n.children) !== '[""]'
+  const glyph = (n: Host) => (StyleSheet.flatten(n.props.style as TextStyle) ?? {}).fontFamily === 'Ionicons';
+  return hosts(root).filter((n) => n.type === 'Text' && !inButton.has(n) && !glyph(n) && JSON.stringify(n.children) !== '[""]'
     && (n.props.numberOfLines || n.props.adjustsFontSizeToFit || n.props.allowFontScaling === false))
     .map((n) => JSON.stringify(n.children));
 }
