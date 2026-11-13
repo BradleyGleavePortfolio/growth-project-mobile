@@ -90,7 +90,7 @@ export function StyleCMastText({ children, kind = 'sub', style }: { children: Re
   return <Text maxFontSizeMultiplier={1.3} style={[look, style]}>{children}</Text>;
 }
 
-/** List progress on the masthead (ctx#457 shopping): one dash per item, gold for each checked one, then the summary.
+/** List progress on the masthead (ctx#457 shopping): one dash per item, bone for each checked one, then the summary.
  *  Past 12 items the 12 dashes fill in proportion. The words carry the meaning; the dashes are decorative.
  *  FIX-929R3: the strip never runs past the gutter: the row and each dash may shrink (22 pt at most), so 12 dashes
  *  fit the 272 pt masthead at 320 pt (about 18 pt each); the summary takes the next line when they do not fit beside it. */
@@ -102,7 +102,7 @@ export function StyleCDashes({ total, done, label }: { total: number; done: numb
     <View style={s.prog}>
       {n > 0 ? (
         <View style={s.dashes} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-          {Array.from({ length: n }, (_, i) => <View key={i} style={[s.dash, { backgroundColor: i < on ? gold[300] : withAlpha(sc.textOnAccent, 0.22) }]} />)}
+          {Array.from({ length: n }, (_, i) => <View key={i} style={[s.dash, { backgroundColor: i < on ? sc.textOnAccent : withAlpha(sc.textOnAccent, 0.22) }]} />)}
         </View>
       ) : null}
       <StyleCMastText style={s.flat}>{label}</StyleCMastText>
