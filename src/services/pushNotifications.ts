@@ -230,5 +230,5 @@ export function installNotificationResponseHandler(
 function opensMealPlan(data: Record<string, unknown> | undefined): boolean {
   const link = data?.deepLink ?? data?.deep_link;
   const path = typeof link === 'string' ? incomingLinkPath(link) : null;
-  return path !== null && resolveAppLink(path, 'student')?.screen === 'ClientDailyMealPlan';
+  return path !== null;
 }
