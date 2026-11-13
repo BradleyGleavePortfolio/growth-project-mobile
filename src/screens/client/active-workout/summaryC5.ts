@@ -6,7 +6,7 @@
  *   time (previousSets) with the same reps or more; a record line on main's rule (workoutSummary, the last 50 saved
  *   workouts) in main's basis words. Never for a seconds or body-weight exercise. At most the two rows the frame draws.
  * - summaryWeek: the Train week (trainWeek over the same GET /assignments/me rows); after Send this workout's own row
- *   counts done, once, and its segment and day are the ones that draw in.
+ *   counts done, once, and its segment and day are the ones that draw in (from trainWeek's answers only).
  */
 import { previousSets, type LoggedWorkout } from './sessionQuality';
 import type { SessionExercise } from './types';
@@ -94,6 +94,11 @@ export function whatMoved(
 
 type WeekRow = Parameters<typeof trainWeek>[0][number] & { id: string };
 
+/**
+ * After Send this workout's own row (by id) counts done: its segment and, when nothing else that day is still open,
+ * its day. Everything comes from trainWeek's own answers (its day rule and its done test), so this reads no day of
+ * its own, and a read that already has the row done counts it once.
+ */
 export function summaryWeek(
   rows: ReadonlyArray<WeekRow>,
   today: string,
@@ -101,10 +106,27 @@ export function summaryWeek(
   sent: boolean,
 ): { week: WorkoutWeek; drawIndex: number | null; drawDay: number | null } {
   const before = trainWeek(rows, today);
-  if (!sent) return { week: before, drawIndex: null, drawDay: null };
-  // Its own row only, by id: a refreshed read that already has it done counts it once.
-  const week = trainWeek(rows.map((r) => (r.id === assignmentId && !r.completed_at ? { ...r, completed_at: 'sent' } : r)), today);
-  const drawIndex = week.segments.findIndex((s, i) => s === 'done' && before.segments[i] !== 'done');
-  const drawDay = week.days.findIndex((d, i) => d === 'done' && before.days[i] !== 'done');
-  return { week, drawIndex: drawIndex < 0 ? null : drawIndex, drawDay: drawDay < 0 ? null : drawDay };
+  const asRead = { week: before, drawIndex: null, drawDay: null };
+  const at = rows.findIndex((r) => r.id === assignmentId);
+  if (!sent || at < 0) return asRead;
+  const alone = (r: WeekRow) => trainWeek([r], today);
+  // Not in this week, or already done in the read: as the read says.
+  if (alone(rows[at]).total === 0 || alone(rows[at]).done === 1) return asRead;
+  const empty = trainWeek([], today).days;
+  const dayOf = (r: WeekRow) => {
+    const days = alone(r).days;
+    const moved = days.findIndex((s, d) => s !== empty[d]);
+    return moved >= 0 ? moved : empty.indexOf('today');
+  };
+  // Its segment: one per row of this week, in the read's order.
+  const drawIndex = trainWeek(rows.slice(0, at), today).total;
+  const day = dayOf(rows[at]);
+  const stillOpen = rows.some((r, i) => i !== at && alone(r).total === 1 && alone(r).done === 0 && dayOf(r) === day);
+  const week: WorkoutWeek = {
+    ...before,
+    segments: before.segments.map((s, i) => (i === drawIndex ? 'done' : s)),
+    days: stillOpen ? before.days : before.days.map((s, d) => (d === day ? 'done' : s)),
+    done: before.done + 1,
+  };
+  return { week, drawIndex, drawDay: stillOpen ? null : day };
 }
