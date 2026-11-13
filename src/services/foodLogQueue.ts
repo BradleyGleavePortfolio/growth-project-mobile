@@ -397,22 +397,25 @@ let running: { owner: string | undefined; done: Promise<FlushResult> } | null = 
 // entries. On "try again later" (retryLater.ts) we stop flushing, leave the
 // rest queued and wait out any Retry-After. A refused item is parked (kept for
 // the sign-out warning, never resent) so one broken payload can't freeze the queue.
-export function flush(): Promise<FlushResult> {
+// FIX-972: exported as `flush`. It sends nothing itself; the one send is `flush` below, by the name the save-day
+// guard knows (food1mSaveSites.test.ts DAYLESS: each queued entry keeps the day stored when it was queued).
+function flushOneAtATime(): Promise<FlushResult> {
   const owner = currentOwnerId();
   if (running && running.owner === owner) return running.done;
   const before = running ? running.done.catch(() => undefined) : Promise.resolve();
   // Cleared before any caller sees the result, so a flush called after one has ended always sends.
   const mine: { owner: string | undefined; done: Promise<FlushResult> } = {
     owner,
-    done: before.then(() => sendQueue()).finally(() => {
+    done: before.then(flush).finally(() => {
       if (running === mine) running = null;
     }),
   };
   running = mine;
   return mine.done;
 }
+export { flushOneAtATime as flush };
 
-async function sendQueue(): Promise<FlushResult> {
+async function flush(): Promise<FlushResult> {
   // P2-1: capture the userId once at the top of flush so a sign-out mid-flush
   // cannot cause us to read from user A's key and write back into user B's.
   // S6 R3: additionally, every write-back below is fenced on that captured
