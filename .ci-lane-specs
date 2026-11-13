@@ -1,0 +1,3 @@
+src/screens/client/__tests__/Goal927.goal.test.tsx
+src/utils/log/__tests__/dailyEntry.test.ts
+src/components/mealplan/__tests__/Goal927.plannedButton.test.tsx
