@@ -10,17 +10,23 @@ import { bestCard } from '../../../components/share/shareCards';
 import { getTodayString } from '../../../utils/date';
 import type { ActiveWorkoutStyles } from './styles';
 import type { workoutSummary } from './sessionQuality';
+import WorkoutSummaryC5, { type WorkoutSummaryC5Props } from './WorkoutSummaryC5';
 
 // DES-R-127: the quiet finish. One fade of at most 300 ms, no scale, no
 // particles (QUIET_LUXURY_DOCTRINE section 3).
 const FADE_MS = 300;
 
-export default function WorkoutFinishSummary({ summary, styles, historyState, elapsed }: {
+export default function WorkoutFinishSummary({ summary, styles, historyState, elapsed, c5 }: {
   summary: ReturnType<typeof workoutSummary>;
   styles: ActiveWorkoutStyles;
   historyState: 'loading' | 'loaded' | 'unavailable';
   /** Workout time as the top bar shows it. */
   elapsed: string;
+  /**
+   * WORKOUT-SUMMARY-M: the C1 Style C v2 summary page (frame C5), for a coach-set workout with
+   * featureFlags.clientTrainV2 on (ActiveWorkoutScreen decides). Without it, main's card below.
+   */
+  c5?: Omit<WorkoutSummaryC5Props, 'recordAction'>;
 }) {
   const { semanticColors: sc } = useTheme();
   const reduceMotion = useReducedMotion();
@@ -34,6 +40,22 @@ export default function WorkoutFinishSummary({ summary, styles, historyState, el
     fade.start();
     return () => fade.stop();
   }, [opacity, reduceMotion]);
+
+  if (c5) {
+    // The SHARE-A link stays under a record line, as main's card draws it (its place on the page is not drawn).
+    return <Animated.View style={[local.page, { opacity }]}>
+      <WorkoutSummaryC5
+        {...c5}
+        recordAction={featureFlags.shareSheetV2 ? (line) => line.weight == null ? null : (
+          <ShareLink
+            accessibilityLabel={`Share ${line.exercise} at ${line.weight.toLocaleString()} lb`}
+            onPress={() => setShareCard(bestCard(line.exercise, line.weight ?? 0, getTodayString()))}
+          />
+        ) : undefined}
+      />
+      {featureFlags.shareSheetV2 ? <ShareSheet card={shareCard} onClose={() => setShareCard(null)} /> : null}
+    </Animated.View>;
+  }
 
   const cells = [
     { label: 'Time', value: elapsed },
@@ -82,6 +104,7 @@ export default function WorkoutFinishSummary({ summary, styles, historyState, el
 }
 
 const local = StyleSheet.create({
+  page: { flex: 1 },
   row: { flexDirection: 'row', marginTop: 8 },
   cell: { flex: 1, alignItems: 'center', paddingVertical: 4 },
   value: { ...typography.h2, fontVariant: ['tabular-nums'] },

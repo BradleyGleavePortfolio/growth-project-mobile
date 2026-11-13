@@ -86,6 +86,8 @@ import { blockLetter } from './active-workout/blockLetter';
 import WorkoutFinishSummary from './active-workout/WorkoutFinishSummary';
 import { workoutApi } from '../../services/api';
 import { completedExercisePayload, moveExercise, newSessionExercise, previousSets, swapExercise, workoutSummary, type LoggedWorkout } from './active-workout/sessionQuality';
+import { coachRatingInput, whatMoved, type CoachRating } from './active-workout/summaryC5';
+import { getTodayString } from '../../utils/date';
 import { featureFlags } from '../../config/featureFlags';
 import { logger } from '../../utils/logger';
 import { buildCompletionLogBase, normalizeError } from './_completionLogging';
@@ -233,6 +235,21 @@ export default function ActiveWorkoutScreen() {
   // The Finish save sends the session's queue key, as the queued retry does.
   const createWorkout = useCreateWorkout(() => queueKeyRef.current);
   const summary = useMemo(() => workoutSummary(sessionExercises, history), [sessionExercises, history]);
+  // WORKOUT-SUMMARY-M (C1 Style C v2, frame C5): with clientTrainV2 on, a coach-set workout of a client with a coach
+  // opens the summary page at Finish workout; nothing is saved until Send to {coach}, which runs the Finish body below
+  // with the client's How hard and note in its one completion. Self-started or coachless: main's finish.
+  const summaryFirst = featureFlags.clientTrainV2 && !!assignmentId && !romanLocked;
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const summaryOpenRef = useRef(false);
+  summaryOpenRef.current = summaryOpen;
+  const [effort, setEffort] = useState<number | null>(null);
+  const [coachNote, setCoachNote] = useState('');
+  // Queued on the phone, the server did not answer (the drawn not-sent state, C2_error).
+  const [notSent, setNotSent] = useState(false);
+  // From the first Send tap the rating and note are fixed: Try again resends exactly these.
+  const sentRatingRef = useRef<CoachRating>({});
+  const sendTapRef = useRef(false);
+  useEffect(() => { if (!saving) sendTapRef.current = false; }, [saving]);
 
   useEffect(() => {
     if (!userId) return;
@@ -732,11 +749,16 @@ export default function ActiveWorkoutScreen() {
     ]);
   };
 
-  const finishWorkout = (confirmed = false) => {
+  const finishWorkout = (confirmed = false, rating?: CoachRating) => {
     if (saving) return;
     const completedSets = sessionExercises.reduce((sum, ex) => sum + ex.sets.filter((s) => s.completed).length, 0);
     if (completedSets === 0) {
       Alert.alert('No sets completed', 'Complete at least one set before finishing.');
+      return;
+    }
+    // C5: Finish workout and "Finish and log" open the summary; only its Send (with `rating`) saves.
+    if (summaryFirst && !rating) {
+      setSummaryOpen(true);
       return;
     }
     const recordLines = summary.records.map((r) => `Recent best: ${r.name} · ${r.weight} lb`).join('\n');
@@ -864,6 +886,8 @@ export default function ActiveWorkoutScreen() {
                       completion_payload: completionPayload,
                       idempotency_key: idempotencyKeyRef.current,
                       started_at: sessionStartTimeRef.current.toISOString(),
+                      // C5: How hard and the note, only when given (the server writes them on this first completion only).
+                      ...rating,
                     },
                   }
                 : null,
@@ -1001,6 +1025,7 @@ export default function ActiveWorkoutScreen() {
                     completion_payload: completionPayload,
                     idempotency_key: idempotencyKeyRef.current,
                     started_at: sessionStartTimeRef.current.toISOString(),
+                    ...rating,
                   }).then(refreshAssignments).catch((error: unknown) => {
                     // Non-fatal: generic workout already saved above.
                     logger.warn('mwb.completion.assignment-sync', {
@@ -1050,6 +1075,12 @@ export default function ActiveWorkoutScreen() {
                   Promise.resolve()
                     .then(() => releaseQueuedWorkout(queueKey, err))
                     .catch(() => undefined);
+                  // C5: from the summary the page stays and draws the not-sent card (C2_error; its haptic is error).
+                  if (rating) {
+                    HapticService.error();
+                    setNotSent(true);
+                    return;
+                  }
                   HapticService.success();
                   navigation.goBack();
                   Alert.alert(
@@ -1108,6 +1139,8 @@ export default function ActiveWorkoutScreen() {
                 const reason = (err as { response?: unknown } | null)?.response
                   ? errorMessage(err, 'The server did not accept the workout.')
                   : 'No connection.';
+                // C5: a refusal (or no local copy) goes back to the logger, where "tap Finish again" is true.
+                if (rating) setSummaryOpen(false);
                 Alert.alert(
                   'Workout not saved yet',
                   `${reason.replace(/\.?$/, '.')} The sets stay on this screen. Check the connection, then tap Finish again.`,
@@ -1211,6 +1244,11 @@ export default function ActiveWorkoutScreen() {
       navigation.addListener('beforeRemove', (e) => {
         if (finishingRef.current) return;
         e.preventDefault();
+        // C5: back from the summary (Android back) is back to the logger, nothing saved.
+        if (summaryOpenRef.current) {
+          setSummaryOpen(false);
+          return;
+        }
         askBeforeLeavingRef.current(() => navigation.dispatch(e.data.action), true);
       }),
     [navigation],
@@ -1284,6 +1322,32 @@ export default function ActiveWorkoutScreen() {
   // The header's block line: the block in progress, else the last block.
   const blockCount = sessionExercises.length;
   const heroBlock = activeExercise >= 0 ? activeExercise : blockCount - 1;
+
+  // C5: Send runs main's Finish body once (a second tap before it starts does nothing); Try again resends the same.
+  const sendFromSummary = (again: boolean) => {
+    if (sendTapRef.current || saving) return;
+    sendTapRef.current = true;
+    if (!again) sentRatingRef.current = coachRatingInput(effort, coachNote);
+    setNotSent(false);
+    finishWorkout(true, sentRatingRef.current);
+  };
+  if (summaryOpen && assignmentId) {
+    return (
+      <WorkoutFinishSummary
+        summary={summary} styles={styles} historyState={historyState} elapsed={formatTime(timer)}
+        c5={{
+          assignmentId, today: getTodayString(), minutes: Math.round(timer / 60), sets: summary.sets, volume: summary.volume,
+          lines: whatMoved(sessionExercises, history, summary.records, bodyWeight),
+          effort, note: coachNote, onEffort: setEffort, onNote: setCoachNote,
+          status: notSent ? 'notSent' : saving ? 'sending' : 'open',
+          sentKey: notSent || saving ? queueKeyRef.current || null : null,
+          onSend: () => sendFromSummary(false), onTryAgain: () => sendFromSummary(true),
+          // Not sent: leaving goes where main's "Saved on this phone" went; else back to the logger.
+          onBack: () => (notSent ? navigation.goBack() : setSummaryOpen(false)),
+        }}
+      />
+    );
+  }
 
   return (
     <>
