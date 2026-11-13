@@ -22,7 +22,7 @@ it.each([{ role: 'client' }, { role: 'student' }, {}, null])('a client (or no sa
   mockUser.current = user;
   const view = await render(<OfflineBanner />);
   expect(view.getByText(C1_S_10)).toBeTruthy();
-  const band = view.getByRole('alert');
+  const band = view.UNSAFE_getAllByProps({ accessibilityRole: 'alert' })[0];
   expect(band.props.accessibilityLiveRegion).toBe('polite');
 });
 

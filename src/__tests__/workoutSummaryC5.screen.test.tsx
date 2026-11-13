@@ -203,7 +203,8 @@ const weekRows = (todayDone = false) => {
   return [...others, weekRow(ASSIGNMENT, today, todayDone)];
 };
 
-async function openScreen(assignmentId: string | undefined = ASSIGNMENT) {
+async function openScreen(assignment: string | null = ASSIGNMENT) {
+  const assignmentId = assignment ?? undefined;
   mockParams = { routineName: 'Upper body A', exercises: '[]', resume: true, ...(assignmentId ? { assignmentId } : {}) };
   mockStore.set(mockUser.id, stored(assignmentId));
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
@@ -218,7 +219,13 @@ async function openSummary(view: Awaited<ReturnType<typeof openScreen>>) {
 async function press(view: Awaited<ReturnType<typeof openScreen>>, testID: string) {
   await act(async () => { fireEvent.press(view.getByTestId(testID)); });
 }
-const queuedInput = () => JSON.parse(mockRows[0].assignment_json ?? 'null')?.input as Record<string, unknown> | undefined;
+// The completion as the queue stored it (the engine clears it once the server answers).
+const queuedInput = () => {
+  const writes = mockDb.runAsync.mock.calls.filter(([sql]) => /INSERT INTO workout_logs|SET payload = \?, assignment_json = \?/.test(String(sql)));
+  const [sql, args] = writes[writes.length - 1] ?? [];
+  const json = sql == null ? null : /INSERT/.test(String(sql)) ? (args as unknown[])[7] : (args as unknown[])[1];
+  return JSON.parse(String(json ?? 'null'))?.input as Record<string, unknown> | undefined;
+};
 const alertTitles = () => (Alert.alert as jest.Mock).mock.calls.map((c) => c[0]);
 
 beforeEach(() => {
@@ -449,7 +456,7 @@ describe('S9 and S10: main\'s finish where the summary does not apply', () => {
     await mainFinish(await openScreen());
   });
   it('S10: a self-started workout (no assignment)', async () => {
-    await mainFinish(await openScreen(undefined));
+    await mainFinish(await openScreen(null));
   });
   it('S10: a coachless client', async () => {
     mockCoachless = true;
