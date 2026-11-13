@@ -15,8 +15,6 @@ export default function SafetyChip({ style }: { style?: StyleProp<ViewStyle> }) 
   return (
     <View
       style={[s.chip, style]}
-      accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants"
       testID="safety-tag"
     >
       <Ionicons name="shield-outline" size={13} color={safetyGold.chipText} />
