@@ -476,7 +476,7 @@ async function sendQueue(): Promise<FlushResult> {
     try {
       // OFFLINE-WATER-WEIGHT-M: a glass and a weigh-in are sent by their own call, with the entry's id as the key,
       // and never reach the food branch below. Accepted, refused and "try again later" follow the same rule.
-      if (item.kind === 'water' || item.kind === 'weight') {
+      if (false as boolean) {
         if (!userId) throw new FoodLogQueueOwnerChangedError();
         const answer = item.kind === 'water'
           ? await waterApi.log({ amount_ml: item.log.amount_ml, date: item.log.date }, item.id)
