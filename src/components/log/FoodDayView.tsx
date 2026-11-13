@@ -332,17 +332,12 @@ export default function FoodDayView(p: FoodDayViewProps) {
           {/* GOAL-930-M (D1, C_first.html :121-122 .c-big2): the drawn three columns, main's Enter manually in the first
               (the drawing has it third; working tiles fill from the left). Columns 2 and 3 hold their place for MEAL-PHOTO-M's
               Photo of a meal and, if the owner brings it to v1 (203-D22), Scan a barcode: never a dead tile. */}
-          <View style={s.tools} testID="food-day-first-tools">
-            <View style={[s.toolCell, wideTool && s.toolCellWide]} testID="food-day-first-tool-cell">
-              <HapticPressable intent="light" onPress={() => p.onSomethingElse(nextFirst(counted), undefined, true)} style={s.tool}
-                accessibilityRole="button" accessibilityLabel="Enter manually" testID="food-day-first-manual">
-                <Ionicons name="create-outline" size={24} color={sc.accentText} />
-                <Text style={s.toolText}>Enter manually</Text>
-              </HapticPressable>
-            </View>
-            <View style={s.toolCell} testID="food-day-first-tool-cell" />
-            <View style={s.toolCell} testID="food-day-first-tool-cell" />
-          </View>
+          <HapticPressable intent="light" onPress={() => p.onSomethingElse(nextFirst(counted), undefined, true)}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingHorizontal: 16, borderRadius: radius.card, borderWidth: 1, borderColor: palette.forest }}
+            accessibilityRole="button" accessibilityLabel="Enter manually" testID="food-day-first-manual">
+            <Ionicons name="create-outline" size={22} color={sc.accentText} />
+            <Text style={{ ...typography.bodyMd, fontSize: 17, color: sc.accentText }}>Enter manually</Text>
+          </HapticPressable>
           <HapticPressable intent="light" disableAnimation onPress={() => p.onSomethingElse(nextFirst(counted))} style={s.search}
             accessibilityRole="search" accessibilityLabel="Search foods..." testID="food-day-first-search">
             <Ionicons name="search-outline" size={22} color={sc.textMuted} />
