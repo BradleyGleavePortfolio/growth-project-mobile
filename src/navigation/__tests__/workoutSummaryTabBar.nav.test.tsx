@@ -7,7 +7,7 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { act, render, screen } from '@testing-library/react-native';
-import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
+import { NavigationContainer, createNavigationContainerRef, type ParamListBase } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
@@ -17,7 +17,7 @@ jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
-const ref = createNavigationContainerRef();
+const ref = createNavigationContainerRef<ParamListBase>();
 const Nothing = () => null;
 const LogTab = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
