@@ -27,8 +27,9 @@ import RomanAvatar from '../../components/roman/RomanAvatar';
 import RomanTypingIndicator from '../../components/roman/RomanTypingIndicator';
 import {
   ROMAN_AI_ON_ASK_AGAIN, ROMAN_ERROR_TRANSIENT, ROMAN_OFFLINE_BODY, ROMAN_OFFLINE_TITLE, ROMAN_QUICK_STARTS, ROMAN_ROOM_FOOTER,
-  ROMAN_STORED_NO_REPLY, ROMAN_STILL_ANSWERING_COPILOT, romanPoolEmpty, romanRateLimited,
+  ROMAN_HELD_NO_ANSWER_COPILOT, ROMAN_HELD_NOT_READY_COPILOT, romanPoolEmpty, romanRateLimited,
 } from '../../components/roman/romanVoice';
+import RomanHeldCard from '../../components/roman/RomanHeldCard';
 import { ForestStatusBar } from '../../components/StatusBarBand';
 import { Headline, Screen, TextLink, useScreenInsets } from '../../ui';
 import { HapticService } from '../../ui/haptics/haptics.service';
@@ -375,13 +376,28 @@ function TurnError({ error, onRetry }: { error: RomanApiError; onRetry: () => vo
   if (error.kind === 'aiRefused' && error.refusal && !granted) {
     return <CopilotRefusal refusal={error.refusal} onRetry={stored ? () => setGranted(true) : onRetry} testID="copilot-ai-refusal" />;
   }
+  // ROMAN-RETRY-B-M (#203-E41, B frames S6a and S6b): a stored question (the branch below after the limits and an AI-help
+  // grant) gets Roman's held card in place of the notice, in his voice, the dots while the answer is not ready, and no
+  // button: the question is back in the box, so the line names the box.
+  const limited = error.kind === 'dailyCap' || error.kind === 'poolEmpty' || granted || error.kind === 'rateLimited';
+  if (stored && !limited) {
+    return (
+      <RomanHeldCard
+        line={error.replyPending ? ROMAN_HELD_NOT_READY_COPILOT : ROMAN_HELD_NO_ANSWER_COPILOT}
+        pending={error.replyPending === true}
+        accessibilityRole="alert"
+        accessibilityLiveRegion="polite"
+        style={s.held}
+        testID={`copilot-turn-${error.kind}`}
+      />
+    );
+  }
   // Style A draws the daily cap inline with main's words (frame 09, CP-A-40), not main's pop-up (style B, CP-B-23).
   const [title, body, retry]: [string, string, boolean] =
     error.kind === 'dailyCap' ? [AI_DAILY_CAP_TITLE, error.dailyCap ? aiDailyCapBody(error.dailyCap, 'client') : '', false]
     : error.kind === 'poolEmpty' ? ['', romanPoolEmpty('client'), false]
     : granted ? [ROMAN_AI_ON_ASK_AGAIN, '', false]
     : error.kind === 'rateLimited' ? [romanRateLimited(error.retryAfterSeconds), '', false]
-    : stored ? [error.replyPending ? ROMAN_STILL_ANSWERING_COPILOT : ROMAN_STORED_NO_REPLY, '', false]
     : error.kind === 'offline' ? [ROMAN_OFFLINE_TITLE, ROMAN_OFFLINE_BODY, true]
     : [ROMAN_ERROR_TRANSIENT, '', true];
   return (
@@ -519,6 +535,8 @@ const s = StyleSheet.create({
   // .trust 12 under the card (the section's gap is 10).
   hint: { marginTop: 2 },
   turn: { gap: 12 },
+  // Roman's held card sits in the turn's own gutter, 12 under the question (the turn's gap).
+  held: { marginHorizontal: 0, marginTop: 0 },
   asked: { gap: 3 },
   strong: { fontWeight: '600' },
   grow: { flex: 1 },
