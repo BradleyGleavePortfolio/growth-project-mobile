@@ -549,6 +549,8 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
         {/* B32 (prototype 68): consent before Roman's first answer. */}
         {surface === 'client' ? <RomanConsentGate surface="client" /> : null}
 
+        {/* ROMAN-RETRY-B-M: the send-error row and the buy links under it are Roman's card in the conversation (held). */}
+
       </View>
     </Screen>
   );
