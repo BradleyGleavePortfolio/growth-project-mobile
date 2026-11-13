@@ -351,7 +351,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
     };
     // GOAL-930-M: the tap that started this save, for the failure below; a new try clears the last one's card.
     const tap = addSheetAfterLog.current;
-    const failed = (title: string, message: string) => (tap === 'classic' ? Alert.alert(title, message)
+    const failed = (title: string, message: string) => (tap === 'classic' || true ? Alert.alert(title, message)
       : setSaveFailure({ title, message, retry: tap === 'keep' ? 'addAnother' : 'confirm' }));
     setSaveFailure(null);
     setFoodSaving(true);
