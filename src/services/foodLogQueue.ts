@@ -385,11 +385,34 @@ export async function mergeAnonymousQueueIntoUser(userId: string): Promise<{
 // The server asked for a pause (Retry-After): no send before this time.
 let retryNotBefore = 0;
 
+type FlushResult = { flushed: number; remaining: number; parked: number };
+
+// REFINE-972 (B2): one flush at a time on this phone. The sync, a day read and the sign-out try all send through
+// here; a caller that arrives while a flush runs for the same owner shares that flush and sends nothing itself, so
+// an item is never read and sent by two flushes at once (a hand-typed food's POST /foods keeps no key). A caller for
+// another owner never takes that result: it waits for the running flush to end, then sends its own owner's queue.
+let running: { owner: string | undefined; done: Promise<FlushResult> } | null = null;
+
 // Flush the queue to the backend. Returns the number of successfully flushed
 // entries. On "try again later" (retryLater.ts) we stop flushing, leave the
 // rest queued and wait out any Retry-After. A refused item is parked (kept for
 // the sign-out warning, never resent) so one broken payload can't freeze the queue.
-export async function flush(): Promise<{ flushed: number; remaining: number; parked: number }> {
+export function flush(): Promise<FlushResult> {
+  const owner = currentOwnerId();
+  if (running && running.owner === owner) return running.done;
+  const before = running ? running.done.catch(() => undefined) : Promise.resolve();
+  // Cleared before any caller sees the result, so a flush called after one has ended always sends.
+  const mine: { owner: string | undefined; done: Promise<FlushResult> } = {
+    owner,
+    done: before.then(() => sendQueue()).finally(() => {
+      if (running === mine) running = null;
+    }),
+  };
+  running = mine;
+  return mine.done;
+}
+
+async function sendQueue(): Promise<FlushResult> {
   // P2-1: capture the userId once at the top of flush so a sign-out mid-flush
   // cannot cause us to read from user A's key and write back into user B's.
   // S6 R3: additionally, every write-back below is fenced on that captured

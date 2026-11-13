@@ -105,6 +105,14 @@ function shownWater(sw: NonNullable<ClientStore['serverWater']>, queue: PendingW
   return withQueuedWater({ totalMl: sw.totalMl, entries: sw.entries }, [...queue, ...sent], sw.date);
 }
 
+/**
+ * REFINE-972 (LS C1): tell the pending-count listeners (foodLogSync.notifyPendingFoodLogs). foodLogSync imports this
+ * store, so it is required here, inside the call, never at the top (an import cycle).
+ */
+const tellPendingCount = () => Promise.resolve()
+  .then(() => (require('../services/foodLogSync') as typeof import('../services/foodLogSync')).notifyPendingFoodLogs())
+  .catch((err: unknown) => logger.warn('ClientStore', 'telling the pending count failed', err));
+
 /** The day on screen: the server's read, plus this phone's queued foods of that day when the flag is on. */
 function shownDay(serverDay: NonNullable<ClientStore['serverDay']>, queue: PendingFoodLog[], sent: PendingFoodLog[] = []) {
   if (!featureFlags.offlineFoodInDay) return { foodLogs: serverDay.logs, dailyTotals: serverDay.totals };
@@ -160,7 +168,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
   loadDayData: async (_userId: string, date?: string) => {
     const mine = session;
     const d = date || get().selectedDate;
-    const rev = queueRev;
+    let rev = queueRev;
     const startedAt = Date.now();
     let queueRead: Promise<PendingFoodLog[]> | null = null;
     let sentRead: Promise<SentFoodLog[]> | null = null;
@@ -203,9 +211,23 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       // one flush sends it again first, with the same key; the server answers the first row, and its id says whether
       // this read holds it. So the read is applied once.
       let phone = waterRev === phoneRev ? phoneAtStart : phoneNow();
+      let foodsAt: [PendingFoodLog[], SentFoodLog[]] = [queueAtStart, sentAtStart];
+      let sentHere = false;
       if (waterResponse && phone.queue.some((q) => q.kind === 'water' && !q.parkedAt && q.log.date === d)) {
         await Promise.resolve().then(() => flush()).catch((err: unknown) => logger.warn('ClientStore', 'sending waiting water failed', err));
-        phone = await Promise.resolve().then(() => readWaterWeight()).catch(() => phoneNow());
+        sentHere = true;
+        // REFINE-972 (B2): what that send delivered leaves the store as the sync leaves it: the phone's foods are read
+        // again with its glasses, so a food it sent stays in its day (the sent list) until a read holds its key.
+        const revAgain = queueRev;
+        const [phoneAgain, foodsAgain] = await Promise.all([
+          Promise.resolve().then(() => readWaterWeight()).catch(() => phoneNow()),
+          featureFlags.offlineFoodInDay ? Promise.all([readQueue(), readSent()]).catch(() => null) : null,
+        ]);
+        phone = phoneAgain;
+        if (foodsAgain) {
+          rev = revAgain;
+          foodsAt = foodsAgain;
+        }
         if (mine !== session || get().selectedDate !== d) return;
       }
       const data = foodResponse.data;
@@ -306,8 +328,8 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       // it does not hold; other days' stay until a read of theirs.
       const onServer = new Set(logs.map((l) => l.clientUuid).filter((k): k is string => !!k));
       const keep = (s: SentFoodLog) => s.sentAt >= startedAt && !onServer.has(s.id);
-      const { queue } = latest(queueAtStart, sentAtStart);
-      const sentFoods = latest(queueAtStart, sentAtStart).sent.filter((s) => !s.log || s.log.date !== d || keep(s));
+      const { queue } = latest(...foodsAt);
+      const sentFoods = latest(...foodsAt).sent.filter((s) => !s.log || s.log.date !== d || keep(s));
       set({
         ...shownDay(serverDay, queue, sentFoods),
         serverDay,
@@ -337,6 +359,8 @@ export const useClientStore = create<ClientStore>((set, get) => ({
           logger.warn('ClientStore', 'settling sent foods failed', err);
         });
       }
+      // REFINE-972 (LS C1): the Food log's pending count hears of what this send delivered, as after the sync.
+      if (sentHere) await tellPendingCount();
     } catch (err) {
       if (mine !== session || get().selectedDate !== d) return;
       // Preserve data only for a refresh of the same selected day.
