@@ -204,18 +204,20 @@ describe.each(DEVICES)('at $name', (device) => {
   });
 
   // ── WorkoutAssignmentDetail: C2_today_ios390_100 below its masthead, C2_adjusted for the changed row ──────
-  it('assigned: each row starts with a 28 pt moss letter chip, 6 pt corners (C2_today cols 48-103, rows 890-945)', async () => {
+  it('assigned: each block starts with a 28 pt moss letter chip, 6 pt corners (C2_today cols 48-103, rows 890-945)', async () => {
     const view = await mount(device, 'Assigned', WorkoutAssignmentDetailScreen, { assignmentId: 'a-1' });
     await view.findByText('Back squat');
     const chips = hosts(view.toJSON()).filter((n) => styleOf(n).borderColor === sc.data.moss);
-    expect(chips.length).toBe(5); // one per row, testIDs stay one per exercise
+    expect(chips.length).toBe(4); // one per block, testIDs stay one per exercise
     for (const c of chips) {
       const st = styleOf(c);
       expect([st.width, st.height]).toEqual([28, 28]);
       expect(st.borderRadius).toBe(radius.control);
       expect(st.borderWidth).toBe(1.5);
     }
-    expect(chips.map(textOf)).toEqual(['A', 'B', 'C', 'D', 'D']); // the superset shares D (H4)
+    expect(chips.map(textOf)).toEqual(['A', 'B', 'C', 'D']); // ruling (5): one superset block under D
+    expect(view.getByText('Pull-up + Push-up')).toBeTruthy();
+    expect(view.getByText('Superset · 3 rounds')).toBeTruthy();
     expect(flat(view.getAllByText('D', { includeHiddenElements: true })[0]).fontFamily).toBe(typography.h3.fontFamily);
     for (const order of [1, 2, 3, 4, 5]) expect(view.getByTestId(`assignment-row-${order}`)).toBeTruthy();
   });

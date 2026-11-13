@@ -35,7 +35,7 @@ import {
 } from '../../utils/workout/buildActiveWorkout';
 import { assignmentPrescription } from '../../utils/workout/assignmentPrescription';
 import { countWord } from '../../utils/workout/exerciseUnit';
-import { blocksOf } from './train/TrainToday';
+import { blocksOf, TRAIN_COPY } from './train/TrainToday';
 import { sectionHead, useCoachItalic, wsc } from './workouts/workoutStyleC';
 
 type RouteParams = {
@@ -99,13 +99,9 @@ export default function WorkoutAssignmentDetailScreen() {
   // into the live workout and its saved history. A failed or offline
   // lookup does not block Start; it keeps the prettified fallback.
   const { names: exerciseNames, loading: namesLoading } = useExerciseNames(exerciseIds);
-  // C1 v2 lettered blocks (C2_today): each row shows its block's letter; rows next to each other in one superset
-  // share it (TrainDay's blocksOf). Rows stay one per exercise for their test ids and the tour's first row.
-  const letters = useMemo(() => {
-    const out = new Map<number, string>();
-    blocksOf(prescription?.exercises ?? []).forEach((b) => b.rows.forEach((r) => out.set(r.order, b.letter)));
-    return out;
-  }, [prescription]);
+  // C2_today and TrainDay draw one lettered block per contiguous superset.
+  // The inner exercise views retain their ids, prescriptions and coach notes.
+  const blocks = useMemo(() => blocksOf(prescription?.exercises ?? []), [prescription]);
   const italic = useCoachItalic();
   const nameFor = useCallback(
     (externalId: string) =>
@@ -216,41 +212,61 @@ export default function WorkoutAssignmentDetailScreen() {
 
       <View>
         <Overline style={[sectionHead(sc), styles.listOverline]}>Exercises</Overline>
-        {sorted.map((ex, i) => {
-          const changed = plan.adjustedOrders.has(ex.order);
+        {blocks.map((block, i) => {
+          const superset = block.rows.length > 1;
           return (
-          // TOUR-133: the tour's first-exercise beat spotlights the first row.
-          // Keyed by `order`: frozen rows have no database id.
-          <TutorialTarget key={ex.order} id={i === 0 ? 'first-exercise' : undefined}>
-          <View style={[styles.exerciseRow, { borderBottomColor: sc.border }]} testID={`assignment-row-${ex.order}`}>
+          // TOUR-133: the tour's first-exercise beat spotlights block A.
+          <TutorialTarget key={block.letter} id={i === 0 ? 'first-exercise' : undefined}>
+          <View style={[styles.exerciseRow, { borderBottomColor: sc.border }]}>
             {/* The block letter in the moss chip; decorative for screen readers, as the numeral was. */}
             <View style={[styles.letter, { borderColor: sc.data.moss }]}>
               <Text maxFontSizeMultiplier={1.15} style={[typography.h3, { color: sc.textPrimary }]} accessible={false} importantForAccessibility="no">
-                {letters.get(ex.order) ?? ''}
+                {block.letter}
               </Text>
             </View>
-            <View style={[styles.exerciseText, changed && [styles.changed, { backgroundColor: sc.surface.sage, borderLeftColor: sc.data.forest }]]}>
-              <Text style={[typography.h4, { color: sc.textPrimary }]}>
-                {nameFor(ex.exercise_external_id)}
-              </Text>
-              <Text style={[typography.bodySmall, styles.tabular, { color: sc.textMuted }]}>
-                {ex.sets} sets × {ex.reps_or_duration_seconds} {countWord(ex)}
-                {ex.weight_lbs ? ` · ${ex.weight_lbs} lb` : ''}
-                {ex.rest_seconds ? ` · ${ex.rest_seconds}s rest` : ''}
-              </Text>
-              {changed ? (
-                <Text
-                  style={[typography.bodySmall, styles.mark, { color: sc.accentText }]}
-                  testID={`assignment-adjusted-${ex.order}`}
-                >
-                  Updated by your coach
-                </Text>
+            <View style={[styles.exerciseText, superset && styles.supersetText]}>
+              {superset ? (
+                <View style={styles.prescription}>
+                  <Text style={[typography.h4, { color: sc.textPrimary }]}>
+                    {block.rows.map((ex) => nameFor(ex.exercise_external_id)).join(' + ')}
+                  </Text>
+                  <Text style={[typography.bodySmall, styles.tabular, { color: sc.textMuted }]}>
+                    {TRAIN_COPY.superset} · {TRAIN_COPY.rounds(block.rows[0].sets)}
+                  </Text>
+                </View>
               ) : null}
-              {ex.notes ? (
-                <Text style={[typography.h3, italic, styles.note, { color: sc.textPrimary }]}>
-                  {ex.notes}
-                </Text>
-              ) : null}
+              {block.rows.map((ex, rowIndex) => {
+                const changed = plan.adjustedOrders.has(ex.order);
+                return (
+                  <View key={`${ex.order}-${rowIndex}`} testID={`assignment-row-${ex.order}`}
+                    style={[styles.prescription, { borderBottomColor: sc.border },
+                      changed && [styles.changed, { backgroundColor: sc.surface.sage, borderLeftColor: sc.data.forest }]]}>
+                    {!superset ? (
+                      <Text style={[typography.h4, { color: sc.textPrimary }]}>
+                        {nameFor(ex.exercise_external_id)}
+                      </Text>
+                    ) : null}
+                    <Text style={[typography.bodySmall, styles.tabular, { color: sc.textMuted }]}>
+                      {ex.sets} sets × {ex.reps_or_duration_seconds} {countWord(ex)}
+                      {ex.weight_lbs ? ` · ${ex.weight_lbs} lb` : ''}
+                      {ex.rest_seconds ? ` · ${ex.rest_seconds}s rest` : ''}
+                    </Text>
+                    {changed ? (
+                      <Text
+                        style={[typography.bodySmall, styles.mark, { color: sc.accentText }]}
+                        testID={`assignment-adjusted-${ex.order}`}
+                      >
+                        Updated by your coach
+                      </Text>
+                    ) : null}
+                    {ex.notes ? (
+                      <Text style={[typography.h3, italic, styles.note, { color: sc.textPrimary }]}>
+                        {ex.notes}
+                      </Text>
+                    ) : null}
+                  </View>
+                );
+              })}
             </View>
           </View>
           </TutorialTarget>
@@ -286,6 +302,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   exerciseText: { flex: 1, gap: 2 },
+  prescription: { gap: 2 },
+  supersetText: { gap: spacing.md },
   // C2_adjusted cols 128-133, rows 1040-1203: sage, a 3 pt forest edge, 16 pt right corners, 4 pt from the rules.
   changed: {
     borderLeftWidth: wsc.changedEdge,
