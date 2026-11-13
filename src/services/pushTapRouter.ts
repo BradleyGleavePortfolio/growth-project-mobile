@@ -372,7 +372,6 @@ export function flushPendingPushTap(): boolean {
     if (!target) return screen ? deliver(navigator, session.role, routeNames, screen, params) : false;
     if (!routeNames.includes(target.root)) return false;
     // MEAL-PLAN-REFRESH-M: at delivery, after a cold start's cache restore, so the plan the tap opens is read anew.
-    if (target.screen === 'ClientDailyMealPlan') refreshMealPlanToday();
     return deliverTarget(navigator, target, target.params);
   }
   // Unroutable target: dropped rather than crashing (deliver returns false).
