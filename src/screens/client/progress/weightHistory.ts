@@ -63,7 +63,7 @@ export function withQueuedWeighIns(
   const sent = new Set(phone.filter((p) => p && 'sentAt' in p).map((p) => p.id));
   const added: WeightLog[] = [];
   for (const item of phone) {
-    if (!item || item.kind !== 'weight' || !item.log || item.parkedAt || onServer.has(item.id)) continue;
+    if (!item || item.kind !== 'weight' || !item.log || item.parkedAt) continue;
     if (added.some((a) => a.id === item.id)) continue;
     added.push({
       id: item.id, clientUuid: item.id, userId, coachId: '', date: item.log.date, weight: item.log.weight_lbs, unit: 'lbs',
