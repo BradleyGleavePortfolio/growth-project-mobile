@@ -34,7 +34,7 @@ import {
   type MacroDisplayMode,
 } from '../../macros/macroDisplay';
 import { reportMacroDisplay, useMacroDisplayMode } from '../../macros/macroDisplayStore';
-import { radius, typography, spacing } from '../../theme/tokens';
+import { lightTokens, radius, typography, spacing } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { SemanticTokens } from '../../theme/tokens';
 import { useQuery } from '@tanstack/react-query';
@@ -42,7 +42,10 @@ import api from '../../services/api';
 import { useTodayLog } from '../../hooks/useApi';
 import { getTodayString } from '../../utils/date';
 import QuietBar from '../../ui/progress/QuietBar';
-import { MastLine, mast, MastTile, PaperPage, PlanMasthead, planStyleC, useCoachItalic } from './mealplan/planStyleC';
+import { MastLine, mast, MastTile, PlanMasthead, planStyleC, useCoachItalic } from './mealplan/planStyleC';
+
+/** Every kcal figure of 1,000 or more grouped as K5 writes "2,100" (the Food day's rule, FoodDayView.tsx:41). */
+const kcal = (v: number) => Math.round(v).toLocaleString('en-US');
 
 export default function ClientMacrosScreen() {
   const { semanticColors: sc } = useTheme();
@@ -86,17 +89,18 @@ export default function ClientMacrosScreen() {
         />
       }
     >
-      <PlanMasthead title="Your daily targets" testID="macros-masthead"
+      {/* K5 Style C (the nearest drawing, the coach's macros): the deep forest masthead with a rounded foot. */}
+      <PlanMasthead title="Your daily targets" testID="macros-masthead" ground={lightTokens.surface.masthead} foot="round"
         eyebrow={!isLoading && !isError && data ? (coachName ? `Set by ${coachName}` : 'Your target') : null}>
         {!isLoading && !isError && data ? (
           <>
             {/* K5 Style C: the day's number large in the serif with its unit beside it. */}
             <View accessible testID="macros-day-target">
               <View style={styles.kcalRow}>
-                <Text style={styles.kcal}>{data.calories_kcal}</Text>
+                <Text style={styles.kcal}>{kcal(data.calories_kcal)}</Text>
                 <MastLine muted style={styles.kcalUnit}>kcal per day</MastLine>
               </View>
-              {eaten.calories != null ? <MastLine>{`${Math.round(eaten.calories)} kcal eaten today`}</MastLine> : null}
+              {eaten.calories != null ? <MastLine>{`${kcal(eaten.calories)} kcal eaten today`}</MastLine> : null}
             </View>
             {/* K5 Style C: one outlined tile per macro target on the forest. */}
             <View style={styles.tiles} testID="macros-tiles">
@@ -109,7 +113,8 @@ export default function ClientMacrosScreen() {
         ) : null}
       </PlanMasthead>
 
-      <PaperPage bg={sc.bgSurface}>
+      {/* K5: the cards on the page under the masthead's foot (14 pt, y 603 to 632 px). */}
+      <View style={styles.page}>
         {isLoading ? (
           <View style={styles.skeleton} accessible accessibilityRole="progressbar" testID="macros-loading">
             <Text style={[typography.body, { color: sc.textMuted }]}>
@@ -133,7 +138,7 @@ export default function ClientMacrosScreen() {
         ) : (
           <EmptyState styles={styles} sc={sc} />
         )}
-      </PaperPage>
+      </View>
     </ScrollView>
   );
 }
@@ -269,13 +274,16 @@ function makeStyles(sc: SemanticTokens) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: sc.bgPrimary },
     content: { flexGrow: 1 },
-    // K5 Style C: the number at 60 pt in the display serif, the unit on its baseline (wraps under at large text).
+    // K5 Style C: the number at 52 pt in the display serif (its digits 67 px tall at 2x, y 252-318), the unit on its
+    // baseline (wraps under at large text).
     kcalRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: spacing.md, marginTop: spacing.md },
     // Lining figures, as K5 sets its number (Cormorant's default figures are old-style).
-    kcal: { ...typography.display, fontSize: 60, lineHeight: 72, letterSpacing: 0, color: mast.ink, fontVariant: ['lining-nums', 'tabular-nums'] },
+    kcal: { ...typography.display, fontSize: 52, lineHeight: 62, letterSpacing: 0, color: mast.ink, fontVariant: ['lining-nums', 'tabular-nums'] },
     kcalUnit: { ...typography.body, marginTop: 0 },
     tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.lg },
-    cardFill: { backgroundColor: sc.bgPrimary, borderColor: sc.border },
+    // K5: the cards in the paper colour on the page.
+    cardFill: { backgroundColor: sc.bgSurface, borderColor: sc.border },
+    page: { flexGrow: 1, paddingHorizontal: spacing.xl, paddingTop: 14, paddingBottom: spacing['3xl'] },
     stack: { gap: spacing.xl },
     macroGrid: { gap: spacing.lg },
     note: { borderRadius: radius.card, padding: spacing.lg },
