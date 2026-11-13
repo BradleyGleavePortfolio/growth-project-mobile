@@ -1,0 +1,15 @@
+src/screens/client/progress/__tests__/ProgressV2.offlineRing.ls972r1.test.tsx
+src/services/__tests__/overlapProof.ls972r1.test.ts
+src/services/__tests__/offlineWaterWeight.preReadFlush.lo972r1.test.ts
+src/services/__tests__/flushOnce.refine972.test.ts
+src/screens/client/progress/__tests__/ProgressV2.offline.refine972.test.tsx
+src/components/progress/__tests__/WeightTrendChartDark.refine972.test.tsx
+src/screens/client/__tests__/ProgressScreen.weighInNull.refine972.test.tsx
+src/screens/client/__tests__/ReportScreen.weighInNull.refine972.test.tsx
+src/services/__tests__/offlineWaterWeight.oww.test.ts
+src/screens/client/progress/__tests__/weightHistory.oww.test.ts
+src/screens/client/progress/__tests__/offlineWeighIn.oww.test.tsx
+src/screens/client/__tests__/LogScreen.offlineWater.oww.test.tsx
+src/services/__tests__/authActions.signOutUnsynced.oww.test.ts
+src/services/__tests__/foodLogQueue.ownerFence.oww.test.ts
+src/components/home/rings/__tests__/HomeTiles.offline.oww.test.tsx
