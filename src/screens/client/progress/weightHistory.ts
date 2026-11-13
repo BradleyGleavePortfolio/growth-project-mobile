@@ -68,7 +68,7 @@ export function withQueuedWeighIns(
     added.push({
       id: item.id, clientUuid: item.id, userId, coachId: '', date: item.log.date, weight: item.log.weight_lbs, unit: 'lbs',
       notes: item.log.notes ?? '', createdAt: new Date(item.createdAt || Date.now()).toISOString(),
-      ...(sent.has(item.id) ? {} : { pending: true }),
+      pending: true,
     });
   }
   return added.length ? [...rows, ...added] : rows;
