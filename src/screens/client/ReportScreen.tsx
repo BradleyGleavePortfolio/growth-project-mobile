@@ -75,7 +75,7 @@ function LegacyReportScreen({ navigation }: { navigation: ReportNavigation }) {
     } catch (err) {
       // Read-only weight history; empty chart is the graceful fallback.
       console.error('ReportScreen: weightApi.getHistory failed', err);
-      setWeeklyWeights(null);
+      setWeeklyWeights([]);
     }
     try {
       // Use the local-tz bucket so this matches the day the user is actually
