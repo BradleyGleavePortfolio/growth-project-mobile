@@ -1,0 +1,14 @@
+src/screens/client/__tests__/LO975R1.supersetBlock.btest.test.tsx
+src/screens/client/__tests__/StyleWorkouts.goal.test.tsx
+src/screens/client/__tests__/StyleWorkouts.guard.test.tsx
+src/__tests__/assignedWorkoutRedo133.test.tsx
+src/__tests__/assignmentSnapshot151.test.tsx
+src/__tests__/timedSets196Display.test.tsx
+src/__tests__/workoutAssignmentRomanSets125.test.tsx
+src/__tests__/workoutAssignmentNamesUx124.test.tsx
+src/__tests__/assignedWorkoutEntry127.test.tsx
+src/__tests__/coachlessNeverGated134.test.tsx
+src/__tests__/exerciseCatalog.test.tsx
+src/screens/client/__tests__/ExerciseLibraryRedo128.test.tsx
+src/screens/client/__tests__/ExerciseLibraryPolish125.test.tsx
+src/navigation/__tests__/homeWorkoutEntry130.test.tsx
