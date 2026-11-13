@@ -144,6 +144,7 @@ export default function ExerciseLibraryScreen({ navigation }: Props) {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          style={styles.chipScroll}
           contentContainerStyle={styles.chipScrollContent}
         >
           {values.map((v) => {
@@ -315,8 +316,13 @@ function makeStyles(sc: SemanticTokens) {
       ...typography.eyebrow,
       color: mast.muted,
     },
+    // The chip rows scroll to the masthead's edges; the first chip starts on the 24 pt gutter.
+    chipScroll: {
+      marginHorizontal: -layout.gutter,
+    },
     chipScrollContent: {
       gap: spacing.sm,
+      paddingHorizontal: layout.gutter,
     },
     // A 44 pt target holding C_picker's 32 pt pill (rows 331-392).
     chip: {
@@ -345,6 +351,7 @@ function makeStyles(sc: SemanticTokens) {
       color: mast.ground,
     },
     listContent: {
+      paddingTop: spacing.sm,
       paddingBottom: spacing.xl,
     },
     // C_picker rows 766-879: 56 pt rows from col 48, name over meta, hairline; C2_swap's chevron at cols 715-726.

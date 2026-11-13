@@ -167,7 +167,7 @@ export default function ExerciseDetailScreen({ route }: Props) {
           <Text style={styles.sectionHead}>MUSCLES</Text>
           {detail.primaryMuscle ? <Text style={styles.facetValue}>{detail.primaryMuscle}</Text> : null}
           {detail.secondaryMuscles.length > 0 ? (
-            <Text style={styles.meta}>Also works: {detail.secondaryMuscles.join(', ')}</Text>
+            <Text style={styles.alsoWorks}>Also works: {detail.secondaryMuscles.join(', ')}</Text>
           ) : null}
         </View>
       ) : null}
@@ -240,6 +240,12 @@ function makeStyles(sc: SemanticTokens) {
     noVideoText: {
       ...typography.bodySmall,
       color: sc.textMuted,
+    },
+    // Inside a section the second line follows the value; the next section's 18 pt is the only gap after it.
+    alsoWorks: {
+      ...typography.bodySmall,
+      color: sc.textMuted,
+      marginTop: spacing.xs,
     },
     // MUSCLES, EQUIPMENT and HOW TO in C2_detail's "YOUR HISTORY" look: eyebrow over its own hairline.
     sectionHead: sectionHead(sc),
