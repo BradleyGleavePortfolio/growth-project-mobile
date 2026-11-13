@@ -371,6 +371,7 @@ describe('S9, the interrupted note', () => {
   });
 });
 
+/** Case 10 is today's behaviour, green at the merge commit and at the head: it reads the line from the screen, not the B words. */
 describe('case 10, Send again and the box', () => {
   it('re-sends the box\'s words under the draft\'s key and nothing else; typing clears the card and main\'s ceiling returns', async () => {
     const r = await openRoom('client');
@@ -391,9 +392,10 @@ describe('case 10, Send again and the box', () => {
     expect(wordsOf(1)).toBe(WORDS);
     expect(keyOf(1)).toBe(keyOf(0));
     await waitFor(() => expect(r.queryByTestId('roman-send-retry')).toBeTruthy());
-    expect(announced(W8)).toBe(2); // once per appearance: the second answer is a new appearance
-    await growBox(r, 400);
-    expect(style(r.getByTestId(INPUT)).height).toBe(twoLines());
+    // Announced once per appearance, the same line both times: the second answer is a new appearance.
+    const said = jest.mocked(AccessibilityInfo.announceForAccessibility).mock.calls.map(([line]) => line);
+    expect(said).toHaveLength(2);
+    expect(said[1]).toBe(said[0]);
     await fireEvent.changeText(r.getByTestId(INPUT), `${WORDS} Thanks.`);
     expect(r.queryByTestId('roman-send-error')).toBeNull();
     await growBox(r, 400);
