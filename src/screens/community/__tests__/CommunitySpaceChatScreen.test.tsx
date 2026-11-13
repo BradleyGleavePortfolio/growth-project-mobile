@@ -44,7 +44,7 @@ jest.mock('@react-navigation/native', () => ({
 }));
 jest.mock('../../../components/community/SpaceDrawer', () => {
   const { Text } = jest.requireActual('react-native');
-  return { SpaceListButton: () => <Text testID="space-list-open" accessibilityLabel="Open space list">list</Text> };
+  return { SpaceListButton: ({ label, testID = 'space-list-open' }: { label?: string; testID?: string }) => <Text testID={testID} accessibilityLabel={label ?? 'Open space list'}>{label ?? 'list'}</Text> };
 });
 let mockUser = { id: 'me-1', name: 'Dana Reyes', coach_id: 'coach-1' };
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
@@ -385,10 +385,12 @@ it('own text message: Delete removes it', async () => {
   expect(r.queryByTestId('space-chat-menu-m3-delete')).toBeNull();
 });
 
-it('empty space: SC-W05 and the composer', async () => {
+it('empty space (SPACE-STATES-M, style 2): the start-of-space row and the composer; SC-W05 is gone', async () => {
   page = [];
   const r = await open();
-  expect(await r.findByText('No messages yet. Say hello.')).toBeTruthy();
+  const start = await r.findByTestId('space-chat-start');
+  expect(within(start).getByText('This is the start of Everyone.')).toBeTruthy();
+  expect(r.queryByText('No messages yet. Say hello.')).toBeNull();
   expect(r.getByTestId('space-chat-composer-field')).toBeTruthy();
 });
 
@@ -773,7 +775,7 @@ describe('FR-871R6 (m#871): member Space info, the hint, the server answer on th
     mockParams.current = { cohortId: 'c-ann' };
     const r = await open();
     await r.findByTestId('space-chat-row-m3');
-    expect(r.getByTestId('space-chat-hint').props.children).toBe('Only your coach posts here.');
+    expect(within(r.getByTestId('space-chat-hint')).getByText('Only your coach posts here.')).toBeTruthy();
     expect(r.queryByText(/press and hold/i)).toBeNull();
   });
 
@@ -2371,5 +2373,104 @@ describe('SPLIT-938 part 4 (LS-938R2 B2, B5): the chat draws photos and a sendin
     const r = await open();
     await r.findByTestId('space-chat-row-vo-1');
     expect(r.getByTestId('space-chat-voice-progress-vo-1').props.accessibilityValue).toEqual({ min: 0, max: 100, now: 30 });
+  });
+});
+
+// SPACE-STATES-M (owner #203-E54: "closed and empty chat spaces - style 2" = 203-D27 op 2, the Slot band; GOAL ctx#538
+// planning/SPACE-STATES-MOCK/frames/s2_*). One table per state class: every way a space reads as closed, every empty viewer.
+describe('SPACE-STATES-M: style 2, the Slot band', () => {
+  const asCoach = () => {
+    mockRole = 'owner';
+    mockUser = { id: 'coach-1', name: 'Sam Okafor', coach_id: '' };
+    mockStack.routes = ['CoachCommunityCohorts', 'CoachCommunityCohortDetail', 'CommunitySpaceChat'];
+  };
+  const refuse = (status: number) => mockApi.get.mockImplementation(async (url: string) => {
+    if (url === '/community/voice-consent') return { data: { seen: true, seen_at: '2026-10-20T10:00:00.000Z' } };
+    throw fail(status);
+  });
+
+  it.each([
+    ['a member, 404 (S1)', 404, false],
+    ['a member, 403 (S1)', 403, false],
+    ['the coach, 404 (S1)', 404, true],
+  ])('closed, %s: the Studio closed bar where the composer was, Back to spaces under it, the hidden note, no reason', async (_n, status, coach) => {
+    if (coach) asCoach();
+    refuse(status);
+    const announce = jest.spyOn(require('react-native').AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
+    const r = await open();
+    const bar = await r.findByTestId('space-chat-no-access');
+    expect(bar.props.accessibilityLabel).toBe('This conversation is closed');
+    expect(within(bar).getByText('This conversation is closed')).toBeTruthy();
+    // m#962's studio bar: 15 pt charcoal words.
+    const words = StyleSheet.flatten(within(bar).getByText('This conversation is closed').props.style) as { fontSize?: number; color?: string };
+    expect(words.fontSize).toBe(15);
+    expect(within(r.getByTestId('space-chat-closed-note')).getByText('Messages in this space are hidden.')).toBeTruthy();
+    expect(r.getByTestId('space-chat-back').props.accessibilityLabel).toBe('Back to spaces');
+    expect(r.queryByTestId('space-chat-composer-field')).toBeNull();
+    expect(r.queryByTestId('space-chat-list')).toBeNull();
+    expect(r.queryByTestId('space-chat-start')).toBeNull();
+    expect(r.queryByText(/banned|removed|package/i)).toBeNull();
+    expect(announce).toHaveBeenCalledWith('This conversation is closed');
+    if (coach) {
+      await fireEvent.press(r.getByTestId('space-chat-back'));
+      expect(mockNavigate).toHaveBeenCalledWith('CoachCommunityCohorts');
+    }
+    announce.mockRestore();
+  });
+
+  it('closed while open (S2b): a refused send takes the composer and the keyboard away, the name stays', async () => {
+    const dismiss = jest.spyOn(Keyboard, 'dismiss');
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    mockApi.post.mockImplementation(async (url: string) => { if (url.endsWith('/read')) return { data: { ok: true } }; throw fail(403); });
+    await fireEvent.changeText(r.getByTestId('space-chat-composer-field'), 'I can bring water');
+    await fireEvent.press(r.getByTestId('space-chat-composer-send'));
+    expect(await r.findByTestId('space-chat-no-access')).toBeTruthy();
+    expect(r.getByTestId('space-chat-back')).toBeTruthy();
+    expect(r.queryByTestId('space-chat-composer-field')).toBeNull();
+    expect(r.getByText('Everyone')).toBeTruthy();
+    expect(dismiss).toHaveBeenCalled();
+    dismiss.mockRestore();
+  });
+
+  it.each([
+    ['a member who can post (S3)', 'c-every', false, 'This is the start of Everyone.', true, false],
+    ['a member of Announcements (S4)', 'c-ann', false, 'This is the start of Announcements.', false, false],
+    ['the coach (S5)', 'c-every', true, 'This is the start of Everyone.', true, true],
+  ])('empty, %s: the start row with purpose and count; composer, band or suggestion as drawn', async (_n, cohortId, coach, line, composer, chip) => {
+    if (coach) asCoach();
+    mockParams.current = { cohortId };
+    mockPurpose = 'Early sessions, check-ins and form questions.';
+    page = [];
+    const r = await open();
+    const start = await r.findByTestId('space-chat-start');
+    expect(within(start).getByText(line)).toBeTruthy();
+    if (cohortId === 'c-every') expect(within(start).getByText('Early sessions, check-ins and form questions.')).toBeTruthy();
+    expect(within(start).getByText(cohortId === 'c-ann' ? '24 members' : '1,000 members')).toBeTruthy();
+    expect(!!r.queryByTestId('space-chat-composer-field')).toBe(composer);
+    expect(!!r.queryByTestId('space-chat-suggestion')).toBe(chip);
+    if (!composer) {
+      const band = r.getByTestId('space-chat-hint');
+      expect(within(band).getByText('Only your coach posts here.')).toBeTruthy();
+      expect((StyleSheet.flatten(band.props.style) as { backgroundColor?: string }).backgroundColor).toBe(fp.sage);
+    }
+  });
+
+  it("the coach's suggestion fills the box and never sends; it goes once the box has words", async () => {
+    asCoach();
+    page = [];
+    const r = await open();
+    await fireEvent.press(await r.findByTestId('space-chat-suggestion'));
+    expect(r.getByTestId('space-chat-composer-field').props.value).toBe('Welcome to Everyone.');
+    expect(sends()).toHaveLength(0);
+    expect(r.queryByTestId('space-chat-suggestion')).toBeNull();
+  });
+
+  it('a space with messages has no start row and no suggestion', async () => {
+    asCoach();
+    const r = await open();
+    await r.findByTestId('space-chat-row-m3');
+    expect(r.queryByTestId('space-chat-start')).toBeNull();
+    expect(r.queryByTestId('space-chat-suggestion')).toBeNull();
   });
 });
