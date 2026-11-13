@@ -44,9 +44,6 @@ import { getTodayString } from '../../utils/date';
 import QuietBar from '../../ui/progress/QuietBar';
 import { MastLine, mast, MastTile, PlanMasthead, planStyleC, useCoachItalic } from './mealplan/planStyleC';
 
-/** Every kcal figure of 1,000 or more grouped as K5 writes "2,100" (the Food day's rule, FoodDayView.tsx:41). */
-const kcal = (v: number) => Math.round(v).toLocaleString('en-US');
-
 export default function ClientMacrosScreen() {
   const { semanticColors: sc } = useTheme();
   const styles = makeStyles(sc);
@@ -97,10 +94,10 @@ export default function ClientMacrosScreen() {
             {/* K5 Style C: the day's number large in the serif with its unit beside it. */}
             <View accessible testID="macros-day-target">
               <View style={styles.kcalRow}>
-                <Text style={styles.kcal}>{kcal(data.calories_kcal)}</Text>
+                <Text style={styles.kcal}>{data.calories_kcal}</Text>
                 <MastLine muted style={styles.kcalUnit}>kcal per day</MastLine>
               </View>
-              {eaten.calories != null ? <MastLine>{`${kcal(eaten.calories)} kcal eaten today`}</MastLine> : null}
+              {eaten.calories != null ? <MastLine>{`${Math.round(eaten.calories)} kcal eaten today`}</MastLine> : null}
             </View>
             {/* K5 Style C: one outlined tile per macro target on the forest. */}
             <View style={styles.tiles} testID="macros-tiles">

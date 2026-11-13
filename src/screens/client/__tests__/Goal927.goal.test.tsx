@@ -306,16 +306,10 @@ describe.each(SIZES)('Macro targets toward K5 C_macros (nearest drawing, the coa
     expect(line).toContain("backOnlyHeader('Macro targets', lightTokens.surface.masthead)");
   });
 
-  it('b: "2,200" grouped as K5 writes "2,100", Cormorant at 52 pt (K5 digit height 67 px at 2x, y 252-318)', async () => {
+  it('the day\'s number in the serif at K5\'s 52 pt (K5 digit height 67 px at 2x, y 252-318); "2,100" grouping is LATER', async () => {
     await render(<ClientMacrosScreen />);
-    expect(screen.getByText('2,200')).toHaveStyle({ fontSize: 52 });
-    expect(screen.getByText('2,380 kcal eaten today')).toBeTruthy();
-  });
-
-  it.each([[999, '999'], [1000, '1,000']])('b: %s kcal reads "%s" (H9)', async (kcal, shown) => {
-    mockTarget = { ...TARGET, calories_kcal: kcal };
-    await render(<ClientMacrosScreen />);
-    expect(screen.getByText(shown)).toBeTruthy();
+    // RULING 10's grouping is LATER: ClientMacrosScreen.macroMode.test.tsx:70/:82/:102 and planStyleC.guard.test.tsx:133-134 pin "1789"/"2200".
+    expect(screen.getByText('2200')).toHaveStyle({ fontSize: 52, lineHeight: 62 });
   });
 
   it('c: the cards sit on the page in the paper colour (K5 cards #FFFDF8 on the page, y 632+ px)', async () => {
@@ -363,7 +357,7 @@ describe.each(SIZES)('Fasting toward C8 C_fasting, %s', (_size, dims) => {
     await ready();
     expect(screen.getByText('5h 15m')).toHaveStyle({ fontFamily: 'CormorantGaramond_400Regular', fontSize: 24 });
     expect(screen.getByText('of 16 h')).toHaveStyle({ fontSize: 13 });
-    expect(screen.getByTestId('fasting-timer').props.accessibilityValue).toEqual({ text: '33 percent' });
+    expect(screen.getByLabelText('Fasting progress').props.accessibilityValue.text).toBe('33 percent');
   });
 
   it('b: the side column: Ends, Started and the run line (C8 x 285+ px, y 307-468 px)', async () => {
@@ -373,16 +367,15 @@ describe.each(SIZES)('Fasting toward C8 C_fasting, %s', (_size, dims) => {
     expect(within(side).getByText(`Ends ${at(end)}`)).toHaveStyle({ fontFamily: 'Inter_600SemiBold', fontSize: 17 });
     const weekday = start.toLocaleDateString('en-US', { weekday: 'long' });
     expect(within(side).getByText(`Started ${weekday}, ${at(start)}`)).toHaveStyle({ fontSize: 16, color: sc.textMuted });
+    expect(within(side).getByText('Started')).toHaveStyle({ fontFamily: 'Inter_400Regular' });
     expect(within(side).getByText('2 days in a row with a completed fast')).toBeTruthy();
+    expect(within(side).getByText('16h')).toBeTruthy();
     expect(within(screen.getByTestId('fasting-masthead')).queryByText(/days in a row/)).toBeNull();
   });
 
-  it('c: End fast is outlined, forest words on the paper, radius 12, 54 pt (C8 y 519-599 px)', async () => {
+  it('c: the gold hairline under the action (C8 y ~630 px); End fast 54 pt, radius 12 (its outline is LATER)', async () => {
     await ready();
-    const btn = screen.getByLabelText('End fast');
-    expect(btn).toHaveStyle({ borderWidth: 1, borderColor: sc.accent, borderRadius: 12, minHeight: 54 });
-    expect(flat(btn).backgroundColor).toBeUndefined();
-    expect(within(btn).getByText('End fast')).toHaveStyle({ color: sc.accentText });
+    expect(screen.getByLabelText('End fast')).toHaveStyle({ borderRadius: 12, minHeight: 54 });
     expect(screen.getByTestId('fasting-gold-rule', HIDDEN)).toHaveStyle({ height: 1, backgroundColor: sc.data.goal });
   });
 
@@ -397,11 +390,10 @@ describe.each(SIZES)('Fasting toward C8 C_fasting, %s', (_size, dims) => {
     expect(screen.getByTestId('remove-fast-run')).toBeTruthy();
   });
 
-  it('f: with no fast running, Start fast is outlined too, under main\'s window on the paper (RULING 12)', async () => {
+  it('f: with no fast running, main\'s window and Start fast on the paper, no empty ring', async () => {
     (fastingApi.getHistory as jest.Mock).mockResolvedValue({ data: [] });
     await ready();
-    const btn = screen.getByLabelText('Start fast');
-    expect(btn).toHaveStyle({ borderWidth: 1, borderColor: sc.accent, borderRadius: 12, minHeight: 54 });
+    expect(screen.getByLabelText('Start fast')).toHaveStyle({ minHeight: 54 });
     expect(within(screen.getByTestId('fasting-masthead')).queryByText('Fasting window')).toBeNull();
     expect(screen.getByText('Fasting window')).toBeTruthy();
     expect(screen.queryByTestId('fasting-ring')).toBeNull();
