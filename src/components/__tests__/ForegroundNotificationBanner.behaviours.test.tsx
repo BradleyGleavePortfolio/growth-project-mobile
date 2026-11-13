@@ -103,6 +103,10 @@ const ROWS: Row[] = [
   // community-notifications.service.ts:265-275, the post reply's link community-posts.service.ts:474 (b#1247).
   ['community post reply, client', 'student', { kind: 'community_post_replied', category: 'community', target_type: 'post', target_id: POST, deepLink: `tgp://community/thread/${POST}` }],
   ['community post reply, coach', 'coach', { kind: 'community_post_replied', category: 'community', target_type: 'post', target_id: POST, deepLink: `tgp://community/thread/${POST}` }],
+  // The same sender's DM push (community-dms.service.ts link): with m#962's coach DM rule merged, the coach row's
+  // device tap opens the thread, and this table goes red until pushTapLanding follows it.
+  ['community DM, client', 'student', { kind: 'community_dm_received', category: 'community', target_type: 'dm', target_id: OTHER_CLIENT, deepLink: `tgp://community/dm/${OTHER_CLIENT}` }],
+  ['community DM, coach', 'coach', { kind: 'community_dm_received', category: 'community', target_type: 'dm', target_id: OTHER_CLIENT, deepLink: `tgp://community/dm/${OTHER_CLIENT}` }],
   // community-space-push.service.ts:136-147 (its own actionScreen and link).
   ['space push', 'student', { actionScreen: 'NotificationCenter', deepLink: `tgp://community/cohorts/${COHORT}?message=${MESSAGE}`, kind: 'community_message_received' }],
   // drip-dispatcher.cron.ts:558-564 (b#1247: Deliverables with the purchase, pushTapData :1139).
