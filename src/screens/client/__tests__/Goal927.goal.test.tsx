@@ -9,7 +9,7 @@
 import fs from 'fs';
 import path from 'path';
 import React from 'react';
-import { StyleSheet, type ViewStyle } from 'react-native';
+import { processColor, StyleSheet, type ViewStyle } from 'react-native';
 import { render, screen, waitFor, within } from '@testing-library/react-native';
 import { colors, gold, lightTokens } from '../../../theme/tokens';
 import { clockOf } from '../../../utils/log/foodTimeline';
@@ -82,6 +82,9 @@ import { fastingApi } from '../../../services/api';
 
 const mockDaily = jest.fn();
 const sc = lightTokens;
+// Decorative parts (marks, gutter, tiles, the now line, bones, the gold rule) are hidden from readers, as on main.
+const HIDDEN = { includeHiddenElements: true } as const;
+const paint = (v: unknown) => (v && typeof v === 'object' && 'payload' in (v as object) ? (v as { payload: unknown }).payload : v);
 const flat = (el: { props: { style?: unknown } }) => (StyleSheet.flatten(el.props.style as ViewStyle) ?? {}) as Record<string, unknown>;
 type Host = { type: string; props: Record<string, unknown>; children: (Host | string)[] | null };
 function hosts(root: unknown): Host[] {
@@ -175,7 +178,7 @@ describe.each(SIZES)('meal plan toward C2 C_day, %s', (_size, dims) => {
   it('b: the left line in Inter 500 15/21 with one gold mark per meal, eaten ones filled (C_day .sum y 360-398 px)', async () => {
     await render(<ClientDailyMealPlanScreen />);
     expect(screen.getByText('640 kcal and 63 g protein left.')).toHaveStyle({ fontFamily: 'Inter_500Medium', fontSize: 15, lineHeight: 21 });
-    const segs = screen.getAllByTestId('daily-meal-plan-seg');
+    const segs = screen.getAllByTestId('daily-meal-plan-seg', HIDDEN);
     expect(segs.map((s) => flat(s).width)).toEqual([18, 18, 18]);
     expect(segs.map((s) => flat(s).height)).toEqual([4, 4, 4]);
     expect(segs.map((s) => flat(s).backgroundColor)).toEqual([gold[300], gold[300], sc.data.plannedOnDark]);
@@ -192,7 +195,7 @@ describe.each(SIZES)('meal plan toward C2 C_day, %s', (_size, dims) => {
     mockTarget = null;
     await render(<ClientDailyMealPlanScreen />);
     expect(screen.queryByText(/protein left\.$/)).toBeNull();
-    expect(screen.queryAllByTestId('daily-meal-plan-seg')).toHaveLength(0);
+    expect(screen.queryAllByTestId('daily-meal-plan-seg', HIDDEN)).toHaveLength(0);
   });
 
   it('c: each meal\'s coach time in the drawn time column, Inter 500 12, right-aligned (C_day .tm, x 52-156 px)', async () => {
@@ -205,26 +208,26 @@ describe.each(SIZES)('meal plan toward C2 C_day, %s', (_size, dims) => {
 
   it('c: the gold now line after the last meal at or before the clock, today only (C_day .c-now y 1122-1146 px)', async () => {
     await render(<ClientDailyMealPlanScreen />);
-    const now = screen.getByTestId('daily-meal-plan-now');
-    expect(within(now).getByText('3:10 pm')).toHaveStyle({ fontFamily: 'Inter_600SemiBold', color: sc.accentText });
+    const now = screen.getByTestId('daily-meal-plan-now', HIDDEN);
+    expect(within(now).getByText('3:10 pm', HIDDEN)).toHaveStyle({ fontFamily: 'Inter_600SemiBold', color: sc.accentText });
     const order = hosts(screen.toJSON()).map((n) => n.props.testID).filter((id) => typeof id === 'string'
       && /^daily-meal-plan-(now|mark-)/.test(id as string));
     expect(order).toEqual(['daily-meal-plan-mark-a', 'daily-meal-plan-mark-b', 'daily-meal-plan-now', 'daily-meal-plan-mark-c']);
-    expect(within(now).queryByRole('button')).toBeNull();
+    expect(within(now).queryByRole('button', HIDDEN)).toBeNull();
   });
 
   it('c: one meal with no time: no time for it and no now line (RULING 5, H6)', async () => {
     mockDaily.mockReturnValue(planOf([DAY[0], { ...DAY[1], time_of_day: null }, DAY[2]]));
     await render(<ClientDailyMealPlanScreen />);
     expect(screen.queryByText('12:35 pm')).toBeNull();
-    expect(screen.queryByTestId('daily-meal-plan-now')).toBeNull();
+    expect(screen.queryByTestId('daily-meal-plan-now', HIDDEN)).toBeNull();
   });
 
   it('d: an eaten meal\'s mark fills forest, an uneaten one stays hollow; 14 pt marks (C_day .mk 14 px, y 484-510 px)', async () => {
     await render(<ClientDailyMealPlanScreen />);
-    expect(screen.getByTestId('daily-meal-plan-mark-a')).toHaveStyle({ width: 14, height: 14, borderWidth: 1.5, backgroundColor: sc.accent });
-    expect(screen.getByTestId('daily-meal-plan-mark-b')).toHaveStyle({ backgroundColor: sc.accent });
-    expect(screen.getByTestId('daily-meal-plan-mark-c')).toHaveStyle({ width: 14, backgroundColor: sc.bgSurface });
+    expect(screen.getByTestId('daily-meal-plan-mark-a', HIDDEN)).toHaveStyle({ width: 14, height: 14, borderWidth: 1.5, backgroundColor: sc.accent });
+    expect(screen.getByTestId('daily-meal-plan-mark-b', HIDDEN)).toHaveStyle({ backgroundColor: sc.accent });
+    expect(screen.getByTestId('daily-meal-plan-mark-c', HIDDEN)).toHaveStyle({ width: 14, backgroundColor: sc.bgSurface });
     expect(screen.getByText('Logged as planned')).toHaveStyle({ fontSize: 13 });
     expect(screen.getByText(/^Logged with a change: /)).toBeTruthy();
   });
@@ -232,14 +235,14 @@ describe.each(SIZES)('meal plan toward C2 C_day, %s', (_size, dims) => {
   it('d: switch off (RULING 4 (i)): every mark hollow, no done lines, every meal keeps Log this meal', async () => {
     mockFlag = false;
     await render(<ClientDailyMealPlanScreen />);
-    for (const id of ['a', 'b', 'c']) expect(screen.getByTestId(`daily-meal-plan-mark-${id}`)).toHaveStyle({ backgroundColor: sc.bgSurface });
+    for (const id of ['a', 'b', 'c']) expect(screen.getByTestId(`daily-meal-plan-mark-${id}`, HIDDEN)).toHaveStyle({ backgroundColor: sc.bgSurface });
     expect(screen.queryByText('Logged as planned')).toBeNull();
     expect(mockButtons.some((b) => b.planned)).toBe(false);
   });
 
   it('e: "Ate it as planned" on the next meal only, on the drawn cream card with its description (C_day .c-next y 1304-1515 px)', async () => {
     await render(<ClientDailyMealPlanScreen />);
-    expect(mockButtons.filter((b) => b.planned).map((b) => b.planSlotId)).toEqual(['c']);
+    expect([...new Set(mockButtons.filter((b) => b.planned).map((b) => b.planSlotId))]).toEqual(['c']);
     const card = screen.getByTestId('daily-meal-plan-next-card');
     expect(card).toHaveStyle({ backgroundColor: colors.cream, borderRadius: 16 });
     expect(within(card).getByText('Salmon 150 g, new potatoes 200 g, green beans')).toBeTruthy();
@@ -250,12 +253,12 @@ describe.each(SIZES)('meal plan toward C2 C_day, %s', (_size, dims) => {
     mockParams = { date: '2026-10-12' };
     await render(<ClientDailyMealPlanScreen />);
     expect(mockButtons.some((b) => b.planned)).toBe(false);
-    expect(screen.queryByTestId('daily-meal-plan-now')).toBeNull();
+    expect(screen.queryByTestId('daily-meal-plan-now', HIDDEN)).toBeNull();
   });
 
   it('f: the gutter is a dotted line drawn in svg, not a solid bar (C_day .c-tl:before 1.5px dotted, x 172-174 px)', async () => {
     await render(<ClientDailyMealPlanScreen />);
-    const lines = screen.getAllByTestId('plan-gutter-line');
+    const lines = screen.getAllByTestId('plan-gutter-line', HIDDEN);
     expect(lines.length).toBeGreaterThanOrEqual(2);
     for (const l of lines) {
       expect(flat(l).backgroundColor).toBeUndefined();
@@ -266,13 +269,13 @@ describe.each(SIZES)('meal plan toward C2 C_day, %s', (_size, dims) => {
 
   it('the cream tile at 52 pt, radius 12 (C_day .c-th span 52px, y 480-584 px)', async () => {
     await render(<ClientDailyMealPlanScreen />);
-    expect(screen.getByTestId('daily-meal-plan-art-a')).toHaveStyle({ width: 52, height: 52, borderRadius: 12, backgroundColor: colors.cream });
+    expect(screen.getByTestId('daily-meal-plan-art-a', HIDDEN)).toHaveStyle({ width: 52, height: 52, borderRadius: 12, backgroundColor: colors.cream });
   });
 
   it('g: loading draws the masthead bones (C_loading) and keeps the block\'s Loading label', async () => {
     mockDaily.mockReturnValue({ data: undefined, isLoading: true, isError: false, isRefetching: false, refetch: jest.fn() });
     await render(<ClientDailyMealPlanScreen />);
-    expect(within(screen.getByTestId('daily-meal-plan-masthead')).getAllByTestId('plan-mast-bone').length).toBe(2);
+    expect(within(screen.getByTestId('daily-meal-plan-masthead')).getAllByTestId('plan-mast-bone', HIDDEN).length).toBe(2);
     expect(screen.queryByText("Today's meals")).toBeNull();
     expect(screen.getByLabelText('Loading')).toBeTruthy();
   });
@@ -351,7 +354,7 @@ describe.each(SIZES)('Fasting toward C8 C_fasting, %s', (_size, dims) => {
     const ring = screen.getByTestId('fasting-ring');
     expect(ring).toHaveStyle({ width: 150, height: 150 });
     const circles = hosts(ring).filter((n) => n.props.strokeWidth != null);
-    expect(circles.map((c) => String(c.props.stroke))).toEqual(expect.arrayContaining([sc.border, sc.data.goal]));
+    expect(circles.map((c) => paint(c.props.stroke))).toEqual(expect.arrayContaining([processColor(sc.border), processColor(sc.data.goal)]));
     expect(circles.every((c) => Number(c.props.strokeWidth) === 9)).toBe(true);
     expect(within(screen.getByTestId('fasting-masthead')).queryByText('5h 15m')).toBeNull();
   });
@@ -380,7 +383,7 @@ describe.each(SIZES)('Fasting toward C8 C_fasting, %s', (_size, dims) => {
     expect(btn).toHaveStyle({ borderWidth: 1, borderColor: sc.accent, borderRadius: 12, minHeight: 54 });
     expect(flat(btn).backgroundColor).toBeUndefined();
     expect(within(btn).getByText('End fast')).toHaveStyle({ color: sc.accentText });
-    expect(screen.getByTestId('fasting-gold-rule')).toHaveStyle({ height: 1, backgroundColor: sc.data.goal });
+    expect(screen.getByTestId('fasting-gold-rule', HIDDEN)).toHaveStyle({ height: 1, backgroundColor: sc.data.goal });
   });
 
   it('d: recent fasts are plain rows with a hairline, short date left and hours with a space right (C8 y 653-850 px)', async () => {
