@@ -34,8 +34,8 @@ describe.each(FILES)('%s', (file) => {
   it('every pressable style it names keeps a 44 pt floor', () => {
     const src = code(file);
     // Each minHeight / height / width set on a tap target in these files is 44 pt or more (layout.touchMin,
-    // layout.buttonHeight or a literal); a literal under 44 on a min size fails.
-    const small = [...src.matchAll(/min(Height|Width):\s*(\d+(?:\.\d+)?)\b/g)].map((m) => Number(m[2])).filter((n) => n < 44);
+    // layout.buttonHeight or a literal); a literal under 44 on a min size fails (minWidth 0 is the flex-shrink idiom, not a size).
+    const small = [...src.matchAll(/min(Height|Width):\s*(\d+(?:\.\d+)?)\b/g)].map((m) => Number(m[2])).filter((n) => n > 0 && n < 44);
     expect(small).toEqual([]);
   });
 });
