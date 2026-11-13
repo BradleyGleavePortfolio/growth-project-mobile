@@ -89,6 +89,7 @@ visit; a 403 or 404 lists no one. Loading is the shared QuietLoading; a failed r
 calm line with Try again (the connection line when offline). When the chat's own read
 failed (not a refusal), the people line says so with Try again, which reloads the chat
 (FR-897). The keyboard goes away before the sheet opens.
+Closed and empty (SPACE-STATES-M, ctx#538 style 2): `SpaceStates.test.tsx`.
 Tests: `CommunitySpaceChatScreen.test.tsx`.
 
 The shell retains Today, Hall, Cohorts, Challenges and Messages behind their
