@@ -48,9 +48,10 @@ function LegacyReportScreen({ navigation }: { navigation: ReportNavigation }) {
     : serverTarget === 'none' ? savedTarget
     : serverTarget === 'error' ? macroTargets?.calories ?? savedTarget
     : undefined;
-  const [weeklyRead, setWeeklyWeights] = useState<WeightLog[]>([]);
+  // REFINE-972 (LO C1): null until a good read, so this phone's weigh-ins never stand alone as the week.
+  const [weeklyRead, setWeeklyWeights] = useState<WeightLog[] | null>(null);
   // OFFLINE-WATER-WEIGHT-M: the week's weights count this phone's weigh-ins once (joined by key), today's included.
-  const weeklyWeights = (useWeighInsOnPhone(weeklyRead, currentUser?.id) ?? weeklyRead).slice(-7);
+  const weeklyWeights = (useWeighInsOnPhone(weeklyRead, currentUser?.id) ?? []).slice(-7);
   const [todayMacros, setTodayMacros] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
   // Until today's log has been read the totals are unknown, not zero.
   const [macrosRead, setMacrosRead] = useState(false);
@@ -74,7 +75,7 @@ function LegacyReportScreen({ navigation }: { navigation: ReportNavigation }) {
     } catch (err) {
       // Read-only weight history; empty chart is the graceful fallback.
       console.error('ReportScreen: weightApi.getHistory failed', err);
-      setWeeklyWeights([]);
+      setWeeklyWeights(null);
     }
     try {
       // Use the local-tz bucket so this matches the day the user is actually

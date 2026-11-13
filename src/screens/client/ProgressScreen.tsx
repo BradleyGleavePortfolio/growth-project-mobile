@@ -142,7 +142,8 @@ function LegacyProgressScreen({ onSaved, logWeightAt }: ProgressProps) {
 
   // Server-authoritative macro targets (AsyncStorage used only as cache).
   const macroTargets = useMacroTargets();
-  const [weightRead, setWeightLogs] = useState<WeightLog[]>([]);
+  // REFINE-972 (LO C1): null until a good read, so this phone's weigh-ins never stand alone as the client's history.
+  const [weightRead, setWeightLogs] = useState<WeightLog[] | null>(null);
   const [period, setPeriod] = useState<Period>('30D');
   const [showLogModal, setShowLogModal] = useState(false);
   // TIMELINE: Log weight on the Timeline's empty state opens this sheet.
@@ -250,7 +251,7 @@ function LegacyProgressScreen({ onSaved, logWeightAt }: ProgressProps) {
 
   // OFFLINE-WATER-WEIGHT-M (191-S5): this phone's weigh-ins count once, joined by key; a sent one is read back once
   // the history holds it (G2, G6).
-  const weightLogs = useWeighInsOnPhone(weightRead, userId ?? undefined) ?? weightRead;
+  const weightLogs = useWeighInsOnPhone(weightRead, userId ?? undefined) ?? [];
   const runLogs = useWeighInsOnPhone(runRead, userId ?? undefined);
   const firstLog = runLogs?.[0] ?? null;
   const lastLog = runLogs?.[runLogs.length - 1] ?? null;
