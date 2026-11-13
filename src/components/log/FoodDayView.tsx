@@ -302,7 +302,7 @@ export default function FoodDayView(p: FoodDayViewProps) {
             style={s.row}>
             {/* GOAL-930-M (D2, C_first .c-e .tm): the meal's word until it has a log, then its log time (main). The row's own
                 label says the meal, so the word is not read twice. */}
-            {mine.length ? <Text style={s.time}>{min != null ? clockOf(min) : ''}</Text>
+            {mine.length ? <Text style={s.time}>{m.word}</Text>
               : <Text style={s.time} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">{m.word}</Text>}
             <View style={s.rail}><View style={s.line} /><Mark done={mine.length > 0 && waiting.length === 0} waiting={waiting.length > 0} reduced={reduced}
               style={s.mark} fill={s.markFill} testID={waiting.length ? `food-day-waiting-${m.type}` : undefined} /></View>
