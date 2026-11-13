@@ -280,7 +280,7 @@ export default function MessagesInboxScreen({ navigation }: { navigation: Naviga
             <Rise index={1}>
               <Pressable onPress={tap(() => navigation.navigate('MoreTab', { screen: 'RomanChat', initial: false }))} accessibilityRole="button" accessibilityLabel={`Roman, your assistant${left !== null ? `, ${left} left today` : ''}`} testID="inbox-roman" style={({ pressed }) => [s.card, { backgroundColor: palette.cream }, pressed && s.pressed]}>
                 <View style={[s.top, s.wrapTop]}>
-                  <View style={[s.ringed, { borderColor: gold[500] }]}><RomanAvatar crop="neutral" size={52} /></View>
+                  <View style={[s.ringed, { borderColor: palette.romanAccent }]}><RomanAvatar crop="neutral" size={52} /></View>
                   <View style={[s.who, s.whoMin]}>
                     <Text style={[s.over, { color: sc.textMuted }]}>Your assistant</Text>
                     <Text style={[s.title, { color: sc.textPrimary }]}>Roman</Text>

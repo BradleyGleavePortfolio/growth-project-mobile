@@ -56,6 +56,7 @@ import { QuietError, QuietLoading, loadFailureMessage } from '../../ui/states/Qu
 import { PATH_DRAFTS_KEY, PathChangeDrafts, usePathChangeDrafts } from './copilot/PathChangeDrafts';
 import { useScreenInsets } from '../../ui/layout/Screen';
 import { draftKinds } from './inboxStyleB';
+import { readStateOf, romanDraftsCount } from './romanDraftsCount';
 
 /** Roles allowed to see + decide AI drafts. Mirrors backend
  *  `@Roles('coach', 'owner')` on the gateway list/decide endpoints. */
@@ -136,7 +137,8 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
   const isMutating = approveMutation.isPending || rejectMutation.isPending;
   const kinds = draftKinds(allRows);
   // LO-952 C1: the headline counts every card the list shows, the plan changes too; the tiles stay the drafts' kinds.
-  const ready = kinds.total + (path.data?.length ?? 0);
+  // DRAFTS-COUNT-M: from the one count, as coach Home and the Messages card count it (the read is off with the switch off).
+  const ready = romanDraftsCount(allRows, readStateOf(query), { n: path.data?.length, state: readStateOf(path) }).waiting;
   const bare = renderable.length === 0 && !query.isLoading && !path.isLoading && !hasPath && !pathFailed;
   // LS-952 B1, LO-952 B1: the header and kind tiles scroll with the cards (a 320 pt screen at 130% text keeps room for
   // them). The screen keeps insets.top so a scrolled card stops below the clock; the header adds 8 as before.

@@ -153,10 +153,13 @@ export function usePostComments(
 
 export function useDmThreads(
   workspaceId: string | null | undefined,
+  opts: { limit?: number } = {},
 ): UseQueryResult<CommunityDmThread[]> {
+  const key = communityKeys.dmThreads(workspaceId ?? '∅');
   return useQuery({
-    queryKey: communityKeys.dmThreads(workspaceId ?? '∅'),
-    queryFn: () => communityApi.listDmThreads(workspaceId as string),
+    // COACH-DM-M: a limited read keeps its own entry under the same prefix (blockSync drops a blocked row from both).
+    queryKey: opts.limit != null ? [...key, opts.limit] : key,
+    queryFn: () => communityApi.listDmThreads(workspaceId as string, opts),
     enabled: !!workspaceId,
   });
 }

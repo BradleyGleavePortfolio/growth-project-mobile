@@ -9,13 +9,18 @@
  * Plain Text only (never HTML), so FIFTY_FAILURES #4 does not apply.
  * CRISIS-BTN (flag crisisActions): a reply the server marked carries its
  * crisis actions under the text, as the last block of the reveal.
+ * ROMAN-HOLD-M (#197-D3): holding Roman's reply text opens the shared message
+ * menu (`onLongPress`); a client turn sent as a reply shows its quote strip.
  */
 import React, { useEffect, useMemo, useRef } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, View, type AccessibilityActionEvent } from 'react-native';
 import RomanAvatar from './RomanAvatar';
 import RomanCrisisActions from './RomanCrisisActions';
+import RomanQuoteStrip from './RomanQuoteStrip';
 import { featureFlags } from '../../config/featureFlags';
 import { ROMAN_INTERRUPTED_NOTE } from './romanVoice';
+import { splitRomanQuote } from './romanReply';
+import { HapticService } from '../../ui/haptics/haptics.service';
 import type { RomanMessage } from '../../api/romanApi';
 import { radius, spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/useTheme';
@@ -26,8 +31,21 @@ export interface RomanMessageBubbleProps {
   reveal?: boolean;
   /** Reduce Motion: when true a reveal shows the text at once. */
   reduceMotion?: boolean;
+  /** Hold on Roman's reply: opens the message menu (Reply, Copy, Report). */
+  onLongPress?: (message: RomanMessage) => void;
   testID?: string;
 }
+
+/** The people's chat hold timing and hint (MessageBubble), reused as is. */
+const HOLD_MS = 350;
+const HOLD_HINT = 'Long press for message actions.';
+const HOLD_ACTIONS = [{ name: 'longpress' as const }];
+/**
+ * LS-950 B2 (FIX-950R1): a one-line reply reads 28 pt tall, so the hold reaches 8 pt above and
+ * below it (44 pt at 100%, 52 at 130%). Nothing drawn moves: the reach sits in the row's own
+ * speaker gap and bottom padding (both spacing.sm), so Android still delivers the touch.
+ */
+export const HOLD_SLOP = { top: spacing.sm, bottom: spacing.sm, left: 0, right: 0 } as const;
 
 export type RomanBlock =
   | { kind: 'paragraph'; text: string }
@@ -68,6 +86,7 @@ function RomanMessageBubbleComponent({
   message,
   reveal = false,
   reduceMotion = false,
+  onLongPress,
   testID,
 }: RomanMessageBubbleProps): React.ReactElement {
   const { semanticColors: c } = useTheme();
@@ -95,6 +114,21 @@ function RomanMessageBubbleComponent({
     return () => run.stop();
   }, [animate, faded]);
 
+  const hold = useMemo(
+    () =>
+      onLongPress
+        ? () => {
+            HapticService.selection();
+            onLongPress(message);
+          }
+        : undefined,
+    [onLongPress, message],
+  );
+  const onHoldAction = useMemo(
+    () => (hold ? (e: AccessibilityActionEvent) => { if (e.nativeEvent.actionName === 'longpress') hold(); } : undefined),
+    [hold],
+  );
+
   if (isAssistant) {
     const reading = [styles.reading, { color: c.textPrimary }];
     return (
@@ -103,12 +137,18 @@ function RomanMessageBubbleComponent({
           <RomanAvatar crop="neutral" size={22} testID="roman-bubble-avatar" />
           <Text style={[styles.speakerLabel, { color: c.textMuted }]}>ROMAN</Text>
         </View>
-        <View
-          style={styles.assistantBody}
+        <Pressable
+          style={({ pressed }) => [styles.assistantBody, pressed && hold ? styles.held : null]}
+          onLongPress={hold}
+          delayLongPress={HOLD_MS}
+          hitSlop={hold ? HOLD_SLOP : undefined}
           accessible
           accessibilityRole="text"
           // The interrupted note is part of what a screen reader speaks (B-602-C-1).
           accessibilityLabel={`Roman said: ${message.content}${message.interrupted ? ` ${ROMAN_INTERRUPTED_NOTE}` : ''}`}
+          accessibilityHint={hold ? HOLD_HINT : undefined}
+          accessibilityActions={hold ? HOLD_ACTIONS : undefined}
+          onAccessibilityAction={onHoldAction}
           testID={testID ? `${testID}-reply` : undefined}
         >
           {blocks.map((b, i) => (
@@ -130,7 +170,7 @@ function RomanMessageBubbleComponent({
           {message.interrupted ? (
             <Text style={[styles.interruptedNote, { color: c.textMuted }]}>{ROMAN_INTERRUPTED_NOTE}</Text>
           ) : null}
-        </View>
+        </Pressable>
         {crisis ? (
           <Animated.View style={[styles.crisis, { opacity: opacities.current[blocks.length] }]}>
             <RomanCrisisActions actions={crisis} testID={testID ? `${testID}-crisis` : undefined} />
@@ -140,14 +180,17 @@ function RomanMessageBubbleComponent({
     );
   }
 
+  const quoted = splitRomanQuote(message.content);
+  const said = quoted ? quoted.body : message.content;
   return (
     <View style={styles.userRow} testID={testID} role="listitem">
       <View
         style={[styles.userBubble, { backgroundColor: c.bgSurface, borderColor: c.border }]}
         testID={testID ? `${testID}-bubble` : undefined}
       >
-        <Text style={[styles.userText, { color: c.textPrimary }]} accessibilityLabel={`You said: ${message.content}`}>
-          {message.content}
+        {quoted ? <RomanQuoteStrip quote={quoted.quote} testID={testID ? `${testID}-quote` : undefined} /> : null}
+        <Text style={[styles.userText, { color: c.textPrimary }]} accessibilityLabel={`You said: ${said}`}>
+          {said}
         </Text>
       </View>
     </View>
@@ -169,7 +212,9 @@ const styles = StyleSheet.create({
   assistantRow: { gap: spacing.sm, paddingTop: spacing.lg, paddingBottom: spacing.sm, marginHorizontal: spacing.xl },
   speakerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   speakerLabel: { ...typography.eyebrow },
-  assistantBody: { gap: spacing.md },
+  assistantBody: { gap: spacing.md, borderRadius: radius.control },
+  // A held reply dims a touch, like a held bubble in the people's chat (bubblePressed 0.85).
+  held: { opacity: 0.85 },
   reading: { ...ROMAN_READING },
   bulletRow: { flexDirection: 'row', paddingLeft: spacing.xs },
   bulletMarker: { width: 22 },
