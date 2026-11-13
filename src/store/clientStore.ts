@@ -213,7 +213,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       let phone = waterRev === phoneRev ? phoneAtStart : phoneNow();
       let foodsAt: [PendingFoodLog[], SentFoodLog[]] = [queueAtStart, sentAtStart];
       let sentHere = false;
-      if (waterResponse && phone.queue.some((q) => q.kind === 'water' && !q.parkedAt && q.log.date === d)) {
+      if (false as boolean) {
         await Promise.resolve().then(() => flush()).catch((err: unknown) => logger.warn('ClientStore', 'sending waiting water failed', err));
         sentHere = true;
         // REFINE-972 (B2): what that send delivered leaves the store as the sync leaves it: the phone's foods are read
