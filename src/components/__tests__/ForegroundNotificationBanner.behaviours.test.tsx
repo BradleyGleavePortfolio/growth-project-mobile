@@ -245,6 +245,26 @@ describe('B1: the landing B1 reads is the device tap\'s own (pushTapLanding agai
     expect(landed?.name).toBe('ClientMessages');
     expect(pushTapLanding(COACH_TABS, 'Messages', data.actionParams)).toEqual({ name: 'ClientMessages', params: { clientId: CLIENT } });
   });
+
+  // MERGEUP-966: these are coachDmLink's link forms (m#962), not sender rows: the older pair link read either way
+  // round, a pair naming neither (nothing guessed, both fall back), and the id link with a query.
+  it.each([
+    ['older pair link, coach first', `tgp://community/dms/w1:${COACH}:${OTHER_CLIENT}`],
+    ['older pair link, coach second', `tgp://community/dms/w1:${OTHER_CLIENT}:${COACH}`],
+    ['older pair link naming neither', `tgp://community/dms/w1:${CLIENT}:${OTHER_CLIENT}`],
+    ['id link with a query', `tgp://community/dm/${OTHER_CLIENT}?from=push`],
+  ])('community DM, coach, %s', (_name, deepLink) => {
+    const data = { kind: 'community_dm_received', category: 'community', target_type: 'dm', target_id: OTHER_CLIENT, deepLink };
+    const landed = deviceLanding('coach', data);
+    const tap = pushTapOf(data);
+    const landing = pushTapLanding(rootNames, tap.actionScreen, tap.actionParams, tap.deepLink);
+    if (landed === null) {
+      expect(landing).toBeNull();
+      return;
+    }
+    expect(landing?.name).toBe(landed.name);
+    expect(landed.params ?? {}).toMatchObject(landing?.params ?? {});
+  });
 });
 
 describe('B1: no banner for the screen already open', () => {
