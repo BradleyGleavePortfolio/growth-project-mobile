@@ -5,7 +5,7 @@
  * GOAL: TAN-MOCK ctx#441, third panel, handoffs/op-197/renders/tan-mock/src/contrast.py @ 3e43773e:
  *   :94 card fill #FFF8EC, border "2px solid #6B4F1A", tag fill #6B4F1A, tag words #FFF8EC;
  *   :67 .card radius 16, padding 16, gap 12;
- *   :68 .chip inline-flex, gap 6, Inter 600 13, padding 5 x 11, radius 12;
+ *   :68 .chip inline-flex, gap 6, Inter 600 13, padding 5 x 11, radius 12 (on a tag 26 tall: a pill, radius.chip);
  *   :80 the tag is a 13 x 13 shield outline then the word "Safety", under the card's line.
  * Look only: who is alerted, which words show (never the client's words for a crisis alert), what a screen reader
  * says, every tap, every testID and every ph-no-capture area stay as on main 8efe38e0.
@@ -53,7 +53,7 @@ function expectDrawnTag(tag: El) {
   const box = flat(tag);
   expect(box.backgroundColor).toBe(safetyGold.chipFill);
   expect([box.flexDirection, box.alignItems, box.alignSelf, box.gap]).toEqual(['row', 'center', 'flex-start', 6]);
-  expect([box.paddingVertical, box.paddingHorizontal, box.borderRadius]).toEqual([5, 11, radius.input]);
+  expect([box.paddingVertical, box.paddingHorizontal, box.borderRadius]).toEqual([5, 11, radius.chip]); // the drawn 12 on a 26 tall tag: 2 px of straight side (PNG measure), a pill
   expect([box.width, box.height]).toEqual([undefined, undefined]); // it grows at 130%
   const word = within(tag as never).getByText('Safety', HIDDEN) as unknown as El;
   const w = flat(word);
