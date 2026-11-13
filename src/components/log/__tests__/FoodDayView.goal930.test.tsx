@@ -85,6 +85,8 @@ describe('D1 C_first: the drawn tool tiles, with the one tile whose feature is o
     expect(cells).toHaveLength(3);
     for (const c of cells) expect(flat(c).flex).toBe(1);
     expect(within(cells[0]).getByTestId('food-day-first-manual')).toBeTruthy();
+    // C_first.html :155: the lead line's 10 pt margin is the space above the row (the row itself has margin-top 0).
+    expect(flat(screen.getByText('After a few days, this page builds your usual day from the meals you repeat.')).marginBottom).toBe(10);
     // Columns 2 and 3 hold their place, empty: never a dead tile, never "soon" (REFINE-968 ruling 4).
     for (const c of cells.slice(1)) {
       expect(within(c).queryAllByRole('button')).toHaveLength(0);

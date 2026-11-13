@@ -636,7 +636,8 @@ const makeStyles = (sc: SemanticTokens, gutter: number, wideCard = false) => Sty
   // The paper page (radius 24) over the masthead's foot.
   paper: { marginHorizontal: -layout.gutter, marginTop: -18, paddingHorizontal: layout.gutter, paddingTop: 16, paddingBottom: 8,
     backgroundColor: sc.bgPrimary, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, minHeight: 360 },
-  lead: { ...typography.bodySmall, fontSize: 15, color: sc.textMuted, marginBottom: 16 },
+  // C_first.html :155: the lead's 10 pt margin is the space above the tool tiles (GOAL-930-M D1).
+  lead: { ...typography.bodySmall, fontSize: 15, color: sc.textMuted, marginBottom: 10 },
   timeline: { marginTop: 0 },
   row: { flexDirection: 'row', alignItems: 'stretch', paddingTop: 6, paddingBottom: 12, minHeight: 56 },
   time: { ...typography.bodyMd, fontSize: 12, lineHeight: 16, letterSpacing: 0, width: gutter, textAlign: 'right', color: sc.textMuted, paddingTop: 4 },
