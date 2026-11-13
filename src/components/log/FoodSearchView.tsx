@@ -127,7 +127,7 @@ export default function FoodSearchView({
 }: Props) {
   const { semanticColors: sc } = useTheme();
   const styles = makeStyles(sc);
-  // "manually" is one long word: past 100% text it would run out of a third of the row, so the tile takes two shares.
+  // Past 100% text the manual tile takes two shares (REFINE-968's rule, kept), so its words stay inside the tile.
   const wideTile = useWindowDimensions().fontScale > 1;
   const browseList = recentTab === 'recent' ? recentFoods : frequentFoods;
   const showList = searchQuery.length >= 2 ? searchResults : browseList;
@@ -138,8 +138,8 @@ export default function FoodSearchView({
   return (
     <View style={styles.modalBody}>
       {!searchingNow ? (
-        // REFINE-968 (C_add.html :121 .c-big2): the drawn three columns, main's manual entry in the first with main's
-        // words (the drawn "Quick add" words wait: renaming the tile turns unlisted tests red, see m#968 FIX ROUND 1);
+        // REFINE-968 (C_add.html :121 .c-big2): the drawn three columns, main's manual entry in the first with the drawn
+        // "Quick add" words and bolt (QUICKADD-968; the drawing has it third, working tiles fill from the left);
         // columns 2 and 3 hold their place for MEAL-PHOTO-M's Photo of a meal and a later barcode tile (never a dead tile).
         <View style={styles.toolsRow} testID="food-tools">
           <HapticPressable
@@ -148,9 +148,10 @@ export default function FoodSearchView({
             style={styles.toolTile}
             onPress={onEnterManualMode}
             accessibilityRole="button"
+            accessibilityLabel="Quick add, enter a food manually"
           >
-            <Ionicons name="create-outline" size={24} color={sc.accentText} />
-            <Text style={styles.toolTileText}>Enter manually</Text>
+            <SheetGlyph name="bolt" size={24} color={sc.accentText} />
+            <Text style={styles.toolTileText}>Quick add</Text>
           </HapticPressable>
           <View style={styles.toolCell} />
           <View style={styles.toolCell} />
@@ -250,7 +251,7 @@ export default function FoodSearchView({
               {browseUnavailable ? (
                 <>
                   <Text style={styles.emptyStateTitle}>Recent foods could not load</Text>
-                  <Text style={styles.emptyStateSubtitle}>Check the connection, or tap Enter manually to save this food now.</Text>
+                  <Text style={styles.emptyStateSubtitle}>Check the connection, or tap Quick add to save this food now.</Text>
                 </>
               ) : (
                 <>
