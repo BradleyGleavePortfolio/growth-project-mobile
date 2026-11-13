@@ -37,6 +37,10 @@ jest.mock('../../../theme/ThemeProvider', () => ({
   }),
 }));
 jest.mock('../../../components/AppleSignInButton', () => ({ __esModule: true, default: () => null }));
+jest.mock('@expo/vector-icons', () => ({
+  Ionicons: ({ name, size }: { name: string; size: number }) =>
+    require('react').createElement(require('react-native').Text, { testID: `goal935-icon-${name}`, style: { fontSize: size } }),
+}));
 const mockGoogle = jest.fn();
 jest.mock('../../../utils/googleAuth', () => ({ signInWithGoogle: (...a: unknown[]) => mockGoogle(...a) }));
 jest.mock('../../../utils/appleAuth', () => ({ signInWithApple: jest.fn() }));
@@ -51,6 +55,7 @@ jest.mock('../../../utils/authEvents', () => ({ authEvents: { emit: jest.fn() } 
 
 import LoginScreen from '../LoginScreen';
 import CreateAccountScreen from '../CreateAccountScreen';
+import ForgotPasswordScreen from '../ForgotPasswordScreen';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { __resetSignupPolicyCacheForTests } from '../../../lib/signupPolicy';
 
@@ -62,8 +67,6 @@ const create = (params?: { invite_code?: string }) =>
   render(<CreateAccountScreen navigation={nav() as never} route={params ? { params } : undefined} />);
 const login = () => render(<LoginScreen navigation={nav() as never} route={{ key: 'l', name: 'Login' } as never} />);
 const flat = (el: { props: object }) => (StyleSheet.flatten((el.props as { style?: object }).style) ?? {}) as Record<string, unknown>;
-const labelOf = (google: { findAll: (p: (n: { type: unknown; props: Record<string, unknown> }) => boolean) => Array<{ props: Record<string, unknown> }> }) =>
-  google.findAll((n) => typeof n.type === 'string' && n.props.children === 'Continue with Google')[0];
 
 beforeEach(async () => {
   jest.clearAllMocks();
@@ -88,12 +91,12 @@ describe('GOAL-935-M S1: Google\'s mark on Create account (C7 Style B)', () => {
 
   it('S1: Style B draws create-account-google-mark and the semibold label, as Sign in does', async () => {
     const view = await create({ invite_code: CODE });
-    const google = await view.findByLabelText('Continue with Google');
+    await view.findByLabelText('Continue with Google');
     expect(view.getByTestId('create-account-google-mark', HIDDEN)).toBeTruthy();
-    expect(flat(labelOf(google as never))).toMatchObject({ fontFamily: 'Inter_600SemiBold', fontWeight: '600' });
+    expect(flat(view.getByText('Continue with Google'))).toMatchObject({ fontFamily: 'Inter_600SemiBold', fontWeight: '600' });
     const signIn = await login();
-    const signInGoogle = await signIn.findByLabelText('Continue with Google');
-    expect(flat(labelOf(signInGoogle as never))).toMatchObject({ fontFamily: 'Inter_600SemiBold', fontWeight: '600' });
+    await signIn.findByLabelText('Continue with Google');
+    expect(flat(signIn.getByText('Continue with Google'))).toMatchObject({ fontFamily: 'Inter_600SemiBold', fontWeight: '600' });
   });
 
   it('S1 (REC): the classic path (Style B off) keeps its typed "G", as Sign in\'s classic branch does', async () => {
@@ -145,5 +148,32 @@ describe('GOAL-935-M S1: Google\'s mark on Create account (C7 Style B)', () => {
     await fireEvent.press(google);
     expect(mockGoogle).not.toHaveBeenCalled();
     expect(view.getByTestId('create-account-coach-terms')).toBeTruthy();
+  });
+});
+
+describe('GOAL-935-M S3: the submitted reset card follows B_reset', () => {
+  it.each([
+    ['card radius', 24],
+    ['card inset', 18],
+    ['title size', 13],
+    ['checkmark size', 17],
+  ])('%s is %d without changing submission or recovery', async (part, expected) => {
+    mockApi.forgotPassword.mockResolvedValue({ data: {} });
+    const navigation = nav();
+    const view = await render(<ForgotPasswordScreen navigation={navigation as never} />);
+    await fireEvent.changeText(view.getByLabelText('Email'), '  member@example.test  ');
+    await fireEvent.press(view.getByLabelText('Send reset link'));
+    const card = await view.findByTestId('forgot-sent');
+    const actual: Record<string, unknown> = {
+      'card radius': flat(card).borderRadius,
+      'card inset': flat(card).padding,
+      'title size': flat(view.getByText('Reset request submitted')).fontSize,
+      'checkmark size': flat(view.getByTestId('goal935-icon-checkmark')).fontSize,
+    };
+    expect(actual[part]).toBe(expected);
+    expect(mockApi.forgotPassword).toHaveBeenCalledWith('member@example.test');
+    expect(view.getByText(/cannot confirm whether an email was sent/)).toBeTruthy();
+    await fireEvent.press(view.getByLabelText('Back to login'));
+    expect(navigation.navigate).toHaveBeenCalledWith('Login');
   });
 });
