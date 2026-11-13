@@ -45,7 +45,7 @@ export default function WeightTrendChartDark({
   const [selectedX, setSelectedX] = useState<number | null>(null);
   const selected = days.find((p) => p.x === selectedX);
   // REFINE-972 (C8V2-S-29): today's weigh-in kept on this phone gets its callout beside the ring, unless the touch chip shows.
-  const todayRing = selected ? undefined : days.find((p) => p.pending && p.weight != null && p.x === Math.floor(through / WEIGHT_DAY) * WEIGHT_DAY);
+  const todayRing = selected ? undefined : days.find((p) => p.pending && p.weight != null && through >= WEIGHT_DAY);
   const reduceMotion = useReduceMotion();
   const opacity = useRef(new Animated.Value(1)).current;
   useEffect(() => {
