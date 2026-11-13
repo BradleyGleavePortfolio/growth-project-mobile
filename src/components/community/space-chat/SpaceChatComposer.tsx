@@ -12,12 +12,15 @@
  * puts the cursor in the field; a refused reply comes back with its quote. The mic is the screen's to leave out.
  * FR-909 (LO-909 B2): it waits while another reply is set too, so a newer reply is never switched; a quote whose message
  * went does not come back (the text does).
+ * SPACE-STATES-M (ctx#538 style 2, S5; build.py :165-166): `suggestion`, the coach's one suggestion in an empty space,
+ * draws as a chip above the dock while the field is empty and no reply is set; a tap puts its words in the field (this
+ * space's draft, like typed text) and sends nothing, with no focus and no keyboard.
  */
 import React, { useEffect, useRef } from 'react';
-import { Alert, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useChatDraft } from '../../../lib/chatDrafts';
-import { forestPop as fp, neutral, spacing, typography, voiceShades } from '../../../theme/tokens';
+import { colors, forestPop as fp, neutral, spacing, typography, voiceShades } from '../../../theme/tokens';
 import { SPACE_MESSAGE_MAX } from './spaceChatApi';
 import { REJECTED_WORDS, spaceOutbox, useSpaceOutbox, type SpaceReplyTarget } from './spaceChatOutbox';
 import { ReplyComposer } from '../../messaging/ReplyComposer';
@@ -34,9 +37,11 @@ export interface SpaceChatComposerProps {
   /** SC-M3: the message being answered (reply mode), and how the screen sets or clears it. */
   reply?: SpaceReplyTarget | null;
   onReply?: (target: SpaceReplyTarget | null) => void;
+  /** SPACE-STATES-M: the words of the coach's one suggestion (the chip's label and what a tap puts in the field). */
+  suggestion?: string;
 }
 
-export default function SpaceChatComposer({ cohortId, onSend, leading, trailing, bottomInset = 0, reply, onReply }: SpaceChatComposerProps): React.ReactElement {
+export default function SpaceChatComposer({ cohortId, onSend, leading, trailing, bottomInset = 0, reply, onReply, suggestion }: SpaceChatComposerProps): React.ReactElement {
   const [text, setText] = useChatDraft(`space:${cohortId}`);
   const body = text.trim();
   const field = useRef<TextInput>(null);
@@ -51,6 +56,16 @@ export default function SpaceChatComposer({ cohortId, onSend, leading, trailing,
   useEffect(() => { if (reply) field.current?.focus(); }, [reply]);
   return (
     <>
+      {suggestion && !text && !reply ? (
+        <View style={s.chips}>
+          <TouchableOpacity onPress={() => setText(suggestion)} accessibilityRole="button" accessibilityLabel={suggestion} style={s.chip} testID="space-chat-suggestion">
+            <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              <Ionicons name="pencil-outline" size={18} color={fp.forest} />
+            </View>
+            <Text style={s.chipText}>{suggestion}</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
       {reply && onReply ? <ReplyComposer target={reply} onCancel={() => onReply(null)} /> : null}
       <View style={[s.bar, leading ? null : s.noLead, bottomInset ? { paddingBottom: spacing.sm + bottomInset } : null]} testID="space-chat-composer">
         {leading ? <View style={s.slot}>{leading}</View> : null}
@@ -94,4 +109,11 @@ const s = StyleSheet.create({
     borderRadius: 22, borderWidth: 1, borderColor: voiceShades.track, backgroundColor: neutral[0], color: fp.ink,
   },
   send: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: fp.forest },
+  // SPACE-STATES-M, build.py .s2chips / .chip: a row on the page colour, a 44 pt pill with a 1.5 pt forest edge on white.
+  chips: { flexDirection: 'row', paddingTop: 10, paddingHorizontal: spacing.lg, paddingBottom: 2, backgroundColor: colors.bone },
+  chip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, maxWidth: '100%', paddingVertical: 10, paddingHorizontal: spacing.lg,
+    borderRadius: 22, borderWidth: 1.5, borderColor: fp.forest, backgroundColor: neutral[0],
+  },
+  chipText: { fontFamily: 'Inter_500Medium', fontWeight: '500', fontSize: 15, lineHeight: 20, color: fp.forest, flexShrink: 1 },
 });

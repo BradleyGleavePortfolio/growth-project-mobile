@@ -35,7 +35,8 @@
  *     #174-4); an author's own delete still vanishes. Only live rows count for the read mark, the New messages line and
  *     the pill: the server counts unread without deleted rows and will not take one as the read mark.
  *   - Empty (SPACE-STATES-M, ctx#538 style 2): "This is the start of {space}." at the top with the space's purpose and
- *     member count (SpaceStartRow), for everyone the server let in on this visit, while the space has no message.
+ *     member count (SpaceStartRow), for everyone the server let in on this visit, while the space has no message. The
+ *     coach also gets one suggestion above the field, "Welcome to {space}.", which fills the field and sends nothing.
  *   - Offline: no line about it; a voice note waiting on the phone says so in its card (owner 10-20 12:25, FR-871R5).
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -442,6 +443,7 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
             bottomInset={dockInset}
             reply={reply}
             onReply={setReply}
+            suggestion={isCoachViewer && admitted && cohort && items.length === 0 ? `Welcome to ${cohort.name}.` : undefined}
             trailing={voiceOn && !reply ? <SpaceChatMic cohortName={cohort?.name ?? ''} userId={client?.id ?? ''} coach={isCoachViewer} onSend={voice.send} /> : undefined}
           />
         ) : admitted ? (
