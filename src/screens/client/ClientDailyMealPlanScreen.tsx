@@ -33,7 +33,7 @@
  * which adds it to today's food log.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   RefreshControl,
   ScrollView,
@@ -83,7 +83,7 @@ export default function ClientDailyMealPlanScreen() {
   const dateParam = normaliseDateParam(route.params?.date);
   const assignmentId = route.params?.assignmentId || undefined;
 
-  const { data, isLoading, isError, refetch, isRefetching, isFetching, dataUpdatedAt } =
+  const { data, isLoading, isError, refetch, isRefetching } =
     useMealPlanToday(dateParam);
 
   const onRefresh = useCallback(() => {
@@ -94,21 +94,6 @@ export default function ClientDailyMealPlanScreen() {
     const all = data?.assignments ?? [];
     return assignmentId ? all.filter((a) => a.id === assignmentId) : all;
   }, [data, assignmentId]);
-
-  // MEAL-PLAN-REFRESH-M (R-a): "not available" only from an answer read since this screen was asked for the
-  // assignment (a mount, or new params). Until then it is still loading, and one read is started if none runs.
-  const askKey = `${assignmentId ?? ''}|${dateParam ?? ''}`;
-  const [ask, setAsk] = useState(() => ({ key: askKey, at: Date.now() }));
-  if (ask.key !== askKey) setAsk({ key: askKey, at: Date.now() }); // new params on a screen already open
-  const askedAt = ask.at;
-  const holding = !!assignmentId && shown.length === 0 && typeof dataUpdatedAt === 'number' && dataUpdatedAt < askedAt;
-  const readFor = useRef(0);
-  useEffect(() => {
-    if (!holding || readFor.current === askedAt) return;
-    readFor.current = askedAt; // once per ask: the read already running, or the one started here
-    if (!isFetching) void refetch();
-  }, [holding, askedAt, isFetching, refetch]);
-  const waiting = isLoading || (holding && !isError);
 
   const italic = useCoachItalic();
   const loaded = !isLoading && !isError;
@@ -126,7 +111,7 @@ export default function ClientDailyMealPlanScreen() {
       refreshControl={
         <RefreshControl
           testID="daily-meal-plan-refresh"
-          refreshing={isRefetching && !waiting}
+          refreshing={isRefetching}
           onRefresh={onRefresh}
           // The pull-down above the masthead is forest (PlanMasthead), so the
           // iOS spinner takes the light ink, as the other forest pull-downs do (LO-927R2 B1).
@@ -148,7 +133,7 @@ export default function ClientDailyMealPlanScreen() {
       </PlanMasthead>
 
       <PaperPage bg={sc.bgSurface}>
-        {waiting ? (
+        {isLoading ? (
           <LoadingTimeline sc={sc} styles={styles} />
         ) : isError ? (
           <View style={[planStyleC.card, styles.cardFill, styles.state]} accessibilityLiveRegion="polite" accessibilityRole="alert">
