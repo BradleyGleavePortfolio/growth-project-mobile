@@ -213,6 +213,8 @@ async function openScreen(assignment: string | null = ASSIGNMENT) {
 async function openSummary(view: Awaited<ReturnType<typeof openScreen>>) {
   await act(async () => { fireEvent.press(view.getByTestId('finish-workout')); });
   await waitFor(() => expect(view.getByTestId('workout-summary-c5')).toBeTruthy());
+  // The coach's name comes from its own read (useMyCoaches): wait for it, so no case races it.
+  await waitFor(() => expect(view.getByText('Send to Sam')).toBeTruthy());
 }
 async function press(view: Awaited<ReturnType<typeof openScreen>>, testID: string) {
   await act(async () => { fireEvent.press(view.getByTestId(testID)); });
