@@ -383,18 +383,25 @@ export default function FastingScreen() {
       {activeFast ? (
         // C8 C_fasting: the gold ring with the elapsed time and the target inside, Ends, Started and the run beside it.
         <View style={styles.ringRow}>
-          <View testID="fasting-timer" accessible accessibilityRole="progressbar"
-            accessibilityValue={{ text: `${Math.round(progress * 100)} percent` }}>
-            <FastRing share={progress} track={colors.border} arc={colors.data.goal}>
+          {/* The ring is the old bar's progress (label and value read as one, "{n} percent"); the words inside are read on their own. */}
+          <FastRing share={progress} track={colors.border} arc={colors.data.goal}
+            label="Fasting progress" value={`${Math.round(progress * 100)} percent`} target={targetMs} elapsed={elapsed}>
+            <View accessible testID="fasting-timer">
               <Text style={styles.ringTime}>{formatDuration(elapsed)}</Text>
               <Text style={styles.ringOf}>{`of ${activeFast.targetHours} h`}</Text>
-            </FastRing>
-          </View>
+            </View>
+          </FastRing>
           <View style={styles.side} testID="fasting-side">
             <Text style={styles.sideLead}>
               {remainingMs > 0 ? `Ends ${clockAt(new Date(activeFast.startTime).getTime() + targetMs)}` : 'Target reached'}
             </Text>
-            <Text style={styles.sideMuted}>{`Started ${weekdayOf(activeFast.startTime)}, ${clockAt(new Date(activeFast.startTime).getTime())}`}</Text>
+            {/* Main's "Started" and "Target" labels moved here from the running fast's card (RULING 13). */}
+            <Text style={styles.sideMuted}>
+              <Text style={styles.sideLabel}>Started</Text>{` ${weekdayOf(activeFast.startTime)}, ${clockAt(new Date(activeFast.startTime).getTime())}`}
+            </Text>
+            <Text style={styles.sideMuted}>
+              <Text style={styles.sideLabel}>Target</Text>{' '}<Text style={styles.sideLabel}>{`${activeFast.targetHours}h`}</Text>
+            </Text>
             {run ? <View style={styles.sideRun}>{runText}</View> : null}
           </View>
         </View>
@@ -429,11 +436,11 @@ export default function FastingScreen() {
         </>
       )}
 
-      {/* Start / End: outlined, forest words on the paper (C8 C_fasting's End fast) */}
+      {/* Start / End: main's filled forest (C8's outlined End fast is LATER: HabitsFasting.launch.test.tsx:486 pins the fill) */}
       <View style={styles.actionRow}>
         {activeFast ? (
           <TouchableOpacity
-            style={[planStyleC.outline, styles.actionBtn, submitting && styles.btnDisabled]}
+            style={[styles.endBtn, submitting && styles.btnDisabled]}
             onPress={handleEnd}
             disabled={submitting}
             accessibilityRole="button"
@@ -446,7 +453,7 @@ export default function FastingScreen() {
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            style={[planStyleC.outline, styles.actionBtn, submitting && styles.btnDisabled]}
+            style={[styles.startBtn, submitting && styles.btnDisabled]}
             onPress={handleStart}
             disabled={submitting}
             accessibilityRole="button"
@@ -528,12 +535,16 @@ const STROKE = 9;
  * C8 C_fasting's ring (x 36-260 px, a 13 px stroke at 1.5x): 150 pt across, the stone track and the gold share of
  * the target from 12 o'clock, clockwise; the words sit inside it. Non-text: its share is the block's value.
  */
-function FastRing({ share, track, arc, children }: { share: number; track: string; arc: string; children: React.ReactNode }) {
+function FastRing({ share, track, arc, label, value, target, elapsed, children }: {
+  share: number; track: string; arc: string; label: string; value: string; target: number; elapsed: number; children: React.ReactNode;
+}) {
   const r = (RING - STROKE) / 2;
   const c = 2 * Math.PI * r;
   const s = Math.max(0, Math.min(1, Number.isFinite(share) ? share : 0));
   return (
     <View style={ringStyles.box} testID="fasting-ring">
+      <View style={ringStyles.fill} accessible accessibilityRole="progressbar" accessibilityLabel={label}
+        accessibilityValue={{ min: 0, max: target, now: Math.min(elapsed, target), text: value }}>
       <Svg width={RING} height={RING} style={ringStyles.svg}>
         <Circle cx={RING / 2} cy={RING / 2} r={r} stroke={track} strokeWidth={STROKE} fill="none" />
         {s > 0 ? (
@@ -541,6 +552,7 @@ function FastRing({ share, track, arc, children }: { share: number; track: strin
             strokeLinecap={s < 1 ? 'round' : 'butt'} strokeDasharray={`${c * s} ${c}`} />
         ) : null}
       </Svg>
+      </View>
       {children}
     </View>
   );
@@ -548,7 +560,8 @@ function FastRing({ share, track, arc, children }: { share: number; track: strin
 
 const ringStyles = StyleSheet.create({
   box: { width: RING, height: RING, alignItems: 'center', justifyContent: 'center' },
-  svg: { position: 'absolute', left: 0, top: 0, transform: [{ rotate: '-90deg' }] },
+  fill: { position: 'absolute', left: 0, top: 0, width: RING, height: RING },
+  svg: { transform: [{ rotate: '-90deg' }] },
 });
 
 /** The phone's clock as the app draws it ("2:00 pm", foodTimeline's clockOf). */
@@ -586,6 +599,7 @@ const makeStyles = (colors: SemanticTokens) =>
   // C8: "Ends 2:00 pm" Inter 600 17, then the muted 16 pt lines on a 22 pt pitch.
   sideLead: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 17, lineHeight: 22, color: colors.textPrimary, fontVariant: ['tabular-nums'] },
   sideMuted: { fontFamily: 'Inter_400Regular', fontSize: 16, lineHeight: 22, color: colors.textMuted, fontVariant: ['tabular-nums'] },
+  sideLabel: { fontFamily: 'Inter_400Regular', fontSize: 16, lineHeight: 22, color: colors.textMuted },
   sideRun: { marginTop: 6 },
   window: { marginBottom: spacing.lg },
   windowLabel: { ...typography.eyebrow, color: colors.textMuted, marginBottom: spacing.sm },
@@ -632,15 +646,20 @@ const makeStyles = (colors: SemanticTokens) =>
   actionRow: {
     marginTop: spacing.lg,
   },
-  actionBtn: {
-    borderColor: colors.accent,
+  startBtn: {
+    ...planStyleC.primary,
+    backgroundColor: colors.accent,
+  },
+  endBtn: {
+    ...planStyleC.primary,
+    backgroundColor: colors.accent,
   },
   btnDisabled: {
     opacity: 0.6,
   },
   actionBtnText: {
-    ...planStyleC.outlineLabel,
-    color: colors.accentText,
+    ...typography.bodyMd,
+    color: colors.textOnAccent,
   },
   runRemove: {
     alignItems: 'flex-start',

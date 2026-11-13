@@ -288,12 +288,6 @@ export const planStyleC = StyleSheet.create({
     justifyContent: 'center', paddingHorizontal: spacing.xl,
   },
   primaryLabel: { ...typography.bodyMd },
-  /** C8 C_fasting's End fast: outlined, forest words on the paper, radius 12, 54 pt (the border colour from the screen). */
-  outline: {
-    minHeight: layout.buttonHeight, borderRadius: radius.button, borderWidth: 1, alignItems: 'center',
-    justifyContent: 'center', paddingHorizontal: spacing.xl,
-  },
-  outlineLabel: { ...typography.bodyMd, fontSize: 17, lineHeight: 22, letterSpacing: 0 },
   /** C2 C_day's eyebrow on the paper: Inter 600 11, tracked 1.3 (.c-e .eb). */
   stopEyebrow: { ...typography.eyebrow, fontFamily: 'Inter_600SemiBold', fontWeight: '600', lineHeight: 14, letterSpacing: 1.3 },
   /** C2 C_day's done line under a meal's name (.c-e .st 13/1.4, 2 pt under the name). */
