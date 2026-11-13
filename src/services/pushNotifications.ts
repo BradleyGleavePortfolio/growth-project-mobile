@@ -113,20 +113,20 @@ export function installForegroundHandler(): () => void {
     }),
   });
 
-  // Write to the in-app banner store instead.
+  // Write to the in-app banner store instead: the notification's own title
+  // and body, and the tap the device would make of the same content
+  // (FOREGROUND-BANNER-M: pushTapOf, the one mapping). No words, no banner.
   const subscription = Notifications.addNotificationReceivedListener((notification) => {
     const { title, body } = notification.request.content;
-    const data = notification.request.content.data;
-    const deepLink = data?.deepLink ?? data?.deep_link;
+    if (!title && !body) return;
+    const kind = bannerKindOf(notification.request.content.data);
     foregroundBannerStore.getState().showBanner({
       title: title ?? '',
       body: body ?? '',
       notificationId: notification.request.identifier,
-      // actionScreen / actionParams come from the data payload if the backend
-      // includes them. Fall through to undefined if absent.
-      actionScreen: pushScreenOf(data),
-      actionParams: (notification.request.content.data?.actionParams as Record<string, string>) ?? undefined,
-      ...(typeof deepLink === 'string' ? { deepLink } : {}),
+      ...pushTapOf(notification.request.content.data),
+      // REFINE-966: the banner's mark only, beside the tap and never inside it.
+      ...(kind !== undefined ? { kind } : {}),
     });
   });
 
@@ -134,6 +134,12 @@ export function installForegroundHandler(): () => void {
     subscription.remove();
     foregroundHandlerInstalled = false;
   };
+}
+
+/** REFINE-966: the push data's own kind, else its type; a value that is not a string counts as absent. */
+function bannerKindOf(data: Record<string, unknown> | undefined): string | undefined {
+  if (typeof data?.kind === 'string') return data.kind;
+  return typeof data?.type === 'string' ? data.type : undefined;
 }
 
 // ─── Notification response handler ───────────────────────────────────────────
@@ -169,18 +175,36 @@ function pushScreenOf(data: Record<string, unknown> | undefined): string | undef
   return typeof data?.actionScreen === 'string' ? data.actionScreen : undefined;
 }
 
+/** Where a tap on this push content goes: the screen, its params and its link, as routePushTap takes them. */
+export interface PushTap {
+  actionScreen?: string;
+  actionParams?: Record<string, string>;
+  deepLink?: string;
+}
+
+/**
+ * FOREGROUND-BANNER-M: the one content-to-tap mapping. A device tap, a
+ * cold-start tap and the in-app banner's tap all read a push through this, so
+ * the banner lands exactly where the device tap of the same push lands.
+ */
+export function pushTapOf(data: Record<string, unknown> | undefined): PushTap {
+  const link = data?.deepLink ?? data?.deep_link;
+  return {
+    actionScreen: pushScreenOf(data) ?? fallbackScreenForKind(data?.kind),
+    // Untrusted payload: decode to a bounded string map (audit #304 Sol C2).
+    actionParams: decodePushParams(data?.actionParams),
+    deepLink: typeof link === 'string' ? link : undefined,
+  };
+}
+
 function dispatchResponse(
   response: Notifications.NotificationResponse | null | undefined,
   onResponse: NotificationResponseCallback,
 ): void {
   if (!response) return;
   const request = response.notification?.request;
-  const data = request?.content?.data;
-  const actionScreen = pushScreenOf(data) ?? fallbackScreenForKind(data?.kind);
-  // Untrusted payload: decode to a bounded string map (audit #304 Sol C2).
-  const actionParams = decodePushParams(data?.actionParams);
-  const deepLink = data?.deepLink ?? data?.deep_link;
-  if (typeof deepLink === 'string') {
+  const { actionScreen, actionParams, deepLink } = pushTapOf(request?.content?.data);
+  if (deepLink !== undefined) {
     onResponse(actionScreen, actionParams, request?.identifier, deepLink);
   } else {
     onResponse(actionScreen, actionParams, request?.identifier);
