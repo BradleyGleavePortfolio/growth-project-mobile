@@ -34,6 +34,8 @@
  *   - A row the coach removed (b#1165: deleted with removed_by) keeps its place as one quiet line (REMOVED-BY-M2, owner
  *     #174-4); an author's own delete still vanishes. Only live rows count for the read mark, the New messages line and
  *     the pill: the server counts unread without deleted rows and will not take one as the read mark.
+ *   - Empty (SPACE-STATES-M, ctx#538 style 2): "This is the start of {space}." at the top with the space's purpose and
+ *     member count (SpaceStartRow), for everyone the server let in on this visit, while the space has no message.
  *   - Offline: no line about it; a voice note waiting on the phone says so in its card (owner 10-20 12:25, FR-871R5).
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -49,6 +51,7 @@ import SpaceChatComposer from '../../components/community/space-chat/SpaceChatCo
 import SpaceChatMic from '../../components/community/space-chat/SpaceChatMic';
 import SpaceInfoSheet from '../../components/community/space-chat/SpaceInfoSheet';
 import SpaceMessageSheet from '../../components/community/space-chat/SpaceMessageSheet';
+import SpaceStartRow from '../../components/community/space-chat/SpaceStartRow';
 import { firstLine, quoteOf, quoteOfTarget, voiceLine } from '../../components/community/space-chat/SpaceReplyQuote';
 import type { SpaceReplyTarget } from '../../components/community/space-chat/spaceChatOutbox';
 import * as Clipboard from 'expo-clipboard';
@@ -387,8 +390,12 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
         ) : loading && items.length === 0 ? (
           <View style={s.center} testID="space-chat-loading"><ActivityIndicator color={fp.forest} /></View>
         ) : items.length === 0 ? (
-          <View style={s.center} testID="space-chat-empty">
-            {canPost ? <Text style={s.muted}>No messages yet. Say hello.</Text> : null}
+          // SPACE-STATES-M (ctx#538 style 2, S3-S5): the start of the space at the top, only once the server let this
+          // viewer in on this visit (never on a page restored at a cold start, nor offline before the read answers).
+          <View style={s.flex} testID="space-chat-empty">
+            {admitted && cohort ? (
+              <SpaceStartRow name={cohort.name} purpose={cohort.description} members={members} coachOnly={coachOnly} />
+            ) : null}
           </View>
         ) : (
           <FlatList

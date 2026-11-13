@@ -388,7 +388,7 @@ it('own text message: Delete removes it', async () => {
 it('empty space: SC-W05 and the composer', async () => {
   page = [];
   const r = await open();
-  expect(await r.findByText('No messages yet. Say hello.')).toBeTruthy();
+  expect(await r.findByText('This is the start of Everyone.')).toBeTruthy(); // SPACE-STATES-W10, the start row (ctx#538 s2_S3)
   expect(r.getByTestId('space-chat-composer-field')).toBeTruthy();
 });
 
