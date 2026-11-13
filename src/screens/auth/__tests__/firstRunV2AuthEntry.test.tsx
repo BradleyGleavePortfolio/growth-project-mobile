@@ -262,7 +262,7 @@ it('Sign in (D10-BUILD-CLOSE, C7 Style B): Google\'s four-colour mark, not a typ
   expect(view.queryByText('G')).toBeNull();
   expect(google).toBeTruthy();
   const src = fs.readFileSync(path.join(__dirname, '..', 'LoginScreen.tsx'), 'utf8');
-  for (const c of ['#EA4335', '#4285F4', '#FBBC05', '#34A853']) expect(src).toContain(`fill="${c}"`);
+  for (const c of ['#EA4335', '#4285F4', '#FBBC05', '#34A853']) expect(fs.readFileSync(path.join(__dirname, '..', 'AuthStyleB.tsx'), 'utf8')).toContain(`fill="${c}"`);
   expect(src).toMatch(/bTitle: \{ marginTop: Spacing\.sm, marginBottom: Spacing\.md \}/);
 });
 
