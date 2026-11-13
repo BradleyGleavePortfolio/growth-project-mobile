@@ -30,6 +30,7 @@ import { featureFlags } from '../../../config/featureFlags';
 import { safetyGold } from '../../../theme/safetyGold';
 import { PlanEndedHomeRow, PlanEndedList } from './PlanEnded';
 import { RomanMark } from './RomanMark';
+import { draftChips } from '../romanDraftsCount';
 
 /** Reach-outs: the ring's goal is at most five of the at-risk set (b#1123), so the sheet offers its five most urgent. */
 const REACH_ROWS = 5;
@@ -244,12 +245,8 @@ export default function CoachHomeV11(p: Props) {
 
   const roman = (() => {
     const n = data.draftsWaiting;
-    const k = data.draftKinds;
-    const chips = ([
-      [k.workouts, 'Workout', 'Workouts'], [k.mealPlans, 'Meal plan', 'Meal plans'], [k.nudges, 'Nudge', 'Nudges'],
-      [k.workoutChanges, 'Workout change', 'Workout changes'], // #197-E5: the approvals clients asked for, tiles here
-    ] as const)
-      .filter(([c]) => c > 0).map(([c, one, many]) => [c, c === 1 ? one : many] as const);
+    // DRAFTS-COUNT-M: the one chip list, which the Messages card draws too (#197-E5: the workout changes are tiles here).
+    const chips = draftChips(data.draftKinds).map((c) => [c.count, c.label] as const);
     const approve = n > 0 ? (
       <Pressable
         onPress={() => { void HapticService.mediumImpact(); p.onOpenDrafts(); }} accessibilityRole="button"

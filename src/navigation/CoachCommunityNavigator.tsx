@@ -39,6 +39,9 @@ import CoachCommunityModerationScreen from '../screens/community/CoachCommunityM
 import CoachCommunityEventsScreen from '../screens/community/CoachCommunityEventsScreen';
 import CommunityWearablePromptsScreen from '../screens/community/CommunityWearablePromptsScreen';
 import CommunityVoiceNoteDetail from '../screens/community/CommunityVoiceNoteDetail';
+import CoachDmListScreen from '../screens/community/coach-dm/CoachDmListScreen';
+import CoachDmThreadScreen from '../screens/community/coach-dm/CoachDmThreadScreen';
+import CoachDmNewScreen from '../screens/community/coach-dm/CoachDmNewScreen';
 import type { CoachCommunityStackParamList } from '../screens/community/coachCommunityNavTypes';
 
 const CoachCommunityStack =
@@ -175,6 +178,29 @@ function CoachCommunityNavigatorStack(): React.ReactElement {
         <CoachCommunityStack.Screen
           name="CommunityVoiceNoteDetail"
           component={CommunityVoiceNoteDetail}
+          options={{ headerShown: false }}
+        />
+      ) : null}
+      {/* COACH-DM-M (owner 203-D3, Studio #203-E25): the coach's community DMs, behind communityDm as the client's are.
+          Each page draws its own deep Studio bar. CommunityDmThread {recipientId} is m#956 N2c's route. */}
+      {featureFlags.communityDm ? (
+        <CoachCommunityStack.Screen
+          name="CoachCommunityDmList"
+          component={CoachDmListScreen}
+          options={{ headerShown: false }}
+        />
+      ) : null}
+      {featureFlags.communityDm ? (
+        <CoachCommunityStack.Screen
+          name="CommunityDmThread"
+          component={CoachDmThreadScreen}
+          options={{ headerShown: false }}
+        />
+      ) : null}
+      {featureFlags.communityDm ? (
+        <CoachCommunityStack.Screen
+          name="CoachCommunityDmNew"
+          component={CoachDmNewScreen}
           options={{ headerShown: false }}
         />
       ) : null}
