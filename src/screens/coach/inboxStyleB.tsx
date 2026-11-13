@@ -11,8 +11,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useIsFocused, useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { coachInboxB as B, radius } from '../../theme/tokens';
 import { usePendingAiDrafts } from '../../hooks/usePendingAiDrafts';
-import { isStream2Capability, type AiActionDraftRow } from '../../api/types/coachAiExecution';
+import type { AiActionDraftRow } from '../../api/types/coachAiExecution';
+import { featureFlags } from '../../config/featureFlags';
 import RomanAvatar from '../../components/roman/RomanAvatar';
+import { usePathChangeDrafts } from './copilot/PathChangeDrafts';
+import { draftChips, readStateOf, romanDraftsCount, type DraftKindCount } from './romanDraftsCount';
 
 const SERIF = 'CormorantGaramond_400Regular';
 
@@ -23,27 +26,26 @@ export function initialsOf(name: string): string {
   return name.split(' ').filter(Boolean).map((n) => n[0]).join('').slice(0, 2).toUpperCase();
 }
 
-export interface DraftKindCount { count: number; label: string }
-/** Stream 2 drafts by kind, as the coach Home counts them; kinds with none are left out. */
+/** Stream 2 drafts by kind (the drafts screen's tiles), from the one count with no workout changes; kinds with none are left out. */
 export function draftKinds(rows: AiActionDraftRow[]): { total: number; kinds: DraftKindCount[] } {
-  const queue = rows.filter((d) => isStream2Capability(d.capability));
-  const n = (cap: string) => queue.filter((d) => d.capability === cap).length;
-  const kinds = ([
-    [n('draft.assign_workout'), 'Workout', 'Workouts'],
-    [n('draft.assign_meal_plan'), 'Meal plan', 'Meal plans'],
-    [n('draft.send_notification'), 'Nudge', 'Nudges'],
-  ] as const)
-    .filter(([c]) => c > 0)
-    .map(([c, one, many]) => ({ count: c, label: c === 1 ? one : many }));
-  return { total: queue.length, kinds };
+  const c = romanDraftsCount(rows, 'ok', null);
+  return { total: c.waiting, kinds: draftChips(c.kinds) };
 }
 
-/** Roman's drafts the coach sees (the one visible-drafts rule in usePendingAiDrafts), by kind. */
+/**
+ * Roman's drafts the coach sees, counted as coach Home counts them (DRAFTS-COUNT-M): the drafts the queue shows (the one
+ * visible-drafts rule in usePendingAiDrafts) and, with clientPathCopilot on, the workout changes of the drafts screen's
+ * own Copilot read. A read with no answer yet counts nothing (OPERATOR RULINGS 15:1x: the partial number, as Home's).
+ */
 export function useRomanDrafts(enabled: boolean): { total: number; kinds: DraftKindCount[] } {
-  return draftKinds(usePendingAiDrafts({ enabled }).data?.drafts ?? []);
+  const list = usePendingAiDrafts({ enabled });
+  const path = usePathChangeDrafts(enabled);
+  const c = romanDraftsCount(list.data?.drafts, readStateOf(list),
+    featureFlags.clientPathCopilot ? { n: path.data?.length, state: readStateOf(path) } : null);
+  return { total: c.waiting, kinds: draftChips(c.kinds) };
 }
 
-/** The drawn forest card: shown only while Stream 2 drafts wait; opens the Pending AI drafts screen. */
+/** The drawn forest card: shown only while Roman's drafts wait; opens the Pending AI drafts screen. */
 export function RomanDraftsHero(): React.ReactElement | null {
   const isFocused = useIsFocused();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();

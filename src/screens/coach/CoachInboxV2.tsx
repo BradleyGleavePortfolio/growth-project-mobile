@@ -137,7 +137,7 @@ export default function CoachInboxV2({ onFeatureDisabled }: CoachInboxV2Props) {
   );
 
   const searching = searchQuery.trim().length > 0;
-  // LO-952 C2: reads the drafts cache only (the card itself reads while focused)
+  // LO-952 C2: the card's own count from the two caches only, no read (the card itself reads while focused); DRAFTS-COUNT-M
   const heroDrawn = useRomanDrafts(false).total > 0;
   // Search must cover the whole inbox, not only the loaded pages.
   useEffect(() => {
