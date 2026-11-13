@@ -295,8 +295,8 @@ it('LS-953R2 B1: reopening while the first answer is pending replays the kept dr
 
 // FIX-953R3: the exact frame backend main f239683f sends a same-key resend while the first send may still store its
 // reply (CONTRACT 6754738036; roman.controller.ts:307-309). The key stays with the words. ROMAN-PENDING-WORDS-M: the
-// member sees Roman's still-writing line (ROMAN_STILL_ANSWERING), not the "could not answer" line ROMAN_UNAVAILABLE gets.
-const { ROMAN_STILL_ANSWERING } = require('../../../components/roman/romanVoice');
+// member sees Roman's still-writing line (ROMAN_HELD_NOT_READY), not the "could not answer" line ROMAN_UNAVAILABLE gets.
+const { ROMAN_HELD_NOT_READY } = require('../../../components/roman/romanVoice');
 const REPLY_PENDING_FRAME: Wire = {
   status: 200,
   text: 'event: error\ndata: {"code":"ROMAN_REPLY_PENDING","message":"Roman is not available right now."}\n\n',
@@ -328,7 +328,7 @@ it('FIX-953R3: reopened while the first send is out, a "still being written" ans
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
   expect(sent(1)).toEqual(first);
   await waitFor(() => expect(b.getByTestId('roman-send-retry')).toBeTruthy());
-  expect(b.getByText(ROMAN_STILL_ANSWERING)).toBeTruthy();
+  expect(b.getByText(ROMAN_HELD_NOT_READY)).toBeTruthy();
   expect(boxOf(b)).toBe(first.content);
   expect(mockDisk.get(`${CHAT_DRAFT_KEY_PREFIX}client-1:roman`)).toContain(first.key);
   await sendAgain(b); // the first answer is stored by now: the same key replays it

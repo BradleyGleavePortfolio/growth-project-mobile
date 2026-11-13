@@ -136,13 +136,13 @@ test('a question the server already stored is never re-sent: main\u2019s stored 
   const s = await render(wrap(<ClientPathCopilotScreen />));
   await act(async () => fireEvent.changeText(await s.findByPlaceholderText('Ask Roman anything.'), 'Can I swap Friday?'));
   await act(async () => fireEvent.press(s.getByLabelText('Send message')));
-  expect(s.getByText('Your message is saved above, but I could not answer it. Tap Send again to ask once more.')).toBeTruthy();
+  expect(s.getByText('I could not answer this one. Send it again from the box to ask once more.')).toBeTruthy();
   expect(s.queryByText('Try again')).toBeNull();
   expect(s.getByPlaceholderText('Ask Roman anything.').props.value).toBe('Can I swap Friday?');
   expect(send).toHaveBeenCalledTimes(1);
   send.mockRejectedValueOnce(new RomanWireError('bad frame'));
   await act(async () => fireEvent.press(s.getByLabelText('Send message')));
-  expect(s.getAllByText('Your message is saved above, but I could not answer it. Tap Send again to ask once more.')).toHaveLength(2);
+  expect(s.getAllByText('I could not answer this one. Send it again from the box to ask once more.')).toHaveLength(2);
   expect(s.queryByText('Try again')).toBeNull();
 });
 

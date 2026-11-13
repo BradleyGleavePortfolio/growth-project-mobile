@@ -44,8 +44,8 @@ jest.mock('../../../../theme/ThemeProvider', () => {
 
 // Required, not imported, so this file type-checks before the new line exists (its red run is at the assertions).
 const voice = require('../../../../components/roman/romanVoice');
-const STORED: string = voice.ROMAN_STORED_NO_REPLY;
-const STILL: string = voice.ROMAN_STILL_ANSWERING_COPILOT;
+const STORED: string = voice.ROMAN_HELD_NO_ANSWER_COPILOT;
+const STILL: string = voice.ROMAN_HELD_NOT_READY_COPILOT;
 
 const WEEK = { number: 3, coach_first_name: 'Alex', target: { kcal: 2150, from: new Date().toISOString(), previous_kcal: 2300 }, workouts: { done: 1, total: 4 }, last_check_in: '2026-10-18' };
 const wrap = (ui: React.ReactElement) => <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{ui}</QueryClientProvider>;

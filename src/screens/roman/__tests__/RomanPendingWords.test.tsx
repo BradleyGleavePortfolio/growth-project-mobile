@@ -50,8 +50,8 @@ const { authEvents } = require('../../../utils/authEvents');
 const { CHAT_DRAFT_KEY_PREFIX } = require('../../../lib/chatDrafts');
 // Required, not imported, so this file type-checks before the new line exists (its red run is at the assertions).
 const voice = require('../../../components/roman/romanVoice');
-const STORED: string = voice.ROMAN_STORED_NO_REPLY;
-const STILL: string = voice.ROMAN_STILL_ANSWERING;
+const STORED: string = voice.ROMAN_HELD_NO_ANSWER;
+const STILL: string = voice.ROMAN_HELD_NOT_READY;
 
 type Wire = { throws: Error } | { status: number; text?: string | Error };
 const frame = (code: string, extra = ''): Wire => ({
@@ -232,7 +232,7 @@ it.each([
 
 /** Case 7: every other line is unchanged (refusal, daily cap and the AI-help grant: aiRefusalClientSurfaces.test.tsx). */
 it.each([
-  ['not stored (a 5xx)', { status: 500, text: '{"error":"internal"}' } as Wire, voice.ROMAN_SEND_FAILED, true],
+  ['not stored (a 5xx)', { status: 500, text: '{"error":"internal"}' } as Wire, voice.ROMAN_HELD_NOT_SENT, true],
   ['rate limited', { status: 429, text: '' } as Wire, voice.romanRateLimited(undefined), false],
   ['pool empty', frame('COACH_AI_BUDGET_EXHAUSTED'), voice.romanPoolEmpty('client'), false],
 ])('case 7: %s draws its own line, as before', async (_label, answer, line, retry) => {
