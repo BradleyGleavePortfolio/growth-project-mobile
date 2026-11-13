@@ -29,7 +29,7 @@ export function openSupportFrom(navigation: Nav | undefined): boolean {
       return true;
     }
     if (names.includes('MoreTab')) {
-      nav.navigate('MoreTab', { screen: 'SupportInbox' });
+      nav.navigate('MoreTab', { screen: 'SupportInbox', initial: false });
       return true;
     }
     if (names.includes('SettingsStack')) {

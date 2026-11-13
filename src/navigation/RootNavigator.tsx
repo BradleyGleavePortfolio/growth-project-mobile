@@ -334,16 +334,16 @@ function subscribeToRouteChanges(listener: () => void): () => void {
 }
 
 function openDataExport(): void {
-  if (navigationRef.isReady()) navigationRef.navigate('MoreTab', { screen: 'DataExport' });
+  if (navigationRef.isReady()) navigationRef.navigate('MoreTab', { screen: 'DataExport', initial: false });
 }
 
 function openDeleteAccount(): void {
-  if (navigationRef.isReady()) navigationRef.navigate('MoreTab', { screen: 'DeleteAccount' });
+  if (navigationRef.isReady()) navigationRef.navigate('MoreTab', { screen: 'DeleteAccount', initial: false });
 }
 
 function openUpdateCard(params: { autostart: boolean; surface: string }): void {
   if (navigationRef.isReady()) {
-    navigationRef.navigate('MoreTab', { screen: 'UpdateCard', params: { autostart: params.autostart } });
+    navigationRef.navigate('MoreTab', { screen: 'UpdateCard', params: { autostart: params.autostart }, initial: false });
   }
 }
 
@@ -985,7 +985,7 @@ export default function RootNavigator() {
       } else if (target === 'first_checkin') {
         nav.navigate('Home', { screen: 'Habits' });
       } else if (target === 'logged_first_weight') {
-        nav.navigate('MoreTab', { screen: 'Progress' });
+        nav.navigate('MoreTab', { screen: 'Progress', initial: false });
       }
     } catch (err) {
       logger.warn('RootNavigator', 'non-fatal', err);
@@ -1079,7 +1079,7 @@ export default function RootNavigator() {
               const nav = navigationRef as unknown as {
                 navigate: (name: string, params?: object) => void;
               };
-              nav.navigate('MoreTab', { screen: 'ClientPackages' });
+              nav.navigate('MoreTab', { screen: 'ClientPackages', initial: false });
             } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
           }}
           onMessageCoach={openCoachThread}
@@ -1110,7 +1110,7 @@ export default function RootNavigator() {
               const nav = navigationRef as unknown as {
                 navigate: (name: string, params?: object) => void;
               };
-              nav.navigate('MoreTab', { screen: 'ClientPackages' });
+              nav.navigate('MoreTab', { screen: 'ClientPackages', initial: false });
             } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
           }}
           onMessageCoach={openCoachThread}
