@@ -187,13 +187,7 @@ const styles = StyleSheet.create({
   // SAFETY-GOLD-M (owner #197-E3): a safety alert card wears safety gold, not the camel edge on cream.
   // GOAL-937-M (owner #197-E3, contrast.py:94): the deep-gold edge 2 pt on all four sides, as drawn; borderLeftWidth
   // too, so AlertRow's 3 pt left rule does not win, and borderLeftColor kept (AlertRow sets camel inline).
-  safetyRow: {
-    backgroundColor: safetyGold.card,
-    borderWidth: 2,
-    borderLeftWidth: 2,
-    borderColor: safetyGold.edge,
-    borderLeftColor: safetyGold.edge,
-  },
+  safetyRow: { backgroundColor: safetyGold.card, borderLeftColor: safetyGold.edge },
   safetyTag: { marginTop: 10 }, // contrast.py:68: the tag 10 under the words
   container: {
     flex: 1,
