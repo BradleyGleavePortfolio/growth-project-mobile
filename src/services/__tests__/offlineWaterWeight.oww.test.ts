@@ -35,6 +35,8 @@ const mockServer = {
   transient: null as null | { status: number; retryAfter?: string },
   readFails: false,
   waterReadFails: false,
+  /** No signal: a send reaches nobody (the reads keep their own switches). */
+  down: false,
 };
 const mockFail = (status: number, headers: Record<string, string> = {}) =>
   Object.assign(new Error(`HTTP ${status}`), { response: { status, headers } });
@@ -48,6 +50,7 @@ function mockSaveOnce(table: Row[], key: string, make: () => Row): Row {
   return row;
 }
 function mockGate(kind: string, key: string, body: Record<string, unknown>, header?: string) {
+  if (mockServer.down) throw new Error('Network Error');
   mockServer.posts.push({ kind, key, header, body });
   if (mockServer.transient) throw mockFail(mockServer.transient.status, mockServer.transient.retryAfter ? { 'retry-after': mockServer.transient.retryAfter } : {});
   if (mockServer.refuse[key]) throw mockFail(mockServer.refuse[key]);
@@ -134,6 +137,15 @@ const foodEntry = (id: string, date = DAY) => ({
 });
 const waterPosts = () => mockServer.posts.filter((p) => p.kind === 'water');
 const weightPosts = () => mockServer.posts.filter((p) => p.kind === 'weight');
+/** +8 oz with no signal (the call site passes its network state; nothing reaches the server). */
+async function addGlassOffline(oz = 8) {
+  mockServer.down = true;
+  try {
+    await day().logWater('member-1', '', oz, false);
+  } finally {
+    mockServer.down = false;
+  }
+}
 const historyRows = async () => weightHistoryRows((await api.weightApi.getHistory()).data).map((r) => parseWeightLogRow(r, 'member-1'));
 
 beforeEach(async () => {
@@ -141,7 +153,7 @@ beforeEach(async () => {
   jest.clearAllMocks();
   Object.assign(mockServer, {
     water: [{ id: 'w-0', client_uuid: 'k-morning', member: 'member-1', date: DAY, amount_ml: 473 }],
-    weight: [], food: [], posts: [], loseAnswer: false, refuse: {}, transient: null, readFails: false, waterReadFails: false,
+    weight: [], food: [], posts: [], loseAnswer: false, refuse: {}, transient: null, readFails: false, waterReadFails: false, down: false,
   });
   mockFlags.inDay = true;
   mockUser.id = 'member-1';
@@ -154,7 +166,7 @@ beforeEach(async () => {
 describe('water saved with no signal', () => {
   it('W1: +8 oz with no signal is queued under its key, counts at once, and makes no server call or "not saved" line', async () => {
     expect(day().waterOz).toBe(16);
-    await day().logWater('member-1', '', 8, false);
+    await addGlassOffline();
     const q = await stored();
     expect(q).toHaveLength(1);
     expect(q[0]).toEqual(expect.objectContaining({ kind: 'water', log: { date: DAY, amount_ml: 237 } }));
@@ -169,7 +181,7 @@ describe('water saved with no signal', () => {
   });
 
   it('W2: the signal returns: one POST with the day it was added on and the entry id as key, then counted once', async () => {
-    await day().logWater('member-1', '', 8, false);
+    await addGlassOffline();
     const [{ id }] = await stored();
     await syncFoodLogQueue();
     expect(waterPosts()).toHaveLength(1);
@@ -182,7 +194,7 @@ describe('water saved with no signal', () => {
   });
 
   it('W3: the send reached the server but its answer was lost: it stays queued, the resend sends the same key, one row, one count', async () => {
-    await day().logWater('member-1', '', 8, false);
+    await addGlassOffline();
     const [{ id }] = await stored();
     mockServer.loseAnswer = true;
     await queue.flush();
@@ -244,7 +256,7 @@ describe('water saved with no signal', () => {
   });
 
   it('W6: a day no read has reached shows no water number; once a read lands the waiting glass counts', async () => {
-    await day().logWater('member-1', '', 8, false);
+    await addGlassOffline();
     day().reset();
     mockServer.readFails = true;
     day().setSelectedDate(DAY);
@@ -263,7 +275,7 @@ describe('water saved with no signal', () => {
     const onlineKey = waterPosts()[0].key;
     expect(mockServer.water).toHaveLength(2);
     mockServer.loseAnswer = false;
-    await day().logWater('member-1', '', 8, false);
+    await addGlassOffline();
     expect((await stored())[0].id).toBe(onlineKey);
     await syncFoodLogQueue();
     expect(mockServer.water).toHaveLength(2);
@@ -287,7 +299,7 @@ describe('water saved with no signal', () => {
   });
 
   it('W10: Remove on a waiting glass takes it off the phone with no server call', async () => {
-    await day().logWater('member-1', '', 8, false);
+    await addGlassOffline();
     const [{ id }] = await stored();
     expect(day().waterEntries.find((e) => e.id === id)?.offline).toBe('waiting');
     await day().removeWaterEntry(id);
@@ -297,7 +309,7 @@ describe('water saved with no signal', () => {
   });
 
   it('W11: a send stored with its answer lost, then a good water read before the next flush: counted once', async () => {
-    await day().logWater('member-1', '', 8, false);
+    await addGlassOffline();
     mockServer.loseAnswer = true;
     await queue.flush();
     mockServer.loseAnswer = false;
@@ -371,7 +383,7 @@ describe('one queue', () => {
   });
 
   it('M5: entries written before an app kill are still there after a fresh load, and the cold start sends them with the same key, counted once', async () => {
-    await day().logWater('member-1', '', 8, false);
+    await addGlassOffline();
     await queue.enqueueWaterWeight('member-1', { kind: 'weight', log: { date: DAY, weight_lbs: 181.4 } }, 'pfl_m5');
     const ids = (await stored()).map((q) => q.id);
     let fresh: typeof import('../foodLogSync') | undefined;
@@ -392,7 +404,7 @@ describe('one queue', () => {
   it('M6: switch off: a glass and a weigh-in are still queued and sent once, and not joined into the totals', async () => {
     mockFlags.inDay = false;
     await day().loadDayData('member-1', DAY);
-    await day().logWater('member-1', '', 8, false);
+    await addGlassOffline();
     await queue.enqueueWaterWeight('member-1', { kind: 'weight', log: { date: DAY, weight_lbs: 181.4 } });
     expect(await stored()).toHaveLength(2);
     expect(day().waterOz).toBe(16);
