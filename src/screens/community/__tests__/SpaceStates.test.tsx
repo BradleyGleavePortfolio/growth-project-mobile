@@ -20,7 +20,6 @@ import { AccessibilityInfo, Keyboard, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { authEvents } from '../../../utils/authEvents';
-import { CLOSED_LINE } from '../../../components/messaging/ConversationClosed';
 
 const mockDisk = new Map<string, string>();
 jest.mock('../../../storage/mmkv', () => ({
@@ -96,6 +95,8 @@ const mockApi = { get: jest.fn(), post: jest.fn(), delete: jest.fn() };
 jest.mock('../../../services/api', () => ({ __esModule: true, default: mockApi }));
 
 const Screen = require('../CommunitySpaceChatScreen').default;
+// Required here, after the stand-ins above exist (it reaches services/api when loaded).
+const { CLOSED_LINE } = require('../../../components/messaging/ConversationClosed') as { CLOSED_LINE: string };
 
 const W9 = 'Messages in this space are hidden.';
 const W2 = 'Back to spaces';
@@ -208,8 +209,11 @@ describe.each([
   it('S2: a send refused with 404 while typing: rows, field and mic go; the keyboard closes and the line is said once', async () => {
     page = [msg('m2', '2026-10-22T06:55:00.000Z', PRIYA), msg('m1', '2026-10-22T06:48:00.000Z', COACH)];
     mockApi.post.mockImplementation(async (url: string) => { if (url.endsWith('/messages')) throw fail(404); return { data: { ok: true } }; });
+    // The jest setup's announceForAccessibility is already a mock (spyOn hands it back with its earlier calls): clear both.
     const dismiss = jest.spyOn(Keyboard, 'dismiss');
+    dismiss.mockClear();
     const say = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
+    say.mockClear();
     const r = await open();
     await r.findByTestId('space-chat-row-m2');
     const field = r.getByTestId('space-chat-composer-field');
@@ -232,8 +236,11 @@ describe.each([
 
   it('S1 on open says nothing itself and closes no keyboard (the bar is a polite region)', async () => {
     readFails = fail(403);
+    // The jest setup's announceForAccessibility is already a mock (spyOn hands it back with its earlier calls): clear both.
     const dismiss = jest.spyOn(Keyboard, 'dismiss');
+    dismiss.mockClear();
     const say = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
+    say.mockClear();
     const r = await open();
     await r.findByTestId('space-chat-no-access');
     expect(dismiss).not.toHaveBeenCalled();
