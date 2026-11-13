@@ -355,7 +355,7 @@ describe.each([true, false])('youTabV2 %s (MoreIndex is YouScreen or MoreScreen;
       ['Download my data', 'dunning-lockout-data-export', 'DataExport'],
       ['Delete my account', 'dunning-lockout-delete-account', 'DeleteAccount'],
       ['Update card', 'dunning-lockout-update-card', 'UpdateCard'],
-    ].flatMap((c) => (['main', 'head'] as const).map((shape) => [...c, shape] as const)))(
+    ].flatMap(([label, testID, screen]) => (['main', 'head'] as const).map((shape): [string, string, string, Shape] => [label, testID, screen, shape])))(
       '%s from the lockout over Home (%s, %s argument): no lockout over the screen; Back keeps the lockout, with no lockout Back',
       async (_label, testID, screen, shape) => {
         const { ref, view } = await launch({ lockout: shape });
