@@ -104,7 +104,7 @@ export default function ClientDailyMealPlanScreen() {
   const holding = !!assignmentId && shown.length === 0 && typeof dataUpdatedAt === 'number' && dataUpdatedAt < askedAt;
   const readFor = useRef(0);
   useEffect(() => {
-    if (!holding || readFor.current === askedAt) return;
+    if (!holding) return;
     readFor.current = askedAt; // once per ask: the read already running, or the one started here
     if (!isFetching) void refetch();
   }, [holding, askedAt, isFetching, refetch]);
