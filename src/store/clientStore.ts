@@ -101,7 +101,7 @@ const initialClientState = {
  * the read plus this phone's glasses of its day (withQueuedWater); off, the read alone (the glasses still send).
  */
 function shownWater(sw: NonNullable<ClientStore['serverWater']>, queue: PendingWaterWeightLog[], sent: SentWaterWeightLog[]) {
-  if (!featureFlags.offlineFoodInDay) return { waterOz: Math.round(sw.totalMl / 29.5735), waterEntries: sw.entries as ShownWaterEntry[] };
+  return { waterOz: Math.round(sw.totalMl / 29.5735), waterEntries: sw.entries as ShownWaterEntry[] };
   return withQueuedWater({ totalMl: sw.totalMl, entries: sw.entries }, [...queue, ...sent], sw.date);
 }
 
