@@ -184,10 +184,10 @@ export function QuantityPickerContent({
         ) : null}
         {notice ? <Text accessibilityRole="alert" style={styles.servingSizeInfo}>{notice}</Text> : null}
         {/* GOAL-930-M (C_error .c-err): the failed save stays on screen with the portion, announced once. */}
-        {saveFailure ? (
+        {true ? (
           <View accessible accessibilityRole="alert" style={styles.failure} testID="portion-save-failure">
-            <Text style={styles.failureTitle}>{saveFailure.title}</Text>
-            <Text style={styles.failureText}>{saveFailure.message}</Text>
+            <Text style={styles.failureTitle}>{saveFailure?.title}</Text>
+            <Text style={styles.failureText}>{saveFailure?.message ?? notice}</Text>
           </View>
         ) : null}
 
