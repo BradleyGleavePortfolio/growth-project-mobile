@@ -26,7 +26,7 @@ const utc = (x: number) => new Date(x);
 export const monthDay = (day: string) => `${MONTHS[utc(dayX(day)).getUTCMonth()]} ${utc(dayX(day)).getUTCDate()}`;
 
 export const samplesOf = (logs: WeightLog[]): WeightSample[] =>
-  logs.map((l) => (l.pending ? { x: dayX(l.date), y: l.weight, pending: true } : { x: dayX(l.date), y: l.weight }));
+  logs.map((l) => ({ x: dayX(l.date), y: l.weight }));
 
 /** The trend now (pounds), or null with no weigh-ins. */
 export function trendNow(logs: WeightLog[], today: string): number | null {
