@@ -18,7 +18,7 @@ import { RecipeAllergenFields, isHiddenForAllergens, recipeAllergenDetail } from
 
 import FadeInView from '../../components/FadeInView';
 import { useTheme } from '../../theme/ThemeProvider';
-import { typography, radius, SemanticTokens } from '../../theme/tokens';
+import { gold, typography, radius, SemanticTokens } from '../../theme/tokens';
 import { PrimaryButton, Screen } from '../../ui';
 import { StyleCLoadingLines, StyleCMasthead, StyleCNotice, StyleCPaper, useStyleCScreen } from '../../ui/layout/StyleCPage';
 
@@ -340,11 +340,12 @@ const makeStyles = (colors: SemanticTokens) =>
     flexShrink: 0,
     marginTop: 1,
   },
-  // Serif numerals (C_recipe); muted ink, since gold is never text on paper.
-  stepNumberText: { ...typography.h3, color: colors.textMuted },
+  // Serif numerals in gold, as C_recipe draws them: gold 700 is 4.78:1 on the paper, past 4.5:1 (gold 500 would be 2.94:1).
+  stepNumberText: { ...typography.h3, color: gold[700] },
   stepText: { ...typography.body, flex: 1, color: colors.textPrimary },
 
-  errorContainer: { padding: 24, gap: 12 },
+  // Try again 16 pt under the notice, as drawn (ctx#457 shopping-error) and as the other four kitchen screens.
+  errorContainer: { padding: 24, gap: 16 },
   errorLink: { ...typography.bodyMd, minHeight: 44, paddingVertical: 10, color: colors.accent, textAlign: 'center', textDecorationLine: 'underline' },
 
   });

@@ -23,6 +23,7 @@ import OnboardingNavigator from './OnboardingNavigator';
 // client gets the consultation. LEAN-CUT-133 deletes the lean files.
 import ConsultationOnboardingNavigator from './ConsultationOnboardingNavigator';
 import OfflineBanner from '../components/OfflineBanner';
+import ForegroundNotificationBanner from '../components/ForegroundNotificationBanner';
 import { authEvents } from '../utils/authEvents';
 import { secureStorage } from '../services/secureStorage';
 import { Colors } from '../constants/colors';
@@ -1129,6 +1130,9 @@ export default function RootNavigator() {
           </DunningLockoutProvider>
         </EntitlementProvider>
       )}
+      {/* FOREGROUND-BANNER-M: a push received while open, over the client or coach app only (the states where
+          the router delivers a tap), and inside the gate so not while a user's cache restores. */}
+      {pushSessionFor(authState, sessionUserId).kind === 'app' ? <ForegroundNotificationBanner /> : null}
       </PersistedQueryCacheGate>
     </NavigationContainer>
     </View>

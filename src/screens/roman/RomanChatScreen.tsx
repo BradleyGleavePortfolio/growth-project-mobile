@@ -32,12 +32,14 @@
  * Owner 2026-10-09 00:0x: a client with no coach, or a 403 ROMAN_REQUIRES_COACH,
  * gets the "Join a coach" lock instead of the room. Nothing is sent to Roman.
  */
-import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { NavigationContext } from '@react-navigation/native';
 import { useChatDraft } from '../../lib/chatDrafts';
+import * as Clipboard from 'expo-clipboard';
 import { generateIdempotencyKey } from '../../utils/idempotency';
 import {
   AccessibilityInfo,
+  Alert,
   FlatList,
   Keyboard,
   ScrollView,
@@ -77,7 +79,13 @@ import { useRomanChat } from './useRomanChat';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachlessClient } from '../../hooks/useCoachlessClient';
 import { logger } from '../../utils/logger';
-import type { RomanMessage, RomanSurface } from '../../api/romanApi';
+import { authEpoch, onAuthEpochChange } from '../../services/accountBinding';
+import { reportMessage, type RomanMessage, type RomanSurface } from '../../api/romanApi';
+import type { ReportReason } from '../../api/messagesApi';
+import MessageActionSheet from '../../components/messaging/MessageActionSheet';
+import ReportMessageSheet from '../../components/messaging/ReportMessageSheet';
+import ReplyComposer from '../../components/messaging/ReplyComposer';
+import { isLocalRomanId, romanQuoteExcerpt, withRomanQuote } from '../../components/roman/romanReply';
 import { spacing, typography } from '../../theme/tokens';
 import RomanConversationsButton from '../../components/roman/RomanConversationsButton';
 import JoinCoachState, { ROMAN_LOCK_BODY, ROMAN_LOCK_TITLE, useClientNeedsCoach } from '../../components/coachless/JoinCoachState';
@@ -121,6 +129,41 @@ export default function RomanChatScreen({
   return <RomanChatRoom surface={surface} />;
 }
 
+/** The chat a selection belongs to: this sign-in (auth epoch) and the open session. */
+function useChatKey(sessionId: string | null): string {
+  const [epoch, setEpoch] = useState(authEpoch);
+  useEffect(() => onAuthEpochChange(setEpoch), []);
+  return `${epoch}:${sessionId ?? ''}`;
+}
+
+type ChatBoundSet = (next: RomanMessage | null | ((cur: RomanMessage | null) => RomanMessage | null)) => void;
+
+/**
+ * A Roman reply picked in one chat (KT-13, FIX-950R1). It reads as null the moment the chat
+ * changes (no frame where an erased reply is still drawn or sent) and is then let go. The setter
+ * is stable and always files a pick under the chat open now, so a memoised hold handler works
+ * in every chat, and a late clear from an older send can only drop the reply it sent.
+ */
+function useChatBound(chat: string): [RomanMessage | null, ChatBoundSet] {
+  const [held, setHeld] = useState<{ chat: string; m: RomanMessage } | null>(null);
+  const chatRef = useRef(chat);
+  useEffect(() => {
+    chatRef.current = chat;
+    setHeld((h) => (h && h.chat !== chat ? null : h));
+  }, [chat]);
+  const set = useCallback<ChatBoundSet>(
+    (next) =>
+      setHeld((h) => {
+        const now = chatRef.current;
+        const cur = h && h.chat === now ? h.m : null;
+        const m = typeof next === 'function' ? next(cur) : next;
+        return m ? { chat: now, m } : null;
+      }),
+    [],
+  );
+  return [held && held.chat === chat ? held.m : null, set];
+}
+
 function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactElement {
   const navigation = useContext(NavigationContext);
   const { semanticColors: sc } = useTheme();
@@ -128,6 +171,7 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
   const coachless = useCoachlessClient();
   const {
     phase,
+    session,
     isFirstOpen,
     messages,
     sending,
@@ -150,6 +194,19 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
   // typing indicator already honours (R3 P2-1). Defaults to motion-on so a
   // failed probe never strands the latest message off-screen.
   const [reduceMotion, setReduceMotion] = useState(false);
+  // ROMAN-HOLD-M (#197-D3): the held reply (menu open), the reply being
+  // answered (quote strip over the composer) and the reply being reported.
+  // KT-13 (FIX-950R1): each belongs to the chat and sign-in it was picked in, so an
+  // erase, Delete all, a fresh or another chat, or a sign-out drops it at once.
+  const chat = useChatKey(session?.id ?? null);
+  const [actionTarget, setActionTarget] = useChatBound(chat);
+  const [replyTarget, setReplyTarget] = useChatBound(chat);
+  const [reportTarget, setReportTarget] = useChatBound(chat);
+  // The chat open now, for a report that settles after the chat it was sent from is gone (FIX-950R2).
+  const chatNow = useRef(chat);
+  useLayoutEffect(() => {
+    chatNow.current = chat;
+  }, [chat]);
 
   const listRef = useRef<FlatList<RomanMessage>>(null);
   // Last assistant message id we announced to assistive tech, so a re-render
@@ -266,9 +323,13 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
   const sendText = useCallback(
     async (text: string, fromChip: boolean) => {
       setAskAgainHint(false);
+      // A typed reply carries its quote; a chip never does (chips hide while replying).
+      const quoted = !fromChip && replyTarget ? replyTarget : null;
       // SEND-ONCE-PHONE (b#1228): the draft's send-once key; Send again with the same words after a failure that
       // keeps it (lib/sendOnce.ts) replays it, so the server answers from what the first send stored.
-      const words = text.trim();
+      // LO-963R1 N7: the key belongs to the exact words sent, quote included (m#953, lib/sendOnce.ts).
+      const body = quoted ? withRomanQuote(quoted.content, text) : text;
+      const words = body.trim();
       const held = keyFor(words);
       const key = held ?? generateIdempotencyKey();
       // The key goes with these words before the request (LS-953R2 B1): a Back, a reopen or a restart before this
@@ -278,7 +339,7 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
         else keepFailed(words, key);
       }
       let kept = false;
-      const outcome = await send(text, { key, keep: () => { kept = true; } });
+      const outcome = await send(body, { key, keep: () => { kept = true; } });
       // Clear the composer ONLY when the turn actually persisted; on a send
       // failure the draft is preserved so the user can retry without retyping
       // (brief §3 / F5 RomanSendOutcome). A chip never clears a typed draft;
@@ -294,8 +355,12 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
             return text;
           });
         }
-      } else if (outcome === 'sent') {
-        setDraft('');
+      } else if (outcome === 'sent' || outcome === 'stored-no-reply') {
+        if (outcome === 'sent') setDraft('');
+        // The quote goes once: a turn the server stored (answered or not) carries it,
+        // so only the reply that went drops it; a failed send keeps both. While a stored turn's key is kept, the quote
+        // stays too, so Send again rebuilds the same words.
+        if (quoted && (outcome === 'sent' || !kept)) setReplyTarget((r) => (r?.id === quoted.id ? null : r));
       }
       if (outcome === 'noop') {
         if (!held && keyFor(words) === key) dropFailed(words); // nothing was sent under the new key
@@ -312,7 +377,7 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
         dropFailed(words);
       }
     },
-    [send, setDraft, keyFor, keepFailed, keepAside, dropFailed],
+    [send, replyTarget, setDraft, keyFor, keepFailed, keepAside, dropFailed],
   );
 
   const onSend = useCallback(async () => {
@@ -354,6 +419,48 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
     onRetrySend();
   }, [sendError, clearSendError, onRetrySend]);
 
+  // ROMAN-HOLD-M: hold one of Roman's replies for the people's chat menu. Client room only:
+  // the coach's own Roman room is unchanged (a coach-visible change is the owner's call).
+  const canHold = surface === 'client';
+  const onHold = useCallback((m: RomanMessage) => {
+    if (m.role === 'assistant') setActionTarget(m);
+  }, []);
+
+  const onReply = useCallback(() => {
+    if (actionTarget) setReplyTarget(actionTarget);
+    setActionTarget(null);
+  }, [actionTarget]);
+
+  const onCopy = useCallback(async () => {
+    const held = actionTarget;
+    setActionTarget(null);
+    if (!held) return;
+    try {
+      await Clipboard.setStringAsync(held.content);
+    } catch (err) {
+      logger.warn('RomanChatScreen.copy', err);
+    }
+  }, [actionTarget]);
+
+  const onOpenReport = useCallback(() => {
+    if (actionTarget) setReportTarget(actionTarget);
+    setActionTarget(null);
+  }, [actionTarget]);
+
+  // A failure throws to the sheet, which keeps the pick and says so; sending
+  // again is safe: the server keeps one report per person and reply.
+  const onSubmitReport = useCallback(
+    async (payload: { reason: ReportReason; details?: string }) => {
+      if (!reportTarget) return;
+      await reportMessage(reportTarget.id, payload);
+      // LS-950R2 C3: a late answer leaves a newer chat (or sign-in) alone: no sheet closed, no alert.
+      if (chatNow.current !== chat) return;
+      setReportTarget(null);
+      Alert.alert('Reported', 'Your report has been submitted.');
+    },
+    [reportTarget, chat],
+  );
+
   // B30: the reply that arrives after a send fades in like reading.
   const freshId = useRomanReveal(messages, sending);
   const renderItem = useCallback(
@@ -362,10 +469,11 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
         message={item}
         reveal={item.id === freshId}
         reduceMotion={reduceMotion}
+        onLongPress={canHold && item.role === 'assistant' ? onHold : undefined}
         testID={`roman-message-${item.id}`}
       />
     ),
-    [freshId, reduceMotion],
+    [freshId, reduceMotion, onHold, canHold],
   );
 
   // ROMAN-RETRY-B-M (#203-E41, "Roman's place, held"): the line that sat in a row under the list is Roman's card at
@@ -436,7 +544,12 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
       onSend={onSend}
       sending={sending}
       accessory={
-        surface === 'client' ? (
+        replyTarget ? (
+          <ReplyComposer
+            target={{ id: replyTarget.id, body: romanQuoteExcerpt(replyTarget.content), authorLabel: 'Roman' }}
+            onCancel={() => setReplyTarget(null)}
+          />
+        ) : surface === 'client' ? (
           <RomanQuickStarts onPick={onPickChip} selected={pickedChip} disabled={sending} />
         ) : null
       }
@@ -550,6 +663,30 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
         {surface === 'client' ? <RomanConsentGate surface="client" /> : null}
 
         {/* ROMAN-RETRY-B-M: the send-error row and the buy links under it are Roman's card in the conversation (held). */}
+
+        {/* ROMAN-HOLD-M: the people's chat hold menu and report sheet; REFINE-950: drawn as their GOAL frames draw them
+            (dm-menu P3 b05, mobile-879-05) through look="roman", which only this room passes. */}
+        <MessageActionSheet
+          look="roman"
+          visible={actionTarget != null}
+          messagePreview={actionTarget ? romanQuoteExcerpt(actionTarget.content) : undefined}
+          onReply={onReply}
+          onCopy={() => void onCopy()}
+          onReport={onOpenReport}
+          onClose={() => setActionTarget(null)}
+          canReport={actionTarget != null && !isLocalRomanId(actionTarget.id)}
+          canReply={actionTarget?.safetyActions == null}
+        />
+        {/* LO-950R2 N3: keyed by chat, so a chat change also drops the sheet's pick, words and error. */}
+        <ReportMessageSheet
+          key={chat}
+          look="roman"
+          visible={reportTarget != null}
+          messagePreview={reportTarget ? romanQuoteExcerpt(reportTarget.content, 400) : ''}
+          onSubmit={onSubmitReport}
+          onClose={() => setReportTarget(null)}
+          revealError
+        />
 
       </View>
     </Screen>

@@ -28,6 +28,12 @@ jest.mock('../../../hooks/usePendingAiDrafts', () => ({
   COACH_AI_PENDING_DRAFTS_QUERY_KEY: ['coach', 'ai', 'pending-drafts'],
   usePendingAiDrafts: (o: unknown) => mockDrafts(o),
 }));
+// DRAFTS-COUNT-M: the card also reads Path Copilot's workout changes (clientPathCopilot is on in jest); none wait here.
+const mockPathDrafts = jest.fn();
+jest.mock('../../../api/copilotApi', () => {
+  const actual = jest.requireActual('../../../api/copilotApi');
+  return { ...actual, copilotApi: { ...actual.copilotApi, pathChangeDrafts: () => mockPathDrafts() } };
+});
 const mockNavigate = jest.fn();
 const mockGoBack = jest.fn();
 jest.mock('@react-navigation/native', () => ({
@@ -49,7 +55,14 @@ const queue = [
   row('d4', 'draft.coach_message'), // pre-Stream-2: its own surface, not counted
 ];
 
+// DRAFTS-COUNT-M: the card's Copilot read is a query, so the screen is drawn under a query client.
+let client: QueryClient;
+const draw = (node: React.ReactElement) => render(<QueryClientProvider client={client}>{node}</QueryClientProvider>);
+afterEach(() => client.clear());
+
 beforeEach(() => {
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  mockPathDrafts.mockReset().mockResolvedValue([]);
   mockNavigate.mockReset();
   mockDrafts.mockReset();
   mockUser.role = 'coach';
@@ -63,7 +76,7 @@ it('counts Stream 2 drafts by kind, as the coach Home does', () => {
 
 it('shows Roman\'s drafts while drafts wait; the button opens the Pending AI drafts screen', async () => {
   mockDrafts.mockReturnValue({ data: { drafts: queue } });
-  const view = await render(<MessagesScreen />);
+  const view = await draw(<MessagesScreen />);
   expect(await view.findByText('Roman has 3 drafts ready')).toBeTruthy();
   expect(view.getByText('2 Workouts')).toBeTruthy();
   expect(view.getByText('1 Nudge')).toBeTruthy();
@@ -74,22 +87,23 @@ it('shows Roman\'s drafts while drafts wait; the button opens the Pending AI dra
 
 it('draws no card when nothing waits', async () => {
   mockDrafts.mockReturnValue({ data: { drafts: [] } });
-  const empty = await render(<MessagesScreen />);
+  const empty = await draw(<MessagesScreen />);
   expect(await empty.findByLabelText('Open messages with Ana Ruiz')).toBeTruthy();
   expect(empty.queryByTestId('inbox-roman-drafts')).toBeNull();
 });
 
 it('never reads drafts for a non-coach session', async () => {
   mockUser.role = 'client';
-  const other = await render(<MessagesScreen />);
+  const other = await draw(<MessagesScreen />);
   expect(await other.findByLabelText('Open messages with Ana Ruiz')).toBeTruthy();
   expect(other.queryByTestId('inbox-roman-drafts')).toBeNull();
   expect(mockDrafts).not.toHaveBeenCalled();
+  expect(mockPathDrafts).not.toHaveBeenCalled(); // DRAFTS-COUNT-M: nor Copilot's read
 });
 
 it('sits on the app page (owner #197-E6)', async () => {
   mockDrafts.mockReturnValue({ data: { drafts: [] } });
-  const view = await render(<MessagesScreen />);
+  const view = await draw(<MessagesScreen />);
   const bg = StyleSheet.flatten((await view.findByTestId('coach-messages')).props.style).backgroundColor;
   expect(bg).toBe(coachInboxB.page);
   expect(String(bg).toUpperCase()).toBe('#F7FAF7');

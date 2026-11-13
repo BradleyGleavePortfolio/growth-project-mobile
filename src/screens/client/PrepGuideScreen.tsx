@@ -18,7 +18,7 @@ import { prepGuideApi, listsApi } from '../../services/api';
 
 import FadeInView from '../../components/FadeInView';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import { typography, radius, gold, brand, withAlpha } from '../../theme/tokens';
+import { colors as palette, typography, radius, gold, brand, withAlpha } from '../../theme/tokens';
 import { PrimaryButton, Screen } from '../../ui';
 import {
   StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCMastText, StyleCNotice, StyleCPaper, StyleCSheet, StyleCThumb, useBottomInset, usePullToRefresh, useStyleCScreen,
@@ -204,7 +204,7 @@ export default function PrepGuideScreen() {
             <View style={styles.prepDayRow}>
               {shown.prep_day_suggestions.map((day) => (
                 <View key={day} style={[styles.prepDayBadge, { borderColor: sc.surface.forestBandLine }]}>
-                  <Ionicons name="calendar-outline" size={16} color={gold[300]} />
+                  <Ionicons name="calendar-clear-outline" size={16} color={gold[300]} />
                   <Text style={styles.prepDayText}>{day}</Text>
                 </View>
               ))}
@@ -382,7 +382,8 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
 
   ingredientRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, paddingTop: 12, minHeight: 44 },
   // A dotted leader (ctx#457): a thin box with every border dotted draws as one dotted line on both platforms.
-  leader: { flex: 1, minWidth: 16, height: 1.5, marginBottom: 8, borderWidth: 1, borderStyle: 'dotted', borderColor: withAlpha(colors.textMuted, 0.5) },
+  // REFINE-959: .ing .dots #B9B2A7; stone at 0.9 over the paper is #B8B0A8 (the list fields' underline too).
+  leader: { flex: 1, minWidth: 16, height: 1.5, marginBottom: 8, borderWidth: 1, borderStyle: 'dotted', borderColor: withAlpha(palette.stone, 0.9) },
   ingredientName: { ...typography.body, lineHeight: 22.4, letterSpacing: 0, flexShrink: 1, color: colors.textPrimary },
   ingredientAmount: { fontFamily: typography.body.fontFamily, fontSize: 16, letterSpacing: 0, color: colors.textPrimary, fontVariant: ['tabular-nums'], textAlign: 'right' },
 

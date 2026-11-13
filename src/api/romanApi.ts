@@ -62,6 +62,7 @@
 import { z } from 'zod';
 import axios from 'axios';
 import api from '../services/api';
+import { reportWireBody, type ReportMessagePayload } from './messagesApi';
 import { env } from '../config/env';
 import { secureStorage } from '../services/secureStorage';
 import { logger } from '../utils/logger';
@@ -443,6 +444,40 @@ export async function deleteSession(sessionId: string): Promise<void> {
   } catch (err) {
     throw toRomanApiError(err);
   }
+}
+
+/** The answer to POST /roman/messages/:id/report (backend #1223). */
+export interface RomanReportResult {
+  reportId: string;
+  status: 'received' | 'already_reported';
+}
+
+const RomanReportResultSchema = z.object({
+  reportId: z.string(),
+  status: z.enum(['received', 'already_reported']),
+});
+
+/**
+ * POST /roman/messages/:id/report (backend #1223, ROMAN-HOLD-M): report one of
+ * Roman's replies to TGP's team. Same body as the DM report (reason list and
+ * 1000-character details). One report per person and reply: a second send
+ * answers `already_reported` with the first id, so a retry never files twice.
+ */
+export async function reportMessage(
+  messageId: string,
+  payload: ReportMessagePayload,
+): Promise<RomanReportResult> {
+  if (!messageId) throw new Error('messageId required');
+  let data: unknown;
+  try {
+    const res = await api.post(`/roman/messages/${encodeURIComponent(messageId)}/report`, reportWireBody(payload));
+    data = res.data;
+  } catch (err) {
+    throw toRomanApiError(err);
+  }
+  const parsed = RomanReportResultSchema.safeParse(data);
+  if (!parsed.success) throw new RomanWireError('POST /roman/messages/:id/report: unexpected response shape');
+  return parsed.data;
 }
 
 // ─── SSE: send a turn, buffer the reply (DECLARED DEVIATION — see header) ────
