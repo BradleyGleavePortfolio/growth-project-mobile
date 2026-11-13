@@ -267,7 +267,7 @@ export function SetLogger({
   const ghost = !(set.weight > 0 || zero) || !(set.reps > 0);
   const bw = readsBW(bodyWeight, shownWeight);
   return (
-    <View style={[styles.setLine, nextUp && styles.setLineNext]} pointerEvents={editable ? 'auto' : 'none'} testID={`set-row-${exIdx}-${setIdx}`}>
+    <View style={[styles.setLine, nextUp && styles.setLineNext, tools && styles.setLineOpen]} pointerEvents={editable ? 'auto' : 'none'} testID={`set-row-${exIdx}-${setIdx}`}>
       <View style={styles.setLineMain}>
         <Text style={styles.setLineLabel}>Set {setIdx + 1}</Text>
         {fields ? (
