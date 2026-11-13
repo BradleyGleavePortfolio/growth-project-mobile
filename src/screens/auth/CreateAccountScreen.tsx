@@ -94,7 +94,7 @@ import {
 } from '../../lib/coachSignupAttempt';
 import { layout, lightTokens, radius, typography, type SemanticTokens } from '../../theme/tokens';
 import ResendVerificationLink from './ResendVerificationLink';
-import { authStyleB, RoundBack, StepPill, styleBFieldStyles, type SignupStep } from './AuthStyleB';
+import { authStyleB, GoogleMark, RoundBack, StepPill, styleBFieldStyles, type SignupStep } from './AuthStyleB';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { Headline, Overline, PrimaryButton, Screen, ScreenTopBar, TextLink } from '../../ui';
 import { Checkbox } from '../consultation/components';
@@ -1490,7 +1490,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
                 accessibilityLabel="Continue with Google"
                 accessibilityState={{ disabled: coachTermsMissing }}
               >
-                <Text style={styles.googleG}>G</Text>
+                {v2 ? <GoogleMark testID="create-account-google-mark" /> : <Text style={styles.googleG}>G</Text>}
                 <Text style={styles.googleButtonText}>Continue with Google</Text>
               </Pressable>
             ) : null}
