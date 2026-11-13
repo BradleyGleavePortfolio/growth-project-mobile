@@ -1,0 +1,2 @@
+src/utils/log/__tests__/foodDay.usualTime.goal930.test.ts
+src/components/log/__tests__/FoodDayView.goal930.test.tsx
