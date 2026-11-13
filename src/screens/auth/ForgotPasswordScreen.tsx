@@ -95,7 +95,7 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
         {submitted ? (
           <View style={[styles.bSent, { backgroundColor: colors.surface.forestBand }]} accessible accessibilityRole="alert" testID="forgot-sent">
             <View style={styles.bSentRow}>
-              <Ionicons name="checkmark" size={20} color={colors.textOnAccent} />
+              <Ionicons name="checkmark" size={17} color={colors.textOnAccent} />
               <Text style={[styles.bSentTitle, onForest]}>Reset request submitted</Text>
             </View>
             <Text style={[styles.successText, styles.bSentBody, onForest]}>Check your inbox and spam folder</Text>
@@ -302,9 +302,9 @@ const makeStyles = (colors: SemanticTokens) =>
   },
   bTitle: { marginTop: 8 },
   bLede: { marginBottom: 24 },
-  bSent: { borderRadius: radius.card, padding: 20, marginTop: 12, gap: 8 },
+  bSent: { borderRadius: radius.sheet, padding: 18, marginTop: 12, gap: 8 },
   bSentRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  bSentTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 16, lineHeight: 22 },
+  bSentTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 13, lineHeight: 22 },
   bSentBody: { textAlign: 'left', paddingHorizontal: 0 },
 
   });
