@@ -26,6 +26,7 @@ import {
   type UpdateDailyMealPlanInput,
   type UpdateMealTemplateInput,
 } from '../api/mealTemplatesApi';
+import { queryClient } from '../services/queryClient';
 
 const FIVE_MIN_MS = 5 * 60 * 1000;
 
@@ -183,4 +184,13 @@ export function useMealPlanToday(dateIso?: string) {
     queryFn: () => mealTemplatesApi.todayForClient(dateIso).then((r) => r.data),
     staleTime: FIVE_MIN_MS,
   });
+}
+
+/**
+ * MEAL-PLAN-REFRESH-M: a meal plan notice (b#1250) marks every saved answer of the client's day stale (the plan
+ * screen's and the Food day's keys) and re-reads the ones on screen. It never drops a saved answer, so an offline
+ * client keeps what they had. Called where a notice is received and where its tap is delivered.
+ */
+export function refreshMealPlanToday(): void {
+  void queryClient.invalidateQueries({ queryKey: ['meal-plan', 'today'] });
 }

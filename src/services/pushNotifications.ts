@@ -19,6 +19,8 @@ import { Platform } from 'react-native';
 import { foregroundBannerStore } from '../store/foregroundBannerStore';
 import { Colors } from '../constants/colors';
 import { decodePushParams } from './pushTapRouter';
+import { incomingLinkPath, resolveAppLink } from '../navigation/incomingLinks';
+import { refreshMealPlanToday } from '../hooks/useMealTemplates';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -115,6 +117,7 @@ export function installForegroundHandler(): () => void {
 
   // Write to the in-app banner store instead.
   const subscription = Notifications.addNotificationReceivedListener((notification) => {
+    if (opensMealPlan(notification.request.content.data)) refreshMealPlanToday(); // MEAL-PLAN-REFRESH-M
     const { title, body } = notification.request.content;
     const data = notification.request.content.data;
     const deepLink = data?.deepLink ?? data?.deep_link;
@@ -221,4 +224,11 @@ export function installNotificationResponseHandler(
     cancelled = true;
     subscription.remove();
   };
+}
+
+/** MEAL-PLAN-REFRESH-M (R-c): a received notice belongs when its link opens the client's meal plan screen. */
+function opensMealPlan(data: Record<string, unknown> | undefined): boolean {
+  const link = data?.deepLink ?? data?.deep_link;
+  const path = typeof link === 'string' ? incomingLinkPath(link) : null;
+  return path !== null && resolveAppLink(path, 'student')?.screen === 'ClientDailyMealPlan';
 }
