@@ -117,7 +117,6 @@ export function installForegroundHandler(): () => void {
 
   // Write to the in-app banner store instead.
   const subscription = Notifications.addNotificationReceivedListener((notification) => {
-    if (opensMealPlan(notification.request.content.data)) refreshMealPlanToday(); // MEAL-PLAN-REFRESH-M
     const { title, body } = notification.request.content;
     const data = notification.request.content.data;
     const deepLink = data?.deepLink ?? data?.deep_link;
