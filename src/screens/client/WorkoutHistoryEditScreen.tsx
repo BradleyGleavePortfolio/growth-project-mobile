@@ -7,7 +7,7 @@ import { useTheme } from '../../theme/ThemeProvider';
 import HapticPressable from '../../components/HapticPressable';
 import api from '../../services/api';
 import { makeStyles as makeActiveStyles } from './active-workout/styles';
-import { layout, spacing, typography } from '../../theme/tokens';
+import { layout, radius, spacing, typography } from '../../theme/tokens';
 import { useScreenInsets } from '../../ui';
 import { SetLogger } from './active-workout/SetLogger';
 import type { SessionSet } from './active-workout/types';
@@ -32,18 +32,26 @@ export default function WorkoutHistoryEditScreen() {
       finishBtn: { ...base.finishBtn, minHeight: 44, justifyContent: 'center', backgroundColor: sc.accent },
       finishBtnText: { ...base.finishBtnText, color: sc.textOnAccent },
       content: { ...base.content, paddingTop: spacing.xl },
-      exerciseCard: { ...base.exerciseCard, backgroundColor: sc.bgPrimary, borderBottomColor: sc.border },
-      exerciseName: { ...base.exerciseName, color: sc.textPrimary },
+      // STYLE-WORKOUTS-M, nearest picked drawing C2_logger (no frame draws this screen): each exercise is the open
+      // block card, sage with a 1 pt sage line, 16 pt corners and padding (rows 462-1065, cols 48-82), 16 pt apart.
+      // These overrides are this screen's own; active-workout/styles.ts and the live workout do not change.
+      exerciseCard: { ...base.exerciseCard, backgroundColor: sc.surface.sage, borderWidth: 1, borderColor: sc.surface.sageLine,
+        borderBottomWidth: 1, borderBottomColor: sc.surface.sageLine, borderRadius: radius.card, padding: spacing.lg,
+        paddingVertical: spacing.lg, marginBottom: spacing.lg },
+      // The card's title in Cormorant, as C2_logger draws "Bench press" (rows 509-556).
+      exerciseName: { ...base.exerciseName, ...typography.h2, color: sc.textPrimary },
+      notesBlock: { marginHorizontal: layout.gutter },
       previousSetText: { ...base.previousSetText, color: sc.textMuted },
       addSetText: { ...base.addSetText, color: sc.textPrimary },
       setHeaderText: { ...base.setHeaderText, color: sc.textMuted },
       setText: { ...base.setText, color: sc.textMuted },
-      setRow: { ...base.setRow, borderBottomColor: sc.border },
-      setRowCompleted: { ...base.setRowCompleted, backgroundColor: sc.bgPrimary, borderBottomColor: sc.border },
-      setInput: { ...base.setInput, color: sc.textPrimary, backgroundColor: sc.bgPrimary,
-        borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: sc.border },
-      notesInput: { ...base.notesInput, color: sc.textPrimary, backgroundColor: sc.bgPrimary,
-        borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: sc.border },
+      // Set rows sit on the card with no rule; the fields are lifted onto the surface (C2_logger rows 762-873).
+      setRow: { ...base.setRow, borderBottomWidth: 0 },
+      setRowCompleted: { ...base.setRowCompleted, backgroundColor: sc.surface.sage, borderBottomWidth: 0 },
+      setInput: { ...base.setInput, color: sc.textPrimary, backgroundColor: sc.bgSurface, borderColor: sc.surface.sageLine,
+        borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: sc.surface.sageLine },
+      notesInput: { ...base.notesInput, color: sc.textPrimary, backgroundColor: sc.bgSurface, borderColor: sc.surface.sageLine,
+        borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: sc.surface.sageLine },
     });
   }, [colors, sc, insetTop]);
   const workout = useMemo(() => JSON.parse(route.params.workout) as LoggedWorkout, [route.params.workout]);
@@ -122,7 +130,7 @@ export default function WorkoutHistoryEditScreen() {
           setExercises((prev) => prev.map((e, i) => i === exIdx ? { ...e, notes: value } : e));
         }} />
       </View>)}
-      <View style={styles.exerciseCard}>
+      <View style={styles.notesBlock}>
         <TextInput style={styles.notesInput} value={notes} multiline maxLength={2000} placeholder="Workout notes" placeholderTextColor={sc.textMuted} accessibilityLabel="Workout notes" editable={!saving} onChangeText={(value) => { changed.current = true; setNotes(value); }} />
       </View>
     </ScrollView>

@@ -102,8 +102,8 @@ it.each([false, true])('uses semantic-theme hairlines and one serif title in edi
   const view = await render(<WorkoutHistoryEditScreen />);
   expect(StyleSheet.flatten(view.getByText('Upper A').props.style).fontFamily).toBe('CormorantGaramond_400Regular');
   const input = StyleSheet.flatten(view.getByTestId('set-weight-0-0').props.style);
-  expect(input.backgroundColor).toBe(sc.bgPrimary);
-  expect(input.borderBottomColor).toBe(sc.border);
+  expect(input.backgroundColor).toBe(sc.bgSurface);
+  expect(input.borderBottomColor).toBe(sc.surface.sageLine);
   expect(input.minHeight).toBeGreaterThanOrEqual(44);
   const save = StyleSheet.flatten(view.getByLabelText('Save workout changes').props.style);
   expect(save.backgroundColor).toBe(sc.accent);
