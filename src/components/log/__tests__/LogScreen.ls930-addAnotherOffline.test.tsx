@@ -75,7 +75,7 @@ it('LS-930 B3: Add another food saves offline and returns to the same open add s
     ));
     // This action is explicitly different from Log food: it must not dismiss
     // the sheet after the plate has successfully been queued.
-    expect(screen.queryByText('Add to Breakfast')).not.toBeNull();
+    expect(screen.getByTestId('food-search-meal')).toHaveTextContent('Breakfast');
     expect(screen.getByText('Rolled oats')).toBeTruthy();
     expect(screen.queryByTestId('quantity-add-another')).toBeNull();
   } finally {

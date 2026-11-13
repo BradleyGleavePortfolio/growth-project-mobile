@@ -350,7 +350,7 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     expect(jest.mocked(logApi.getDaily).mock.calls.length).toBeGreaterThan(reads);
     for (const [index, meal] of ['Breakfast', 'Lunch', 'Dinner', 'Snacks'].entries()) {
       await fireEvent.press(screen.getAllByText('Add food')[index]);
-      expect(screen.getByText(`Add to ${meal}`)).toBeTruthy();
+      expect(screen.getByTestId('food-search-meal')).toHaveTextContent(meal);
       await fireEvent(screen.getByTestId('food-search-sheet'), 'requestClose');
     }
   });
