@@ -122,7 +122,7 @@ const entry = (id: string, slotId: string | null, meal: string, name: string, ex
   food_item: { id: `fi-${id}`, name, calories: 400, protein_g: 30, carbs_g: 40, fat_g: 10 }, plan_slot_id: slotId, ...extra,
 });
 const LOG = { entries: [
-  entry('e1', 'a', 'breakfast', 'Greek yoghurt, oats and berries'),
+  entry('e1', null, 'breakfast', 'Greek yoghurt, oats and berries'),
   entry('e2', 'b', 'lunch', 'Chicken, rice and greens', { original_quantity: 300, original_unit: 'g' }),
   entry('e3', null, 'snack', 'Flat white'),
 ], total_calories: 1560, total_protein_g: 97 };
