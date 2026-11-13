@@ -40,9 +40,9 @@ interface ListItem {
 const LIST_TYPE = 'grocery' as const;
 const QUERY_KEY = ['lists', LIST_TYPE];
 
-// One list (owner 10-07, CF-ONE-LIST-128): More no longer opens a Shopping list, so rows a client saved
-// there are read here too and can be checked, removed and cleared like grocery rows. New rows go to grocery.
-// The shopping read runs only after the grocery read succeeds, so a failed load costs one request.
+// One read (owner 10-07, CF-ONE-LIST-128): More no longer opens a Shopping list, so rows a client saved there are
+// read here too. The shopping read runs only after the grocery read succeeds, so a failed load costs one request.
+// SHOP-SWITCH-M (owner 203-D16 op 1, ctx#527 style 1): the switch under the title chooses which list the page shows.
 async function fetchOneList(): Promise<ListItem[]> {
   const grocery = (await listsApi.getList(LIST_TYPE)).data as ListItem[];
   const shopping = (await listsApi.getList('shopping')).data as ListItem[];
@@ -53,6 +53,23 @@ async function fetchOneList(): Promise<ListItem[]> {
   ];
 }
 const fromShopping = (item: ListItem) => item.list_type === 'shopping';
+
+// Each list's words, all main's: the grocery ones from this screen, the shopping ones from ShoppingListScreen.tsx.
+const LISTS = {
+  grocery: {
+    tab: 'Grocery', title: 'Grocery list', loading: 'Loading grocery list…', failed: "Couldn't load grocery list.",
+    empty: 'Your grocery list is empty', addFailed: 'Could not add grocery item', clearFailed: 'Could not clear grocery items',
+    clearLine: 'Checked items could not be removed. Refresh the grocery list before clearing them again.',
+  },
+  shopping: {
+    tab: 'Shopping', title: 'Shopping list', loading: 'Loading shopping list…', failed: "Couldn't load shopping list.",
+    empty: 'Your shopping list is empty', addFailed: 'Could not add shopping item', clearFailed: 'Could not clear shopping items',
+    clearLine: 'Checked items could not be removed. Refresh the shopping list before clearing them again.',
+  },
+} as const;
+type ListType = keyof typeof LISTS;
+/** A row is on Shopping when it came from the shopping read (above), else on Grocery. */
+const onList = (type: ListType) => (item: ListItem) => fromShopping(item) === (type === 'shopping');
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function GroceryListScreen() {
@@ -71,6 +88,9 @@ export default function GroceryListScreen() {
   const [newItemName, setNewItemName] = useState('');
   const [newItemQty, setNewItemQty] = useState('1');
   const [newItemUnit, setNewItemUnit] = useState('');
+  // The list on show: Grocery every time the screen opens (operator R2, every drawn frame), held while it stays mounted.
+  const [chosen] = useState<ListType>('grocery');
+  const list = LISTS[chosen];
 
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: QUERY_KEY,
@@ -79,19 +99,15 @@ export default function GroceryListScreen() {
   });
   const { pulling, onRefresh } = usePullToRefresh(refetch);
 
-  const items = data ?? [];
+  const rows = data ?? [];
+  const items = rows.filter(onList(chosen));
   const unchecked = items.filter((i) => !i.is_checked);
   const checked = items.filter((i) => i.is_checked);
-  const hasShoppingItems = items.some(fromShopping);
-  const clearsShopping = checked.some(fromShopping);
 
+  // The list rides with the add, so the row lands on the list chosen at the tap even if the client switches before it is sent.
   const addMutation = useMutation({
-    mutationFn: (name: string) =>
-      listsApi.addItem(LIST_TYPE, {
-        name: name.trim(),
-        quantity: parseFloat(newItemQty) || 1,
-        unit: newItemUnit.trim() || undefined,
-      }),
+    mutationFn: ({ type, ...item }: { type: ListType; name: string; quantity: number; unit?: string }) =>
+      listsApi.addItem(type, item),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
       setNewItemName('');
@@ -100,7 +116,7 @@ export default function GroceryListScreen() {
       Keyboard.dismiss();
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     },
-    onError: () => Alert.alert('Could not add grocery item', 'Your item is still in the form. Check your connection and tap Add again.'),
+    onError: (_err, { type }) => Alert.alert(LISTS[type].addFailed, 'Your item is still in the form. Check your connection and tap Add again.'),
   });
 
   const toggleMutation = useMutation({
@@ -136,22 +152,21 @@ export default function GroceryListScreen() {
     onSettled: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
   });
 
+  // Clears one list: the one on show when the client confirmed (never the list she cannot see).
   const clearCheckedMutation = useMutation({
-    mutationFn: (withShopping: boolean) => Promise.all([
-      listsApi.clearChecked(LIST_TYPE),
-      ...(withShopping ? [listsApi.clearChecked('shopping')] : []),
-    ]),
+    mutationFn: (type: ListType) => listsApi.clearChecked(type),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
-    onError: () => Alert.alert('Could not clear grocery items', 'Checked items could not be removed. Refresh the grocery list before clearing them again.'),
+    onError: (_err, type) => Alert.alert(LISTS[type].clearFailed, LISTS[type].clearLine),
   });
 
   const handleAdd = useCallback(() => {
-    if (!newItemName.trim()) return;
-    addMutation.mutate(newItemName.trim());
-  }, [newItemName, addMutation]);
+    const name = newItemName.trim();
+    if (!name) return;
+    addMutation.mutate({ type: chosen, name, quantity: parseFloat(newItemQty) || 1, unit: newItemUnit.trim() || undefined });
+  }, [newItemName, newItemQty, newItemUnit, chosen, addMutation]);
 
   const handleToggle = useCallback(
     (item: ListItem) => {
@@ -171,15 +186,16 @@ export default function GroceryListScreen() {
 
   const handleClearChecked = useCallback(() => {
     if (checked.length === 0) return;
+    const type = chosen;
     Alert.alert(
       'Clear checked items?',
       `Remove ${checked.length} checked item${checked.length > 1 ? 's' : ''}?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Clear', style: 'destructive', onPress: () => clearCheckedMutation.mutate(clearsShopping) },
+        { text: 'Clear', style: 'destructive', onPress: () => clearCheckedMutation.mutate(type) },
       ],
     );
-  }, [checked.length, clearsShopping, clearCheckedMutation]);
+  }, [checked.length, chosen, clearCheckedMutation]);
 
   const renderItem = ({ item }: { item: ListItem }) => (
     <View style={[styles.itemRow, item.is_checked && styles.itemRowChecked]}>
@@ -234,7 +250,7 @@ export default function GroceryListScreen() {
         {!isLoading && !isError && items.length > 0 ? (
           <StyleCDashes total={items.length} done={checked.length} label={unchecked.length > 0 ? `${unchecked.length} to get.` : 'All items checked.'} />
         ) : null}
-        {!isLoading && !isError && hasShoppingItems ? <StyleCMastText kind="muted">Includes items from your shopping list.</StyleCMastText> : null}
+        {!isLoading && !isError && rows.some(fromShopping) ? <StyleCMastText kind="muted">Includes items from your shopping list.</StyleCMastText> : null}
       </StyleCMasthead>
       <StyleCPaper scrolls style={styles.paper}>
 
@@ -288,19 +304,19 @@ export default function GroceryListScreen() {
 
       ListEmptyComponent={isLoading ? (
         <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading grocery list…</Text>
+          <Text style={styles.loadingText}>{list.loading}</Text>
           <StyleCLoadingLines lead="ring" rows={5} />
         </View>
       ) : isError ? (
         <View style={styles.errorBlock}>
-          <StyleCNotice>Couldn't load grocery list.</StyleCNotice>
+          <StyleCNotice>{list.failed}</StyleCNotice>
           <PrimaryButton label="Try again" onPress={() => refetch()} disabled={isRefetching} haptic={false} />
         </View>
       ) : items.length === 0 ? (
         <FadeInView>
           <StyleCEmpty
             icon="bag-outline"
-            title="Your grocery list is empty"
+            title={list.empty}
             subtitle="Add items using the field above."
           />
         </FadeInView>
