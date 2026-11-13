@@ -39,7 +39,8 @@ const s = StyleSheet.create({
   row: { paddingTop: 20, paddingHorizontal: 16, paddingBottom: 14, marginBottom: 4, borderBottomWidth: 1, borderBottomColor: voiceShades.hairline },
   // .s2tile: 48 pt deep, radius 12, 12 pt under it.
   tile: { width: 48, height: 48, borderRadius: 12, backgroundColor: fp.deep, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-  hash: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 24, lineHeight: 28, color: fp.onDeep },
+  // The drawn hash (build.py ic('hash'), 24 pt box, 2.4 stroke): Inter 500 at 22 pt matches its height and weight.
+  hash: { fontFamily: 'Inter_500Medium', fontWeight: '500', fontSize: 22, lineHeight: 26, color: fp.onDeep },
   title: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 17, lineHeight: 22, color: colors.ink },
   purpose: { fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 21, color: colors.charcoal, marginTop: 4 },
   members: { fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18, color: fp.n700, marginTop: 6 },

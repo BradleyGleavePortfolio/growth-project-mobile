@@ -392,7 +392,7 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
         ) : items.length === 0 ? (
           // SPACE-STATES-M (ctx#538 style 2, S3-S5): the start of the space at the top, only once the server let this
           // viewer in on this visit (never on a page restored at a cold start, nor offline before the read answers).
-          <View style={s.flex} testID="space-chat-empty">
+          <View style={[s.flex, s.stream]} testID="space-chat-empty">
             {admitted && cohort ? (
               <SpaceStartRow name={cohort.name} purpose={cohort.description} members={members} coachOnly={coachOnly} />
             ) : null}
