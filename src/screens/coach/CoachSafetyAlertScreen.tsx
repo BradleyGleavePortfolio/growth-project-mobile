@@ -163,7 +163,6 @@ export default function CoachSafetyAlertScreen({ route, navigation }: Props): Re
             <Text style={[styles.summary, { color: safetyGold.text }]} testID="coach-safety-alert-summary">
               {SAFETY_ALERT_SUMMARY[alertType].replace('{first name}', first || clientName)}
             </Text>
-            <SafetyChip />
           </View>
         </View>
       </Screen>
