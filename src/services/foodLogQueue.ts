@@ -399,7 +399,7 @@ let running: { owner: string | undefined; done: Promise<FlushResult> } | null = 
 // the sign-out warning, never resent) so one broken payload can't freeze the queue.
 export function flush(): Promise<FlushResult> {
   const owner = currentOwnerId();
-  if (running && running.owner === owner) return running.done;
+  if (running) return running.done;
   const before = running ? running.done.catch(() => undefined) : Promise.resolve();
   // Cleared before any caller sees the result, so a flush called after one has ended always sends.
   const mine: { owner: string | undefined; done: Promise<FlushResult> } = {
