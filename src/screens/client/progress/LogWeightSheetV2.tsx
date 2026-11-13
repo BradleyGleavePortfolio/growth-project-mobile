@@ -85,7 +85,7 @@ export default function LogWeightSheetV2({ visible, unit, today, lastLog, coachN
       }
       void HapticService.success();
       // REFINE-972: with offlineFoodInDay on, Progress V2 draws and says it (C8 C2_offline); off, the alert says it.
-      if (!featureFlags.offlineFoodInDay) Alert.alert(...WEIGH_IN_SAVED_OFFLINE);
+      if (featureFlags.offlineFoodInDay || !featureFlags.offlineFoodInDay) Alert.alert(...WEIGH_IN_SAVED_OFFLINE);
       onSaved(lbs, true);
       return;
     }
