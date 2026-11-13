@@ -386,7 +386,7 @@ describe('openSupportFrom', () => {
     const tabs = nav(['HomeTab', 'MoreTab']);
     const progress = nav(['Progress', 'Wearables'], tabs);
     expect(openSupportFrom(progress)).toBe(true);
-    expect(tabs.navigate).toHaveBeenCalledWith('MoreTab', { screen: 'SupportInbox' });
+    expect(tabs.navigate).toHaveBeenCalledWith('MoreTab', { screen: 'SupportInbox', initial: false });
   });
 
   it('coach tab elsewhere: goes through SettingsStack', async () => {

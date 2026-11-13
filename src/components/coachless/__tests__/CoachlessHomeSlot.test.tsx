@@ -182,7 +182,7 @@ describe('CoachlessHomeSlot banner and story', () => {
     await fireEvent.press(screen.getByTestId('coach-code-join'));
     expect(await screen.findByText('Alex Rivera is now your coach.')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('coach-code-next-cta'));
-    expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'ClientPackages' });
+    expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'ClientPackages', initial: false });
     await new Promise((r) => setTimeout(r, 600));
     expect(screen.queryByTestId('plan-sheet')).toBeNull();
   });
