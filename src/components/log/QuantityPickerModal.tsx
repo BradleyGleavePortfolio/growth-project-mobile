@@ -195,7 +195,7 @@ export function QuantityPickerContent({
           label={confirmLabel}
           disabled={quantity == null || blocked}
           loading={saving}
-          onPress={saveFailure?.retry === 'addAnother' && onAddAnother ? onAddAnother : onConfirm}
+          onPress={onConfirm}
           testID="quantity-log-food"
           style={[styles.quantityLogButton, saveFailure || (afterPlate && !selectedFood?.serving_size
             && !['cup', 'tbsp', 'tsp'].includes(selectedUnit) && !notice) ? styles.afterPlateButton : undefined]}
