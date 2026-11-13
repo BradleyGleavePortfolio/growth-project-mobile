@@ -19,6 +19,8 @@ export type CoachCommunityStackParamList = {
   CoachCommunityCohorts: undefined;
   /** Cohort header + member list + invite / remove flows. */
   CoachCommunityCohortDetail: { cohortId: string; cohortName?: string };
+  /** SC-M1: one space as a chat stream. Registered only behind communitySpaceChat. */
+  CommunitySpaceChat: { cohortId: string; messageId?: string };
   /** A single post: title, body, author, timestamp, reply thread. */
   CoachCommunityPostDetail: { postId: string; flagged?: boolean };
   /** Flagged-content moderation queue (hide, confirmed). */

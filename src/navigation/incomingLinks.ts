@@ -33,6 +33,17 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const nested = (root: string, screen: string, params?: Record<string, string>): AppLinkTarget =>
   ({ root, screen, params, initial: false });
 
+/**
+ * LS-938R2 B1: the server's space link (tgp://community/cohorts/:id; replies and alerts add ?message=:id) opens that
+ * space chat at the message, only with the space chat on.
+ */
+function spaceChatParams(path: string, segments: string[]): Record<string, string> | null {
+  if (!featureFlags.communitySpaceChat || segments.length !== 3 || segments[0] !== 'community'
+    || segments[1] !== 'cohorts' || !UUID.test(segments[2])) return null;
+  const message = new URLSearchParams(path.split('?')[1]?.split('#')[0]).get('message');
+  return message && UUID.test(message) ? { cohortId: segments[2], messageId: message } : { cohortId: segments[2] };
+}
+
 /** Existing screens only; never infer a route name or role from an external URL. */
 export function resolveAppLink(path: string, role: 'student' | 'coach'): AppLinkTarget | null {
   let segments: string[];
@@ -45,6 +56,7 @@ export function resolveAppLink(path: string, role: 'student' | 'coach'): AppLink
   const plain = segments.join('/');
   const pair = segments.length === 2;
   const uuidPair = pair && UUID.test(id);
+  const space = spaceChatParams(path, segments);
   if (role === 'student') {
     if (first === 'meal-plan' && uuidPair) return nested('MoreTab', 'ClientDailyMealPlan', { assignmentId: id });
     if (first === 'workouts' && uuidPair) return nested('MoreTab', 'WorkoutAssignmentDetail', { assignmentId: id });
@@ -80,6 +92,7 @@ export function resolveAppLink(path: string, role: 'student' | 'coach'): AppLink
     }
     if (featureFlags.communityTab) {
       if (plain === 'community' || plain === 'community/home') return { root: 'CommunityTab' };
+      if (space) return nested('CommunityTab', 'CommunitySpaceChat', space);
       if (segments.length === 3 && first === 'community' && UUID.test(segments[2])) {
         if (id === 'thread') return nested('CommunityTab', 'CommunityThread', { postId: segments[2] });
         if (id === 'dm') return nested('CommunityTab', 'CommunityDmThread', { recipientId: segments[2] });
@@ -90,6 +103,7 @@ export function resolveAppLink(path: string, role: 'student' | 'coach'): AppLink
   if (plain === 'messages' || (first === 'messages' && uuidPair)) {
     return featureFlags.coachTabsV2 ? { root: 'Messages', screen: 'MessagesInbox', pop: true } : { root: 'Messages' };
   }
+  if (space && featureFlags.coachCommunity) return nested('CommunityStack', 'CommunitySpaceChat', space);
   if (first !== 'coach') return null;
   if (id === 'clients' && UUID.test(segments[2] ?? '') &&
       (segments.length === 3 || (segments.length === 4 && segments[3] === 'checkins'))) {
