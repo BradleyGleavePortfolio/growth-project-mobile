@@ -203,6 +203,11 @@ export const makeStyles = (colors: ThemeColors) =>
   // SET-EDIT-M: under an open set, "Previous" (when shown) on the left and the
   // remove control on the right, on one line.
   setLineTools: { flexBasis: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' },
+  // SET-PILL-GAP-M: while that line shows, 6 pt between the row's lines (the C1 v2
+  // drawings' in-row value): under the done control, so a tap just below it
+  // cannot land on the bin drawn under it, and between the numbers and a pill
+  // that wraps under them.
+  setLineOpen: { rowGap: 6 },
   previousLineShared: { flexBasis: 'auto', flexGrow: 1, flexShrink: 1 },
   // C1 v2 "As planned": an outlined pill, filled forest on the next set to do.
   asPlannedBtn: {
