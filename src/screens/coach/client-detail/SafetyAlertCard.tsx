@@ -85,7 +85,7 @@ export function SafetyAlertCard({ alert, first, clientName, onMessage, onDismiss
 }
 
 const s = StyleSheet.create({
-  card: { borderRadius: radius.card, borderWidth: 2, padding: 20, marginTop: 12, gap: 12 },
+  card: { borderRadius: radius.card, borderWidth: 1, padding: 20, marginTop: 12, gap: 12 },
   row: { flexDirection: 'row', gap: 12 },
   lineCol: { flex: 1, gap: 10 }, // contrast.py:68: the tag 10 under the line
   actions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
