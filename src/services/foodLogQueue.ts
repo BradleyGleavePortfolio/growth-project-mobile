@@ -313,7 +313,7 @@ export async function getQueueLength(opts: { includeParked?: boolean } = {}): Pr
 
 /** OFFLINE-FOOD-M: every food on this phone for the signed-in owner, waiting and refused (parkedAt). Foods only. */
 export async function readQueue(): Promise<PendingFoodLog[]> {
-  return (await readQueueForKey(getQueueKey(currentOwnerId()))).filter(isFoodLog);
+  return (await readQueueForKey(getQueueKey(currentOwnerId()))) as PendingFoodLog[];
 }
 
 /**
