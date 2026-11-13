@@ -53,13 +53,15 @@ const log = (id: string, mealType: FoodLog['mealType'], foodName: string, hhmm: 
   id, userId: 'u', coachId: '', date: today, mealType, foodName, calories: 380, protein: 20, carbs: 30, fat: 10,
   quantity: 1, unit: 'serving', createdAt: `${today}T${hhmm}:00`, ...extra,
 });
+// The gutter words are hidden from the screen reader, so their queries include hidden elements.
+const H = { includeHiddenElements: true } as const;
 const DRAWN_OUT = ['Photo of a meal', 'Scan a barcode', 'Keep on plate for later'];
 const noDrawnOut = () => {
   for (const words of DRAWN_OUT) {
-    expect(screen.queryByText(new RegExp(words, 'i'))).toBeNull();
-    expect(screen.queryByLabelText(new RegExp(words, 'i'))).toBeNull();
+    expect(screen.queryByText(new RegExp(words, 'i'), H)).toBeNull();
+    expect(screen.queryByLabelText(new RegExp(words, 'i'), H)).toBeNull();
   }
-  expect(screen.queryAllByTestId(/photo/i)).toHaveLength(0);
+  expect(screen.queryAllByTestId(/photo/i, H)).toHaveLength(0);
 };
 
 beforeEach(() => {
@@ -142,7 +144,7 @@ describe('D2 C_first: Morning, Midday and Evening in the gutter beside empty mea
     await show();
     for (const [meal, word, label] of [['breakfast', 'Morning', 'Breakfast'], ['lunch', 'Midday', 'Lunch'], ['dinner', 'Evening', 'Dinner']]) {
       const row = await screen.findByTestId(`food-day-first-${meal}`);
-      const w = within(row).getByText(word);
+      const w = within(row).getByText(word, H);
       expect(w.props.accessibilityElementsHidden).toBe(true);
       expect(w.props.importantForAccessibility).toBe('no-hide-descendants');
       // .c-e .tm (:88): the gutter's own type, the same Text style a log time uses.
@@ -155,10 +157,12 @@ describe('D2 C_first: Morning, Midday and Evening in the gutter beside empty mea
     await show({ foodLogs: [log('5', 'lunch', 'Tomato soup', '12:05')], eaten: { calories: 380, protein: 20 }, nowMin: 13 * 60 });
     const lunch = await screen.findByTestId('food-day-first-lunch');
     expect(within(lunch).getByText('12:05 pm')).toBeTruthy();
-    expect(within(lunch).queryByText('Midday')).toBeNull();
-    expect(within(screen.getByTestId('food-day-first-breakfast')).getByText('Morning')).toBeTruthy();
-    expect(within(screen.getByTestId('food-day-first-dinner')).getByText('Evening')).toBeTruthy();
-    expect(screen.getAllByText(/^(Morning|Midday|Evening)$/)).toHaveLength(2);
+    expect(within(lunch).queryByText('Midday', H)).toBeNull();
+    expect(within(screen.getByTestId('food-day-first-breakfast')).getByText('Morning', H)).toBeTruthy();
+    expect(within(screen.getByTestId('food-day-first-dinner')).getByText('Evening', H)).toBeTruthy();
+    expect(screen.getAllByText(/^(Morning|Midday|Evening)$/, H)).toHaveLength(2);
+    // Hidden from the reader: no query that skips hidden elements finds them.
+    expect(screen.queryAllByText(/^(Morning|Midday|Evening)$/)).toHaveLength(0);
   });
 });
 
