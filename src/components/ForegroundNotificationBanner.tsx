@@ -92,12 +92,14 @@ export function opensOpenScreen(navRoot: NavRoot, p: BannerPayload): boolean {
     const route = navRoot.getCurrentRoute();
     if (!route) return false;
     const open = (route.params ?? {}) as Record<string, unknown>;
-    const clientId = p.actionParams?.clientId;
-    // The coach's chat with one client (coachInbox.ts chatTarget); the push itself opens the inbox.
-    if (p.kind === 'message_received' && route.name === 'ClientMessages' && !!clientId && open.clientId === clientId) {
-      return true;
-    }
-    const landing = pushTapLanding(navRoot.getRootState()?.routeNames ?? [], p.actionScreen, p.actionParams, p.deepLink);
+    const routeNames = navRoot.getRootState()?.routeNames ?? [];
+    // The chat row: a coach's message push names its client but not the name, so its tap opens the inbox; given the
+    // open chat's own name, as a message row carries it, the router would open that chat (COACH-ROW-CHAT).
+    const chat = p.kind === 'message_received' && typeof open.clientName === 'string'
+      ? pushTapLanding(routeNames, p.actionScreen, { ...p.actionParams, clientName: open.clientName }, p.deepLink)
+      : null;
+    if (chat && chat.name === route.name && chat.params?.clientId === open.clientId) return true;
+    const landing = pushTapLanding(routeNames, p.actionScreen, p.actionParams, p.deepLink);
     if (!landing || landing.name !== route.name) return false;
     return Object.entries(landing.params ?? {}).every(([key, value]) => open[key] === value);
   } catch {
