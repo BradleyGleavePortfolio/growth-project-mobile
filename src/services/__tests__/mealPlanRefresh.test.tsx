@@ -312,6 +312,7 @@ describe('f. received while the plan screen is open on A1', () => {
     expect(mockToday).not.toHaveBeenCalled();
     await receive('n-f', `tgp://meal-plan/${A1}`);
     await waitFor(() => expect(screenReads()).toHaveLength(1));
+    await settle(); // let the screen draw what the refresh left it (M7: a reset would leave no plan)
     // In place: the plan stays on screen while it reads (main's background refetch); never loading or "not available".
     expect(screen.getByText('Plan one')).toBeTruthy();
     expect(screen.queryByTestId('daily-meal-plan-loading')).toBeNull();
