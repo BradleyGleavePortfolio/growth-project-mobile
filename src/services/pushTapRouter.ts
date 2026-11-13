@@ -303,6 +303,7 @@ export function routePushTap(
   if (deepLink !== undefined) {
     const path = incomingLinkPath(deepLink);
     if (path === null) return;
+    if (resolveAppLink(path, 'student')?.screen === 'ClientDailyMealPlan') refreshMealPlanToday();
     // Specific action screens (safety alerts, bookings) retain their richer
     // params. A generic inbox fallback must not swallow a real app link.
     if (!actionScreen || actionScreen === 'NotificationCenter') {
@@ -372,7 +373,6 @@ export function flushPendingPushTap(): boolean {
     if (!target) return screen ? deliver(navigator, session.role, routeNames, screen, params) : false;
     if (!routeNames.includes(target.root)) return false;
     // MEAL-PLAN-REFRESH-M: at delivery, after a cold start's cache restore, so the plan the tap opens is read anew.
-    if (target.screen === 'ClientDailyMealPlan') refreshMealPlanToday();
     return deliverTarget(navigator, target, target.params);
   }
   // Unroutable target: dropped rather than crashing (deliver returns false).
