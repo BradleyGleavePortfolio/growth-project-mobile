@@ -13,6 +13,7 @@ import { workoutBuilderApi } from '../../../api/workoutBuilderApi';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { useCoachlessClient } from '../../../hooks/useCoachlessClient';
 import { useMyCoaches } from '../../../hooks/useCalendar';
+import { isEffectivelyOnline, useNetworkStatus } from '../../../hooks/useNetworkStatus';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { colors, motion, radius, typography } from '../../../theme/tokens';
 import { useReduceMotion } from '../wearables/components/useReduceMotion';
@@ -49,6 +50,10 @@ export default function ProgressV2({ onSaved, logWeightAt }: { onSaved?: () => v
   const coach = coaches?.find((c) => c.coach_id === user?.coach_id) ?? coaches?.[0];
   // null: no coach, so no sharing words. undefined: not read yet ("Your coach").
   const coachName = coachless ? null : coach?.name.trim().split(/\s+/)[0] || undefined;
+  // REFINE-972 (C8 C2_offline): with no signal the page says so on the masthead (the sheet's own network read).
+  const offline = featureFlags.offlineFoodInDay && !isEffectivelyOnline(useNetworkStatus());
+  const phoneLine = coachName === null ? 'On this phone. Sends when you are back online.'
+    : `On this phone. Goes to ${coachName ?? 'your coach'} when you are back online.`;
   const unit = P.unitOf(user?.profile?.weight_unit);
   const today = getTodayString();
   const [read, setLogs] = useState<WeightLog[] | null>(null);
@@ -61,6 +66,7 @@ export default function ProgressV2({ onSaved, logWeightAt }: { onSaved?: () => v
   const [sheet, setSheet] = useState(false);
   const [saved, setSaved] = useState<{ lbs: number; at: Date; move: number | null } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [readAt, setReadAt] = useState<Date | null>(null);
   useEffect(() => { if (logWeightAt) setSheet(true); }, [logWeightAt]);
 
   const userId = user?.id;
@@ -72,6 +78,7 @@ export default function ProgressV2({ onSaved, logWeightAt }: { onSaved?: () => v
           .filter((l): l is WeightLog => l !== null).sort((a, b) => a.date.localeCompare(b.date));
         setLogs(rows);
         setFailed(false);
+        setReadAt(new Date());
         void settleWeighInsHeld(rows);
       }, (err: unknown) => { setFailed(true); fail('weight history')(err); }),
       workoutApi.getAll(P.SESSIONS).then((res) => setSessions(Array.isArray(res.data) ? res.data : []), fail('workouts')),
@@ -93,9 +100,10 @@ export default function ProgressV2({ onSaved, logWeightAt }: { onSaved?: () => v
   }, [saved, reduce, fade]);
   const logged = (lbs: number, queued?: boolean) => {
     if (queued) {
-      // OFFLINE-WATER-WEIGHT-M: no saved moment for a weigh-in the coach cannot see yet; the "Saved offline" alert
-      // said it is on this phone, and the trend counts it from the phone.
+      // OFFLINE-WATER-WEIGHT-M: no saved moment for a weigh-in the coach cannot see yet. REFINE-972 (index-v2.md:232):
+      // with offlineFoodInDay on the page draws it (the ring, its callout, the line under the chart) and says the line.
       setSheet(false);
+      if (featureFlags.offlineFoodInDay) AccessibilityInfo.announceForAccessibility(phoneLine);
       onSaved?.();
       return;
     }
@@ -122,6 +130,7 @@ export default function ProgressV2({ onSaved, logWeightAt }: { onSaved?: () => v
   const tile = [s.tile, fontScale <= 1.15 && s.grow];
   const retry = () => { setRefreshing(true); void load().then(() => setRefreshing(false)); };
   const since = logs?.[0] ? `Since ${P.monthDay(logs[0].date)}` : null;
+  const waiting = !!logs?.some((l) => l.pending);
   return (
     <>
       <ForestStatusBar />
@@ -135,6 +144,12 @@ export default function ProgressV2({ onSaved, logWeightAt }: { onSaved?: () => v
               <Text style={[typography.h1, light]} accessibilityRole="header">Your progress</Text>
             </View>
           </View>
+          {offline ? (
+            <View testID="progress-offline-card" role="status" accessibilityLiveRegion="polite" style={[s.row, s.top, s.card]}>
+              <Ionicons name="cloud-offline-outline" size={20} color={colors.warningInk} style={s.glyph} />
+              <Text style={[typography.body, s.flex, { color: colors.charcoal }]}>No connection. Weigh-ins are kept on this phone and send when you are back online.</Text>
+            </View>
+          ) : null}
           <View style={[s.row, s.apart]}>
             <Text style={[typography.eyebrow, muted]}>Weight</Text>
             <Pressable onPress={() => setSheet(true)} accessibilityRole="button" accessibilityLabel="Log weight" testID="progress-log-weight"
@@ -168,11 +183,13 @@ export default function ProgressV2({ onSaved, logWeightAt }: { onSaved?: () => v
                 {saved.move != null ? <Text style={[typography.body, light]}>{P.trendMove(saved.move, unit)}</Text> : null}
               </View>
             </Animated.View>
-          ) : sentence ? <Text style={[typography.body, muted]}>{sentence}</Text> : null}
+          ) : offline && readAt && sentence ? <Text style={[typography.body, muted]} testID="progress-updated">{`Updated ${clock(readAt)}`}</Text>
+            : sentence ? <Text style={[typography.body, muted]}>{sentence}</Text> : null}
           {has ? <PeriodTabs variant="dark" value={period} onChange={(p) => { if (p !== '90D') setPeriod(p); }} /> : null}
         </View>
         {logs && has ? <WeightTrendChartDark data={P.samplesOf(logs)} period={period} through={P.dayX(today)} unit={unit}
-          goal={user?.profile?.target_weight_lbs ? { value: user.profile.target_weight_lbs } : undefined} testID="progress-weight-chart" /> : null}
+          goal={user?.profile?.target_weight_lbs ? { value: user.profile.target_weight_lbs } : undefined}
+          phoneLine={waiting ? phoneLine : undefined} testID="progress-weight-chart" /> : null}
 
         <View style={[s.gutter, !has && s.gutterTop]}>
           {best || training ? (
@@ -245,6 +262,8 @@ const s = StyleSheet.create({
   avatar: { width: 44, height: 44, borderRadius: radius.chip, alignItems: 'center', justifyContent: 'center' },
   initial: { ...serif, fontSize: 24, lineHeight: 30, color: colors.ink },
   fail: { alignItems: 'center', gap: 16, padding: 24, borderWidth: 1, borderStyle: 'dashed', borderRadius: radius.card },
+  card: { padding: 16, borderWidth: 1, borderRadius: radius.card, backgroundColor: colors.warningBg, borderColor: colors.warningInk },
+  glyph: { marginTop: 2 },
   center: { textAlign: 'center' },
   chip: { gap: 6, minHeight: 44, paddingHorizontal: 14, borderWidth: 1, borderRadius: radius.button },
   big: { ...serif, fontSize: 64, lineHeight: 80 },

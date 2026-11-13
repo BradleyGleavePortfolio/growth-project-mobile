@@ -19,6 +19,7 @@ import { isEffectivelyOnline, useNetworkStatus } from '../../../hooks/useNetwork
 import type { WeightLog } from '../../../types';
 import { lastWas, monthDay, one, toLbs, toUnit, type WeightUnit } from './progressV2';
 import { saveWeighInOffline, WEIGH_IN_SAVED_OFFLINE } from './offlineWeighIn';
+import { featureFlags } from '../../../config/featureFlags';
 
 /** The server takes 40 to 1,500 lb; the kg bounds stay inside it once converted. */
 const BOUNDS = { lb: [40, 1500], kg: [18.2, 680] } as const;
@@ -82,7 +83,8 @@ export default function LogWeightSheetV2({ visible, unit, today, lastLog, coachN
         setSaving(false);
       }
       void HapticService.success();
-      Alert.alert(...WEIGH_IN_SAVED_OFFLINE);
+      // REFINE-972: with offlineFoodInDay on, Progress V2 draws and says it (C8 C2_offline); off, the alert says it.
+      if (!featureFlags.offlineFoodInDay) Alert.alert(...WEIGH_IN_SAVED_OFFLINE);
       onSaved(lbs, true);
       return;
     }

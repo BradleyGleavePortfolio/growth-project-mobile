@@ -59,6 +59,8 @@ export function withQueuedWeighIns(
 ): WeightLog[] {
   if (!featureFlags.offlineFoodInDay) return rows;
   const onServer = new Set(rows.map((r) => r.clientUuid).filter((k): k is string => !!k));
+  // REFINE-972 (B1): one the server accepted (in the sent list) is a plain weigh-in; one still waiting is marked.
+  const sent = new Set(phone.filter((p) => p && 'sentAt' in p).map((p) => p.id));
   const added: WeightLog[] = [];
   for (const item of phone) {
     if (!item || item.kind !== 'weight' || !item.log || item.parkedAt || onServer.has(item.id)) continue;
@@ -66,6 +68,7 @@ export function withQueuedWeighIns(
     added.push({
       id: item.id, clientUuid: item.id, userId, coachId: '', date: item.log.date, weight: item.log.weight_lbs, unit: 'lbs',
       notes: item.log.notes ?? '', createdAt: new Date(item.createdAt || Date.now()).toISOString(),
+      ...(sent.has(item.id) ? {} : { pending: true }),
     });
   }
   return added.length ? [...rows, ...added] : rows;
