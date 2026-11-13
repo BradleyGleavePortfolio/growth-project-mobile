@@ -126,6 +126,10 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
   const [quantityModalVisible, setQuantityModalVisible] = useState(false);
   const [quantityInput, setQuantityInput] = useState('1');
   const [selectedUnit, setSelectedUnit] = useState('serving');
+  // GOAL-930-M (C2 C_error): on the Style C day a failed save from the portion sheet shows in the sheet, with the
+  // action to repeat. It belongs to this portion: it goes when the sheet closes or another food is chosen.
+  const [saveFailure, setSaveFailure] = useState<{ title: string; message: string; retry: 'confirm' | 'addAnother' } | null>(null);
+  useEffect(() => setSaveFailure(null), [quantityModalVisible, selectedFood]);
 
   // NL parse hints from the most recent /foods/search response. When the
   // backend parses "6oz chicken breast" it returns parsed_quantity=6 and
@@ -345,6 +349,11 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
       originalUnit: selectedUnit,
       link: sheetLink,
     };
+    // GOAL-930-M: the tap that started this save, for the failure below; a new try clears the last one's card.
+    const tap = addSheetAfterLog.current;
+    const failed = (title: string, message: string) => (tap === 'classic' ? Alert.alert(title, message)
+      : setSaveFailure({ title, message, retry: tap === 'keep' ? 'addAnother' : 'confirm' }));
+    setSaveFailure(null);
     setFoodSaving(true);
 
     if (!online) {
@@ -360,7 +369,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
         );
       } catch (err) {
         console.error('LogScreen: enqueue failed', err);
-        Alert.alert("Couldn't save food", errorMessage(err, 'Keep this portion open and try saving again.'));
+        failed("Couldn't save food", errorMessage(err, 'Keep this portion open and try saving again.'));
       } finally {
         setFoodSaving(false);
       }
@@ -384,7 +393,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
       console.error('LogScreen: handleConfirmLog failed', err);
       // Phase 11 / Track 3: error haptic on failed API action
       HapticService.error();
-      Alert.alert("Couldn't log food", errorMessage(err, 'This food was not added. Check the connection and try again.'));
+      failed("Couldn't log food", errorMessage(err, 'This food was not added. Check the connection and try again.'));
     } finally {
       setFoodSaving(false);
     }
@@ -869,6 +878,8 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
             dayLeft={styleCDay && macroTargets && macroTargets.calories > 0
               ? { kcal: macroTargets.calories - dailyTotals.calories, protein: macroTargets.protein - dailyTotals.protein } : undefined}
             onAddAnother={styleCDay ? () => { addSheetAfterLog.current = 'keep'; void handleConfirmLog(); } : undefined}
+            saveFailure={saveFailure}
+            confirmLabel={saveFailure ? 'Try again' : undefined}
             onCancel={() => {
               setQuantityModalVisible(false);
               setSelectedFood(null);
