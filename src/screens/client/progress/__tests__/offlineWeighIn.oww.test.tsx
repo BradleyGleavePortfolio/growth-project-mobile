@@ -127,7 +127,8 @@ describe('Progress V2: a weigh-in saved with no signal', () => {
     expect(mockLog).not.toHaveBeenCalled();
     const q = await queued();
     expect(q).toEqual([expect.objectContaining({ kind: 'weight', log: { date: today, weight_lbs: 176.1 } })]);
-    expect(v.getByTestId('log-weight-modal').props.visible).toBe(false);
+    // The sheet closed.
+    expect(v.queryByTestId('log-weight-sheet')).toBeNull();
     expect(v.queryByText('Weigh-in saved')).toBeNull();
     expect(v.queryByText(/sees it\./)).toBeNull();
     await waitFor(() => expect(lastChart().data.filter((p) => p.y === 176.1)).toHaveLength(1));

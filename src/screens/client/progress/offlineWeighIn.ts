@@ -29,27 +29,33 @@ export const WEIGH_IN_SAVED_OFFLINE = ['Saved offline', 'Your weigh-in will sync
  * would not be the client's trend.
  */
 export function useWeighInsOnPhone(read: WeightLog[] | null, userId?: string): WeightLog[] | null {
-  const queue = useClientStore((st) => st.queuedWaterWeight);
-  const sent = useClientStore((st) => st.sentWaterWeight);
+  const queue = listOf(useClientStore((st) => st.queuedWaterWeight));
+  const sent = listOf(useClientStore((st) => st.sentWaterWeight));
   return useMemo(() => {
     if (!read || !userId) return read;
-    const joined = withQueuedWeighIns(read, [...(queue ?? []), ...(sent ?? [])], userId);
+    const joined = withQueuedWeighIns(read, [...queue, ...sent], userId);
     return joined === read ? read : [...joined].sort((a, b) => a.date.localeCompare(b.date));
   }, [read, queue, sent, userId]);
 }
 
 /** The keys of the weigh-ins this phone sent and no read holds yet: a change means a reader should read again (G2). */
 export function useSentWeighInKeys(): string {
-  const sent = useClientStore((st) => st.sentWaterWeight);
-  return (sent ?? []).filter((x) => x.kind === 'weight').map((x) => x.id).join(',');
+  const sent = listOf(useClientStore((st) => st.sentWaterWeight));
+  return sent.filter((x) => x && x.kind === 'weight').map((x) => x.id).join(',');
+}
+
+/** A list the store holds, or none (a store without these lists, as some screens' tests stand it in). */
+function listOf<T>(value: T[] | undefined): T[] {
+  return Array.isArray(value) ? value : [];
 }
 
 /** OFFLINE-WATER-WEIGHT-M: a good history read settles the sent weigh-ins whose key it holds. */
 export async function settleWeighInsHeld(rows: WeightLog[]): Promise<void> {
   const held = new Set(rows.map((r) => r.clientUuid).filter((k): k is string => !!k));
-  const store = useClientStore.getState();
-  if (!held.size || !(store.sentWaterWeight ?? []).some((x) => x.kind === 'weight' && held.has(x.id))) return;
+  if (!held.size) return;
+  const store = useClientStore.getState?.();
+  if (!store || !listOf(store.sentWaterWeight).some((x) => x.kind === 'weight' && held.has(x.id))) return;
   const sent = await settleSentWeighIns(held).catch(() => null);
   const now = useClientStore.getState();
-  if (sent) now.showQueuedWaterWeight?.({ queue: now.queuedWaterWeight, sent });
+  if (sent) now.showQueuedWaterWeight?.({ queue: listOf(now.queuedWaterWeight), sent });
 }
