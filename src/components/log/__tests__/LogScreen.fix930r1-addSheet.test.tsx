@@ -92,8 +92,8 @@ it.each([
     else await waitFor(() => expect(enqueue).toHaveBeenCalledTimes(1));
     expect(online ? enqueue : logApi.logFood).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByTestId(button)).toBeNull());
-    if (open) expect(screen.getByText('Add to Breakfast')).toBeTruthy();
-    else expect(screen.queryByText('Add to Breakfast')).toBeNull();
+    if (open) expect(screen.getByTestId('food-search-meal')).toHaveTextContent('Breakfast');
+    else expect(screen.queryByTestId('food-search-title')).toBeNull();
   } finally {
     alert.mockRestore();
   }

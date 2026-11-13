@@ -6,6 +6,7 @@ import {
   FlatList,
   ActivityIndicator,
   Image,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, gold, layout, radius, typography } from '../../theme/tokens';
@@ -19,6 +20,7 @@ import { SearchResult } from '../../utils/log/types';
 import type { PastMeal } from '../../hooks/useFoodBrowse';
 import { formatPortion } from '../../utils/log/quickLog';
 import { calcMacros } from '../../utils/log/macros';
+import { SheetGlyph } from './AddSheetGlyphs';
 
 interface Props {
   searchQuery: string;
@@ -76,11 +78,8 @@ function FoodThumb({ item }: { item: SearchResult }) {
       />
     );
   }
-  return (
-    <View style={styles.thumbSlot}>
-      <FoodImage name={item.name || '?'} size={48} />
-    </View>
-  );
+  // REFINE-968 (ruling 6): with no photo, the C_add cream tile with its bowl.
+  return <FoodImage name={item.name || '?'} size={48} drawn />;
 }
 
 function FoodRow({ item, onPress }: { item: SearchResult; onPress: () => void }) {
@@ -128,6 +127,8 @@ export default function FoodSearchView({
 }: Props) {
   const { semanticColors: sc } = useTheme();
   const styles = makeStyles(sc);
+  // Past 100% text the manual tile takes two shares (REFINE-968's rule, kept), so its words stay inside the tile.
+  const wideTile = useWindowDimensions().fontScale > 1;
   const browseList = recentTab === 'recent' ? recentFoods : frequentFoods;
   const showList = searchQuery.length >= 2 ? searchResults : browseList;
   const showEmpty =
@@ -137,24 +138,31 @@ export default function FoodSearchView({
   return (
     <View style={styles.modalBody}>
       {!searchingNow ? (
-        <View style={styles.toolsRow}>
+        // REFINE-968 (C_add.html :121 .c-big2): the drawn three columns, main's manual entry in the first with the drawn
+        // "Quick add" words and bolt (QUICKADD-968; the drawing has it third, working tiles fill from the left);
+        // columns 2 and 3 hold their place for MEAL-PHOTO-M's Photo of a meal and a later barcode tile (never a dead tile).
+        <View style={styles.toolsRow} testID="food-tools">
           <HapticPressable
             intent="light"
+            containerStyle={[styles.toolCell, wideTile && styles.toolCellWide]}
             style={styles.toolTile}
             onPress={onEnterManualMode}
             accessibilityRole="button"
+            accessibilityLabel="Quick add, enter a food manually"
           >
-            <Ionicons name="create-outline" size={22} color={sc.accentText} />
-            <Text style={styles.toolTileText}>Enter manually</Text>
+            <SheetGlyph name="bolt" size={24} color={sc.accentText} />
+            <Text style={styles.toolTileText}>Quick add</Text>
           </HapticPressable>
+          <View style={styles.toolCell} />
+          <View style={styles.toolCell} />
         </View>
       ) : null}
-      <View style={styles.searchBar}>
-        <Ionicons name="search" size={20} color={colors.graphite} />
+      <View style={[styles.searchBar, searchingNow && styles.searchBarAlone]} testID="food-search-line">
+        <SheetGlyph name="search" size={22} color={sc.textMuted} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search foods..."
-          placeholderTextColor={colors.graphite}
+          placeholderTextColor={sc.textMuted}
           value={searchQuery}
           onChangeText={onSearchChange}
           autoFocus
@@ -206,7 +214,7 @@ export default function FoodSearchView({
       ) : null}
 
       {searchQuery.length < 2 && (
-        <View style={styles.tabRow}>
+        <View style={styles.tabRow} testID="food-search-tabs">
           {(['recent', 'frequent'] as const).map((tab) => (
             <HapticPressable
               key={tab}
@@ -243,7 +251,7 @@ export default function FoodSearchView({
               {browseUnavailable ? (
                 <>
                   <Text style={styles.emptyStateTitle}>Recent foods could not load</Text>
-                  <Text style={styles.emptyStateSubtitle}>Check the connection, or tap Enter manually to save this food now.</Text>
+                  <Text style={styles.emptyStateSubtitle}>Check the connection, or tap Quick add to save this food now.</Text>
                 </>
               ) : (
                 <>
@@ -281,6 +289,7 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: layout.gutter,
+    marginTop: 12,
     marginBottom: 12,
     padding: 16,
     borderRadius: radius.card,
@@ -308,30 +317,34 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   modalBody: {
     flex: 1,
   },
-  toolsRow: { flexDirection: 'row', marginHorizontal: layout.gutter, marginTop: 8 },
+  // REFINE-968, C_add.html :121-122 (.c-big2): three equal columns, gap 8, 12 above and below; the tile a 1 pt forest
+  // border, corner 16, at least 72 tall, the 24 pt glyph above the label (gap 6), padding 8 12, Inter 500 15/19.
+  toolsRow: { flexDirection: 'row', gap: 8, marginHorizontal: layout.gutter, marginTop: 12, marginBottom: 12 },
+  toolCell: { flex: 1 },
+  toolCellWide: { flex: 2 },
   toolTile: {
-    minWidth: '31%',
-    minHeight: 88,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 8,
+    minHeight: 72,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 6,
+    alignItems: 'flex-start',
     justifyContent: 'center',
     borderRadius: radius.card,
     borderWidth: 1,
     borderColor: sc.accent,
   },
-  toolTileText: { fontFamily: typography.bodyMd.fontFamily, fontSize: 16, lineHeight: 21, color: sc.accentText },
+  toolTileText: { fontFamily: typography.bodyMd.fontFamily, fontSize: 15, lineHeight: 19, color: sc.accentText },
+  // :112 (.c-search): gap 10, a 1.5 pt ink underline, at least 50 tall.
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: layout.gutter,
-    marginTop: 8,
-    marginBottom: 8,
     gap: 10,
-    minHeight: layout.buttonHeight,
-    borderBottomWidth: 1,
+    minHeight: 50,
+    borderBottomWidth: 1.5,
     borderBottomColor: sc.textPrimary,
   },
+  searchBarAlone: { marginTop: 12 },
   searchInput: {
     minHeight: 44, fontFamily: 'Inter_400Regular',
     flex: 1,
@@ -339,52 +352,63 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     fontSize: 17,
     color: sc.textPrimary,
   },
+  // :113-115 (.c-tabs): gap 22, 10 above and 2 below, a 1 pt line under the row; each tab at least 44 tall, Inter 500 15
+  // muted, the active one ink over a 2 pt gold underline (gold[300], the app's gold for this underline; #C9A961 is
+  // only named for Roman).
   tabRow: {
     flexDirection: 'row',
     marginHorizontal: layout.gutter,
-    marginTop: 8,
-    gap: 28,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginTop: 10,
+    marginBottom: 2,
+    gap: 22,
+    borderBottomWidth: 1,
     borderBottomColor: sc.border,
   },
   tabChipActive: {
     borderBottomColor: gold[300],
   },
   tabChipText: {
-    fontSize: 16,
-    color: colors.graphite,
+    fontFamily: typography.bodyMd.fontFamily,
+    fontSize: 15,
+    lineHeight: 20,
+    color: sc.textMuted,
   },
+  // :120 (.c-li .ph): the photo tile 48, corner 12.
   foodThumb: {
     width: 48,
     height: 48,
     borderRadius: radius.input,
-    marginRight: 16,
   },
-  thumbSlot: { marginRight: 16 },
+  // :116 (.c-li): gap 12, at least 56 tall, padding 6 0, a line under (#EFE8DC is not a token: the hairline border).
   searchResultItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 7,
+    gap: 12,
+    paddingVertical: 6,
     minHeight: layout.rowMinHeight,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: sc.border,
   },
+  // :117 (.nm): Cormorant 500 18/23.4.
   searchResultName: {
-    fontFamily: typography.h2.fontFamily,
-    fontSize: 21,
-    lineHeight: 27,
+    fontFamily: typography.h3.fontFamily,
+    fontWeight: typography.h3.fontWeight,
+    fontSize: 18,
+    lineHeight: 23.4,
     color: sc.textPrimary,
   },
+  // :118 (.st): Inter 13/18.2, muted.
   searchResultMacros: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: colors.graphite,
+    fontSize: 13,
+    lineHeight: 18.2,
+    color: sc.textMuted,
     fontVariant: ['tabular-nums'],
   },
+  // :119 (.k): Inter 500 14, charcoal.
   searchResultCals: {
     fontFamily: typography.bodyMd.fontFamily,
-    fontSize: 16,
-    color: sc.textPrimary,
+    fontSize: 14,
+    color: colors.charcoal,
     fontVariant: ['lining-nums', 'tabular-nums'],
   },
   manualLink: { marginTop: 16 },
@@ -393,6 +417,7 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     alignItems: 'center',
     gap: 8,
     marginHorizontal: layout.gutter,
+    marginTop: 8,
     marginBottom: 8,
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -405,6 +430,7 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   },
   slowSearchBanner: {
     marginHorizontal: layout.gutter,
+    marginTop: 8,
     marginBottom: 8,
   },
   slowSearchText: {
@@ -416,10 +442,9 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     justifyContent: 'center',
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
-    marginBottom: -StyleSheet.hairlineWidth,
+    marginBottom: -1,
   },
   tabChipTextActive: {
-    fontFamily: typography.bodyMd.fontFamily,
     color: sc.textPrimary,
   },
   overlineFlush: { marginBottom: 0 },
@@ -457,6 +482,5 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   },
   searchResultLeft: {
     flex: 1,
-    marginRight: 12,
   },
 });

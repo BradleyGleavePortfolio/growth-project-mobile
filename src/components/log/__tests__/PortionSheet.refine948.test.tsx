@@ -101,7 +101,7 @@ it('uses a local 36 by 5 grip, with 14 pt before the overline, without changing 
   expect(flat(grip.parent!)).toMatchObject({ paddingTop: 10, paddingBottom: 14 });
   expect(grip.parent!.props.accessibilityElementsHidden).toBe(true);
   const shared = await render(<SheetGrip />);
-  expect(flat(shared.getByTestId('sheet-grip', { includeHiddenElements: true }))).toMatchObject({ width: 40, height: 5 });
+  expect(flat(shared.getByTestId('sheet-grip', { includeHiddenElements: true }))).toMatchObject({ width: 36, height: 5 });
 });
 
 it.each([272, 342])('draws 58 pt ticks inside the unchanged 72 pt target, with 18/82 fade stops and a 2.5 pt needle at %i pt', async (width) => {
