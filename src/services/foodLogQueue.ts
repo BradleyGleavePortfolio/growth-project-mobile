@@ -480,7 +480,7 @@ async function sendQueue(): Promise<FlushResult> {
         if (!userId) throw new FoodLogQueueOwnerChangedError();
         const answer = item.kind === 'water'
           ? await waterApi.log({ amount_ml: item.log.amount_ml, date: item.log.date }, item.id)
-          : await weightApi.log({ weight_lbs: item.log.weight_lbs, date: item.log.date, notes: item.log.notes }, item.id);
+          : await weightApi.log({ weight_lbs: item.log.weight_lbs, date: item.log.date, notes: item.log.notes });
         const answerId = (answer?.data as { id?: unknown } | undefined)?.id;
         if (!(await keepSent(item, typeof answerId === 'string' ? answerId : undefined))) break;
         if (await commit((q) => q.filter((x) => x.id !== item.id))) flushed++;
