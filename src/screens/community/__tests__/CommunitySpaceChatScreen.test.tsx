@@ -773,7 +773,7 @@ describe('FR-871R6 (m#871): member Space info, the hint, the server answer on th
     mockParams.current = { cohortId: 'c-ann' };
     const r = await open();
     await r.findByTestId('space-chat-row-m3');
-    expect(r.getByTestId('space-chat-hint').props.children).toBe('Only your coach posts here.');
+    expect(within(r.getByTestId('space-chat-hint')).getByText('Only your coach posts here.')).toBeTruthy(); // the sage band: a megaphone and the words (ctx#538 s2_S4)
     expect(r.queryByText(/press and hold/i)).toBeNull();
   });
 
@@ -920,7 +920,7 @@ describe('FR-871R6 (m#879): the bottom inset, rows on their way, the report card
     mockParams.current = { cohortId: 'c-ann' };
     const a = await open();
     await a.findByTestId('space-chat-hint');
-    expect(pad(a, 'space-chat-hint')).toBe(spacing.lg + 34);
+    expect(pad(a, 'space-chat-hint')).toBe(14 + 34); // the sage band's own 14 pt (ctx#538 build.py .s2band)
     await a.unmount();
     mockRole = 'owner';
     mockUser = { id: 'coach-1', name: 'Sam Okafor', coach_id: '' };

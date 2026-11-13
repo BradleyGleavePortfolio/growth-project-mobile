@@ -10,8 +10,8 @@
  *   - Composer: SpaceChatComposer (pill field, slots for SC-M4's "+" and SC-M2's mic), shown only once the server let
  *     this person in on this visit (useServerAnswered: a page restored from the saved cache at a cold start does not
  *     count, FR-871R6 Opus B3), so a banned member never gets a box to type in (owner 10-22 ban ruling).
- *   - Announcements (a coach-posting space): members get no composer, only "Only your coach posts here."; the coach
- *     posts as usual. A member who chooses Reply on the coach's post gets the field until the reply is sent or cancelled.
+ *   - Announcements (a coach-posting space): members get no composer, only "Only your coach posts here." (in the sage
+ *     band, SPACE-STATES-M); the coach posts as usual. A member who chooses Reply on the coach's post gets the field until the reply is sent or cancelled.
  *   - SC-M3 (agent 184, owner #167-5 TEXT-REPLIES): press and hold a row for the sheet (Reply, Copy; SpaceMessageSheet).
  *     Reply puts ReplyComposer above the field (no mic while it is set) and the text goes with parent_message_id; a
  *     reply draws its quote (SpaceReplyQuote), which scrolls to the message when it is loaded here. Report, Block and
@@ -326,7 +326,6 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
     return () => { up.remove(); down.remove(); };
   }, []);
   const dockInset = keyboardUp ? 0 : insets.bottom;
-  const lineInset = dockInset ? { paddingBottom: spacing.lg + dockInset } : null;
   // SPACE-STATES-M (index.md :268-269; research :206-230): when the space closes under an open composer (a refused
   // send), the keyboard goes with it and the closed line is said once; never again on a later render, never on open.
   const composerOn = canPost || (admitted && (!!reply || refusedReply));
@@ -447,7 +446,13 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
             trailing={voiceOn && !reply ? <SpaceChatMic cohortName={cohort?.name ?? ''} userId={client?.id ?? ''} coach={isCoachViewer} onSend={voice.send} /> : undefined}
           />
         ) : admitted ? (
-          <Text style={[s.line, lineInset]} testID="space-chat-hint">Only your coach posts here.</Text>
+          // SPACE-STATES-M (ctx#538 style 2, S4; C6CHAT-S-V2 d2): the hint as the sage band, rows or none.
+          <View style={[s.hintBand, { paddingBottom: 14 + dockInset }]} testID="space-chat-hint">
+            <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              <Ionicons name="megaphone-outline" size={20} color={fp.forest} />
+            </View>
+            <Text style={s.hintText}>Only your coach posts here.</Text>
+          </View>
         ) : null}
       </KeyboardAvoidingView>
       {info && cohort && !coachStack ? (
@@ -485,7 +490,6 @@ const s = StyleSheet.create({
     minHeight: 44, paddingHorizontal: spacing.lg, borderRadius: radius.chip, backgroundColor: fp.deep,
   },
   pillText: { ...typography.bodyMd, color: fp.onDeep },
-  line: { ...typography.bodySmall, color: SMALL_GREY, textAlign: 'center', paddingHorizontal: spacing.xl, paddingVertical: spacing.lg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: fp.sageLine },
   // SPACE-STATES-M, ctx#538 style 2 (build.py :151-157): the closed note (.s2note, .s2disc, .s2nt) and the band where the
   // composer was (.s2bar: bone, a 1 pt sage line, 14 20 6 padding; the Studio bar inside it, .s2line; .tlink).
   note: { flex: 1, backgroundColor: colors.bone, alignItems: 'center', justifyContent: 'center', gap: spacing.md, paddingVertical: spacing.xl, paddingHorizontal: spacing['2xl'] },
@@ -494,5 +498,11 @@ const s = StyleSheet.create({
   band: { backgroundColor: colors.bone, borderTopWidth: 1, borderTopColor: fp.sageLine, paddingTop: 14, paddingHorizontal: 20, paddingBottom: 6, alignItems: 'center' },
   closedLine: { alignSelf: 'stretch', backgroundColor: colors.bone, borderTopWidth: 0, minHeight: 36, paddingVertical: 0, paddingHorizontal: 0 },
   back: { minHeight: 44, minWidth: 44, paddingHorizontal: spacing.sm, alignItems: 'center', justifyContent: 'center' },
+  // .s2band: sage, a 1 pt sage line, 14 20 14 padding, a 20 pt forest megaphone, 14/22 charcoal words.
+  hintBand: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, backgroundColor: fp.sage,
+    borderTopWidth: 1, borderTopColor: fp.sageLine, paddingTop: 14, paddingHorizontal: 20, paddingBottom: 14,
+  },
+  hintText: { fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 22, color: colors.charcoal, textAlign: 'center', flexShrink: 1 },
   backText: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 15, lineHeight: 20, color: fp.forest, textDecorationLine: 'underline', textAlign: 'center' },
 });
