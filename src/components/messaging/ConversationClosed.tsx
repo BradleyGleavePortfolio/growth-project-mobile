@@ -227,8 +227,9 @@ export function ConversationClosedLine({
   testID?: string;
   style?: StyleProp<ViewStyle>;
   /** REFINE-962 (Studio closed bar, S_closed_you_ios.html:84-:85): a 20 pt glyph (no-entry when I blocked them, the lock
-   * otherwise, as Studio draws), 15 pt charcoal words, a forest Settings link, a 1 pt sage line. Only the coach's DM
-   * thread passes it; unset, the bar draws as before. A dark theme keeps its own colours. */
+   * otherwise, as Studio draws), 15 pt charcoal words, a forest Settings link, a 1 pt sage line. The coach's DM thread
+   * and the closed space chat (SPACE-STATES-M, ctx#538 style 2) pass it; unset, the bar draws as before. A dark theme
+   * keeps its own colours. */
   studio?: boolean;
   /** The words, by prop, so the role lines (#169-5) can pass theirs. */
   line?: string;

@@ -20,7 +20,10 @@
  *     ends reply mode and closes the sheet, Copy reads the message as it is when it runs, and a member's reply refused
  *     for its words in Announcements keeps the field until it is back in it (LO-909 B2).
  *   - No access (the server answers a read or a send with 404 or 403: not a member, or banned): no space content and no
- *     composer, one line where the composer was: "This conversation is closed" (BAM-1, owner #169-5).
+ *     composer. SPACE-STATES-M (owner #203-E54, 203-D27 op 2, ctx#538 style 2): a quiet note in the body ("Messages in
+ *     this space are hidden.") and, where the composer was, the Studio closed bar (BAM-1, owner #169-5; #203-E25) with
+ *     Back to spaces under it (the coach's space list, or the member's space drawer). A send refused while the
+ *     composer was up closes the keyboard and says the closed line once.
  *   - "New messages" line and pill from SC-BE2's read cursor; both hidden while the server has no read route. The page
  *     opens there (or at the message asked for), loading older pages until that row is loaded (FR-871 Sol B1), once the
  *     cursor has answered. Read marks and the pill follow what is on screen (FlatList viewability), not a scroll
@@ -35,7 +38,7 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator, FlatList, Keyboard, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View,
+  AccessibilityInfo, ActivityIndicator, FlatList, Keyboard, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View,
   type ViewToken,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -56,7 +59,7 @@ import SpaceChatRow, { DayLine, HashGlyph, MenuGlyph, NewMessagesLine, PHOTO_WOR
 import { isCoachRemoved, spaceRemovedLine } from '../../components/community/space-chat/removed/SpaceRemovedPlaceholder';
 import { useSpaceChat, type PendingRow } from '../../components/community/space-chat/useSpaceChat';
 import { type SpaceMessage } from '../../components/community/space-chat/spaceChatApi';
-import { useServerAnswered } from '../../components/messaging/ConversationClosed';
+import { CLOSED_LINE, ConversationClosedLine, useServerAnswered } from '../../components/messaging/ConversationClosed';
 import { describeCommunityFailure } from '../../api/communityErrors';
 import { CommunityApiError } from '../../api/apiCall';
 import { useCommunityCohorts } from '../../hooks/useCommunity';
@@ -66,6 +69,9 @@ import { featureFlags } from '../../config/featureFlags';
 import { colors, forestPop as fp, radius, spacing, typography } from '../../theme/tokens';
 
 type Params = { CommunitySpaceChat: { cohortId: string; messageId?: string } };
+/** SPACE-STATES-W9 and W2 (ctx#538 style 2; approved, operator, #203-E15). */
+const HIDDEN_LINE = 'Messages in this space are hidden.';
+const BACK_TO_SPACES = 'Back to spaces';
 type Item =
   | { type: 'msg'; key: string; m: SpaceMessage }
   | { type: 'local'; key: string; r: PendingRow }
@@ -317,6 +323,18 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
   }, []);
   const dockInset = keyboardUp ? 0 : insets.bottom;
   const lineInset = dockInset ? { paddingBottom: spacing.lg + dockInset } : null;
+  // SPACE-STATES-M (index.md :268-269; research :206-230): when the space closes under an open composer (a refused
+  // send), the keyboard goes with it and the closed line is said once; never again on a later render, never on open.
+  const composerOn = canPost || (admitted && (!!reply || refusedReply));
+  const hadComposer = useRef(false);
+  useEffect(() => {
+    if (!chat.noAccess) { hadComposer.current = composerOn; return; }
+    if (!hadComposer.current) return;
+    hadComposer.current = false;
+    Keyboard.dismiss();
+    AccessibilityInfo.announceForAccessibility?.(CLOSED_LINE);
+  }, [chat.noAccess, composerOn]);
+  const backWords = <Text style={s.backText}>{BACK_TO_SPACES}</Text>;
 
   return (
     <SafeAreaView style={s.safe} edges={['top']} testID="space-chat-screen">
@@ -351,7 +369,14 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
         </View>
       </View>
       <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        {chat.noAccess ? <View style={s.flex} /> : failure ? (
+        {chat.noAccess ? (
+          <View style={s.note} testID="space-chat-closed-note">
+            <View style={s.disc} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              <Ionicons name="chatbox-outline" size={26} color={fp.n700} />
+            </View>
+            <Text style={s.noteText}>{HIDDEN_LINE}</Text>
+          </View>
+        ) : failure ? (
           <View style={s.center} testID="space-chat-error">
             <Ionicons name={isOnline ? 'alert-circle-outline' : 'cloud-offline-outline'} size={28} color={SMALL_GREY} />
             <Text style={s.muted}>{failure.message}</Text>
@@ -392,7 +417,15 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
           </TouchableOpacity>
         ) : null}
         {chat.noAccess ? (
-          <Text style={[s.line, lineInset]} testID="space-chat-no-access">This conversation is closed</Text>
+          <View style={[s.band, { paddingBottom: 6 + dockInset }]} testID="space-chat-closed-band">
+            <ConversationClosedLine studio testID="space-chat-no-access" style={s.closedLine} />
+            {coachStack ? (
+              <TouchableOpacity onPress={() => navigation.navigate('CoachCommunityCohorts')} accessibilityRole="button"
+                accessibilityLabel={BACK_TO_SPACES} style={s.back} testID="space-chat-back">
+                {backWords}
+              </TouchableOpacity>
+            ) : <SpaceListButton icon={backWords} label={BACK_TO_SPACES} style={s.back} testID="space-chat-back" />}
+          </View>
         ) : canPost || (admitted && (reply || refusedReply)) ? (
           // SC-M3: a member answering the coach in a space only the coach posts in gets the field while the reply is set.
           // No mic in reply mode: a voice reply is SC-M3 part 2 (after BPF-1-M).
@@ -444,4 +477,13 @@ const s = StyleSheet.create({
   },
   pillText: { ...typography.bodyMd, color: fp.onDeep },
   line: { ...typography.bodySmall, color: SMALL_GREY, textAlign: 'center', paddingHorizontal: spacing.xl, paddingVertical: spacing.lg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: fp.sageLine },
+  // SPACE-STATES-M, ctx#538 style 2 (build.py :151-157): the closed note (.s2note, .s2disc, .s2nt) and the band where the
+  // composer was (.s2bar: bone, a 1 pt sage line, 14 20 6 padding; the Studio bar inside it, .s2line; .tlink).
+  note: { flex: 1, backgroundColor: colors.bone, alignItems: 'center', justifyContent: 'center', gap: spacing.md, paddingVertical: spacing.xl, paddingHorizontal: spacing['2xl'] },
+  disc: { width: 56, height: 56, borderRadius: 28, borderWidth: 1.5, borderColor: fp.sageLine, alignItems: 'center', justifyContent: 'center' },
+  noteText: { fontFamily: 'Inter_400Regular', fontSize: 15, lineHeight: 22.5, color: SMALL_GREY, textAlign: 'center' },
+  band: { backgroundColor: colors.bone, borderTopWidth: 1, borderTopColor: fp.sageLine, paddingTop: 14, paddingHorizontal: 20, paddingBottom: 6, alignItems: 'center' },
+  closedLine: { alignSelf: 'stretch', backgroundColor: colors.bone, borderTopWidth: 0, minHeight: 36, paddingVertical: 0, paddingHorizontal: 0 },
+  back: { minHeight: 44, minWidth: 44, paddingHorizontal: spacing.sm, alignItems: 'center', justifyContent: 'center' },
+  backText: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 15, lineHeight: 20, color: fp.forest, textDecorationLine: 'underline', textAlign: 'center' },
 });
