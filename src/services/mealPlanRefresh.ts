@@ -9,5 +9,5 @@
 import { queryClient } from './queryClient';
 
 export function refreshMealPlanToday(): void {
-  void queryClient.invalidateQueries({ queryKey: ['meal-plan', 'today'] });
+  void queryClient.resetQueries({ queryKey: ['meal-plan', 'today'] });
 }
