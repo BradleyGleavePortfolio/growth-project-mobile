@@ -118,7 +118,8 @@ it('LS-972R1 B1: a weigh-in waiting on this phone is the chart\'s pending ring, 
   await act(async () => {
     fireEvent.press(v.getByLabelText('Save weight log entry'));
   });
-  await waitFor(() => expect(alert).toHaveBeenCalledWith('Saved offline', 'Your weigh-in will sync when you reconnect.'));
+  await waitFor(() => expect((mockChart.mock.calls[mockChart.mock.calls.length - 1][0] as { phoneLine?: string }).phoneLine).toBe('On this phone. Goes to Sam when you are back online.'));
+  expect(alert).not.toHaveBeenCalled();
   await waitFor(() => expect(lastChart().data.filter((p) => p.y === 176.1)).toHaveLength(1));
   // Waiting on the phone: the dashed hollow ring (the sample is marked pending); every server weigh-in stays a dot.
   expect(lastChart().data.find((p) => p.y === 176.1)?.pending).toBe(true);

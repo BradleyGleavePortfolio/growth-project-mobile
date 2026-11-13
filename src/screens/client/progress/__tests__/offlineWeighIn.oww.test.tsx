@@ -122,7 +122,8 @@ describe('Progress V2: a weigh-in saved with no signal', () => {
     await act(async () => {
       fireEvent.press(v.getByLabelText('Save weight log entry'));
     });
-    await waitFor(() => expect(alert).toHaveBeenCalledWith('Saved offline', 'Your weigh-in will sync when you reconnect.'));
+    await waitFor(() => expect((mockChart.mock.calls[mockChart.mock.calls.length - 1][0] as { phoneLine?: string }).phoneLine).toBe('On this phone. Goes to Sam when you are back online.'));
+    expect(alert).not.toHaveBeenCalled();
     expect(alert).not.toHaveBeenCalledWith("Couldn't log weight", expect.anything());
     expect(mockLog).not.toHaveBeenCalled();
     const q = await queued();
@@ -156,7 +157,8 @@ describe('Progress V2: a weigh-in saved with no signal', () => {
     await act(async () => {
       fireEvent.press(v.getByLabelText('Save weight log entry'));
     });
-    await waitFor(() => expect(alert).toHaveBeenCalledWith('Saved offline', 'Your weigh-in will sync when you reconnect.'));
+    await waitFor(() => expect((mockChart.mock.calls[mockChart.mock.calls.length - 1][0] as { phoneLine?: string }).phoneLine).toBe('On this phone. Goes to Sam when you are back online.'));
+    expect(alert).not.toHaveBeenCalled();
     expect(mockTake).toHaveBeenCalledWith({ weight_lbs: 176, date: today, notes: undefined });
     expect((await queued()).map((x) => x.id)).toEqual(['kept-key-1']);
   });
