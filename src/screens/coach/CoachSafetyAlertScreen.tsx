@@ -123,7 +123,7 @@ export default function CoachSafetyAlertScreen({ route, navigation }: Props): Re
   }
 
   const { alertType, clientId, clientName, sentAt } = alert;
-  const quote = safetyQuote(alertType, alert.quote);
+  const quote = alert.quote ?? null; // MUTATION: crisis words reach the card
   const first = firstName(clientName);
   const sent = formatSentAt(sentAt);
   const openChat = () => openInboxChat(navigation, clientId, clientName); // COACH-CHAT-BACK: in Messages with the six tabs
