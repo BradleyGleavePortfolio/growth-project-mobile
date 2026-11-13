@@ -11,7 +11,7 @@
  * (as copilotPendingWords.test.tsx). Every error comes from the wire, never built by hand.
  */
 import React from 'react';
-import { AccessibilityInfo, Dimensions, FlatList, StyleSheet } from 'react-native';
+import { AccessibilityInfo, Dimensions, FlatList, StyleSheet, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -88,7 +88,7 @@ const W11 = 'I could not answer this one. Send it again from the box to ask once
 const W12 = 'My answer is not ready yet. Send it again in a moment to see if it is ready.';
 const ITALIC = 'CormorantGaramond_400Regular_Italic';
 
-type Wire = { throws: Error } | { status: number; text?: string | Error; retryAfter?: string };
+type Wire = { throws: Error } | { status: number; text?: string | Error; retryAfter?: string } | { gate: Promise<void>; then: Wire };
 const frame = (code: string): Wire => ({
   status: 200,
   text: `event: error\ndata: {"code":"${code}","message":"Roman is not available right now."}\n\n`,
@@ -110,7 +110,9 @@ const realFetch = global.fetch;
 let wire: Wire[] = [];
 let fallback: Wire = OK;
 const fetchMock = jest.fn(async (_url: string, _init: RequestInit) => {
-  const next = wire.shift() ?? fallback;
+  let next = wire.shift() ?? fallback;
+  if ('gate' in next) { await next.gate; next = next.then; }
+  if ('gate' in next) throw new Error('one gate per answer');
   if ('throws' in next) throw next.throws;
   const body = next.text;
   return {
@@ -174,7 +176,8 @@ const typeAndSend = async (r: Screen, words: string) => {
   await act(async () => { fireEvent.press(r.getByTestId('roman-composer-send')); });
 };
 const boxOf = (r: Screen): string => r.getByTestId(INPUT).props.value;
-const style = (node: { props: { style?: unknown } }) => StyleSheet.flatten(node.props.style as never) ?? {};
+const style = (node: { props: { style?: unknown } }): TextStyle & ViewStyle =>
+  StyleSheet.flatten(node.props.style as StyleProp<TextStyle & ViewStyle>) ?? {};
 const announced = (line: string): number =>
   jest.mocked(AccessibilityInfo.announceForAccessibility).mock.calls.filter(([s]) => s === line).length;
 
@@ -373,12 +376,18 @@ describe('case 10, Send again and the box', () => {
     const r = await openRoom('client');
     thread = [turn('m-q1', 'user', WORDS)];
     // A cut stream keeps the draft's key (lib/sendOnce.ts), so Send again replays it; ROMAN_UNAVAILABLE would end it.
-    wire = [CUT_STREAM, CUT_STREAM];
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((res) => { release = res; });
+    wire = [CUT_STREAM, { gate, then: CUT_STREAM }];
     await typeAndSend(r, WORDS);
     await waitFor(() => expect(r.queryByTestId('roman-send-retry')).toBeTruthy());
     expect(r.getByTestId('roman-send-retry').props.accessibilityState).toEqual({ disabled: false });
     await act(async () => { fireEvent.press(r.getByTestId('roman-send-retry')); });
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    // While that send is out, Send again cannot be pressed: the card is gone (the send clears it) or disabled.
+    const out = r.queryByTestId('roman-send-retry');
+    expect(out == null || out.props.accessibilityState?.disabled === true).toBe(true);
+    await act(async () => { release(); });
     expect(wordsOf(1)).toBe(WORDS);
     expect(keyOf(1)).toBe(keyOf(0));
     await waitFor(() => expect(r.queryByTestId('roman-send-retry')).toBeTruthy());
