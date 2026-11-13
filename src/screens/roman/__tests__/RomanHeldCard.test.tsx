@@ -11,7 +11,7 @@
  * (as copilotPendingWords.test.tsx). Every error comes from the wire, never built by hand.
  */
 import React from 'react';
-import { AccessibilityInfo, Dimensions, FlatList, StyleSheet, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { AccessibilityInfo, Dimensions, FlatList, ScrollView, StyleSheet, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -279,8 +279,12 @@ describe('S3, not stored', () => {
     expect(scrolledWithCard).toContain(true);
   });
 
-  it('on an empty thread (the first send never stored) draws the card under the greeting', async () => {
+  it('on an empty thread (the first send never stored) draws the card under the greeting, scrolled into view', async () => {
+    const scrolled = jest.spyOn(ScrollView.prototype, 'scrollToEnd').mockImplementation(() => undefined);
     const r = await openRoom('client');
+    // With no card the empty room is main's: the greeting in a plain view, nothing to scroll.
+    expect(r.getByTestId('roman-empty-greeting')).toBeTruthy();
+    expect(r.queryByTestId('roman-empty-scroll')).toBeNull();
     wire = [NO_ANSWER];
     await typeAndSend(r, WORDS);
     await waitFor(() => expect(r.queryByTestId('roman-send-error')).toBeTruthy());
@@ -288,6 +292,13 @@ describe('S3, not stored', () => {
     expect(r.queryByTestId('roman-message-list')).toBeNull();
     const order = r.getAllByTestId(/^(roman-empty-greeting|roman-send-error)$/).map((n) => n.props.testID);
     expect(order).toEqual(['roman-empty-greeting', 'roman-send-error']);
+    // At iPhone 320 with 130% text the greeting alone fills the room: the card sits in a scroll under it, and the
+    // scroll's content-size event brings it into view (the list's own trigger is a no-op on an empty thread).
+    const scroll = r.getByTestId('roman-empty-scroll');
+    expect(within(scroll).getByTestId('roman-empty-greeting')).toBeTruthy();
+    expect(within(scroll).getByTestId('roman-send-error')).toBeTruthy();
+    await act(async () => { fireEvent(scroll, 'contentSizeChange', 320, 900); });
+    expect(scrolled).toHaveBeenCalled();
     expect(boxOf(r)).toBe(WORDS);
   });
 });
