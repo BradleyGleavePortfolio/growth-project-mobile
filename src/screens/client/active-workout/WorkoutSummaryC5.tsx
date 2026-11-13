@@ -182,9 +182,12 @@ function EffortMeter({ value, onChange, locked }: { value: number | null; onChan
               HapticService.selection();
               onChange(chosen ? null : n);
             }}
-            style={[s.step, { backgroundColor: fill, borderColor: chosen ? d.deep : filled ? fill : sc.textMuted, borderWidth: chosen ? 3 : 1 }]}
+            style={[s.step, chosen && { borderColor: d.deep, borderWidth: 2, padding: 2 }]}
           >
-            <Text maxFontSizeMultiplier={CAP} style={[s.stepText, { color: ink }]}>{n}</Text>
+            {/* The chosen number keeps its fill inside a deep ring, a light gap between (colour plus a second cue). */}
+            <View style={[s.stepFill, { backgroundColor: fill, borderColor: filled ? sc.bgSurface : sc.textMuted }]}>
+              <Text maxFontSizeMultiplier={CAP} style={[s.stepText, { color: ink }]}>{n}</Text>
+            </View>
           </Pressable>
         );
       })}
@@ -217,10 +220,8 @@ const s = StyleSheet.create({
   tile: { width: 30, height: 30, borderRadius: radius.input / 2, alignItems: 'center', justifyContent: 'center' },
   movedText: { flex: 1, fontFamily: typography.bodySmall.fontFamily, fontSize: 16, lineHeight: 22 },
   meter: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  step: {
-    flexBasis: '17%', flexGrow: 1, minWidth: layout.touchMin, minHeight: layout.touchMin,
-    borderRadius: radius.button, alignItems: 'center', justifyContent: 'center',
-  },
+  step: { flexBasis: '17%', flexGrow: 1, minWidth: layout.touchMin, minHeight: layout.touchMin, borderRadius: radius.button + 4 },
+  stepFill: { flex: 1, borderWidth: 1, borderRadius: radius.button, alignItems: 'center', justifyContent: 'center' },
   stepText: { fontFamily: 'Inter_600SemiBold', fontSize: 16, lineHeight: 20, fontVariant: ['tabular-nums'] },
   note: {
     minHeight: 72, borderWidth: 1, borderRadius: radius.card, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12,
