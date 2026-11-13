@@ -58,33 +58,34 @@ const barHidden = () => {
   }
   return false;
 };
-const setActiveWorkoutParams = (params: object) => act(() => {
+const setActiveWorkoutParams = (params: object) => act(async () => {
   ref.dispatch({ type: 'SET_PARAMS', payload: { params }, source: ref.getCurrentRoute()?.key } as never);
 });
 
-it('hides the bar while the live workout shows its summary, and brings it back when the summary closes', () => {
-  mount(true);
+it('hides the bar while the live workout shows its summary, and brings it back when the summary closes', async () => {
+  await mount(true);
   expect(ref.getCurrentRoute()?.name).toBe('ActiveWorkout');
   expect(barHidden()).toBe(false);
 
-  setActiveWorkoutParams({ summary: true });
+  await setActiveWorkoutParams({ summary: true });
   expect(barHidden()).toBe(true);
 
-  setActiveWorkoutParams({ summary: false });
+  await setActiveWorkoutParams({ summary: false });
   expect(barHidden()).toBe(false);
 });
 
-it('brings the bar back when the client leaves the summary for Train', () => {
-  mount(true);
-  setActiveWorkoutParams({ summary: true });
+it('brings the bar back when the client leaves the summary for Train', async () => {
+  await mount(true);
+  await setActiveWorkoutParams({ summary: true });
   expect(barHidden()).toBe(true);
 
-  act(() => { ref.goBack(); });
+  await act(async () => ref.goBack());
   expect(ref.getCurrentRoute()?.name).toBe('WorkoutMain');
   expect(barHidden()).toBe(false);
 });
 
-it('keeps the bar on Train with no workout open', () => {
-  mount(false);
+it('keeps the bar on Train with no workout open', async () => {
+  await mount(false);
+  expect(ref.getCurrentRoute()?.name).toBe('WorkoutMain');
   expect(barHidden()).toBe(false);
 });
