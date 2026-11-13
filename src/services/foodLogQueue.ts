@@ -307,7 +307,7 @@ export async function enqueueWaterWeight(
 
 /** Foods waiting to be sent; `includeParked` also counts the ones the server refused. Foods only. */
 export async function getQueueLength(opts: { includeParked?: boolean } = {}): Promise<number> {
-  const queue = (await readQueueForKey(getQueueKey(currentOwnerId()))).filter(isFoodLog);
+  const queue = (await readQueueForKey(getQueueKey(currentOwnerId()))) as PendingFoodLog[];
   return (opts.includeParked ? queue : waiting(queue)).length;
 }
 
