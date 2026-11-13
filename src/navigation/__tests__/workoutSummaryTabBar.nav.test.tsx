@@ -50,11 +50,17 @@ const mount = (activeWorkoutOpen: boolean) => render(
   </SafeAreaInsetsContext.Provider>,
 );
 
-// The bar is hidden when the button or one of its ancestors is display: none.
+// The bar is hidden when its view is display: none. bottom-tabs then draws no buttons, so the bar is read as the
+// root's last child (after the screens); while it shows, the Log button is there and no ancestor of it is hidden.
+type Json = { props: { style?: unknown }; children: Array<Json | string> | null };
+const displayOf = (style: unknown) => (StyleSheet.flatten(style as never) as { display?: string } | undefined)?.display;
 const barHidden = () => {
+  const bar = (screen.toJSON() as unknown as Json).children?.at(-1);
+  if (bar == null || typeof bar === 'string') throw new Error('no tab bar drawn');
+  if (displayOf(bar.props.style) === 'none') return true;
   type Node = { props: { style?: unknown }; parent: Node | null };
   for (let n: Node | null = screen.getByTestId('tab-Log') as unknown as Node; n; n = n.parent) {
-    if ((StyleSheet.flatten(n.props.style as never) as { display?: string } | undefined)?.display === 'none') return true;
+    if (displayOf(n.props.style) === 'none') return true;
   }
   return false;
 };
