@@ -593,3 +593,89 @@ describe('LO-935R3 B1: the unread ring keeps the drawn old-style figure', () => 
     expect(flat(el).fontVariant ?? []).not.toContain('lining-nums');
   });
 });
+
+// LO-935R4 C1 (agent 199, review round 4, outside the fix commits): every C3 Style B inbox drawing (B_inbox
+// ios390/android360 at 100 and 130) rings Roman's portrait on the coached card in Roman's gold #C9A961, the token
+// colors.romanAccent, which src/theme/tokens.ts names "the avatar ring" and Roman's portraits use elsewhere. The build
+// rings it in camel, gold[500] #B08D57 (as on main since C3B-S2), a brown ring beside the drawn gold.
+describe('LO-935R4 C1: Roman\'s portrait ring on the coached card is Roman\'s gold, as drawn', () => {
+  // The 2 pt ring around the portrait (s.ringed: borderWidth 2, padding 2), found by walking the card's children.
+  type RingNode = { props?: { style?: StyleProp<ViewStyle> }; children?: unknown };
+  const ringsIn = (node: unknown, out: RingNode[] = []): RingNode[] => {
+    if (Array.isArray(node)) {
+      node.forEach((n) => ringsIn(n, out));
+      return out;
+    }
+    if (node === null || typeof node !== 'object') return out;
+    const n = node as RingNode;
+    const st = (StyleSheet.flatten(n.props?.style) ?? {}) as Record<string, unknown>;
+    if (st.borderWidth === 2 && st.padding === 2) out.push(n);
+    ringsIn(n.children, out);
+    return out;
+  };
+
+  it('LO-935R4 C1: the coached card rings Roman\'s portrait in colors.romanAccent (#C9A961)', async () => {
+    mockNeedsCoach.mockReturnValue(false);
+    const { u } = await show();
+    const rings = ringsIn(await u.findByTestId('inbox-roman'));
+    expect(rings.length).toBeGreaterThan(0);
+    const colours = [...new Set(rings.map((r) => (StyleSheet.flatten(r.props?.style) as ViewStyle | undefined)?.borderColor))];
+    expect(colours).toEqual(['#C9A961']);
+  });
+});
+
+// C1-935 (agent 203), class-first [R24]: on the client Messages screen (C3 Style B), every ring whose only job is to
+// mark Roman draws colors.romanAccent, as every C3 B_inbox drawing does (#C9A961); the rings and eyebrows that are
+// not Roman keep their own tokens. Member rows are red while Roman's ring reads a raw gold token; control rows hold.
+describe('C1-935 class: only Roman\'s own rings on client Messages read colors.romanAccent', () => {
+  type Node = { props?: Record<string, unknown> & { style?: StyleProp<ViewStyle> }; children?: unknown };
+  const walk = (node: unknown, keep: (n: Node) => boolean, out: Node[] = []): Node[] => {
+    if (Array.isArray(node)) { node.forEach((n) => walk(n, keep, out)); return out; }
+    if (node === null || typeof node !== 'object') return out;
+    const n = node as Node;
+    if (keep(n)) out.push(n);
+    walk(n.children, keep, out);
+    return out;
+  };
+  const style = (n: Node) => (StyleSheet.flatten(n.props?.style) ?? {}) as Record<string, unknown>;
+  const isRing = (n: Node) => style(n).borderWidth === 2 && style(n).padding === 2;
+  const tokens = jest.requireActual('../../../theme/tokens') as typeof import('../../../theme/tokens');
+  const noUnread = (): void => {
+    mockInbox.mockResolvedValue({ items: [thread({ unread_count: 0 })], next_cursor: null, total_unread: 0 });
+    mockGet.mockImplementation(async (url: string) => ({ data: url === '/messages/unread-count' ? { total: 0 } : ROUTES[url] }));
+  };
+
+  it('colors.romanAccent is still Roman\'s drawn gold', () => {
+    expect(tokens.colors.romanAccent).toBe('#C9A961');
+  });
+
+  it.each([
+    // row | needs a coach | set-up | card | ring colours | portrait size
+    ['member: coached client, with an unread count', false, (): void => undefined, 'inbox-roman', [tokens.colors.romanAccent], 52],
+    ['member: coached client, no unread count', false, noUnread, 'inbox-roman', [tokens.colors.romanAccent], 52],
+    ['control: no coach, the grey locked Roman', true, (): void => undefined, 'inbox-roman', [tokens.colors.stone], 52],
+  ] as const)('%s', async (_name, needsCoach, setUp, card, colours, portrait) => {
+    mockNeedsCoach.mockReturnValue(needsCoach);
+    setUp();
+    const { u } = await show();
+    const rings = walk(await u.findByTestId(card), isRing);
+    expect(rings.length).toBe(1);
+    expect([...new Set(rings.map((r) => style(r).borderColor))]).toEqual([...colours]);
+    expect(style(rings[0])).toMatchObject({ borderWidth: 2, padding: 2, borderRadius: tokens.radius.chip });
+    // The portrait inside the ring keeps its size (the face image is portrait x portrait).
+    expect(walk(rings[0], (n) => n.props?.source !== undefined).map((n) => [style(n).width, style(n).height])).toEqual([[portrait, portrait]]);
+  });
+
+  it('control: the coach\'s unread ring stays gold[300] and the coach eyebrow gold[200]', async () => {
+    const { u } = await show();
+    expect(flat(await u.findByTestId('inbox-unread')).borderColor).toBe(tokens.gold[300]);
+    expect(flat(u.getByText('Your coach')).color).toBe(tokens.gold[200]);
+    expect(walk(u.getByTestId('inbox-coach'), isRing)).toEqual([]);
+  });
+
+  it('control: the no-coach eyebrow stays gold[200]', async () => {
+    mockNeedsCoach.mockReturnValue(true);
+    const { u } = await show();
+    expect(flat(await u.findByText('Your coach')).color).toBe(tokens.gold[200]);
+  });
+});
