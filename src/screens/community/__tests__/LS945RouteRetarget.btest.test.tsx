@@ -20,9 +20,13 @@ jest.mock('../../../hooks/useNetworkStatus', () => ({
   useNetworkStatus: () => ({ isOnline: true }),
   isEffectivelyOnline: () => true,
 }));
+const mockPurpose = { current: undefined as string | undefined, role: 'client', kind: 'chat' };
 jest.mock('../../../hooks/useCommunity', () => ({
   useCommunityCohorts: () => ({
-    data: { cohorts: ['space-a', 'space-b'].map((id) => ({ id, name: id, member_count: 4, my_role: 'client' })) },
+    data: { cohorts: ['space-a', 'space-b'].map((id) => ({
+      id, name: id, member_count: 4, my_role: mockPurpose.role, kind: mockPurpose.kind,
+      description: mockPurpose.current,
+    })) },
     isLoading: false, isError: false,
   }),
 }));
@@ -121,4 +125,31 @@ it('LS945 B1: changing spaces resets the read watermark even when the second spa
   await r.rerender(<Screen />);
   await reportVisible(r, 'space-b-3');
   await waitFor(() => expect(mockMarkRead).toHaveBeenCalledWith('space-b', 'space-b-3'));
+});
+
+it.each([
+  ['member chat', 'client', 'chat'],
+  ['member announcement', 'client', 'announcement'],
+  ['coach chat', 'coach', 'chat'],
+])('LS945 B2: empty %s keeps a full purpose readable in the scrollable stream', async (_label, role, kind) => {
+  const messages = mockChats['space-a'].messages;
+  mockChats['space-a'].messages = [];
+  // An ordinary allowed purpose, under the server's 2,000-character limit. At narrow widths and large text it
+  // exceeds the area between the header and fixed composer; it must be possible to scroll to the count below it.
+  mockPurpose.current = 'Use this space to share weekly progress, training questions and ideas for the next session. '.repeat(17);
+  mockPurpose.role = role;
+  mockPurpose.kind = kind;
+  try {
+    expect(mockPurpose.current.length).toBeLessThanOrEqual(2000);
+    const r = await render(<Screen />);
+    expect(r.getByText(mockPurpose.current.trim())).toBeTruthy();
+    let stream = r.getByTestId('space-chat-start').parent;
+    while (stream && !String(stream.type).includes('ScrollView')) stream = stream.parent;
+    expect(stream).not.toBeNull();
+  } finally {
+    mockChats['space-a'].messages = messages;
+    mockPurpose.current = undefined;
+    mockPurpose.role = 'client';
+    mockPurpose.kind = 'chat';
+  }
 });
