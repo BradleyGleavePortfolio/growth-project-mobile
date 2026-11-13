@@ -655,7 +655,7 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
           Reachable via deep-link and from MoreScreen entries (added
           in a follow-up; route registration first so deep-links
           work today). */}
-      <MoreStackNav.Screen name="ClientMacros"        component={ProtectedClientMacrosScreen} options={backOnlyHeader('Macro targets', PLAN_BAND)} />
+      <MoreStackNav.Screen name="ClientMacros"        component={ProtectedClientMacrosScreen} options={backOnlyHeader('Macro targets', lightTokens.surface.masthead)} />
       <MoreStackNav.Screen name="ClientDailyMealPlan" component={ProtectedClientDailyMealPlanScreen} options={backOnlyHeader('', PLAN_BAND)} />
       <MoreStackNav.Screen name="ClientWorkoutViewer" component={ProtectedClientWorkoutViewerScreen} />
       <MoreStackNav.Screen name="WorkoutAssignmentDetail" component={ProtectedWorkoutAssignmentDetailScreen} />
