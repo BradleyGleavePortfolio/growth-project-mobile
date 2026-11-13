@@ -463,7 +463,7 @@ function makeStyles(sc: SemanticTokens) {
     content: { flexGrow: 1 },
     mastPlan: { ...typography.h2, color: mast.ink, marginTop: spacing.sm },
     // The coach's note in C2's italic on the masthead, in the light ink (C_day .q: 1.1875rem/1.35, 6 pt under the title).
-    mastNote: { ...typography.h2, fontSize: 19, lineHeight: 26, letterSpacing: 0, color: mast.ink, marginTop: 6 },
+    mastNote: { ...typography.h2, fontSize: 21, lineHeight: 28, letterSpacing: 0, color: mast.ink, marginTop: 6 },
     tabular: { fontVariant: ['tabular-nums'] },
     cardFill: { backgroundColor: sc.bgPrimary, borderColor: sc.border },
     state: { gap: spacing.md },

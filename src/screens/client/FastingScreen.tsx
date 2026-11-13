@@ -521,8 +521,8 @@ export default function FastingScreen() {
   );
 }
 
-const RING = 150;
-const STROKE = 9;
+const RING = 140;
+const STROKE = 4;
 
 /**
  * C8 C_fasting's ring (x 36-260 px, a 13 px stroke at 1.5x): 150 pt across, the stone track and the gold share of

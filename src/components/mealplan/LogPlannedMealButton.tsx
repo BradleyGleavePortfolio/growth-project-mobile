@@ -253,7 +253,7 @@ function makeStyles(sc: SemanticTokens) {
     link: { ...typography.bodySmall, fontFamily: 'Inter_500Medium', color: sc.accentText },
     // C2 C_day .c-next .btn: filled forest, 54 pt, radius 12, Inter 600 14, 10 pt under the meal's foods.
     planned: {
-      minHeight: layout.buttonHeight, borderRadius: radius.button, backgroundColor: sc.accent, alignItems: 'center',
+      minHeight: 44, borderRadius: radius.button, backgroundColor: sc.accent, alignItems: 'center',
       justifyContent: 'center', alignSelf: 'stretch', paddingHorizontal: spacing.lg, marginTop: 10,
     },
     plannedText: {

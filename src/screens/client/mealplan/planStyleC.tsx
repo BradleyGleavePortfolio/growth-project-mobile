@@ -265,11 +265,11 @@ export function MealArt({ slot, testID }: { slot: SlotLabel | string; testID?: s
   );
 }
 
-const DOT = 14;
-const ART = 52;
+const DOT = 11;
+const ART = 56;
 const GUTTER = 24;
 const LINE = 1.5;
-const TIME = 54;
+const TIME = 56;
 
 export const planStyleC = StyleSheet.create({
   /** Inner card on the cream paper (state and stats cards). */
@@ -293,7 +293,7 @@ export const planStyleC = StyleSheet.create({
     minHeight: layout.buttonHeight, borderRadius: radius.button, borderWidth: 1, alignItems: 'center',
     justifyContent: 'center', paddingHorizontal: spacing.xl,
   },
-  outlineLabel: { ...typography.bodyMd, fontSize: 17, lineHeight: 22, letterSpacing: 0 },
+  outlineLabel: { ...typography.bodyMd, fontSize: 16, lineHeight: 22, letterSpacing: 0 },
   /** C2 C_day's eyebrow on the paper: Inter 600 11, tracked 1.3 (.c-e .eb). */
   stopEyebrow: { ...typography.eyebrow, fontFamily: 'Inter_600SemiBold', fontWeight: '600', lineHeight: 14, letterSpacing: 1.3 },
   /** C2 C_day's done line under a meal's name (.c-e .st 13/1.4, 2 pt under the name). */
@@ -321,7 +321,7 @@ const s = StyleSheet.create({
   // The drawings' eyebrow: Inter 600 11, tracked 1.98 (C_day .ov), in the masthead's light muted ink.
   eyebrow: { ...typography.eyebrow, fontFamily: 'Inter_600SemiBold', fontWeight: '600', color: mast.muted, marginBottom: spacing.xs },
   // C_day .h1 (2rem/1.25, Cormorant 500, -0.2) and C8's title (cap 183-212 px at 1.5x = 32 pt).
-  title: { ...typography.h1, fontFamily: 'CormorantGaramond_500Medium', fontWeight: '500', fontSize: 32, lineHeight: 40, letterSpacing: -0.2, color: mast.ink },
+  title: { ...typography.h1, fontFamily: 'CormorantGaramond_500Medium', fontWeight: '500', fontSize: 36, lineHeight: 44, letterSpacing: -0.2, color: mast.ink },
   line: { ...typography.bodySmall, color: mast.ink, marginTop: spacing.sm },
   lineMuted: { color: mast.muted },
   // C_day: 1 pt gold, 12 pt under the summary.
@@ -334,12 +334,12 @@ const s = StyleSheet.create({
   // C_day .sum: the marks and the line, Inter 500 15/21, 10 pt under the note.
   progress: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginTop: 10 },
   segs: { flexDirection: 'row', gap: spacing.xs, flexShrink: 0 },
-  seg: { width: 18, height: 4, borderRadius: 2, backgroundColor: lightTokens.data.plannedOnDark },
+  seg: { width: 16, height: 4, borderRadius: 2, backgroundColor: lightTokens.data.plannedOnDark },
   segDone: { backgroundColor: gold[300] },
   progressLine: { ...typography.bodyMd, fontSize: 15, lineHeight: 21, letterSpacing: 0, color: mast.ink, flexShrink: 1, minWidth: 0 },
   // K5 C_macros' outlined tiles: 56 pt tall (y 362-473 px at 2x), the serif value over a plain Inter label.
   tile: {
-    flexGrow: 1, flexBasis: 88, minHeight: 56, borderRadius: radius.input,
+    flexGrow: 1, flexBasis: 88, minHeight: 64, borderRadius: radius.input,
     borderWidth: 1, borderColor: lightTokens.data.frameOnDark, paddingHorizontal: spacing.md,
     paddingVertical: 6, justifyContent: 'center',
   },

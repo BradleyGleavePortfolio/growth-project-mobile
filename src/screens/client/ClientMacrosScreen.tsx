@@ -45,7 +45,7 @@ import QuietBar from '../../ui/progress/QuietBar';
 import { MastLine, mast, MastTile, PlanMasthead, planStyleC, useCoachItalic } from './mealplan/planStyleC';
 
 /** Every kcal figure of 1,000 or more grouped as K5 writes "2,100" (the Food day's rule, FoodDayView.tsx:41). */
-const kcal = (v: number) => Math.round(v).toLocaleString('en-US');
+const kcal = (v: number) => String(Math.round(v));
 
 export default function ClientMacrosScreen() {
   const { semanticColors: sc } = useTheme();
@@ -278,7 +278,7 @@ function makeStyles(sc: SemanticTokens) {
     // baseline (wraps under at large text).
     kcalRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: spacing.md, marginTop: spacing.md },
     // Lining figures, as K5 sets its number (Cormorant's default figures are old-style).
-    kcal: { ...typography.display, fontSize: 52, lineHeight: 62, letterSpacing: 0, color: mast.ink, fontVariant: ['lining-nums', 'tabular-nums'] },
+    kcal: { ...typography.display, fontSize: 60, lineHeight: 72, letterSpacing: 0, color: mast.ink, fontVariant: ['lining-nums', 'tabular-nums'] },
     kcalUnit: { ...typography.body, marginTop: 0 },
     tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.lg },
     // K5: the cards in the paper colour on the page.
