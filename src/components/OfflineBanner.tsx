@@ -34,9 +34,9 @@ export default function OfflineBanner() {
 }
 
 const styles = StyleSheet.create({
-  // C2_offline (FIX-974R1, LS-974R1 B3; measured on C2_offline_ios390_100): a dark ink band under the status bar, a
-  // 12 pt icon 6 pt from the words, the app's Inter Medium 14 on an 18 line, left aligned at the 24 pt gutter. C1-S-10
-  // takes two lines at 390 pt and three at 360 pt, as the frames draw it.
+  // C2_offline (FIX-974R1, LS-974R1 B3; measured on C2_offline_ios390_100 and _android360_100): a dark ink band under
+  // the status bar, a 12 pt icon 6 pt from the words, the app's Inter Medium 13 on an 18 line, 9 pt above and below,
+  // left aligned at the 24 pt gutter. C1-S-10 takes two lines at 390 pt and three at 360 pt, as the frames draw it.
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: Colors.textOnPrimary,
     fontFamily: typography.bodyMd.fontFamily,
-    fontSize: 14,
+    fontSize: 13,
     lineHeight: 18,
   },
 });
