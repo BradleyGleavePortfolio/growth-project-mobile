@@ -1,0 +1,5 @@
+src/utils/log/__tests__/foodDay.usualTime.goal930.test.ts
+src/components/log/__tests__/FoodDayView.goal930.test.tsx
+src/components/log/__tests__/QuantityPicker.saveFailure.goal930.test.tsx
+src/screens/client/__tests__/LogScreen.saveFailure.goal930.test.tsx
+src/screens/client/__tests__/LogScreen.ls-food-online-retry.test.tsx
