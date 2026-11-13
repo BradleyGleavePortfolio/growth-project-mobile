@@ -346,6 +346,50 @@ export function resolvePushTarget(role: PushRole, screen: string): Target {
   return t ?? (routes.NotificationCenter() as Target);
 }
 
+/**
+ * REFINE-966 (B1, read only): where a tap on this push would land now, for the role whose navigator is the mounted
+ * root (its ROLE_ANCHOR, as flushPendingPushTap checks it): the route it opens and the params it passes, following
+ * routePushTap's link rule, flushPendingPushTap and deliver without routing (no navigate, hold, dedupe or after()).
+ * null when the tap opens nothing. A root that keeps open work (pop) still answers its screen: no exact match there.
+ */
+export function pushTapLanding(
+  routeNames: readonly string[],
+  actionScreen?: string,
+  actionParams?: unknown,
+  deepLink?: string,
+): { name: string; params?: Record<string, string> } | null {
+  const roles = (['student', 'coach'] as const).filter((r) => routeNames.includes(ROLE_ANCHOR[r]));
+  if (roles.length !== 1) return null;
+  const role: PushRole = roles[0];
+  const land = (t: Target, params?: Record<string, string>) => (routeNames.includes(t.root)
+    ? { name: t.screen ?? t.root, params: t.screen || !t.params ? params : { ...params, ...t.params } }
+    : null);
+  const onScreen = (screen: string, params?: Record<string, string>) => {
+    let rest = params;
+    if (screen === 'Messages' && params && 'clientId' in params && 'clientName' in params) {
+      const { clientId, clientName, ...others } = params;
+      const chat = chatTarget(clientId, clientName);
+      if (role === 'coach' && UUID.test(clientId ?? '') && clientName?.trim() && routeNames.includes(chat.tab)) {
+        return { name: chat.params.screen, params: { clientId } };
+      }
+      rest = Object.keys(others).length > 0 ? others : undefined;
+    }
+    const target = resolvePushTarget(role, screen);
+    return land(routeNames.includes(target.root) ? target : resolvePushTarget(role, 'NotificationCenter'), rest);
+  };
+  if (deepLink !== undefined) {
+    const path = incomingLinkPath(deepLink);
+    if (path === null) return null;
+    if (!actionScreen || actionScreen === 'NotificationCenter') {
+      if (isPublicLinkPath(path)) return null;
+      const target = resolveAppLink(path, role);
+      return target ? land(target, target.params) : onScreen('NotificationCenter');
+    }
+  }
+  if (!actionScreen || !SCREEN_NAME.test(actionScreen)) return null;
+  return onScreen(actionScreen, decodePushParams(actionParams));
+}
+
 /** Returns true when a pending tap was delivered. */
 export function flushPendingPushTap(): boolean {
   if (!pending || !navigator || !navigator.isReady()) return false;

@@ -119,11 +119,14 @@ export function installForegroundHandler(): () => void {
   const subscription = Notifications.addNotificationReceivedListener((notification) => {
     const { title, body } = notification.request.content;
     if (!title && !body) return;
+    const kind = bannerKindOf(notification.request.content.data);
     foregroundBannerStore.getState().showBanner({
       title: title ?? '',
       body: body ?? '',
       notificationId: notification.request.identifier,
       ...pushTapOf(notification.request.content.data),
+      // REFINE-966: the banner's mark only, beside the tap and never inside it.
+      ...(kind !== undefined ? { kind } : {}),
     });
   });
 
@@ -131,6 +134,12 @@ export function installForegroundHandler(): () => void {
     subscription.remove();
     foregroundHandlerInstalled = false;
   };
+}
+
+/** REFINE-966: the push data's own kind, else its type; a value that is not a string counts as absent. */
+function bannerKindOf(data: Record<string, unknown> | undefined): string | undefined {
+  if (typeof data?.kind === 'string') return data.kind;
+  return typeof data?.type === 'string' ? data.type : undefined;
 }
 
 // ─── Notification response handler ───────────────────────────────────────────
