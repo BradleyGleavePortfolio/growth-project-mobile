@@ -20,7 +20,6 @@ import {
   type NavigationState,
   type ParamListBase,
 } from '@react-navigation/native';
-import { HeaderBackContext } from '@react-navigation/elements';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { CoachCodeSheetProps } from '../../components/coachless/CoachCodeSheet';
@@ -120,21 +119,17 @@ jest.mock('../../entitlements/dunning/dunningApi', () => ({
 }));
 
 // Every leaf screen ClientNavigator imports is shallow (read from its own imports). Each keeps its own navigation, so
-// Back is the screen's own goBack(), and records the header back its native stack computes (NativeStackView.native.tsx
-// :262, handed to the native header as its back button).
+// Back is the screen's own goBack().
 const HOME = '../screens/client/HomeScreen';
 const REAL = new Set(['../screens/client/MessagesScreen', '../screens/client/CheckoutReturnScreen']);
 const mockScreenNavs = new Map<string, NavigationProp<ParamListBase>>();
-const mockHeaderBack = new Map<string, unknown>();
 const mockBodies: Record<string, React.ComponentType | undefined> = {};
 function mockLeaf(label: string) {
   return function LeafScreen() {
     const navigation = React.useContext(NavigationContext);
     const route = React.useContext(NavigationRouteContext);
-    const headerBack = React.useContext(HeaderBackContext);
     if (navigation && route) {
       mockScreenNavs.set(route.key, navigation as NavigationProp<ParamListBase>);
-      mockHeaderBack.set(route.key, headerBack);
     }
     const Body = mockBodies[label];
     return <>{Body ? <Body /> : null}<Text>{label}</Text></>;
@@ -172,7 +167,6 @@ const leafNav = (ref: Ref) => mockScreenNavs.get(ref.getCurrentRoute()!.key)!;
 
 async function launch(opts: { lockout?: Shape } = {}) {
   mockScreenNavs.clear();
-  mockHeaderBack.clear();
   mockSheetProps = null;
   const ref = createNavigationContainerRef<ParamListBase>();
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
@@ -343,10 +337,12 @@ describe.each([true, false])('youTabV2 %s (MoreIndex is YouScreen or MoreScreen;
       '%s, %s argument, the You tab never opened', async (_name, shape, screen, params) => {
         const { ref } = await launch();
         await act(async () => ref.navigate('MoreTab', arg(shape, screen, params)));
-        const headerBack = mockHeaderBack.get(ref.getCurrentRoute()!.key);
+        // Progress's stack header (backOnlyHeader, ClientNavigator.tsx:586) gets a back button only when its own native
+        // stack holds a route under it (NativeStackView.native.tsx:262 previousDescriptor); read that stack's state.
+        const own = leafNav(ref).getState();
+        const under = own.routes.findIndex((r) => r.key === ref.getCurrentRoute()!.key) > 0;
         expect(await landed(ref)).toEqual(shape === 'head' ? overYouHome(screen, params) : alone(screen, 'HomeMain', params));
-        // Progress's stack header (backOnlyHeader, ClientNavigator.tsx:586): a back button only with a route under it.
-        if (screen === 'Progress') expect(headerBack !== undefined).toBe(shape === 'head');
+        if (screen === 'Progress') expect(under).toBe(shape === 'head');
       });
   });
 
