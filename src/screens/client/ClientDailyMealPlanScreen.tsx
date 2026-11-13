@@ -343,15 +343,11 @@ function MealStop({ stop, ctx }: { stop: Stop; ctx: DayCtx }) {
             </View>
             <MealArt slot={s.slot_label} testID={`daily-meal-plan-art-${s.id}`} />
           </View>
-          {isNext ? (
-            // C_day .c-next: today's next meal on the cream card with what is in it and "Ate it as planned".
-            <View style={planStyleC.nextCard} testID="daily-meal-plan-next-card">
-              {s.meal_template.description ? <Text style={planStyleC.nextText}>{s.meal_template.description}</Text> : null}
-              <LogPlannedMealButton meal={plannedMealFromSlot(s)} slot={s.slot_label} planSlotId={s.id} planned />
-            </View>
-          ) : (
-            <LogPlannedMealButton meal={plannedMealFromSlot(s)} slot={s.slot_label} planSlotId={s.id} />
-          )}
+          {/* Keep the action mounted when the log refresh moves the next-meal card, preserving Undo and queued status. */}
+          <View style={isNext ? planStyleC.nextCard : undefined} testID={isNext ? 'daily-meal-plan-next-card' : undefined}>
+            {isNext && s.meal_template.description ? <Text style={planStyleC.nextText}>{s.meal_template.description}</Text> : null}
+            <LogPlannedMealButton meal={plannedMealFromSlot(s)} slot={s.slot_label} planSlotId={s.id} planned={isNext} />
+          </View>
         </TimelineRow>
       </View>
     </View>
