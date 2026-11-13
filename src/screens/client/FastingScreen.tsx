@@ -16,12 +16,13 @@ import { logger } from '../../utils/logger';
 
 import FadeInView from '../../components/FadeInView';
 import HapticPressable from '../../components/HapticPressable';
-import QuietBar from '../../ui/progress/QuietBar';
+import Svg, { Circle } from 'react-native-svg';
 import { scheduleFastEndAlert, cancelFastEndAlert } from '../../utils/fastingAlert';
 import { bucketDateLocal } from '../../utils/date';
 import { useTheme } from '../../theme/ThemeProvider';
 import { layout, radius, spacing, typography, type SemanticTokens } from '../../theme/tokens';
-import { GoldLine, MastLine, mast, PaperPage, PlanMasthead, planStyleC, TimelineRow } from './mealplan/planStyleC';
+import { clockOf } from '../../utils/log/foodTimeline';
+import { mast, PaperPage, PlanMasthead, planStyleC } from './mealplan/planStyleC';
 
 type Protocol = { label: string; hours: number };
 
@@ -311,7 +312,7 @@ export default function FastingScreen() {
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <PlanMasthead title="Fasting" />
+        <PlanMasthead title="Fasting" testID="fasting-masthead" foot="short" />
         <PaperPage bg={colors.bgSurface}>
           {/* Loading bones are shapes only, so readers skip them (LO-927 C1: no unnamed progress bar);
               the block around them says main's "Loading" (LO-927R2 C3). */}
@@ -330,7 +331,7 @@ export default function FastingScreen() {
   if (loadError) {
     return (
       <View style={styles.container}>
-        <PlanMasthead title="Fasting" />
+        <PlanMasthead title="Fasting" testID="fasting-masthead" foot="short" />
         <PaperPage bg={colors.bgSurface}>
           <View style={[planStyleC.card, styles.card]} accessibilityRole="alert" accessibilityLiveRegion="polite">
             <Text style={[typography.body, { color: colors.textPrimary, marginBottom: 16 }]}>
@@ -356,6 +357,7 @@ export default function FastingScreen() {
   const remainingMs = activeFast ? Math.max(targetMs - elapsed, 0) : targetMs;
 
   const run = runLine(streak);
+  const runText = run ? <Text style={styles.sideMuted}>{run}</Text> : null;
 
   return (
     <ScrollView
@@ -374,60 +376,64 @@ export default function FastingScreen() {
         />
       }
     >
-      <PlanMasthead title="Fasting" titleTestID="fasting-title">
-        {run && <MastLine muted style={styles.runText}>{run}</MastLine>}
-        {/* Timer: one serif hero number, no ring */}
-        <View style={styles.timerContainer} accessible testID="fasting-timer">
-          <Text style={styles.overline}>
-            {activeFast ? `${activeFast.targetHours}-hour fast` : 'Fasting window'}
-          </Text>
-          {activeFast ? (
-            <>
-              <Text style={styles.timerValue}>{formatDuration(elapsed)}</Text>
-              <Text style={styles.timerSub}>
-                {remainingMs > 0
-                  ? `${formatDuration(remainingMs)} remaining`
-                  : 'Target reached'}
-              </Text>
-            </>
-          ) : (
-            <Text style={styles.timerValue}>{selectedProtocol}h</Text>
-          )}
-        </View>
-        {/* C2's gold progress line: the share of the target the fast has run (the card's percent in words). */}
-        {activeFast ? <GoldLine share={progress} testID="fasting-gold-line" /> : null}
-      </PlanMasthead>
+      {/* C8 C_fasting: a short masthead, the title only; the fast itself is on the paper. */}
+      <PlanMasthead title="Fasting" titleTestID="fasting-title" testID="fasting-masthead" foot="short" />
 
       <PaperPage bg={colors.bgSurface}>
-      {/* Protocol Selector */}
-      {!activeFast && (
-        <View style={styles.protocolRow}>
-          {PROTOCOLS.map((p) => (
-            <TouchableOpacity
-              key={p.hours}
-              style={[styles.protocolBtn, selectedProtocol === p.hours && styles.protocolBtnActive]}
-              onPress={() => setProtocol(p.hours)}
-              accessibilityRole="button"
-              accessibilityState={{ selected: selectedProtocol === p.hours }}
-            >
-              <Text
-                style={[
-                  styles.protocolText,
-                  selectedProtocol === p.hours && styles.protocolTextActive,
-                ]}
-              >
-                {p.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+      {activeFast ? (
+        // C8 C_fasting: the gold ring with the elapsed time and the target inside, Ends, Started and the run beside it.
+        <View style={styles.ringRow}>
+          <View testID="fasting-timer" accessible accessibilityRole="progressbar"
+            accessibilityValue={{ text: `${Math.round(progress * 100)} percent` }}>
+            <FastRing share={progress} track={colors.border} arc={colors.data.goal}>
+              <Text style={styles.ringTime}>{formatDuration(elapsed)}</Text>
+              <Text style={styles.ringOf}>{`of ${activeFast.targetHours} h`}</Text>
+            </FastRing>
+          </View>
+          <View style={styles.side} testID="fasting-side">
+            <Text style={styles.sideLead}>
+              {remainingMs > 0 ? `Ends ${clockAt(new Date(activeFast.startTime).getTime() + targetMs)}` : 'Target reached'}
+            </Text>
+            <Text style={styles.sideMuted}>{`Started ${weekdayOf(activeFast.startTime)}, ${clockAt(new Date(activeFast.startTime).getTime())}`}</Text>
+            {run ? <View style={styles.sideRun}>{runText}</View> : null}
+          </View>
         </View>
+      ) : (
+        <>
+          {/* No fast running: main's window on the paper (no drawing of its own; no empty ring). */}
+          <View style={styles.window} accessible testID="fasting-timer">
+            <Text style={styles.windowLabel}>Fasting window</Text>
+            <Text style={styles.windowValue}>{selectedProtocol}h</Text>
+            {runText}
+          </View>
+          <View style={styles.protocolRow}>
+            {PROTOCOLS.map((p) => (
+              <TouchableOpacity
+                key={p.hours}
+                style={[styles.protocolBtn, selectedProtocol === p.hours && styles.protocolBtnActive]}
+                onPress={() => setProtocol(p.hours)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: selectedProtocol === p.hours }}
+              >
+                <Text
+                  style={[
+                    styles.protocolText,
+                    selectedProtocol === p.hours && styles.protocolTextActive,
+                  ]}
+                >
+                  {p.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </>
       )}
 
-      {/* Start / End Button */}
+      {/* Start / End: outlined, forest words on the paper (C8 C_fasting's End fast) */}
       <View style={styles.actionRow}>
         {activeFast ? (
           <TouchableOpacity
-            style={[styles.endBtn, submitting && styles.btnDisabled]}
+            style={[planStyleC.outline, styles.actionBtn, submitting && styles.btnDisabled]}
             onPress={handleEnd}
             disabled={submitting}
             accessibilityRole="button"
@@ -440,7 +446,7 @@ export default function FastingScreen() {
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            style={[styles.startBtn, submitting && styles.btnDisabled]}
+            style={[planStyleC.outline, styles.actionBtn, submitting && styles.btnDisabled]}
             onPress={handleStart}
             disabled={submitting}
             accessibilityRole="button"
@@ -452,38 +458,48 @@ export default function FastingScreen() {
             </Text>
           </TouchableOpacity>
         )}
+        {/* The running fast keeps its remove control, under its End fast. */}
+        {activeFast ? <View style={styles.runRemove}>{removeFastControl(activeFast)}</View> : null}
       </View>
+      {/* C8 C_fasting's gold hairline under the action. */}
+      <View style={styles.goldRule} testID="fasting-gold-rule" importantForAccessibility="no" accessibilityElementsHidden />
 
-      {/* Active fast info */}
-      {activeFast && (
-        <View style={[planStyleC.card, styles.card, styles.activeCard]}>
-          <View style={styles.activeRow}>
-            <Text style={styles.activeLabel}>Started</Text>
-            <Text style={styles.activeValue}>
-              {new Date(activeFast.startTime).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </Text>
-          </View>
-          <View style={styles.activeRow}>
-            <Text style={styles.activeLabel}>Target</Text>
-            <Text style={styles.activeValue}>{activeFast.targetHours}h</Text>
-          </View>
-          <QuietBar
-            label="Fasting"
-            value={`${Math.round(progress * 100)}%`}
-            current={elapsed}
-            target={targetMs}
-          />
-          {removeFastControl(activeFast)}
+      {/* Recent fasts: C8's plain rows, the date left and the hours right, a hairline between */}
+      {history.length > 0 ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Recent fasts</Text>
+          {history.slice(0, 10).map((session) => {
+            const startMs = new Date(session.startTime).getTime();
+            const endMs = session.endTime ? new Date(session.endTime).getTime() : 0;
+            const hours = endMs ? (endMs - startMs) / (1000 * 60 * 60) : 0;
+            return (
+              <View key={session.id} style={styles.histRow} testID={`fasting-history-${session.id}`}>
+                <View style={styles.histLine}>
+                  <Text style={styles.histDate}>{shortDateOf(session.startTime)}</Text>
+                  <Text style={styles.histHours}>{`${hours.toFixed(1)} h`}</Text>
+                </View>
+                {/* Main's meta (the drawing has no place for it) in the row's muted line, with the remove control. */}
+                <View style={styles.histMeta}>
+                  <Text style={[styles.historyTarget, styles.histMetaText]}>
+                    {`${session.targetHours}h target · ${session.completed ? 'Completed' : 'Ended early'}`}
+                  </Text>
+                  {removeFastControl(session)}
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      ) : (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Recent fasts</Text>
+          <Text style={styles.historyTarget}>Each fast you end is saved here.</Text>
         </View>
       )}
 
-      {/* Stats: shown once a fast has ended; the labels say which fasts each covers */}
+      {/* Stats: shown once a fast has ended; plain rows (no frame in C8), the labels say which fasts each covers */}
       {history.length > 0 && (
       <FadeInView delay={100}>
-      <View style={[planStyleC.card, styles.card, styles.statsRow]}>
+      <View style={styles.statsRows}>
         <View style={styles.statCard}>
           <Text style={styles.statLabel}>Completed</Text>
           <Text testID="fasting-completed-count" style={styles.statValue}>{stats.totalCompleted}</Text>
@@ -500,47 +516,49 @@ export default function FastingScreen() {
       </View>
       </FadeInView>
       )}
-
-      {/* History */}
-      {history.length > 0 ? (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Recent fasts</Text>
-          {history.slice(0, 10).map((session, i, shownFasts) => {
-            const startMs = new Date(session.startTime).getTime();
-            const endMs = session.endTime ? new Date(session.endTime).getTime() : 0;
-            const hours = endMs ? (endMs - startMs) / (1000 * 60 * 60) : 0;
-            // C2's timeline: a filled dot for a completed fast, a hollow one for a fast ended early.
-            return (
-              <TimelineRow key={session.id} line={colors.border} dot={session.completed ? colors.accent : colors.textMuted}
-                bg={colors.bgSurface} filled={session.completed} last={i === shownFasts.length - 1} dotTop={8}
-                testID={`fasting-history-${session.id}`}>
-                <View style={styles.historyStop}>
-                  {/* The date and its hours on one line; the meta and the remove control take the full width under it. */}
-                  <View style={styles.historyRow}>
-                    <Text style={[styles.historyDate, styles.historyLeft]}>
-                      {new Date(session.startTime).toLocaleDateString()}
-                    </Text>
-                    <Text style={styles.historyDuration}>{hours.toFixed(1)}h</Text>
-                  </View>
-                  <Text style={styles.historyTarget}>
-                    {`${session.targetHours}h target · ${session.completed ? 'Completed' : 'Ended early'}`}
-                  </Text>
-                  <View style={styles.historyRight}>{removeFastControl(session)}</View>
-                </View>
-              </TimelineRow>
-            );
-          })}
-        </View>
-      ) : (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Recent fasts</Text>
-          <Text style={styles.historyTarget}>Each fast you end is saved here.</Text>
-        </View>
-      )}
       </PaperPage>
     </ScrollView>
   );
 }
+
+const RING = 150;
+const STROKE = 9;
+
+/**
+ * C8 C_fasting's ring (x 36-260 px, a 13 px stroke at 1.5x): 150 pt across, the stone track and the gold share of
+ * the target from 12 o'clock, clockwise; the words sit inside it. Non-text: its share is the block's value.
+ */
+function FastRing({ share, track, arc, children }: { share: number; track: string; arc: string; children: React.ReactNode }) {
+  const r = (RING - STROKE) / 2;
+  const c = 2 * Math.PI * r;
+  const s = Math.max(0, Math.min(1, Number.isFinite(share) ? share : 0));
+  return (
+    <View style={ringStyles.box} testID="fasting-ring">
+      <Svg width={RING} height={RING} style={ringStyles.svg}>
+        <Circle cx={RING / 2} cy={RING / 2} r={r} stroke={track} strokeWidth={STROKE} fill="none" />
+        {s > 0 ? (
+          <Circle cx={RING / 2} cy={RING / 2} r={r} stroke={arc} strokeWidth={STROKE} fill="none"
+            strokeLinecap={s < 1 ? 'round' : 'butt'} strokeDasharray={`${c * s} ${c}`} />
+        ) : null}
+      </Svg>
+      {children}
+    </View>
+  );
+}
+
+const ringStyles = StyleSheet.create({
+  box: { width: RING, height: RING, alignItems: 'center', justifyContent: 'center' },
+  svg: { position: 'absolute', left: 0, top: 0, transform: [{ rotate: '-90deg' }] },
+});
+
+/** The phone's clock as the app draws it ("2:00 pm", foodTimeline's clockOf). */
+function clockAt(ms: number): string {
+  const d = new Date(ms);
+  return clockOf(d.getHours() * 60 + d.getMinutes());
+}
+const weekdayOf = (iso: string) => new Date(iso).toLocaleDateString('en-US', { weekday: 'long' });
+/** C8's short date: "Tue, Oct 13". */
+const shortDateOf = (iso: string) => new Date(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 
 const makeStyles = (colors: SemanticTokens) =>
   StyleSheet.create({
@@ -559,16 +577,31 @@ const makeStyles = (colors: SemanticTokens) =>
   skeleton: { gap: spacing.md },
   bone: { height: 14, borderRadius: radius.control, backgroundColor: colors.border },
   boneTall: { height: layout.buttonHeight, borderRadius: radius.button, width: '100%' },
-  runText: {
-    fontVariant: ['tabular-nums'],
-    marginTop: 4,
+  // C8 C_fasting: the ring at the page's left, the side column 16 pt to its right (x 285 px); at 320 pt and
+  // 130 percent the column wraps under the ring.
+  ringRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: spacing.lg, rowGap: spacing.lg },
+  ringTime: { ...typography.h2, letterSpacing: 1, color: colors.textPrimary, textAlign: 'center' },
+  ringOf: { fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18, color: colors.textMuted, textAlign: 'center' },
+  side: { flexGrow: 1, flexBasis: 140, minWidth: 0 },
+  // C8: "Ends 2:00 pm" Inter 600 17, then the muted 16 pt lines on a 22 pt pitch.
+  sideLead: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 17, lineHeight: 22, color: colors.textPrimary, fontVariant: ['tabular-nums'] },
+  sideMuted: { fontFamily: 'Inter_400Regular', fontSize: 16, lineHeight: 22, color: colors.textMuted, fontVariant: ['tabular-nums'] },
+  sideRun: { marginTop: 6 },
+  window: { marginBottom: spacing.lg },
+  windowLabel: { ...typography.eyebrow, color: colors.textMuted, marginBottom: spacing.sm },
+  windowValue: {
+    ...typography.display,
+    fontSize: 60,
+    lineHeight: 72,
+    letterSpacing: 0,
+    fontVariant: ['lining-nums', 'tabular-nums'],
+    color: colors.textPrimary,
   },
   // The chips wrap to a second row at large text sizes so "12:12" never runs past its chip (320 pt at 130%).
   protocolRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginBottom: 24,
   },
   protocolBtn: {
     flexGrow: 1,
@@ -595,71 +628,32 @@ const makeStyles = (colors: SemanticTokens) =>
     fontFamily: 'Inter_500Medium',
     color: colors.textOnAccent,
   },
-  timerContainer: {
-    paddingTop: 20,
-  },
-  overline: {
-    ...typography.eyebrow,
-    color: mast.muted,
-    marginBottom: 8,
-  },
-  // The hero number at 60 pt in the display serif (C2 / K5 Style C scale), as on Macro targets.
-  timerValue: {
-    ...typography.display,
-    fontSize: 60,
-    lineHeight: 72,
-    letterSpacing: 0,
-    fontVariant: ['lining-nums', 'tabular-nums'],
-    color: mast.ink,
-  },
-  timerSub: {
-    ...typography.bodySmall,
-    fontVariant: ['tabular-nums'],
-    color: mast.ink,
-    marginTop: 4,
-  },
+  // C8: the button 16 pt under the ring (y 497 to 519 px).
   actionRow: {
-    marginBottom: 24,
+    marginTop: spacing.lg,
   },
-  startBtn: {
-    ...planStyleC.primary,
-    backgroundColor: colors.accent,
-  },
-  endBtn: {
-    ...planStyleC.primary,
-    backgroundColor: colors.accent,
+  actionBtn: {
+    borderColor: colors.accent,
   },
   btnDisabled: {
     opacity: 0.6,
   },
   actionBtnText: {
-    ...typography.bodyMd,
-    color: colors.textOnAccent,
+    ...planStyleC.outlineLabel,
+    color: colors.accentText,
   },
-  activeCard: {
-    gap: 12,
-    marginBottom: 24,
+  runRemove: {
+    alignItems: 'flex-start',
   },
-  activeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  // C8: a 1 pt gold hairline 20 pt under the button (y 599 to 630 px).
+  goldRule: {
+    height: 1,
+    backgroundColor: colors.data.goal,
+    marginTop: 20,
+    marginBottom: spacing.xl,
   },
-  activeLabel: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
-    color: colors.textMuted,
-  },
-  activeValue: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 14,
-    fontWeight: '500',
-    fontVariant: ['tabular-nums'],
-    color: colors.textPrimary,
-  },
-  statsRow: {
-    paddingTop: 4,
-    paddingBottom: spacing.md,
-    marginBottom: 24,
+  statsRows: {
+    marginTop: spacing.xl,
   },
   statCard: {
     flexDirection: 'row',
@@ -682,47 +676,57 @@ const makeStyles = (colors: SemanticTokens) =>
     color: colors.textMuted,
   },
   section: {
-    marginBottom: 24,
+    marginBottom: 0,
   },
   sectionTitle: {
     ...typography.eyebrow,
     color: colors.textMuted,
-    marginBottom: 12,
+    marginBottom: spacing.xs,
   },
-  // A stop on the gutter; the dot sits level with the date.
-  historyStop: {
-    paddingBottom: spacing.md,
+  // C8 C_fasting's rows (y 653-850 px): the date and the hours on one line, a hairline under each row.
+  histRow: {
+    paddingTop: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
-  historyRow: {
+  histLine: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'baseline',
     gap: spacing.md,
   },
-  historyLeft: {
+  histDate: {
     flex: 1,
     minWidth: 0,
-    gap: 2,
-  },
-  historyDate: {
-    ...planStyleC.name,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 16,
+    lineHeight: 22,
     color: colors.textPrimary,
+  },
+  histHours: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '500',
+    fontVariant: ['tabular-nums'],
+    color: colors.textPrimary,
+  },
+  histMeta: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    columnGap: spacing.md,
+  },
+  histMetaText: {
+    flexShrink: 1,
+    marginTop: 0,
   },
   historyTarget: {
     fontFamily: 'Inter_400Regular',
     fontSize: 13,
     color: colors.textMuted,
     marginTop: 2,
-  },
-  historyDuration: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 16,
-    fontWeight: '500',
-    fontVariant: ['tabular-nums'],
-    color: colors.textPrimary,
-  },
-  historyRight: {
-    alignItems: 'flex-end',
   },
   removeButton: {
     minHeight: 44,

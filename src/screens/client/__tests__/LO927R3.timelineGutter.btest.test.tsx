@@ -128,7 +128,6 @@ const plan = {
 it.each([
   ['meal plan day (P1)'],
   ['meal plan loading (P3)'],
-  ['fasting history (F2)'],
 ])('LO-927R3 B1: the %s timeline line reaches the next stop', async (name) => {
   mockDaily.mockReturnValue(name.startsWith('meal plan day') ? plan
     : { data: undefined, isLoading: true, isError: false, isRefetching: false, refetch: jest.fn() });
