@@ -637,6 +637,7 @@ const makeStyles = (colors: SemanticTokens) =>
   },
   btnDisabled: {
     opacity: 0.6,
+    backgroundColor: '#2C4A36',
   },
   actionBtnText: {
     ...planStyleC.outlineLabel,
