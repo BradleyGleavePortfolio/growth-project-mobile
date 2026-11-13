@@ -9,6 +9,7 @@ import {
   RefreshControl,
   FlatList,
   ListRenderItem,
+  useWindowDimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -59,6 +60,8 @@ interface Recipe extends RecipeAllergenFields {
 function RecipeCard({ recipe, onPress }: { recipe: Recipe; onPress: () => void }) {
   const { semanticColors: colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  // The drawn kitchen row's 64 pt tile, 52 at large text as on the Prep guide (ctx#457 .big .rrow .tile).
+  const big = useWindowDimensions().fontScale > 1.15;
   const totalTime = Number.isFinite(recipe.prep_time_min) && Number.isFinite(recipe.cook_time_min)
     ? recipe.prep_time_min + recipe.cook_time_min : null;
   const nutrition = [
@@ -72,7 +75,7 @@ function RecipeCard({ recipe, onPress }: { recipe: Recipe; onPress: () => void }
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.8}
       accessibilityRole="button" accessibilityLabel={`Open ${recipe.title}`}>
-      <View style={styles.cardThumb}><StyleCThumb uri={recipe.image_url || undefined} size={56} /></View>
+      <View style={styles.cardThumb}><StyleCThumb uri={recipe.image_url || undefined} size={big ? 52 : 64} /></View>
       <View style={styles.cardBody}>
         <Text style={styles.cardTitle}>{recipe.title}</Text>
         {recipe.description ? (
@@ -90,7 +93,7 @@ function RecipeCard({ recipe, onPress }: { recipe: Recipe; onPress: () => void }
         </View>
         {nutrition ? <Text style={styles.cardMetaText}>{nutrition} per serving</Text> : null}
         {otherMacros ? <Text style={styles.cardMetaText}>{otherMacros} per serving</Text> : null}
-        <Text style={styles.cardMetaText}>{recipeAllergenSummary(recipe)}</Text>
+        <Text style={styles.cardAllergens}>{recipeAllergenSummary(recipe)}</Text>
         {recipe.tags.length > 0 ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagsRow}>
             {recipe.tags.slice(0, 4).map((tag) => (
@@ -282,7 +285,7 @@ export default function RecipesScreen() {
       {isLoading ? (
         <ScrollView style={styles.list} contentContainerStyle={styles.loadingContainer}>
           <Text style={styles.loadingText}>Loading recipes…</Text>
-          <StyleCLoadingLines />
+          <StyleCLoadingLines lead="tile" />
         </ScrollView>
       ) : (
         <FlatList<Recipe>
@@ -406,8 +409,9 @@ const makeStyles = (colors: SemanticTokens) =>
     borderColor: colors.border,
     overflow: 'hidden',
   },
-  // The picture tile (C_kitchen draws 64 pt; 56 here so a 320 pt screen at 130% keeps room for the name): the photo when there is one, else the warm tile with the line drawing.
-  cardThumb: { paddingTop: 20 },
+  // The picture tile (ctx#457 prep-plan .rrow: 64 pt, 52 at large text, 14 pt from the row's top): the photo when there
+  // is one, else the warm tile with the line drawing.
+  cardThumb: { paddingTop: 14 },
   caloriesBadge: {
     position: 'absolute',
     bottom: 10,
@@ -417,12 +421,14 @@ const makeStyles = (colors: SemanticTokens) =>
     paddingVertical: 4,
     borderRadius: radius.chip,
   },
-  cardBody: { flex: 1, paddingVertical: 20, gap: 6 },
-  cardTitle: { ...typography.h3, fontSize: 21, lineHeight: 27, color: colors.textPrimary },
+  cardBody: { flex: 1, paddingVertical: 14, gap: 6 },
+  cardTitle: { ...typography.h3, fontSize: 21, lineHeight: 26.25, color: colors.textPrimary },
   cardDesc: { ...typography.bodySmall, color: colors.textMuted },
   cardMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginTop: 2 },
   cardMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   cardMetaText: { ...typography.bodySmall, color: colors.textMuted, fontVariant: ['tabular-nums'] },
+  // The allergen line in the drawn smaller meta (ctx#457 .meta2, 13 pt), as on the Prep guide.
+  cardAllergens: { ...typography.bodySmall, fontSize: 13, lineHeight: 18.85, color: colors.textMuted },
   macroRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
   macroBadge: {
     flexDirection: 'row',
