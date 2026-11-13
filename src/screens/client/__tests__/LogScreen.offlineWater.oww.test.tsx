@@ -104,7 +104,7 @@ describe('Food log water card: glasses saved offline', () => {
     await act(async () => {
       fireEvent.press(screen.getByLabelText('Add 8 ounces of water'));
     });
-    expect(mockStore.logWater).toHaveBeenCalledWith('user', '', 8, true);
+    expect(mockStore.logWater).toHaveBeenCalledWith('user', '', 8);
   });
 
   it("W4, W10: a waiting glass carries food's waiting line, a refused one \"Couldn't log water\"; each is spoken; Remove takes it off the phone", async () => {

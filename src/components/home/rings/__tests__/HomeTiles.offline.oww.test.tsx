@@ -73,7 +73,7 @@ it('W7: with a signal it is the online send, as main', async () => {
   await act(async () => {
     fireEvent.press(v.getByTestId('home-tile-water-add'));
   });
-  expect(mockState.logWater).toHaveBeenCalledWith('u1', '', 8, true);
+  expect(mockState.logWater).toHaveBeenCalledWith('u1', '', 8);
 });
 
 it('G1: a weigh-in saved with no signal counts on the weight tile at once', async () => {

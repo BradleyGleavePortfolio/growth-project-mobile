@@ -107,7 +107,9 @@ export default function HomeTiles({ day, checkIn, refreshing, noSource }: HomeTi
   const waterReady = !!water.value && water.value !== '—';
   const addWater = async () => {
     if (!currentUser) return;
-    await logWater(currentUser.id, '', metric ? glass / 29.5735 : glass, online);
+    const oz = metric ? glass / 29.5735 : glass;
+    // OFFLINE-WATER-WEIGHT-M: no signal queues the glass; with one, main's call as it was.
+    await (online ? logWater(currentUser.id, '', oz) : logWater(currentUser.id, '', oz, false));
     if (useClientStore.getState().loadError?.endsWith(WATER_NOT_SAVED)) void HapticService.error();
     else void HapticService.success();
   };

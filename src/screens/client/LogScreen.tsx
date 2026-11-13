@@ -630,7 +630,8 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
   const handleAddWater = (oz: number) => {
     if (currentUser) {
       // OFFLINE-WATER-WEIGHT-M: with no signal the glass waits in the phone's queue (the send decision food uses).
-      logWater(currentUser.id, '', oz, online);
+      if (online) logWater(currentUser.id, '', oz);
+      else logWater(currentUser.id, '', oz, false);
     }
   };
 
