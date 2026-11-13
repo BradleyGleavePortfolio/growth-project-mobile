@@ -475,10 +475,12 @@ export const communityApi = {
     ).then(() => undefined);
   },
 
-  /** GET /community/workspaces/:workspaceId/dms — DM inbox (thread list). */
-  listDmThreads(workspaceId: string): Promise<CommunityDmThread[]> {
+  /** GET /community/workspaces/:workspaceId/dms — DM inbox (thread list). COACH-DM-M: `limit` asks for up to 100 rows
+   * (b#1243 community-dms.service.ts:145-150); without it the call is the client's own, default 30. */
+  listDmThreads(workspaceId: string, opts: { limit?: number } = {}): Promise<CommunityDmThread[]> {
+    const url = `/community/workspaces/${workspaceId}/dms`;
     return call(CommunityDmThreadListResponseSchema, () =>
-      api.get<unknown>(`/community/workspaces/${workspaceId}/dms`),
+      opts.limit != null ? api.get<unknown>(url, { params: { limit: String(opts.limit) } }) : api.get<unknown>(url),
     ).then((r) => r.threads);
   },
 

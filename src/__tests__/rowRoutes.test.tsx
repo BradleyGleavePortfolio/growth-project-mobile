@@ -741,6 +741,29 @@ ROWS.push(
     tap: { testID: `dm-row-${WS}:${CLIENT}:${COACH_USER}` },
     expected: opens('CommunityDmThread', { recipientId: COACH_USER }),
   },
+  {
+    // COACH-DM-M: the coach's own DM list. The coach holds no membership (community.service.ts:137-142); b#1243 lists
+    // only threads with their current clients, ?limit=100 (community-dms.service.ts:145-150, :265-300 at e760b3e0);
+    // names come from GET /coach/clients?status=all (coach.controller.ts:64-78).
+    id: 'F8c', title: 'coach DM row', role: 'coach', host: COACH_COMMUNITY_HOST,
+    http: {
+      '/community/me': { ...ME('coach'), membership: null },
+      [`/community/workspaces/${WS}/dms`]: { threads: [
+        { thread_id: `${WS}:${[COACH_USER, CLIENT_2].sort().join(':')}`, workspace_id: WS, other_user_id: CLIENT_2, created_at: null, last_message_at: CREATED },
+        { thread_id: `${WS}:${[COACH_USER, CLIENT].sort().join(':')}`, workspace_id: WS, other_user_id: CLIENT, created_at: null, last_message_at: CREATED },
+      ] },
+    },
+    before: () => mockGetClients.mockResolvedValue({ data: [
+      { id: CLIENT, email: 'dana@example.com', name: 'Dana Cruz', role: 'student', coach_id: COACH_USER, archived_at: null, created_at: CREATED, activity: null },
+      { id: CLIENT_2, email: 'eli@example.com', name: 'Eli Park', role: 'student', coach_id: COACH_USER, archived_at: null, created_at: CREATED, activity: null },
+    ] }),
+    screen: () => {
+      const CoachDmListScreen = require('../screens/community/coach-dm/CoachDmListScreen').default;
+      return <CoachDmListScreen />;
+    },
+    tap: { testID: `coach-dm-row-${CLIENT}` },
+    expected: opens('CommunityDmThread', { recipientId: CLIENT, name: 'Dana Cruz' }),
+  },
 );
 
 const SEARCH_HTTP = (flags: Record<string, boolean>, results: object[]) => ({
@@ -925,10 +948,16 @@ ROWS.push(
     communityRow('n-dm', 'community_dm_received', 'New direct message.', DM_LINK, { type: 'dm', id: uuid(122) }),
     NESTED('CommunityTab', 'CommunityDmThread', { recipientId: COACH_USER }),
     'community-dms.service.ts:223 tgp://community/dms/<dmKey> matches no phone link; the row lands on the Community root', landsOnCommunityRoot),
-  notifGap('N2c', 'community_dm_received (coach, see Owner decisions: no coach DM screen exists)', 'coach',
-    communityRow('n-dmc', 'community_dm_received', 'New direct message for coach.', DM_LINK, { type: 'dm', id: uuid(123) }),
-    NESTED('CommunityStack', 'CommunityDmThread', { recipientId: CLIENT }),
-    'the coach app has no CommunityDmThread route; the row stays on the notification list', staysOnCoachList),
+  // COACH-DM-M: a stored row keeps the older link; the router opens the id of the pair that is not the coach's.
+  { id: 'N2c', title: 'community_dm_received (coach, a stored row with the older community/dms/<dmKey> link)', role: 'coach', host: ['Tab@CoachNavigator'],
+    http: NOTIF_HTTP(communityRow('n-dmc', 'community_dm_received', 'New direct message for coach.', DM_LINK, { type: 'dm', id: uuid(123) })),
+    before: () => attach('coach'), screen: centerScreen, tap: { label: /New direct message for coach\./ },
+    expected: NESTED('CommunityStack', 'CommunityDmThread', { recipientId: CLIENT }) },
+  // COACH-DM-M: b#1243 writes tgp://community/dm/<sender's user id> (community-dms.service.ts:234 at e760b3e0).
+  { id: 'N2d', title: 'community_dm_received (coach, tgp://community/dm/<client>)', role: 'coach', host: ['Tab@CoachNavigator'],
+    http: NOTIF_HTTP(communityRow('n-dmd', 'community_dm_received', 'A client sent you a direct message.', `tgp://community/dm/${CLIENT}`, { type: 'dm', id: uuid(131) })),
+    before: () => attach('coach'), screen: centerScreen, tap: { label: /A client sent you a direct message\./ },
+    expected: NESTED('CommunityStack', 'CommunityDmThread', { recipientId: CLIENT }) },
 );
 const spaceRow = communityRow('n-space', 'community_message_received', 'New activity in Spring block.', `tgp://community/cohorts/${COHORT}`, { type: 'message', id: uuid(124) });
 ROWS.push(
@@ -1251,6 +1280,7 @@ describe('completeness guards', () => {
       'screens/community/CommunityChallengeDetailScreen.tsx': 'one challenge\'s comments and leaderboard (rows inside one conversation)',
       // m#945: present once the space chat lands.
       'screens/community/CommunitySpaceChatScreen.tsx': 'the messages of one space chat (rows inside one conversation)',
+      'screens/community/coach-dm/CoachDmThreadScreen.tsx': 'the bubbles of one coach DM thread (rows inside one conversation)',
     };
     const SURFACES: Record<string, string[]> = {
       'screens/community/CoachCommunityInboxScreen.tsx': ['A1', 'A2', 'A3', 'A4', 'A5'],
@@ -1260,11 +1290,12 @@ describe('completeness guards', () => {
       'screens/community/CoachCommunityEventsScreen.tsx': ['C7'],
       'screens/community/CommunitySpaceScreen.tsx': ['F5', 'F6', 'F7', 'W4'],
       'screens/community/CommunityDmListScreen.tsx': ['F8'],
+      'screens/community/coach-dm/CoachDmListScreen.tsx': ['F8c'],
       'screens/community/CommunityFindScreen.tsx': ['F9', 'F10', 'F11', 'F12', 'F13a', 'F13b'],
       'screens/community/CommunityChallengesScreen.tsx': ['F14'],
       'screens/community/CommunityClassroomScreen.tsx': ['F15'],
       'screens/community/CommunityWearablePromptsScreen.tsx': ['W3'],
-      'screens/notifications/NotificationCenterScreen.tsx': ['N1', 'N2', 'N2c', 'N3', 'N3c', 'N4', 'N5', 'N6', 'N7', 'N8', 'N8c'],
+      'screens/notifications/NotificationCenterScreen.tsx': ['N1', 'N2', 'N2c', 'N2d', 'N3', 'N3c', 'N4', 'N5', 'N6', 'N7', 'N8', 'N8c'],
       'screens/coach/CoachInboxV2.tsx': ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7'],
       'screens/coach/MessagesScreen.tsx': ['D8'],
       'screens/coach/command-center/InboxScreen.tsx': ['D9'],

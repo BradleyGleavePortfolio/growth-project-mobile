@@ -24,6 +24,8 @@ import HapticPressable from '../../components/HapticPressable';
 import RomanAvatar from '../../components/roman/RomanAvatar';
 import { ROMAN_INTERRUPTED_NOTE } from '../../components/roman/romanVoice';
 import RomanCrisisActions from '../../components/roman/RomanCrisisActions';
+import RomanQuoteStrip from '../../components/roman/RomanQuoteStrip';
+import { splitRomanQuote } from '../../components/roman/romanReply';
 import { featureFlags } from '../../config/featureFlags';
 import { typography } from '../../theme/tokens';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
@@ -312,21 +314,27 @@ export default function RomanConversationScreen({
       <FlatList
         data={messages}
         keyExtractor={(m) => m.id}
-        renderItem={({ item }) => (
-          <View style={styles.turn} testID={`roman-transcript-message-${item.id}`} role="listitem">
-            <View style={[styles.speaker, item.role === 'user' && styles.userTurn]}>
-              {item.role === 'assistant' ? <RomanAvatar crop="neutral" size={24} testID="roman-bubble-avatar" /> : null}
-              <Text style={styles.speakerLabel}>{item.role === 'user' ? 'YOU' : 'ROMAN'}</Text>
+        renderItem={({ item }) => {
+          // LO-950R3 B1: a person's turn sent as a reply reads as in the room. Roman's turns are never split.
+          const quoted = item.role === 'user' ? splitRomanQuote(item.content) : null;
+          const said = quoted ? quoted.body : item.content;
+          return (
+            <View style={styles.turn} testID={`roman-transcript-message-${item.id}`} role="listitem">
+              <View style={[styles.speaker, item.role === 'user' && styles.userTurn]}>
+                {item.role === 'assistant' ? <RomanAvatar crop="neutral" size={24} testID="roman-bubble-avatar" /> : null}
+                <Text style={styles.speakerLabel}>{item.role === 'user' ? 'YOU' : 'ROMAN'}</Text>
+              </View>
+              {quoted ? <RomanQuoteStrip quote={quoted.quote} testID={`roman-transcript-message-${item.id}-quote`} /> : null}
+              <Text style={[styles.body, item.role === 'user' && styles.userText]}
+                accessibilityLabel={`${item.role === 'user' ? 'You' : 'Roman'} said: ${said}`}>{said}</Text>
+              {item.interrupted && item.role === 'assistant' ? <Text style={styles.caption}>{ROMAN_INTERRUPTED_NOTE}</Text> : null}
+              {/* CRISIS-BTN: the server-marked crisis reply keeps its actions here too (coachless: the two 988s). */}
+              {featureFlags.crisisActions && item.role === 'assistant' && item.safetyActions ? (
+                <RomanCrisisActions actions={item.safetyActions} testID={`roman-transcript-crisis-${item.id}`} />
+              ) : null}
             </View>
-            <Text style={[styles.body, item.role === 'user' && styles.userText]}
-              accessibilityLabel={`${item.role === 'user' ? 'You' : 'Roman'} said: ${item.content}`}>{item.content}</Text>
-            {item.interrupted && item.role === 'assistant' ? <Text style={styles.caption}>{ROMAN_INTERRUPTED_NOTE}</Text> : null}
-            {/* CRISIS-BTN: the server-marked crisis reply keeps its actions here too (coachless: the two 988s). */}
-            {featureFlags.crisisActions && item.role === 'assistant' && item.safetyActions ? (
-              <RomanCrisisActions actions={item.safetyActions} testID={`roman-transcript-crisis-${item.id}`} />
-            ) : null}
-          </View>
-        )}
+          );
+        }}
         role="list"
         contentContainerStyle={styles.list}
         testID="roman-chat-transcript-list"

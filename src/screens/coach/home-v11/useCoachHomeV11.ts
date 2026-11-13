@@ -13,7 +13,6 @@ import { useClientUnreadCount } from '../../../hooks/useClientUnreadCount';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { usePendingAiDrafts } from '../../../hooks/usePendingAiDrafts';
 import { rememberUnreadCounts } from '../../../store/closedClientsStore';
-import { isStream2Capability } from '../../../api/types/coachAiExecution';
 import { isSubCoachBillingBlocked } from '../../../lib/coachSetup/errors';
 import type { LtvMetrics } from '../../../components/command-center/CoachLtvDashboard';
 import type { MoneyPayout, MoneySummary } from '../../../api/coachMoneyApi';
@@ -25,6 +24,7 @@ import { fetchOverviewWithHome, type CoachHomeDay, type OverviewRead } from './h
 import { needsYouReason, useCoachBlockList } from './blockList';
 import type { ActionQueueItem } from '../../../services/commandCenterApi';
 import { needsYouAreas, type NeedsAreas } from '../../../utils/coach/needsYou';
+import { romanDraftsCount } from '../romanDraftsCount';
 
 export type MonthState = { kind: 'loading' | 'blocked' | 'error' } | { kind: 'ok'; summary: MoneySummary };
 /** A read that is still on its way, failed with nothing verified to show, or answered (an empty answer included). */
@@ -192,25 +192,15 @@ export function useCoachHomeV11(sources: CoachHomeSources = coachHomeSources, re
   const { needs, steady } = useMemo(() => needsAndSteady(clients, unread, now, blockedSet), [clients, unread, now, blockedSet]);
   const areas = useMemo(() => needsYouAreas(needs, unread, alerts, blockedSet), [needs, unread, alerts, blockedSet]);
   const pathOn = pathCopilot && !!sources.pathChangeDrafts;
-  const changes = pathOn ? path.n ?? 0 : 0;
-  const queue = (drafts.data?.drafts ?? []).filter((d) => isStream2Capability(d.capability));
-  const draftKinds: DraftKinds = {
-    workouts: queue.filter((d) => d.capability === 'draft.assign_workout').length,
-    mealPlans: queue.filter((d) => d.capability === 'draft.assign_meal_plan').length,
-    nudges: queue.filter((d) => d.capability === 'draft.send_notification').length,
-    // #197-E5: workout-change approvals are tiles in Roman's drafts, counted here once (never in Needs you).
-    workoutChanges: changes,
-  };
   // The query keeps its last good answer when a refetch fails, so the button stays while that answer stands. Roman's
   // card is 'ok' only once every read it counts has answered: a failed one is 'error', one on its way 'loading'.
   const queueState: ReadState = drafts.isError ? 'error' : drafts.data ? 'ok' : 'loading';
-  const pathState: ReadState = pathOn ? path.state : 'ok';
-  const draftsState: ReadState = queueState === 'error' || pathState === 'error' ? 'error'
-    : queueState === 'loading' || pathState === 'loading' ? 'loading' : 'ok';
+  // DRAFTS-COUNT-M: the one count, which the Messages card and the drafts screen headline take too.
+  const roman = romanDraftsCount(drafts.data?.drafts, queueState, pathOn ? { n: path.n, state: path.state } : null);
   const data: CoachHomeData = {
     overview: read?.overview ?? null, home: read?.home ?? null, overviewFailed, refreshing,
     needs, areas, alertsState, reachOuts, steady, rosterState: rosterState === 'ok' && !blockList.known ? 'loading' : rosterState, ltv, month, payout, unreadNotifications,
-    draftsWaiting: queue.length + changes, draftKinds, draftsState, draftsError: queueState === 'error' ? drafts.error : path.error, draftsRetrying: !!drafts.isFetching || path.busy, now,
+    draftsWaiting: roman.waiting, draftKinds: roman.kinds, draftsState: roman.state, draftsError: queueState === 'error' ? drafts.error : path.error, draftsRetrying: !!drafts.isFetching || path.busy, now,
   };
   return {
     // The Home's one block-list read: the Plan ended list takes this one (usePlanEnded), so a Home mount sends one

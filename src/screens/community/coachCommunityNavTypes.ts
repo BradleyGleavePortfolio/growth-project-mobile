@@ -35,6 +35,12 @@ export type CoachCommunityStackParamList = {
    * Registered only behind `featureFlags.communityVoiceNotes`.
    */
   CommunityVoiceNoteDetail: { voiceNoteId: string; excerpt?: string };
+  /** COACH-DM-M: the coach's community DM list (behind featureFlags.communityDm). */
+  CoachCommunityDmList: undefined;
+  /** One client's DM thread; `name` is the roster name for a first paint (the screen reads the roster too). */
+  CommunityDmThread: { recipientId: string; name?: string };
+  /** New message: pick one of the coach's active clients. */
+  CoachCommunityDmNew: undefined;
 };
 
 /** Loosely-typed nav prop used by the screens (matches the codebase pattern). */

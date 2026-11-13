@@ -20,7 +20,7 @@ import { listsApi } from '../../services/api';
 
 import FadeInView from '../../components/FadeInView';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import { layout, typography, radius } from '../../theme/tokens';
+import { colors as palette, layout, typography, radius, withAlpha } from '../../theme/tokens';
 import { PrimaryButton, TextLink, Screen } from '../../ui';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { StyleCCheck, StyleCDashes, StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCMastText, StyleCNotice, StyleCPaper, usePullToRefresh, useStyleCScreen } from '../../ui/layout/StyleCPage';
@@ -299,7 +299,7 @@ export default function GroceryListScreen() {
       ) : items.length === 0 ? (
         <FadeInView>
           <StyleCEmpty
-            icon="cart-outline"
+            icon="bag-outline"
             title="Your grocery list is empty"
             subtitle="Add items using the field above."
           />
@@ -346,11 +346,15 @@ const fieldSize = (size: number, fontScale: number) => Math.max(layout.touchMin,
 // Inter's normal line box is 1.21em. Fill the space above it so the text keeps the drawing's 10 pt bottom baseline.
 const fieldPaddingTop = (textSize: number, fontScale: number) => Math.max(0, fieldSize(48, fontScale) - textSize * 1.21 * fontScale - 10);
 
+// ctx#457 .fld.sm underline #B9B2A7: stone at 0.9 over the paper is #B8B0A8.
+const smallFieldLine = withAlpha(palette.stone, 0.9);
+
 const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primary' | 'textPrimary' | 'textMuted' | 'textOnPrimary' | 'border' | 'error'>, fontScale = 1) =>
   StyleSheet.create({
   // Screen owns the inset top (forest via useStyleCScreen); the masthead and paper are Style C; the paper holds the list.
   paper: { paddingTop: 22 },
-  clearBtn: { marginHorizontal: 24, paddingVertical: 16 },
+  // TextLink keeps 4 pt each side inside its 44 pt target; 20 + 4 puts the words on the 24 pt gutter (ctx#457 .clear).
+  clearBtn: { marginLeft: 20, marginRight: 24, paddingVertical: 16 },
 
   addRow: { paddingHorizontal: 24, marginBottom: 0 },
   // Underlined fields (C_grocery, ctx#457), not boxes: the name on its own line, then Qty, Unit and the round add.
@@ -376,7 +380,7 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
     paddingBottom: 10,
     textAlignVertical: 'bottom',
     borderBottomWidth: 1.5,
-    borderColor: colors.border,
+    borderColor: smallFieldLine,
     paddingHorizontal: 0,
     fontSize: 16,
     color: colors.textPrimary,
@@ -390,7 +394,7 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
     paddingBottom: 10,
     textAlignVertical: 'bottom',
     borderBottomWidth: 1.5,
-    borderColor: colors.border,
+    borderColor: smallFieldLine,
     paddingHorizontal: 0,
     fontSize: 16,
     color: colors.textPrimary,
@@ -436,13 +440,14 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
   // ctx#457: the ring at the left edge, the serif name, the amount at the right on one line, the cross at the edge. The
   // name keeps at least half the row so a word never breaks mid-word; when the amount does not fit beside it (narrow
   // phones at large text) the amount moves under the name, still at the right, whole.
-  // The 44 pt targets reach into the 24 pt gutter so the ring and the cross sit at the content edges and the row keeps its width.
+  // The ring's 44 pt target reaches 2 pt into the gutter; the cross's ends at it (ctx#457 .chk, .rm), so both sit at the content edges.
   checkbox: { width: 44, height: 44, marginLeft: -2, alignItems: 'flex-start', justifyContent: 'center' },
   itemContent: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 12 },
   itemName: { ...typography.h3, fontSize: 21, lineHeight: 26.25, letterSpacing: 0, paddingVertical: 10, color: colors.textPrimary, flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: '50%' },
   itemNameChecked: { textDecorationLine: 'line-through', color: colors.textMuted },
   itemMeta: { fontFamily: typography.body.fontFamily, fontSize: 15, letterSpacing: 0, color: colors.textMuted, fontVariant: ['tabular-nums'], textAlign: 'right', flexShrink: 0, marginLeft: 'auto' },
-  deleteBtn: { width: 44, height: 44, marginRight: -12, alignItems: 'center', justifyContent: 'center' },
+  // ctx#457 .rm: the 44 pt box ends at the gutter with the cross at its right edge, so the amount ends 50 pt in.
+  deleteBtn: { width: 44, height: 44, alignItems: 'flex-end', justifyContent: 'center' },
 
   });
 

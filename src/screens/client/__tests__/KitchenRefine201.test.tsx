@@ -55,7 +55,7 @@ afterEach(() => { clients.splice(0).forEach((client) => client.clear()); jest.re
 it('M01: the kitchen masthead preserves its paper boundary without clipping the 44pt Back row', async () => {
   const ui = await render(<StyleCMasthead title="Prep guide" onBack={jest.fn()} />);
   const styles = stylesOf(ui.toJSON() as Node);
-  expect(styles).toContainEqual(expect.objectContaining({ marginTop: 0, paddingHorizontal: 24, paddingBottom: 32 }));
+  expect(styles).toContainEqual(expect.objectContaining({ marginTop: 0, paddingHorizontal: 24, paddingBottom: 40 }));
   expect(styles).toContainEqual(expect.objectContaining({ marginBottom: 2, marginHorizontal: -10, zIndex: 1 }));
 });
 
