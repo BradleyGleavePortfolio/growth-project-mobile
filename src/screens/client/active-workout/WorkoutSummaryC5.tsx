@@ -68,6 +68,17 @@ export default function WorkoutSummaryC5(p: WorkoutSummaryC5Props) {
   const locked = p.status !== 'open';
   const light = { color: sc.textOnAccent };
   const muted = { color: sc.textOnMastheadMuted };
+  // FIX-974R1 (LS-974R1 B1): C2_summary draws no row for back. With the week drawn it sits beside the ring (no height of
+  // its own); without the week, at the top as before. Not while Send is saving (LO-974R1 C3).
+  const back = (
+    <Pressable
+      testID="summary-back" onPress={p.status === 'sending' ? undefined : p.onBack} disabled={p.status === 'sending'}
+      accessibilityRole="button" accessibilityState={{ disabled: p.status === 'sending' }} hitSlop={8}
+      accessibilityLabel={p.status === 'notSent' ? c.leave : c.back} style={showWeek ? s.backBeside : s.back}
+    >
+      <Ionicons name="chevron-back" size={24} color={sc.textOnAccent} />
+    </Pressable>
+  );
 
   return (
     <Screen
@@ -79,12 +90,7 @@ export default function WorkoutSummaryC5(p: WorkoutSummaryC5Props) {
         : <PrimaryButton label={c.send(coach)} onPress={p.onSend} loading={p.status === 'sending'} testID="send-to-coach" />}
     >
       <View style={[s.mast, { backgroundColor: sc.surface.masthead, paddingTop: insets.top + layout.statusBarGap }]}>
-        <Pressable
-          testID="summary-back" onPress={p.onBack} accessibilityRole="button" hitSlop={8}
-          accessibilityLabel={p.status === 'notSent' ? c.leave : c.back} style={s.back}
-        >
-          <Ionicons name="chevron-back" size={24} color={sc.textOnAccent} />
-        </Pressable>
+        {showWeek ? null : back}
         {p.status === 'notSent' ? (
           <View testID="summary-not-sent" accessibilityRole="alert" style={s.card}>
             <Text maxFontSizeMultiplier={CAP} style={[s.cardTitle, { color: colors.ink }]}>{c.notSent(coach)}</Text>
@@ -105,6 +111,7 @@ export default function WorkoutSummaryC5(p: WorkoutSummaryC5Props) {
               ))}
             </View>
             <View style={s.ringWrap}>
+              {back}
               <SegmentedRing
                 onDark size={RING} segments={week.segments} label={doneLine(week)} testID="summary-ring"
                 drawIndex={drawIndex ?? undefined} event={p.sentKey ?? undefined}
@@ -202,6 +209,7 @@ const s = StyleSheet.create({
     borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet,
   },
   back: { width: layout.touchMin, height: layout.touchMin, justifyContent: 'center', marginLeft: -10 },
+  backBeside: { position: 'absolute', left: -10, top: 0, width: layout.touchMin, height: layout.touchMin, justifyContent: 'center', zIndex: 1 },
   card: {
     backgroundColor: Colors.noticeWarningBg, borderColor: Colors.offlineBanner, borderWidth: 1, borderRadius: radius.card,
     paddingHorizontal: 16, paddingVertical: 14, marginBottom: 16,

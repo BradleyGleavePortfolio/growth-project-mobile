@@ -10,6 +10,7 @@ import {
   FlatList,
   AppState,
   AppStateStatus,
+  BackHandler,
   type AlertButton,
 } from 'react-native';
 import HapticPressable from '../../components/HapticPressable';
@@ -60,7 +61,9 @@ import {
   settleQueuedWorkout,
   releaseQueuedWorkout,
   triggerSync,
+  workoutSyncEvents,
 } from '../../offline';
+import { getDatabase } from '../../offline/database';
 
 // NB: the local exercise_logs SQLite table (logExerciseWithVolume) is
 // no longer written to. Volume aggregation now happens on the server
@@ -246,6 +249,11 @@ export default function ActiveWorkoutScreen() {
   const [coachNote, setCoachNote] = useState('');
   // Queued on the phone, the server did not answer (the drawn not-sent state, C2_error).
   const [notSent, setNotSent] = useState(false);
+  // FIX-974R1 (LS-974R1 B2): the sync engine sent it while the not-sent page was open; the page leaves as Send does.
+  const [sentByPhone, setSentByPhone] = useState(false);
+  // FIX-974R1 (LO-974R1 C2, LS-974R1 C4): the workout's minutes at Finish workout. The summary shows them and Send
+  // saves them, so they do not tick on while the client rates the workout.
+  const [summaryMinutes, setSummaryMinutes] = useState<number | null>(null);
   // From the first Send tap the rating and note are fixed: Try again resends exactly these.
   const sentRatingRef = useRef<CoachRating>({});
   const sendTapRef = useRef(false);
@@ -758,6 +766,12 @@ export default function ActiveWorkoutScreen() {
     }
     // C5: Finish workout and "Finish and log" open the summary; only its Send (with `rating`) saves.
     if (summaryFirst && !rating) {
+      setSummaryMinutes(Math.round(timer / 60));
+      // FIX-974R1 (LS-974R1 C2): a rest still running ends here, so no rest-over buzz or alert comes under the summary.
+      if (restIntervalRef.current) clearInterval(restIntervalRef.current);
+      restIntervalRef.current = null;
+      setRestActive(false);
+      cancelRestAlert();
       setSummaryOpen(true);
       return;
     }
@@ -794,7 +808,7 @@ export default function ActiveWorkoutScreen() {
           }
           pendingPersistPayloadRef.current = null;
           if (timerRef.current) clearInterval(timerRef.current);
-          const durationMinutes = Math.round(timer / 60);
+          const durationMinutes = rating && summaryMinutes != null ? summaryMinutes : Math.round(timer / 60);
           const completedExercises = sessionExercises.filter((e) =>
             e.sets.some((s) => s.completed),
           );
@@ -1256,6 +1270,56 @@ export default function ActiveWorkoutScreen() {
   // A press on another tab asks the same question (ClientNavigator).
   useEffect(() => setWorkoutLeaveGuard((leave) => askBeforeLeavingRef.current(leave, false)), []);
 
+  // FIX-974R1 (LS-974R1 B1): the summary is the whole screen (C2_summary_*); ClientNavigator hides the tab bar while
+  // this route says summary (navigation/workoutSummaryTabBar).
+  const summaryParamRef = useRef((route.params as { summary?: boolean }).summary === true);
+  useEffect(() => {
+    if (summaryParamRef.current === summaryOpen) return;
+    summaryParamRef.current = summaryOpen;
+    navigation.setParams({ summary: summaryOpen });
+  }, [summaryOpen, navigation]);
+
+  // FIX-974R1 (LS-974R1 B2): on the not-sent page the sync engine may send the queued workout and its completion (the
+  // signal is back). Once the row is sent with no completion left to send, the page leaves as a sent workout does.
+  useEffect(() => {
+    if (!notSent) return undefined;
+    const key = queueKeyRef.current;
+    let active = true;
+    const onSynced = () => {
+      void (async () => {
+        try {
+          const db = await getDatabase();
+          const row = await db.getFirstAsync<{ sync_status: string; assignment_json: string | null }>(
+            'SELECT sync_status, assignment_json FROM workout_logs WHERE client_key = ? LIMIT 1',
+            [key],
+          );
+          if (!active || row?.sync_status !== 'synced' || row.assignment_json != null) return;
+          active = false;
+          finishingRef.current = true;
+          setNotSent(false);
+          setSentByPhone(true);
+          HapticService.success();
+          navigation.goBack();
+        } catch (error) {
+          logger.warn('workout.summary.sent-by-phone', { error: normalizeError(error) });
+        }
+      })();
+    };
+    workoutSyncEvents.on('synced', onSynced);
+    return () => {
+      active = false;
+      workoutSyncEvents.off('synced', onSynced);
+    };
+  }, [notSent, navigation]);
+
+  // FIX-974R1 (LO-974R1 C3): Android back while Send is saving does nothing; the save's answer leaves or comes back.
+  const summaryBusy = summaryOpen && (saving || sentByPhone);
+  useEffect(() => {
+    if (!summaryBusy) return undefined;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => true);
+    return () => sub.remove();
+  }, [summaryBusy]);
+
   const totalSets = sessionExercises.reduce((sum, ex) => sum + ex.sets.length, 0);
   const completedSets = sessionExercises.reduce((sum, ex) => sum + ex.sets.filter((s) => s.completed).length, 0);
 
@@ -1336,14 +1400,19 @@ export default function ActiveWorkoutScreen() {
       <WorkoutFinishSummary
         summary={summary} styles={styles} historyState={historyState} elapsed={formatTime(timer)}
         c5={{
-          assignmentId, today: getTodayString(), minutes: Math.round(timer / 60), sets: summary.sets, volume: summary.volume,
+          assignmentId, today: getTodayString(), minutes: summaryMinutes ?? Math.round(timer / 60), sets: summary.sets, volume: summary.volume,
           lines: whatMoved(sessionExercises, history, summary.records, bodyWeight),
           effort, note: coachNote, onEffort: setEffort, onNote: setCoachNote,
-          status: notSent ? 'notSent' : saving ? 'sending' : 'open',
-          sentKey: notSent || saving ? queueKeyRef.current || null : null,
+          status: notSent ? 'notSent' : saving || sentByPhone ? 'sending' : 'open',
+          // LO-974R1 B1: today's segment and day draw in on a Send that is on its way or sent; not sent keeps the read.
+          sentKey: saving || sentByPhone ? queueKeyRef.current || null : null,
           onSend: () => sendFromSummary(false), onTryAgain: () => sendFromSummary(true),
           // Not sent: leaving goes where main's "Saved on this phone" went; else back to the logger.
-          onBack: () => (notSent ? navigation.goBack() : setSummaryOpen(false)),
+          onBack: () => {
+            if (summaryBusy) return; // LO-974R1 C3: not while Send is saving.
+            if (notSent) navigation.goBack();
+            else setSummaryOpen(false);
+          },
         }}
       />
     );

@@ -8,7 +8,7 @@ import { View, Text, StyleSheet, Platform, StatusBar } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNetworkStatus, isEffectivelyOnline } from '../hooks/useNetworkStatus';
 import { Colors } from '../constants/colors';
-import { colors, layout } from '../theme/tokens';
+import { colors, layout, typography } from '../theme/tokens';
 import { readUserCacheSync } from '../lib/userCache';
 import { isCoachLikeRole } from '../lib/roleSelectionGate';
 
@@ -27,30 +27,32 @@ export default function OfflineBanner() {
 
   return (
     <View style={styles.banner} accessibilityRole="alert" accessibilityLiveRegion="polite">
-      <Ionicons name="cloud-offline-outline" size={16} color={Colors.textOnPrimary} />
+      <Ionicons name="cloud-offline-outline" size={12} color={Colors.textOnPrimary} />
       <Text style={styles.text} maxFontSizeMultiplier={1.3}>{coach ? COACH_LINE : CLIENT_LINE}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  // C2_offline: a dark ink band under the status bar, the icon and up to two lines, left aligned.
+  // C2_offline (FIX-974R1, LS-974R1 B3; measured on C2_offline_ios390_100): a dark ink band under the status bar, a
+  // 12 pt icon 6 pt from the words, the app's Inter Medium 14 on an 18 line, left aligned at the 24 pt gutter. C1-S-10
+  // takes two lines at 390 pt and three at 360 pt, as the frames draw it.
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 6,
     backgroundColor: colors.ink,
-    paddingVertical: 10,
+    paddingVertical: 9,
     paddingHorizontal: layout.gutter,
     // Sit below the status bar on Android; iOS is handled by the SafeAreaView in
     // the root navigator so this only adds its own vertical padding.
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : 10,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 9 : 9,
   },
   text: {
     flex: 1,
     color: Colors.textOnPrimary,
+    fontFamily: typography.bodyMd.fontFamily,
     fontSize: 14,
-    lineHeight: 20,
-    fontWeight: '500',
+    lineHeight: 18,
   },
 });

@@ -68,6 +68,8 @@ export function whatMoved(
   bodyWeight: Record<string, boolean | undefined>,
 ): MovedLine[] {
   const lines: MovedLine[] = [];
+  // FIX-974R1 (LO-974R1 C4, LS-974R1 C1): the same exercise twice draws its record once, from a block that lifted it.
+  const recordDrawn = new Set<string>();
   for (const exercise of exercises) {
     // LS-928 B4: a set counted in seconds, or a body-weight set, carries no lb to compare.
     if (isTimedRow(exercise) || bodyWeight[exercise.exerciseId]) continue;
@@ -75,8 +77,12 @@ export function whatMoved(
     if (ticked.length === 0) continue;
     const record = records.find((r) => nameKey(r.name) === nameKey(exercise.exerciseName));
     if (record) {
-      const reps = Math.max(...ticked.filter(({ set }) => set.weight === record.weight).map(({ set }) => set.reps));
-      lines.push({ kind: 'best', exercise: exercise.exerciseName, weight: record.weight, text: SUMMARY_COPY.best(exercise.exerciseName, record.weight, reps) });
+      const atRecord = ticked.filter(({ set }) => set.weight === record.weight);
+      if (atRecord.length > 0 && !recordDrawn.has(nameKey(record.name))) {
+        recordDrawn.add(nameKey(record.name));
+        const reps = Math.max(...atRecord.map(({ set }) => set.reps));
+        lines.push({ kind: 'best', exercise: exercise.exerciseName, weight: record.weight, text: SUMMARY_COPY.best(exercise.exerciseName, record.weight, reps) });
+      }
       continue;
     }
     const last = previousSets(history, exercise.exerciseName, exercise.unit);

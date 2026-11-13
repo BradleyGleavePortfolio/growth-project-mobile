@@ -53,6 +53,7 @@ import WidgetsScreen from '../screens/client/WidgetsScreen';
 import WorkoutScreen from '../screens/client/WorkoutScreen';
 import ActiveWorkoutScreen from '../screens/client/ActiveWorkoutScreen';
 import { workoutLeaveGuard } from './workoutLeaveGuard';
+import { summaryHidesTabBar } from './workoutSummaryTabBar';
 import WorkoutHistoryEditScreen from '../screens/client/WorkoutHistoryEditScreen';
 import RoutineBuilderScreen from '../screens/client/RoutineBuilderScreen';
 import CoachGuidelinesScreen from '../screens/client/CoachGuidelinesScreen';
@@ -770,7 +771,7 @@ export default function ClientNavigator({ onDay1Saved, day1NoteVisible }: Day1Sa
   return (
     <TutorialHost tabs={TUTORIAL_TABS} onNavigate={onTutorialNavigate}>
     <Tab.Navigator
-      screenOptions={{
+      screenOptions={({ route }) => ({
         headerShown: false,
         tabBarShowLabel: true,
         // B26: six labelled tabs on a 360 pt Android phone leave 60 pt each;
@@ -796,13 +797,17 @@ export default function ClientNavigator({ onDay1Saved, day1NoteVisible }: Day1Sa
         tabBarHideOnKeyboard: true,
         tabBarActiveTintColor:   colors.forest,
         tabBarInactiveTintColor: sc.textMuted,
-        tabBarStyle: {
-          backgroundColor: sc.bgPrimary,
-          borderTopWidth: 0.5,
-          borderTopColor: sc.border,
-          height: 64 + insets.bottom,
-        },
-      }}
+        tabBarStyle: [
+          {
+            backgroundColor: sc.bgPrimary,
+            borderTopWidth: 0.5,
+            borderTopColor: sc.border,
+            height: 64 + insets.bottom,
+          },
+          // FIX-974R1 (LS-974R1 B1): the workout summary is the whole screen (C2_summary_*), no bar under Send.
+          summaryHidesTabBar(route) && { display: 'none' },
+        ],
+      })}
       screenListeners={({ navigation, route }) => {
         if (featureFlags.clientTutorial) tabNavRef.current = navigation;
         return {
