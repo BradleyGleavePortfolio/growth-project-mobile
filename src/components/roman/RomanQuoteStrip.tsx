@@ -1,18 +1,20 @@
 /**
  * RomanQuoteStrip: the quote on a client turn sent as a reply (ROMAN-HOLD-M), one copy for the
  * Roman room and the read-only history. The people's chat reply strip (MessageBubble replyStub)
- * and its label, reused.
+ * and its label, reused. The history passes its own place and fill (QUOTE-STRIP-950); the room passes none.
  */
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { radius, spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/useTheme';
 
-export default function RomanQuoteStrip({ quote, testID }: { quote: string; testID?: string }): React.ReactElement {
+export default function RomanQuoteStrip({ quote, testID, fill, style }: {
+  quote: string; testID?: string; fill?: string; style?: StyleProp<ViewStyle>;
+}): React.ReactElement {
   const { semanticColors: c } = useTheme();
   return (
     <View
-      style={[styles.quote, { backgroundColor: c.bgPrimary }]}
+      style={[styles.quote, { backgroundColor: fill ?? c.bgPrimary }, style]}
       accessible
       accessibilityRole="text"
       accessibilityLabel={`Replying to: ${quote}`}
