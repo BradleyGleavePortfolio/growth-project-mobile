@@ -10,7 +10,7 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View, type TextStyle, type ViewStyle } from 'react-native';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { CommonActions, NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator, type NativeStackHeaderProps } from '@react-navigation/native-stack';
 import type { AxiosResponse } from 'axios';
 
@@ -349,4 +349,88 @@ it('comment: 6 pt under the strip (999 to 1017), the next one spacing.sm under i
   expect(first.marginTop).toBe(3);
   expect(second.marginTop).toBe(spacing.sm);
   expect([first.fontSize, first.lineHeight]).toEqual([16, 20]);
+});
+
+// ─── The round 1 lenses' unheld rules (LS-986R1 C3; LO-986R1 C1 to C3), each pinned so its mutation goes red ─────
+
+const day = (date: string, weight: number, reps: number) => session(date, weight, reps);
+const answerOf = (sessions: ReturnType<typeof session>[], best: { date: string; top_set: { weight_lbs: number; reps: number } },
+  first: { date: string; top_set: { weight_lbs: number; reps: number } | null }) => ({ best, first, sessions });
+
+it('LO-986R1 C1: the Since week 1 change in the drawn forest (C2_detail "+20 lb" rows 645-680, the data forest token), not ink', async () => {
+  serve({ data: DETAIL });
+  const view = await screen();
+  // This file's week 1 is Sep 22 at 145, so the change reads +10 lb.
+  const change = await within(await view.findByTestId('exercise-history-since')).findByText('+10 lb');
+  expect(flat(change).color).toBe(lightTokens.data.forest);
+});
+
+it('LS-986R1 C3: two rows on the best day with the best set: the star sits on one row only, the older', async () => {
+  const a = { ...day('2026-10-13', 155, 6), workout_id: 'w-a' };
+  const b = { ...day('2026-10-13', 155, 6), workout_id: 'w-b' };
+  serve({ data: DETAIL }, { data: answerOf([a, b, day('2026-09-22', 145, 6)], { date: a.date, top_set: a.top_set }, { date: '2026-09-22', top_set: { weight_lbs: 145, reps: 6 } }) });
+  const view = await screen();
+  await view.findByTestId('exercise-history-row-2');
+  expect(view.getAllByTestId('exercise-history-star')).toHaveLength(1);
+  expect(within(view.getByTestId('exercise-history-row-1')).getByTestId('exercise-history-star')).toBeTruthy();
+  expect(view.getAllByTestId(/^exercise-history-dot-/, HIDDEN).filter((d) => flat(d).backgroundColor === lightTokens.data.peak)).toHaveLength(1);
+});
+
+it('LS-986R1 C3, LO-986R1 C2: week 1 at body weight with two later weighted sessions draws no Since week 1 tile', async () => {
+  const bw = day('2026-09-15', 0, 10);
+  serve({ data: DETAIL }, { data: answerOf([day('2026-10-13', 155, 6), day('2026-10-06', 150, 6), bw],
+    { date: '2026-10-13', top_set: { weight_lbs: 155, reps: 6 } }, { date: bw.date, top_set: bw.top_set }) });
+  const view = await screen();
+  await view.findByTestId('exercise-history-best');
+  expect(view.queryByTestId('exercise-history-since')).toBeNull();
+  expect(view.queryByText(/^[+\u2212]\d+ lb$/)).toBeNull();
+});
+
+it('LS-986R1 C3, LO-986R1 C3: the strip is hidden from screen readers (no dot or track without hidden elements)', async () => {
+  serve({ data: DETAIL });
+  const view = await screen();
+  await view.findByTestId('exercise-history-row-0');
+  expect(view.queryByTestId('exercise-history-dot-0')).toBeNull();
+  expect(view.queryByTestId('exercise-history-track-0')).toBeNull();
+  expect(view.getByTestId('exercise-history-dot-0', HIDDEN)).toBeTruthy();
+});
+
+it('LS-986R1 C3: Best ever is drawn as the server sends it, never recomputed from the rows (H2)', async () => {
+  serve({ data: DETAIL }, { data: answerOf([day('2026-10-13', 155, 6), day('2026-10-06', 150, 6)],
+    { date: '2025-08-01', top_set: { weight_lbs: 200, reps: 3 } }, { date: '2025-01-05', top_set: { weight_lbs: 100, reps: 5 } }) });
+  const view = await screen();
+  const best = await view.findByTestId('exercise-history-best');
+  expect(within(best).getByText('200 × 3')).toBeTruthy();
+  expect(within(best).getByText('Aug 1')).toBeTruthy();
+  expect(view.queryAllByTestId('exercise-history-star')).toHaveLength(0);
+});
+
+it('LS-986R1 C3: a history answer for a page run that was replaced (new route param) is dropped; the new run draws its own', async () => {
+  const nav = createNavigationContainerRef<WorkoutStackParamList>();
+  const pending: Record<string, (v: unknown) => void> = {};
+  get.mockImplementation((url: string) => {
+    if (url.startsWith('/exercise-catalog/')) {
+      const id = decodeURIComponent(url.split('/').pop() ?? '');
+      return Promise.resolve(ok({ ...DETAIL, id, name: id === 'seed:push-002' ? 'Incline press' : 'Bench press' }));
+    }
+    return new Promise((r) => { pending[decodeURIComponent(url.split('name=')[1] ?? '')] = r; });
+  });
+  const view = await render(
+    <NavigationContainer ref={nav}>
+      <Stack.Navigator>
+        <Stack.Screen name="ExerciseDetail" component={ExerciseDetailScreen} initialParams={{ idOrSlug: 'seed:push-001' }} />
+      </Stack.Navigator>
+    </NavigationContainer>,
+  );
+  await view.findByText('Bench press');
+  await waitFor(() => expect(pending['Bench press']).toBeDefined());
+  await act(async () => { nav.dispatch(CommonActions.setParams({ idOrSlug: 'seed:push-002' })); });
+  await view.findByText('Incline press');
+  await waitFor(() => expect(pending['Incline press']).toBeDefined());
+  await act(async () => { pending['Bench press'](ok(CASE1)); });
+  await flush();
+  expect(view.queryByTestId('exercise-history')).toBeNull();
+  await act(async () => { pending['Incline press'](ok(TWO_COACHES)); });
+  expect(await view.findByText('Sam: Good depth today.')).toBeTruthy();
+  expect(view.queryByTestId('exercise-history-row-1')).toBeNull();
 });
