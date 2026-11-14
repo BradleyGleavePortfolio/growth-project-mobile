@@ -337,6 +337,22 @@ it('C1. Cancel reply in the reopened room while the closed room\'s send is still
   expect(quoting(c)).toBe(false);
 });
 
+// LO-988R1 (AUDIT 6873008435) C1's P3, the same order in one room: red at 91f847cf.
+it('C1 (LO-988R1 P3). Cancel reply while the first send is out, then it fails keeping its key: in the same room, typing the old words back draws no strip', async () => {
+  first = 'hold';
+  const a = await open();
+  await quotedSend(a);
+  await cancelReply(a);
+  await act(async () => { release?.('lost'); });
+  await settle();
+  expect(quoting(a)).toBe(false);
+  await type(a, `${WORDS} x`);
+  await type(a, WORDS);
+  await settle();
+  expect(boxOf(a)).toBe(WORDS);
+  expect(quoting(a)).toBe(false);
+});
+
 it('C1. Cancel reply, then the same reply picked again and Send again (the same words, the kept key): it fails keeping its key; Back, reopen: the strip is back', async () => {
   first = 'pending';
   const a = await open();
