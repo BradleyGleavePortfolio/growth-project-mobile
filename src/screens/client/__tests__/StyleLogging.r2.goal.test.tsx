@@ -152,7 +152,7 @@ describe('the week (behaviour)', () => {
     let view = await mount(DEVICES[0], <ClientWorkoutViewerScreen />);
     expect(view.queryByTestId('week-card')).toBeNull();
     expect(view.getByText('To complete')).toBeTruthy();
-    view.unmount();
+    await view.unmount();
     mockToday = '2026-11-23';
     view = await mount(DEVICES[0], <ClientWorkoutViewerScreen />);
     expect(within(view.getByTestId('week-card')).getByText('Mon 23')).toBeTruthy();
@@ -163,7 +163,7 @@ describe('the week (behaviour)', () => {
     mockToday = '2026-11-01';
     let view = await mount(DEVICES[0], <ClientWorkoutViewerScreen />);
     expect(view.getByTestId('week-ring').props.accessibilityLabel).toBe('1 of 2 done');
-    view.unmount();
+    await view.unmount();
     mockToday = '2026-11-02';
     view = await mount(DEVICES[0], <ClientWorkoutViewerScreen />);
     expect(view.queryByTestId('week-card')).toBeNull();
@@ -292,7 +292,7 @@ describe.each(DEVICES)('the drawn numbers at $name', (device) => {
     let view = await mount(device, <RoutineBuilderScreen />);
     expect(view.getByText('2 exercises')).toBeTruthy();
     expect(view.queryByText('Exercises')).toBeNull();
-    view.unmount();
+    await view.unmount();
     mockRoutineId = undefined;
     view = await mount(device, <RoutineBuilderScreen />);
     expect(view.getByText('Exercises')).toBeTruthy();
