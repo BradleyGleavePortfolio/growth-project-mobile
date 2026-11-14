@@ -198,7 +198,7 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
                     viewerUserId={client?.id}
                     viewerCoachId={client?.coach_id}
                     onBlocked={() => navigation.goBack()}
-                    triggerColor={light ? fp.n700 : undefined}
+                    triggerColor={fp.n700}
                     triggerSize={22}
                     testID={`dm-message-safety-${item.id}`}
                   />
