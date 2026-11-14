@@ -54,6 +54,7 @@ const WINDOWS = KINDS.flatMap((row) => row.paths.map((path, index) => ({ ...row,
 
 let posted: Array<{ path: string; account: string | null; token: string }>;
 let rejectOnce = false;
+let rejectPath: string | undefined;
 let transportHold: ReturnType<typeof deferred> | null = null;
 let transportStarted: ReturnType<typeof deferred> | null = null;
 const adapter: AxiosAdapter = async (config) => {
@@ -61,7 +62,7 @@ const adapter: AxiosAdapter = async (config) => {
   posted.push({ path: config.url ?? '', account: credentialSubject(bearer), token: bearer });
   transportStarted?.resolve();
   if (transportHold) await transportHold.promise;
-  if (rejectOnce) {
+  if (rejectOnce && (!rejectPath || config.url === rejectPath)) {
     rejectOnce = false;
     const response = { config, status: 401, statusText: 'Unauthorized', headers: {}, data: {} };
     throw new AxiosError('Unauthorized', 'ERR_BAD_REQUEST', config as InternalAxiosRequestConfig, null, response);
@@ -120,6 +121,7 @@ beforeEach(async () => {
   api.defaults.adapter = adapter;
   posted = [];
   rejectOnce = false;
+  rejectPath = undefined;
   transportHold = null;
   transportStarted = null;
   await signIn('owner-a');
@@ -168,16 +170,30 @@ describe.each(WINDOWS)('LS-972R3 $kind send $send ($path)', ({ queue, paths, sen
     expect(posted[send - 1].token).toBe(token('owner-a', 2));
     expect(await aQueue()).toEqual([]);
   });
+
+  it('refuses a different subject even without a cache or auth-event change', async () => {
+    await queue();
+    const hold = holdRead(1 + send);
+    const sending = flush();
+    await hold.started;
+    secure.__store.set('supabase_token', token('owner-b'));
+    hold.resume();
+    await sending;
+    expect(posted.map(({ path, account }) => ({ path, account })))
+      .toEqual(paths.slice(0, send - 1).map((path) => ({ path, account: 'sub:owner-a' })));
+    expect(await aQueue()).toEqual([expect.objectContaining({ id: ID })]);
+  });
 });
 
-describe.each(KINDS)('LS-972R3 $kind replay and in-flight response', ({ queue, paths }) => {
+describe.each(WINDOWS)('LS-972R3 $kind send $send replay', ({ queue, paths, path, send }) => {
   it.each(['logout', 'owner-a', 'owner-b'])('never replays into %s after a 401', async (next) => {
     await queue();
     __setRefreshSessionForTests(async () => ({
       data: { session: { access_token: token('owner-a', 1), refresh_token: 'test-refreshed-a' } }, error: null,
     }));
     rejectOnce = true;
-    const hold = holdRead(3); // capture, initial request, replay
+    rejectPath = path;
+    const hold = holdRead(2 + send); // capture, preceding sends, failed send, replay
     const sending = flush();
     await hold.started;
     if (next === 'logout') await signOut();
@@ -185,10 +201,51 @@ describe.each(KINDS)('LS-972R3 $kind replay and in-flight response', ({ queue, p
     hold.resume();
     await sending;
     expect(posted.map(({ path, account }) => ({ path, account })))
-      .toEqual([{ path: paths[0], account: 'sub:owner-a' }]);
+      .toEqual(paths.slice(0, send).map((path) => ({ path, account: 'sub:owner-a' })));
     expect(await aQueue()).toEqual([expect.objectContaining({ id: ID })]);
   });
 
+  it('replays with the refreshed credential when the same session remains', async () => {
+    await queue();
+    __setRefreshSessionForTests(async () => ({
+      data: { session: { access_token: token('owner-a', 1), refresh_token: 'test-refreshed-a' } }, error: null,
+    }));
+    rejectOnce = true;
+    rejectPath = path;
+    await flush();
+    const expected = [...paths.slice(0, send), path, ...paths.slice(send)];
+    expect(posted.map(({ path, account }) => ({ path, account })))
+      .toEqual(expected.map((path) => ({ path, account: 'sub:owner-a' })));
+    expect(posted[send].token).toBe(token('owner-a', 1));
+    expect(await aQueue()).toEqual([]);
+  });
+
+  it.each(['logout', 'owner-a', 'owner-b'])('does not publish or replay an overtaken refresh into %s', async (next) => {
+    await queue();
+    const started = deferred();
+    const resume = deferred();
+    __setRefreshSessionForTests(async () => {
+      started.resolve();
+      await resume.promise;
+      return { data: { session: { access_token: token('owner-a', 1), refresh_token: 'test-refreshed-a' } }, error: null };
+    });
+    rejectOnce = true;
+    rejectPath = path;
+    const sending = flush();
+    await started.promise;
+    if (next === 'logout') await signOut();
+    else await signIn(next);
+    const afterSwitch = secure.__store.get('supabase_token');
+    resume.resolve();
+    await sending;
+    expect(secure.__store.get('supabase_token')).toBe(afterSwitch);
+    expect(posted.map(({ path, account }) => ({ path, account })))
+      .toEqual(paths.slice(0, send).map((path) => ({ path, account: 'sub:owner-a' })));
+    expect(await aQueue()).toEqual([expect.objectContaining({ id: ID })]);
+  });
+});
+
+describe.each(KINDS)('LS-972R3 $kind in-flight response', ({ queue, paths }) => {
   it('does not continue a manual second send or write back after another account signs in during transport', async () => {
     await queue();
     transportHold = deferred();
