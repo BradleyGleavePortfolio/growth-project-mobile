@@ -15,7 +15,7 @@ import {
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useClientStore } from '../../store/clientStore';
 import { MealType, FoodLog } from '../../types';
-import { foodApi, logApi, type WaterEntry } from '../../services/api';
+import { foodApi, logApi } from '../../services/api';
 import { notifyPendingFoodLogs, syncFoodLogQueue } from '../../services/foodLogSync';
 import { usePendingFoodLogCount } from '../../hooks/useFoodLogQueueSync';
 import { useNetworkStatus, isEffectivelyOnline } from '../../hooks/useNetworkStatus';
@@ -39,7 +39,7 @@ import { initialEditPortion, editUnitsFor, editPortionMultiplier } from '../../u
 import { mapFoodItem, type RawFoodItem } from '../../utils/log/mapFoodItem';
 import { matchLoggedFoods, mergeWithLoggedMatches, queuePastMeal, repeatPastMeal } from '../../utils/log/quickLog';
 import { dropQueued } from '../../services/foodLogQueue';
-import { countsInDay } from '../../utils/log/queuedDay';
+import { countsInDay, type ShownWaterEntry } from '../../utils/log/queuedDay';
 import type { PlanLink } from '../../utils/log/planLink';
 import { addDays, getTodayString } from '../../utils/date';
 import { dayForNewLog } from '../../utils/logDay';
@@ -88,6 +88,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
     removeWaterEntry,
     removeFoodLogLocally,
     queuedFoods,
+    queuedWaterWeight,
   } = useClientStore();
 
   const { recentFoods, frequentFoods, lastMeals, browseUnavailable, loadBrowseFoods } = useFoodBrowse(
@@ -628,13 +629,16 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
 
   const handleAddWater = (oz: number) => {
     if (currentUser) {
-      logWater(currentUser.id, '', oz);
+      // OFFLINE-WATER-WEIGHT-M: with no signal the glass waits in the phone's queue (the send decision food uses).
+      if (online) logWater(currentUser.id, '', oz);
+      else logWater(currentUser.id, '', oz, false);
     }
   };
 
-  const handleRemoveWater = (entry: WaterEntry) => {
+  const handleRemoveWater = (entry: ShownWaterEntry) => {
     if (!currentUser || removingWaterId) return;
-    Alert.alert('Remove water entry?', "This entry will be removed from this day's water total.", [
+    // OFFLINE-WATER-WEIGHT-M: a glass saved offline is only on this phone; Remove takes it off with no server call.
+    Alert.alert('Remove water entry?', entry.offline ? 'This entry will be removed from this phone.' : "This entry will be removed from this day's water total.", [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',
@@ -666,6 +670,10 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
     ? foodLogs.filter((f) => f.offline === 'waiting' && queuedIds.has(f.id)).length
     : 0;
   const pendingElsewhere = Math.max(0, pendingFoods - pendingInDay);
+  // OFFLINE-WATER-WEIGHT-M (M6): glasses saved offline that this day's water total does not count (the switch off, or
+  // another day, or a day not read yet) get the same note as foods (C2-S-17).
+  const waterShownIds = new Set((waterEntries ?? []).map((e) => e.id));
+  const waterElsewhere = (queuedWaterWeight ?? []).filter((q) => q.kind === 'water' && !q.parkedAt && !waterShownIds.has(q.id)).length;
 
   const remaining = macroTargets ? macroTargets.calories - dailyTotals.calories : null;
   const showDayLoading = !hasLoadedDay && (isLoading || !loadError);
@@ -704,6 +712,13 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
           {pendingInDay === 1
             ? `1 food saved offline is in this log and its totals. ${online ? 'Pull down to sync it now.' : 'It syncs when the connection returns.'}`
             : `${pendingInDay} foods saved offline are in this log and its totals. ${online ? 'Pull down to sync them now.' : 'They sync when the connection returns.'}`}
+        </Text>
+      ) : null}
+      {waterElsewhere > 0 ? (
+        <Text style={styles.note} accessibilityLiveRegion="polite" testID="log-offline-pending-water">
+          {waterElsewhere === 1
+            ? `1 water entry saved offline is not in this log or its totals yet. ${online ? 'Pull down to sync it now.' : 'It syncs when the connection returns.'}`
+            : `${waterElsewhere} water entries saved offline are not in this log or its totals yet. ${online ? 'Pull down to sync them now.' : 'They sync when the connection returns.'}`}
         </Text>
       ) : null}
       {savedMessage ? (

@@ -1,13 +1,14 @@
 /** C8 v2 focus/explore layer. Receives caller-authorized history, never fetches. */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 import TgpLineChart from '../../ui/charts/TgpLineChart';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { useTheme } from '../../theme/ThemeProvider';
 import { colors, radius, typography } from '../../theme/tokens';
 import { useReduceMotion } from '../../screens/client/wearables/components/useReduceMotion';
-import { weightDomain, weightPeriod, weightSegments, weightTrend, type WeightPeriod, type WeightSample } from './weightTrend';
+import { WEIGHT_DAY, weightDomain, weightPeriod, weightSegments, weightTrend, type WeightPeriod, type WeightSample } from './weightTrend';
 
 export interface WeightTrendDarkProps {
   data: WeightSample[];
@@ -18,13 +19,15 @@ export interface WeightTrendDarkProps {
   height?: number;
   /** The client's unit. Data and goal stay pounds in; only the drawing and words convert. */
   unit?: 'lb' | 'kg';
+  /** REFINE-972 (C8 C2_offline): the line under the chart, on the masthead, while a weigh-in waits on this phone. */
+  phoneLine?: string;
   testID?: string;
 }
 const date = (x: number) => new Date(x).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 const pounds = (n: number) => n.toFixed(1);
 
 export default function WeightTrendChartDark({
-  data, period = 'All', overview = false, goal: goalLbs, through = Date.now(), height = 248, unit = 'lb', testID,
+  data, period = 'All', overview = false, goal: goalLbs, through = Date.now(), height = 248, unit = 'lb', phoneLine, testID,
 }: WeightTrendDarkProps) {
   const { semanticColors: sc } = useTheme();
   // Smooth in pounds (2a rules), then scale every drawn value to the client's unit.
@@ -41,6 +44,8 @@ export default function WeightTrendChartDark({
     ? `Goal ${goal.value} ${unit}, set with ${goal.coachName}` : `Your goal ${goal.value} ${unit}` : '';
   const [selectedX, setSelectedX] = useState<number | null>(null);
   const selected = days.find((p) => p.x === selectedX);
+  // REFINE-972 (C8V2-S-29): today's weigh-in kept on this phone gets its callout beside the ring, unless the touch chip shows.
+  const todayRing = selected ? undefined : days.find((p) => p.pending && p.weight != null && p.x === Math.floor(through / WEIGHT_DAY) * WEIGHT_DAY);
   const reduceMotion = useReduceMotion();
   const opacity = useRef(new Animated.Value(1)).current;
   useEffect(() => {
@@ -97,6 +102,12 @@ export default function WeightTrendChartDark({
                 backgroundColor: sc.textOnAccent, position: 'absolute', top: 0,
                 width: Math.min(212, right - 44), left: Math.max(44, Math.min(x(selected.x) - 106, right - Math.min(212, right - 44))),
               }]}><Text style={[styles.caption, { color: colors.ink }]}>{describe(days.indexOf(selected))}</Text></View>}
+              {todayRing && <View pointerEvents="none" testID="weight-today-callout" accessible={false} accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants" style={[styles.callout, { left: 44, width: Math.max(0, x(todayRing.x) - 50), top: y(todayRing.weight!) + 8 }]}>
+                <View style={[styles.pill, { backgroundColor: sc.textOnAccent }]}>
+                  <Text style={[styles.caption, { color: colors.ink }]}>{`${pounds(todayRing.weight!)} ${unit} today`}</Text>
+                </View>
+              </View>}
             </>,
             render: ({ x, y, right, bottom }) => (
               <>
@@ -119,6 +130,10 @@ export default function WeightTrendChartDark({
             ),
           }} />
       </Animated.View>
+      {phoneLine ? <View testID="weight-phone-line" style={styles.phone}>
+        <Ionicons name="phone-portrait-outline" size={18} color={sc.data.pending} />
+        <Text style={[typography.body, text, styles.grow]}>{phoneLine}</Text>
+      </View> : null}
       {last.count === 1 ? <Text style={[styles.caption, text]}>The trend line starts at your second weigh-in.</Text> : <>
         {!overview && <View style={styles.legend}>{legend.map(([name, color, kind]) => <View key={name} style={styles.key}>
           <Svg width={20} height={12} accessible={false}>
@@ -143,4 +158,8 @@ const styles = StyleSheet.create({
   legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 12 },
   key: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   chip: { borderRadius: radius.button, padding: 10, marginBottom: 12 },
+  callout: { position: 'absolute', alignItems: 'flex-end' },
+  pill: { borderRadius: radius.button, paddingHorizontal: 10, paddingVertical: 2 },
+  phone: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginTop: 8 },
+  grow: { flex: 1 },
 });
