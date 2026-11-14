@@ -33,6 +33,9 @@ export interface ReportMessageSheetProps {
   /** REFINE-950: 'roman' draws the parts this sheet shares with mobile-879-05 (the people's report sheet) as that
    *  frame draws them, for the Roman room only. The direct-message screens pass nothing and keep this sheet's look. */
   look?: 'roman';
+  /** CHECKIN-DRAFT-M: a report of one of Roman's drafts takes a reason only (backend ReportAiDraftDto), so no details
+   *  field is drawn and none is passed on. Every other caller passes nothing and keeps the field. */
+  noDetails?: boolean;
 }
 
 export function ReportMessageSheet({
@@ -42,6 +45,7 @@ export function ReportMessageSheet({
   onClose,
   revealError = false,
   look,
+  noDetails = false,
 }: ReportMessageSheetProps): React.ReactElement {
   const { colors, semanticColors, colorScheme } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -76,13 +80,13 @@ export function ReportMessageSheet({
     setSubmitting(true);
     setError('');
     try {
-      await onSubmit({ reason, details: details.trim() ? details.trim() : undefined });
+      await onSubmit({ reason, details: !noDetails && details.trim() ? details.trim() : undefined });
       reset();
     } catch {
       setError('Sending your report could not be confirmed. Check your connection, then try again.');
       setSubmitting(false);
     }
-  }, [reason, submitting, details, onSubmit, reset]);
+  }, [reason, submitting, details, noDetails, onSubmit, reset]);
 
   const canSubmit = !!reason && !submitting;
 
@@ -166,20 +170,24 @@ export function ReportMessageSheet({
 
           {reasons}
 
-          <Text style={styles.sectionLabel}>More details (optional)</Text>
-          <TextInput
-            style={styles.detailsInput}
-            multiline
-            maxLength={DETAILS_MAX}
-            value={details}
-            onChangeText={setDetails}
-            placeholder="Add anything the safety team should know."
-            placeholderTextColor={colors.textMuted}
-            accessibilityLabel="Additional details"
-          />
-          <Text style={styles.counter}>
-            {details.length}/{DETAILS_MAX}
-          </Text>
+          {noDetails ? null : (
+            <>
+              <Text style={styles.sectionLabel}>More details (optional)</Text>
+              <TextInput
+                style={styles.detailsInput}
+                multiline
+                maxLength={DETAILS_MAX}
+                value={details}
+                onChangeText={setDetails}
+                placeholder="Add anything the safety team should know."
+                placeholderTextColor={colors.textMuted}
+                accessibilityLabel="Additional details"
+              />
+              <Text style={styles.counter}>
+                {details.length}/{DETAILS_MAX}
+              </Text>
+            </>
+          )}
 
           {error ? (
             <Text

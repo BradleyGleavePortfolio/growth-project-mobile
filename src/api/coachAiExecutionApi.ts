@@ -10,7 +10,8 @@
  *   POST  /v1/coach/ai/draft/send-notification   → draft.send_notification
  *
  *   GET   /ai/gateway/drafts?status=pending&clientId=&limit=
- *   PATCH /ai/gateway/drafts/:id   body: { decision: 'approved'|'rejected', note? }
+ *   PATCH /ai/gateway/drafts/:id   body: { decision: 'approved'|'rejected', note?, payload? }
+ *   POST  /ai/gateway/drafts/:id/report   body: { reason }   (CHECKIN-DRAFT-M, b#1234)
  *
  * `draft.client_message` is no longer surfaced here — it was merged into
  * the existing PR #293 `draft.coach_message` flow, which mobile reaches via
@@ -35,6 +36,8 @@ import type {
   DecideResponse,
   InvokeDraftResponse,
   ListPendingResponse,
+  ReportDraftReason,
+  ReportDraftResponse,
   SendNotificationInvokeRequest,
   SendNotificationProposedAction,
 } from './types/coachAiExecution';
@@ -137,6 +140,8 @@ export const COACH_AI_EXECUTION_PATHS = {
   listPending: '/ai/gateway/drafts',
   decide: (draftId: string) =>
     `/ai/gateway/drafts/${encodeURIComponent(draftId)}`,
+  report: (draftId: string) =>
+    `/ai/gateway/drafts/${encodeURIComponent(draftId)}/report`,
 } as const;
 
 /** LS-952R3 B1: the paged queue's page (backend ai-gateway.controller.ts listDrafts, `limit` at most 200). */
@@ -289,8 +294,9 @@ export const coachAiExecutionApi = {
    *  updated row. On materialisation failure backend returns a 500 with
    *  AI_MATERIALISATION_FAILED; the draft stays `pending` so the coach
    *  can retry. */
-  async approveDraft(draftId: string, note?: string): Promise<DecideResponse> {
-    const body: DecideRequest = { decision: 'approved', note };
+  async approveDraft(draftId: string, note?: string, payload?: { body: string }): Promise<DecideResponse> {
+    // CHECKIN-DRAFT-M: a payload only for a saved edit; every other caller sends today's body.
+    const body: DecideRequest = payload ? { decision: 'approved', note, payload } : { decision: 'approved', note };
     if (_mockMode === 'on') {
       const draft = mockStore.drafts.get(draftId);
       if (!draft) throw new Error(`Mock: draft ${draftId} not found`);
@@ -330,6 +336,13 @@ export const coachAiExecutionApi = {
       COACH_AI_EXECUTION_PATHS.decide(draftId),
       body,
     );
+    return res.data;
+  },
+
+  /** CHECKIN-DRAFT-M: Report this draft (b#1234). The body is the reason alone (backend ReportAiDraftDto); nothing is
+   *  sent to the client and the draft stays pending. */
+  async reportDraft(draftId: string, reason: ReportDraftReason): Promise<ReportDraftResponse> {
+    const res = await api.post<ReportDraftResponse>(COACH_AI_EXECUTION_PATHS.report(draftId), { reason });
     return res.data;
   },
 
