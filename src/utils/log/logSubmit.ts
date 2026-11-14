@@ -6,8 +6,13 @@ import { planLink, type PlanLink } from './planLink';
 import { SearchResult } from './types';
 import { parseQuantityInput, densityGramsFor } from './macros';
 import { foodSaveIntent, withSaveKey } from './saveKey';
+import { mealPhotoAfterSave } from './mealPhoto';
 
 const OZ_TO_GRAMS = 28.3495;
+
+/** The new entry's id from POST /log/food's answer, or null. */
+const entryIdOf = (res: { data?: { id?: unknown } } | undefined): string | null =>
+  (typeof res?.data?.id === 'string' ? res.data.id : null);
 
 interface SearchLogArgs {
   food: SearchResult;
@@ -118,10 +123,12 @@ export async function submitSearchLogOffline(args: SearchLogArgs) {
 export async function submitSearchLogOnline(args: SearchLogArgs) {
   const { food, log, created, intent } = searchSave(args);
   // FOOD-1-M R3: one key per intended save; a tap again after a lost answer sends the same key.
-  await withSaveKey(intent, async (key) => {
+  const entryId = await withSaveKey(intent, async (key) => {
     const foodItemId = created ? (await foodApi.create(created)).data.id : food.id;
-    await logApi.logFood({ ...log, food_item_id: foodItemId, client_uuid: key });
+    return entryIdOf(await logApi.logFood({ ...log, food_item_id: foodItemId, client_uuid: key }));
   });
+  // MEAL-PHOTO-M (R5): once the save has answered, a photo the open sheet keeps for this meal and day goes with it.
+  mealPhotoAfterSave(log, entryId);
 }
 
 // Convert a manual qty + unit pair into grams, so we can store a real
@@ -222,13 +229,15 @@ export async function submitManualLogOffline(args: ManualLogArgs) {
 export async function submitManualLogOnlineWithId(args: ManualLogArgs) {
   const { foodPayload, logPayload } = buildManualPayload(args);
   // FOOD-1-M R3: one key per intended save, kept for a tap again after a lost answer.
-  return withSaveKey(foodSaveIntent(logPayload, foodPayload), async (key) => {
+  const saved = await withSaveKey(foodSaveIntent(logPayload, foodPayload), async (key) => {
     const createRes = await foodApi.create(foodPayload);
     const foodItemId = createRes.data.id;
     const logRes = await logApi.logFood({ ...logPayload, food_item_id: foodItemId, client_uuid: key });
-    const id: unknown = logRes?.data?.id;
-    return { name: foodPayload.name, entryId: typeof id === 'string' ? id : null };
+    return { name: foodPayload.name, entryId: entryIdOf(logRes) };
   });
+  // MEAL-PHOTO-M (R5): Quick add takes a kept photo the same way.
+  mealPhotoAfterSave(logPayload, saved.entryId);
+  return saved;
 }
 
 export async function submitManualLogOnline(args: ManualLogArgs) {
