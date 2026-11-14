@@ -47,6 +47,18 @@ import { ExerciseHistoryStyleC } from './workouts/exerciseHistoryStyleC';
 
 type Props = NativeStackScreenProps<WorkoutStackParamList, 'ExerciseDetail'>;
 
+const capital = (word: string) => word.charAt(0).toUpperCase() + word.slice(1);
+/**
+ * The meta line as C2_detail draws it (rows 287-307, "Chest · Barbell"): the body part and the first equipment, each
+ * with a capital first letter; one of them alone; the two equal, once. With neither, main's line exactly.
+ */
+export function metaLine(d: Pick<ExerciseDetail, 'primaryMuscle' | 'category' | 'difficulty' | 'equipment'>): string {
+  const facts = [d.category, (d.equipment ?? [])[0]].map((x) => (x ?? '').trim()).filter(Boolean);
+  if (facts.length === 0) return [d.primaryMuscle, d.category, d.difficulty].filter(Boolean).join(' · ');
+  const once = facts.length === 2 && facts[0].toLowerCase() === facts[1].toLowerCase() ? [facts[0]] : facts;
+  return once.map(capital).join(' · ');
+}
+
 /** C2_detail's play triangle (cols 703-726, rows 130-161: 15.5 pt tall) in a 44 pt box at the bar's right. */
 function PlayControl({ onPress, color }: { onPress: () => void; color: string }) {
   return (
@@ -188,11 +200,7 @@ export default function ExerciseDetailScreen({ route, navigation }: Props) {
       testID="exercise-detail-screen"
     >
       <Text style={styles.title} accessibilityRole="header">{detail.name}</Text>
-      <Text style={styles.meta}>
-        {[detail.primaryMuscle, detail.category, detail.difficulty]
-          .filter(Boolean)
-          .join(' · ')}
-      </Text>
+      <Text style={styles.meta}>{metaLine(detail)}</Text>
 
       {history ? <ExerciseHistoryStyleC history={history} /> : null}
 
@@ -269,9 +277,10 @@ function makeStyles(sc: SemanticTokens) {
       backgroundColor: sc.bgPrimary,
     },
     // C2_detail (STYLE-WORKOUTS-M): the title and every section start at col 48 of the 2x frame, a 24 pt gutter.
+    // REFINE-986: the title's ink 15 pt under the bar (the frame's bar ends at 91 pt, ink row 212).
     scrollContent: {
       paddingHorizontal: layout.gutter,
-      paddingTop: spacing.lg,
+      paddingTop: spacing.sm,
       paddingBottom: spacing['3xl'],
     },
     center: {
@@ -281,14 +290,17 @@ function makeStyles(sc: SemanticTokens) {
     stateBody: {
       paddingHorizontal: spacing.lg,
     },
+    // The drawn letters sit 0.7 pt closer than h1's 0.6 (cols 50-335 against 50-349, the same glyph widths).
     title: {
       ...typography.h1,
+      letterSpacing: 0,
       color: sc.textPrimary,
     },
+    // Title ink row 212 to meta ink row 287 (37.5 pt): no margin above the meta line.
     meta: {
       ...typography.bodySmall,
       color: sc.textMuted,
-      marginTop: spacing.xs,
+      marginTop: 0,
       marginBottom: spacing.md,
     },
     player: {
