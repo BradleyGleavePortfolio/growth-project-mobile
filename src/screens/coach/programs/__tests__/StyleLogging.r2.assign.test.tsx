@@ -216,7 +216,16 @@ describe("Already on this program (behaviour)", () => {
 it("loading: the masthead's band is forest while clients and the program load (LO-987R1 C1)", async () => {
   mockLoading = true;
   const view = await mount();
-  const band = view.UNSAFE_root.findAll((n) => (n.type as unknown) === "MastheadBand");
+  type J = { type: string; props: { color?: string }; children: (J | string)[] | null };
+  const found: J[] = [];
+  const walk = (n: J | J[] | string | null) => {
+    if (!n || typeof n === "string") return;
+    if (Array.isArray(n)) { n.forEach(walk); return; }
+    if (n.type === "MastheadBand") found.push(n);
+    (n.children ?? []).forEach(walk);
+  };
+  walk(view.toJSON() as unknown as J);
+  const band = found;
   expect(band.length).toBeGreaterThan(0);
   expect(band[0].props.color).toBe(mast.ground);
 });
