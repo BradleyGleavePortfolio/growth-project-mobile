@@ -228,7 +228,6 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
           sending={sendDm.isPending}
           onSubmit={onSend}
           draftKey={recipientId && workspaceId ? `dm:${workspaceId}:${recipientId}` : undefined}
-          voiceB
           testID="community-dmthread-composer"
         />}
       </KeyboardAvoidingView>
