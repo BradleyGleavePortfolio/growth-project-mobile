@@ -1,0 +1,11 @@
+src/components/community/__tests__/sharedLook985.test.tsx
+src/screens/community/__tests__/CommunityDmThreadGoal985.test.tsx
+src/screens/community/__tests__/LO985R1.openThreadDmPush.btest.test.tsx
+src/screens/community/__tests__/LS985R1.openThreadNewDm.btest.test.tsx
+src/screens/community/__tests__/CommunityDmMeRead.test.tsx
+src/screens/community/__tests__/CommunityDmClientM.test.tsx
+src/screens/community/__tests__/CommunityDmClosedBlockAllM.test.tsx
+src/screens/community/__tests__/CommunityDmKeptText841.test.tsx
+src/screens/community/coach-dm/__tests__/coachDm.test.tsx
+src/components/community/__tests__/ComposerInput.test.tsx
+src/components/community/__tests__/SafetyMenu.test.tsx
