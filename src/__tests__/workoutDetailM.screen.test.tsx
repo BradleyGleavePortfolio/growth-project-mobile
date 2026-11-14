@@ -144,10 +144,10 @@ const bg = (node: { props: { style?: unknown } }) => (StyleSheet.flatten(node.pr
 const toLocale = Date.prototype.toLocaleDateString;
 const NativeFormat = Intl.DateTimeFormat;
 beforeAll(() => {
-  jest.spyOn(Date.prototype, 'toLocaleDateString').mockImplementation(function (this: Date, l?: string | string[], o?: Intl.DateTimeFormatOptions) {
+  jest.spyOn(Date.prototype, 'toLocaleDateString').mockImplementation(function (this: Date, l, o) {
     return toLocale.call(this, l, { ...o, timeZone: o?.timeZone ?? 'America/Los_Angeles' });
   });
-  jest.spyOn(Intl, 'DateTimeFormat').mockImplementation((l?: string | string[], o?: Intl.DateTimeFormatOptions) =>
+  jest.spyOn(Intl, 'DateTimeFormat').mockImplementation((l, o) =>
     new NativeFormat(l, { ...o, timeZone: o?.timeZone ?? 'America/Los_Angeles' }));
 });
 afterAll(() => jest.restoreAllMocks());

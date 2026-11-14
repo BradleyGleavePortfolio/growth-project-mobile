@@ -46,10 +46,10 @@ const CASE1 = answer([oct13, oct6, sep29, sep22, sep15], oct13);
 function inZone(zone: string) {
   const toLocale = Date.prototype.toLocaleDateString;
   const Native = Intl.DateTimeFormat;
-  const a = jest.spyOn(Date.prototype, 'toLocaleDateString').mockImplementation(function (this: Date, l?: string | string[], o?: Intl.DateTimeFormatOptions) {
+  const a = jest.spyOn(Date.prototype, 'toLocaleDateString').mockImplementation(function (this: Date, l, o) {
     return toLocale.call(this, l, { ...o, timeZone: o?.timeZone ?? zone });
   });
-  const b = jest.spyOn(Intl, 'DateTimeFormat').mockImplementation((l?: string | string[], o?: Intl.DateTimeFormatOptions) =>
+  const b = jest.spyOn(Intl, 'DateTimeFormat').mockImplementation((l, o) =>
     new Native(l, { ...o, timeZone: o?.timeZone ?? zone }));
   return () => { a.mockRestore(); b.mockRestore(); };
 }

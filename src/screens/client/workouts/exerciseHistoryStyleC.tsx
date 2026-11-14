@@ -132,7 +132,7 @@ function SinceLine({ since, sc }: { since: SinceWeek1; sc: SemanticTokens }) {
   const end = pts[pts.length - 1];
   return (
     <View
-      style={{ width: C2.lineWidth + C2.end, height: C2.lineHeight + C2.end, marginTop: spacing.xs }}
+      style={{ width: C2.lineWidth + C2.end, height: C2.lineHeight + C2.end }}
       accessible accessibilityRole="image"
       accessibilityLabel={`Top set, week 1 to today: ${since.from} to ${since.to} lb`}
       testID="exercise-history-since-line"
@@ -238,13 +238,15 @@ function makeStyles(sc: SemanticTokens) {
     // Rows 574-831: two tiles, 12 pt apart; they wrap to one per line when either would fall under 150 pt.
     tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginTop: spacing.xs },
     tile: { flexGrow: 1, flexBasis: 0, minWidth: C2.tileMin, borderRadius: radius.card, padding: spacing.lg },
-    // With no Since week 1 tile, Best ever keeps its half and the right half stays empty.
-    half: { flexGrow: 1, flexBasis: 0 },
+    // With no Since week 1 tile, Best ever keeps its half and the right half stays empty (the same padding, so the
+    // two halves grow from the same base).
+    half: { flexGrow: 1, flexBasis: 0, padding: spacing.lg },
     eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
     eyebrow: { ...typography.eyebrow },
-    tileNumber: { ...typography.h2, marginTop: spacing.sm },
+    // Rows 606-798 of the Since tile: eyebrow, number, line and caption close up to the drawn 129 pt tile.
+    tileNumber: { ...typography.h2, marginTop: spacing.xs },
     small,
-    caption: { marginTop: spacing.sm },
+    caption: { marginTop: spacing.xs },
     // "YOUR HISTORY" (rows 868-891): the imported head; the first row starts at its rule.
     head: { marginBottom: 0 },
     // A row: date | value, strip and comments | sets; a hairline between rows (rows 1072, 1206, 1428).
