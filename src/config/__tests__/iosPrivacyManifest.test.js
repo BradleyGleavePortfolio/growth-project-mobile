@@ -172,7 +172,7 @@ describe('M4a: iOS privacy manifest', () => {
     // with the account ID to its flags API, hence Analytics too.
     ['DeviceID', ['AppFunctionality', 'Analytics'], 'src/services/pushNotifications.ts', 'Notifications.getExpoPushTokenAsync()'],
     ['EmailsOrTextMessages', ['AppFunctionality', 'ProductPersonalization'], 'src/api/messagesApi.ts', "api.post('/messages', {", { also: [ROMAN_TURN] }],
-    ['PhotosorVideos', ['AppFunctionality'], 'src/api/coachMediaApi.ts', 'uploadAsync(url, file.uri'],
+    ['PhotosorVideos', ['AppFunctionality'], 'src/api/coachMediaApi.ts', 'uploadAsync(url, file.uri', { also: [['src/api/mealPhotoApi.ts', 'uploadAsync(data.upload_url, uri']] }],
     ['OtherUserContent', ['AppFunctionality', 'ProductPersonalization'], 'src/api/communityWinsApi.ts', "api.post<unknown>('/community/wins'", { also: [ROMAN_TURN] }],
     // Voice notes (community and coach DMs) are stored for playback; declared whether or not the voice flag is on.
     ['AudioData', ['AppFunctionality'], 'src/api/communityVoiceApi.ts', '/voice-notes/upload-url'],
