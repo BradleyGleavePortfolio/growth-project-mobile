@@ -141,7 +141,7 @@ describe('Messages list, client with a coach', () => {
     expect(u.getByText('left today')).toBeTruthy();
     expect(u.getByText('Ask Roman anything.')).toBeTruthy();
     expect(u.getByLabelText('Sam never sees this chat, with one safety exception.')).toBeTruthy();
-    expect(flat(u.getByTestId('inbox-unread'))).toMatchObject({ borderColor: '#D4B96B', minWidth: 40, minHeight: 40 });
+    expect(flat(u.getByTestId('inbox-unread'))).toMatchObject({ borderColor: '#C9A961', minWidth: 44, minHeight: 44 });
   });
 
   it('every tap lands on a real screen, with a selection haptic on each row', async () => {
@@ -624,10 +624,10 @@ describe('LO-935R4 C1: Roman\'s portrait ring on the coached card is Roman\'s go
   });
 });
 
-// C1-935 (agent 203), class-first [R24]: on the client Messages screen (C3 Style B), every ring whose only job is to
-// mark Roman draws colors.romanAccent, as every C3 B_inbox drawing does (#C9A961); the rings and eyebrows that are
-// not Roman keep their own tokens. Member rows are red while Roman's ring reads a raw gold token; control rows hold.
-describe('C1-935 class: only Roman\'s own rings on client Messages read colors.romanAccent', () => {
+// C1-935 (agent 203), class-first [R24], as GOAL-935-M M2 states it: the drawn #C9A961 rings on client Messages read
+// colors.romanAccent: Roman's portrait ring and the coach's unread ring (every C3 B_inbox drawing rings both in --gold
+// #C9A961). The no-coach grey Roman ring and the eyebrows keep their own tokens (control rows).
+describe('C1-935 class (GOAL-935-M M2): the drawn #C9A961 rings on client Messages read colors.romanAccent: Roman\'s portrait ring and the coach\'s unread ring', () => {
   type Node = { props?: Record<string, unknown> & { style?: StyleProp<ViewStyle> }; children?: unknown };
   const walk = (node: unknown, keep: (n: Node) => boolean, out: Node[] = []): Node[] => {
     if (Array.isArray(node)) { node.forEach((n) => walk(n, keep, out)); return out; }
@@ -666,9 +666,9 @@ describe('C1-935 class: only Roman\'s own rings on client Messages read colors.r
     expect(walk(rings[0], (n) => n.props?.source !== undefined).map((n) => [style(n).width, style(n).height])).toEqual([[portrait, portrait]]);
   });
 
-  it('control: the coach\'s unread ring stays gold[300] and the coach eyebrow gold[200]', async () => {
+  it('member: the coach\'s unread ring reads colors.romanAccent (GOAL-935-M M2); control: the coach eyebrow stays gold[200]', async () => {
     const { u } = await show();
-    expect(flat(await u.findByTestId('inbox-unread')).borderColor).toBe(tokens.gold[300]);
+    expect(flat(await u.findByTestId('inbox-unread')).borderColor).toBe(tokens.colors.romanAccent);
     expect(flat(u.getByText('Your coach')).color).toBe(tokens.gold[200]);
     expect(walk(u.getByTestId('inbox-coach'), isRing)).toEqual([]);
   });
