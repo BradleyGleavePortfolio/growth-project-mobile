@@ -497,7 +497,7 @@ function summaryLine(s: ReturnType<typeof summarise>): string {
 }
 
 // K3 C_assign's look from the theme and the kit. The two heads keep main's case (an uppercase eyebrow would change
-// the words), in the eyebrow's size, tracking and colour.
+// the words), so they take the caption role, the nearest mixed-case role to the drawn eyebrow, in its place and colour.
 function makeStyles(sc: SemanticTokens) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: sc.bgPrimary },
@@ -514,8 +514,8 @@ function makeStyles(sc: SemanticTokens) {
       paddingBottom: 14,
       gap: spacing.sm,
     },
-    // "FIRST WEEK" (cap rows 210-226): the eyebrow's size, tracking and muted ink on forest; main's case.
-    mastHead: { ...typography.eyebrow, textTransform: "none", color: mast.muted },
+    // "FIRST WEEK" (cap rows 210-226): in the eyebrow's place, muted ink on forest; main's case (caption role).
+    mastHead: { ...typography.caption, color: mast.muted },
     row: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
     // C_assign rows 442-529: 44 pt pills, a 1 pt frame line (#627669), 16 pt in from each end (cols 48-79).
     pill: {
@@ -561,8 +561,8 @@ function makeStyles(sc: SemanticTokens) {
       gap: spacing.md,
       minHeight: layout.touchMin,
     },
-    // "10 SELECTED" (cap rows 728-743): the eyebrow's size and muted ink; main's case.
-    pageHead: { ...typography.eyebrow, textTransform: "none", color: sc.textMuted, flexShrink: 1 },
+    // "10 SELECTED" (cap rows 728-743): in the eyebrow's place, muted ink; main's case (caption role).
+    pageHead: { ...typography.caption, color: sc.textMuted, flexShrink: 1 },
     // "Select all 100" (rows 726-745): the forest link at the right, in a 44 pt target.
     link: { minHeight: layout.touchMin, justifyContent: "center" },
     linkText: { ...typography.bodySmall, fontFamily: typography.micro.fontFamily, fontWeight: "600", color: sc.accentText },
