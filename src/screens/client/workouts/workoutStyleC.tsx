@@ -1,6 +1,8 @@
 /**
  * C1 Style C v2 parts for the client workout screens (STYLE-WORKOUTS-M): the exercise library, an exercise's page,
- * the assigned workout and the past-workout edit. Used only by those four screens. The numbers are read from the
+ * the assigned workout and the past-workout edit; also read by STYLE-LOGGING-M's three screens (the list of assigned
+ * workouts, the routine builder, the coach's program assign) and the program assign's route bar
+ * (ProgramsStackNavigator). The numbers are read from the
  * picked drawings at 2x (planning/MOCKUP3/C1/style-c-v2/C2_*_ios390_100.png; for the library, the nearest picked
  * drawing K3 style-c/C_picker_ios390_100.png). Colours come from the theme only; these parts hold no words.
  */
