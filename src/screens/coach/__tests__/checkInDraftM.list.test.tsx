@@ -150,7 +150,7 @@ describe('CHECKIN-DRAFT-M: the check-in card in Roman\'s drafts list', () => {
     mockListPending.mockResolvedValue({ drafts: [bound('d-7', 'client-1', 'ci-7'), stream2('w-1', 'client-2')] });
     const view = await render(wrap(<><HomeProbe /><RomanDraftsHero /><PendingAiDraftsScreen /></>));
     await waitFor(() => expect(String(view.getByTestId('home-count').props.children)).toMatch(/^2\|ok\|/));
-    const heroCard = within(view.getByTestId('inbox-roman-drafts'));
+    const heroCard = within(await view.findByTestId('inbox-roman-drafts'));
     expect(heroCard.getByText('Roman has 2 drafts ready')).toBeTruthy();
     expect(heroCard.getByText('1 Workout')).toBeTruthy();
     expect(heroCard.queryByText(/Check-in/)).toBeNull();
