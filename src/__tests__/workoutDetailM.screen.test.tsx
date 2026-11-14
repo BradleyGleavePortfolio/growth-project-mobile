@@ -296,7 +296,7 @@ it.each([
 
 it('case 7: a body-weight exercise reads BW x 12, with no Since week 1', async () => {
   const s13 = session('2026-10-13', 0, 12);
-  serve({ data: answer([s13, session('2026-10-06', 0, 10)], s13) });
+  serve({ data: answer([s13, session('2026-10-06', 0, 10)], s13) }, { data: { ...DETAIL, equipment: ['body weight'] } });
   const view = await screen();
   expect(within(await view.findByTestId('exercise-history-best')).getByText('BW × 12')).toBeTruthy();
   expect(view.queryByTestId('exercise-history-since')).toBeNull();
@@ -380,7 +380,7 @@ it('case 13: opened as the modal over the live workout, the page shows the same 
 
 it('H4: a timed exercise (a 60-second plank) draws what the server sends, BW x 60, with no unit guessed', async () => {
   const plank = session('2026-10-13', 0, 60, [], 1);
-  serve({ data: answer([plank], plank) });
+  serve({ data: answer([plank], plank) }, { data: { ...DETAIL, equipment: ['body weight'] } });
   const view = await screen();
   expect(within(await view.findByTestId('exercise-history-best')).getByText('BW × 60')).toBeTruthy();
   expect(within(view.getByTestId('exercise-history-row-0')).getByText('1 set')).toBeTruthy();

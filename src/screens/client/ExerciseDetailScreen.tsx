@@ -44,6 +44,7 @@ import type { WorkoutStackParamList } from '../../navigation/ClientNavigator';
 import { sectionHead } from './workouts/workoutStyleC';
 import { exerciseHistoryApi, type ExerciseHistory } from '../../api/exerciseHistoryApi';
 import { ExerciseHistoryStyleC } from './workouts/exerciseHistoryStyleC';
+import { isBodyWeightEquipment } from '../../utils/workout/bodyWeight';
 
 type Props = NativeStackScreenProps<WorkoutStackParamList, 'ExerciseDetail'>;
 
@@ -202,7 +203,9 @@ export default function ExerciseDetailScreen({ route, navigation }: Props) {
       <Text style={styles.title} accessibilityRole="header">{detail.name}</Text>
       <Text style={styles.meta}>{metaLine(detail)}</Text>
 
-      {history ? <ExerciseHistoryStyleC history={history} /> : null}
+      {history ? (
+        <ExerciseHistoryStyleC history={history} bodyWeight={detail.equipment.some(isBodyWeightEquipment)} />
+      ) : null}
 
       {playbackUrl && !mediaFailed ? (
         <VideoView

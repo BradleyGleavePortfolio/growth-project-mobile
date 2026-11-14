@@ -15,6 +15,7 @@ import type { SemanticTokens } from '../../../theme/tokens';
 import { useTheme } from '../../../theme/ThemeProvider';
 import type { ExerciseHistory, HistoryPoint, HistorySession, TopSet } from '../../../api/exerciseHistoryApi';
 import { sectionHead, useCoachItalic } from './workoutStyleC';
+import { readsBW } from '../../../utils/workout/bodyWeight';
 
 // ─── The rules ──────────────────────────────────────────────────────────────
 
@@ -31,13 +32,19 @@ export function dayLabel(date: string, spoken = false): string {
   return `${spoken ? month : month.slice(0, 3)} ${Number(m[3])}`;
 }
 
-/** A top set as drawn: "155 × 6"; a body-weight set (0 lb) reads "BW × 12". */
-export const setText = (t: TopSet): string => `${t.weight_lbs > 0 ? t.weight_lbs : 'BW'} × ${t.reps}`;
-/** A history row's set: "155 × 6 lb"; "BW × 12" has no unit. */
-export const rowSetText = (t: TopSet): string => (t.weight_lbs > 0 ? `${setText(t)} lb` : setText(t));
-/** Spoken: "155 pounds by 6", "body weight by 12". */
-export const spokenSet = (t: TopSet): string =>
-  `${t.weight_lbs > 0 ? `${t.weight_lbs} pounds` : 'body weight'} by ${t.reps}`;
+/**
+ * A top set as drawn: "155 × 6"; a body-weight exercise's set with no added load reads "BW × 12". Body weight comes
+ * from the exercise, never from a 0 weight (bodyWeight.ts, FIX-928-BW; LS-986R1 B1): a weighted exercise at 0 reads
+ * "0 × 10". The page passes whether its exercise is body weight.
+ */
+export const setText = (t: TopSet, bodyWeight = true): string =>
+  `${readsBW(bodyWeight, t.weight_lbs) ? 'BW' : t.weight_lbs} × ${t.reps}`;
+/** A history row's set: "155 × 6 lb", "0 × 10 lb"; "BW × 12" has no unit. */
+export const rowSetText = (t: TopSet, bodyWeight = true): string =>
+  (readsBW(bodyWeight, t.weight_lbs) ? setText(t, bodyWeight) : `${setText(t, bodyWeight)} lb`);
+/** Spoken: "155 pounds by 6", "0 pounds by 10", "body weight by 12". */
+export const spokenSet = (t: TopSet, bodyWeight = true): string =>
+  `${readsBW(bodyWeight, t.weight_lbs) ? 'body weight' : `${t.weight_lbs} pounds`} by ${t.reps}`;
 /** The Since week 1 change as drawn: "+20 lb", a fall "−10 lb", none "+0 lb". */
 export const changeText = (n: number): string => `${n < 0 ? '−' : '+'}${Math.abs(n)} lb`;
 
@@ -172,7 +179,7 @@ function SinceLine({ since, sc }: { since: SinceWeek1; sc: SemanticTokens }) {
   );
 }
 
-export function ExerciseHistoryStyleC({ history }: { history: ExerciseHistory }) {
+export function ExerciseHistoryStyleC({ history, bodyWeight }: { history: ExerciseHistory; bodyWeight: boolean }) {
   const { semanticColors: sc } = useTheme();
   const s = useMemo(() => makeStyles(sc), [sc]);
   const italic = useCoachItalic();
@@ -191,8 +198,8 @@ export function ExerciseHistoryStyleC({ history }: { history: ExerciseHistory })
             <PeakStar size={C2.eyebrowStar} onDark />
             <Text style={[s.eyebrow, { color: sc.data.peak }]}>Best ever</Text>
           </View>
-          <Text style={[s.tileNumber, { color: sc.textOnAccent }]} accessibilityLabel={spokenSet(top)}>
-            {setText(top)}
+          <Text style={[s.tileNumber, { color: sc.textOnAccent }]} accessibilityLabel={spokenSet(top, bodyWeight)}>
+            {setText(top, bodyWeight)}
           </Text>
           <Text style={[s.small, { color: sc.textOnMastheadMuted }]} accessibilityLabel={dayLabel(best.date, true)}>
             {dayLabel(best.date)}
@@ -221,7 +228,9 @@ export function ExerciseHistoryStyleC({ history }: { history: ExerciseHistory })
             <View style={s.middle}>
               <View style={s.valueLine} testID={`exercise-history-value-${i}`}>
                 {row.top_set ? (
-                  <Text style={s.value} accessibilityLabel={spokenSet(row.top_set)}>{rowSetText(row.top_set)}</Text>
+                  <Text style={s.value} accessibilityLabel={spokenSet(row.top_set, bodyWeight)}>
+                    {rowSetText(row.top_set, bodyWeight)}
+                  </Text>
                 ) : null}
                 {isStar ? <PeakStar size={C2.rowStar} label="Best ever" testID="exercise-history-star" /> : null}
               </View>
