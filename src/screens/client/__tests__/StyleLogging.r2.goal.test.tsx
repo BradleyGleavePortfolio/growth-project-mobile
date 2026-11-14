@@ -36,8 +36,11 @@ const mockRoutine = { id: 'routine', name: 'Full body A', exercises: [
   { exercise_id: 'press', exercise_name: 'Bench press', default_sets: 3, default_reps: 10, default_rest_seconds: 60, muscle_group: 'CHEST' },
   { exercise_id: 'row', exercise_name: 'Row', default_sets: 4, default_reps: 8, default_rest_seconds: 90, muscle_group: 'BACK' },
 ] };
+// One array for every render, as React Query's cached data is: a new array each render re-runs the builder's load
+// effect (RoutineBuilderScreen.tsx:128-137) without end.
+const mockRoutineData = [mockRoutine];
 jest.mock('../../../hooks/useApi', () => ({
-  useRoutines: () => ({ data: [mockRoutine] }),
+  useRoutines: () => ({ data: mockRoutineData }),
   useCreateRoutine: () => ({ mutate: jest.fn(), isPending: false }),
   useUpdateRoutine: () => ({ mutate: jest.fn(), isPending: false }),
   useDeleteRoutine: () => ({ mutate: jest.fn() }),
