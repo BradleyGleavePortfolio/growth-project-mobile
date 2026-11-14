@@ -9,6 +9,7 @@ import path from 'path';
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { render, within } from '@testing-library/react-native';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 jest.mock('../../../services/api', () => ({
   __esModule: true,
@@ -40,6 +41,7 @@ const CommunityEmptyState = require('../EmptyState').default;
 const SafetyMenu = require('../SafetyMenu').default;
 const { forestPop: fp, lightTokens: t, spacing, radius } = jest.requireActual('../../../theme/tokens');
 
+const withQuery = (el: React.ReactElement) => <QueryClientProvider client={new QueryClient()}>{el}</QueryClientProvider>;
 const css = (el: { props: { style?: unknown } }) => (StyleSheet.flatten(el.props.style as never) ?? {}) as Record<string, unknown>;
 const ME = '00000010-0000-4000-8000-000000000000';
 const OTHER = '00000020-0000-4000-8000-000000000000';
@@ -83,13 +85,13 @@ describe('REFINE-985: each shared piece with every new prop unset draws as at f9
   });
 
   it('SafetyMenu (every report menu): today\'s 18 pt muted mark on its 44 pt target', async () => {
-    const view = await render(<SafetyMenu targetType="message" targetId="m-1" authorUserId={OTHER} authorName="Riley Park" viewerUserId={ME} testID="s" />);
+    const view = await render(withQuery(<SafetyMenu targetType="message" targetId="m-1" authorUserId={OTHER} authorName="Riley Park" viewerUserId={ME} testID="s" />));
     expect(css(view.getByTestId('s'))).toMatchObject({ minWidth: 44, minHeight: 44 });
     expect(css(within(view.getByTestId('s')).getByTestId('icon-ellipsis-horizontal'))).toMatchObject({ color: t.textMuted, fontSize: 18 });
   });
 
   it('SafetyMenu with the client DM thread\'s props: the mark takes them and keeps its 44 pt target', async () => {
-    const view = await render(<SafetyMenu targetType="message" targetId="m-1" authorUserId={OTHER} authorName="Riley Park" viewerUserId={ME} triggerColor={fp.onDeep} triggerSize={22} testID="s" />);
+    const view = await render(withQuery(<SafetyMenu targetType="message" targetId="m-1" authorUserId={OTHER} authorName="Riley Park" viewerUserId={ME} triggerColor={fp.onDeep} triggerSize={22} testID="s" />));
     expect(css(view.getByTestId('s'))).toMatchObject({ minWidth: 44, minHeight: 44 });
     expect(css(within(view.getByTestId('s')).getByTestId('icon-ellipsis-horizontal'))).toMatchObject({ color: fp.onDeep, fontSize: 22 });
   });
