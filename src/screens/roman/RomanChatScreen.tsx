@@ -216,11 +216,15 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
   // Never after a sign-out, sign-in or re-bootstrap while the room is open (KT-13: the pick's sign-in is gone).
   const sessionId = session?.id ?? null;
   const openEpoch = useRef(authEpoch());
+  const restoredFor = useRef<string | null>(null);
   useEffect(() => {
     const kept = keptSend();
     const q = kept?.quote;
     // The client room only (canHold), its session open, no strip up, a quote kept, the sign-in it opened under.
     if (surface !== 'client' || !sessionId || replyTarget || !kept || !q) return;
+    // LS-988R1 C3: decided once per chat, when the kept words first reach the box; never on a later keystroke.
+    if (restoredFor.current === chat) return;
+    restoredFor.current = chat;
     if (authEpoch() !== openEpoch.current) return;
     if (q.session !== sessionId) {
       keepFailed(kept.text, kept.key);
@@ -229,6 +233,14 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
     if (withRomanQuote(q.excerpt, draft).trim() !== kept.text) return;
     setReplyTarget({ id: q.id, role: 'assistant', content: q.excerpt, interrupted: false, createdAt: '' });
   }, [chat, sessionId, draft, replyTarget, surface, keptSend, keepFailed, setReplyTarget]);
+  // LS-988R1 C1: the strip this room shows now (none once the room has closed), for a send that ends later.
+  const stripNow = useRef(replyTarget);
+  stripNow.current = replyTarget;
+  const roomOpen = useRef(true);
+  useEffect(() => {
+    roomOpen.current = true;
+    return () => { roomOpen.current = false; };
+  }, []);
   // R3: Cancel reply, or another reply picked, drops the kept quote (not the key), so a reopen never brings it back.
   const dropKeptQuote = useCallback((unless?: string) => {
     const kept = keptSend();
@@ -401,13 +413,18 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
       if (outcome !== 'sent' && kept) {
         if (inBox) {
           if (fromChip) dropFailed(words); // the chip's words are in the box now: its key moves from aside to the box
-          keepFailed(words, key, quote);
+          // LS-988R1 C1: a quote removed while this send was out (Cancel reply, another reply, here or in a reopened
+          // room) stays removed: it is filed again only while the kept send still carries it or this room's strip is it.
+          const still = keptSend();
+          const shown = roomOpen.current && stripNow.current?.id === quote?.id;
+          const carried = (still?.key === key && still.quote?.id === quote?.id) || shown;
+          keepFailed(words, key, quote && carried ? quote : undefined);
         } else keepAside(words, key);
       } else if (keyFor(words) === key) {
         dropFailed(words);
       }
     },
-    [send, replyTarget, sessionId, setDraft, keyFor, keepFailed, keepAside, dropFailed],
+    [send, replyTarget, sessionId, setDraft, keyFor, keepFailed, keptSend, keepAside, dropFailed],
   );
 
   const onSend = useCallback(async () => {
