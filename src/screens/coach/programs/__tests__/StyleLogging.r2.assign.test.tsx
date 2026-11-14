@@ -94,7 +94,7 @@ function mount(device: Device = DEVICES[0]) {
     </SafeAreaProvider>,
   );
 }
-async function setStart(view: ReturnType<typeof mount>, day: string) {
+async function setStart(view: Awaited<ReturnType<typeof mount>>, day: string) {
   await fireEvent.changeText(view.getByLabelText("Start date, year month day"), day);
 }
 
