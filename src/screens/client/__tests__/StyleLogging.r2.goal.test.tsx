@@ -122,7 +122,7 @@ describe('the week (behaviour)', () => {
     expect(rows.map((r) => r.props.testID)).toEqual(['week-row-Upper body', 'week-row-Mobility', 'week-row-Full body A', 'week-row-Lower body']);
     const words = rows.map((r) => within(r).getByText(/^(done|planned|missed)$/).props.children);
     expect(words).toEqual(['done', 'missed', 'missed', 'planned']);
-    expect(within(card).getByText('Mon 16')).toBeTruthy();
+    expect(within(card).getAllByText('Mon 16')).toHaveLength(2);
     expect(within(card).getByText('Tue 17')).toBeTruthy();
     expect(within(card).getByText('Thu 19')).toBeTruthy();
     expect(within(card).getByText('This week')).toBeTruthy();
