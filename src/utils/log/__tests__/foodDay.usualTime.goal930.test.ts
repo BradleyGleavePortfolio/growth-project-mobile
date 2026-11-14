@@ -74,7 +74,9 @@ describe('GOAL-930-M D3: a usual meal still to eat carries its usual time', () =
     const iso = '2026-11-04T20:30:00.000Z';
     const d = new Date(iso);
     const local = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-    expect(slot(week(iso, at(S, '13:15')), 'lunch')?.time).toBe(local);
+    // Keep this a zone-conversion test, independent of whether the runner's zone puts lunch after dinner.
+    const past = week(iso, at(S, '13:15')).map((day) => ({ ...day, entries: day.entries.filter((e) => e.meal_type === 'lunch') }));
+    expect(slot(past, 'lunch')?.time).toBe(local);
   });
 
   it('two days with different times take the newest day (the version Repeat copies)', () => {

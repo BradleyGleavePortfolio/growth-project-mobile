@@ -20,6 +20,7 @@ const Sheet = ({ failure, message, qty = '150' }: { failure?: Failure; message?:
 
 describe('FIX-980: shared portion-sheet announcements', () => {
   const originalOS = Platform.OS;
+  beforeEach(() => jest.clearAllMocks());
   afterEach(() => { Platform.OS = originalOS; jest.restoreAllMocks(); });
 
   it.each([

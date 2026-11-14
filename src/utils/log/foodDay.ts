@@ -32,7 +32,8 @@ export interface DaySlot {
   planNo?: number;
   /**
    * "HH:MM": FOOD-DAY-STYLEC-M, the coach's time for a plan meal (DailyMealPlanSlot.time_of_day); GOAL-930-M (C_usual),
-   * a usual meal's time, from when its usual version was last logged (usualTime). None when there is nothing to read.
+   * a usual meal's time, from when its usual version was last logged (usualTime). Pending usual meals use
+   * times only when every pending meal has one and they follow meal order; otherwise they keep slot order.
    */
   time?: string | null;
 }
@@ -202,6 +203,13 @@ export function buildUsualDay(past: PastDay[], logs: FoodLog[]): FoodDay {
       carbs: usual.carbs, fat: usual.fat, foods: usual.foods, logs: [], status: null, usual: { meal: usual.meal, days: usual.days },
       time: usual.time,
     });
+  }
+  // logged_at is storage time, not eating time: catch-up/batch saves must not reorder the usual day.
+  // Mixing timed and untimed pending meals also reorders them once now passes a later timed meal.
+  // Keep a complete, ordered schedule; otherwise use main's untimed slot-order fallback for all pending meals.
+  const pending = slots.filter((s) => s.logs.length === 0);
+  if (!pending.every((s, i) => s.time != null && (i === 0 || s.time > pending[i - 1].time!))) {
+    for (const slot of pending) slot.time = null;
   }
   const used = new Set(slots.flatMap((x) => x.logs));
   return { kind: 'usual', slots, extras: slots.length > 0 ? logs.filter((l) => !used.has(l)) : [] };

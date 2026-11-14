@@ -8,6 +8,7 @@ import {
   Platform,
   ScrollView,
   useWindowDimensions,
+  AccessibilityInfo,
 } from 'react-native';
 import { colors, gold, layout, radius, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/useTheme';
@@ -93,6 +94,15 @@ export function QuantityPickerContent({
   const quantity = parseQuantityInput(quantityInput);
   const { semanticColors: sc } = useTheme();
   const styles = makeStyles(sc);
+  const failureAnnouncement = saveFailure ? `${saveFailure.title}. ${saveFailure.message}` : null;
+  // iOS does not announce an inline alert role; Android uses the live region below, without a second announcement.
+  // Depend on the words rather than the prop object so quantity/unit edits do not repeat the same failure.
+  React.useEffect(() => {
+    if (Platform.OS === 'ios' && failureAnnouncement) AccessibilityInfo.announceForAccessibility(failureAnnouncement);
+  }, [failureAnnouncement]);
+  React.useEffect(() => {
+    if (Platform.OS === 'ios' && notice) AccessibilityInfo.announceForAccessibility(notice);
+  }, [notice]);
   // The amount field is as wide as its digits (Cormorant figures are about 0.5 em) so the unit sits beside it.
   const amountWidth = Math.ceil(Math.max(1, quantityInput.length) * 28 * Math.min(useWindowDimensions().fontScale || 1, 1.3)) + 12;
   const previewMacros = selectedFood
@@ -182,10 +192,10 @@ export function QuantityPickerContent({
         {quantity == null ? (
           <Text style={styles.servingSizeInfo}>{emptyHint}</Text>
         ) : null}
-        {notice ? <Text accessibilityRole="alert" style={styles.servingSizeInfo}>{notice}</Text> : null}
+        {notice ? <Text accessibilityRole="alert" accessibilityLiveRegion="assertive" style={styles.servingSizeInfo}>{notice}</Text> : null}
         {/* GOAL-930-M (C_error .c-err): the failed save stays on screen with the portion, announced once. */}
         {saveFailure ? (
-          <View accessible accessibilityRole="alert" style={styles.failure} testID="portion-save-failure">
+          <View accessible accessibilityRole="alert" accessibilityLiveRegion="assertive" style={styles.failure} testID="portion-save-failure">
             <Text style={styles.failureTitle}>{saveFailure.title}</Text>
             <Text style={styles.failureText}>{saveFailure.message}</Text>
           </View>
