@@ -304,7 +304,7 @@ export default function RoutineBuilderScreen() {
     <Screen
       edges={[]}
       contentStyle={styles.content}
-      header={<View style={[styles.masthead, { paddingTop: insets.top + layout.statusBarGap }]}>
+      header={<View style={[styles.masthead, { paddingTop: insets.top + spacing.xs }]}>
         <MastheadBand color={mast.ground} />
         <View style={styles.topBar}>
           <TouchableOpacity style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Cancel routine" onPress={() => navigation.goBack()}>
@@ -485,7 +485,8 @@ const makeStyles = (sc: SemanticTokens) =>
   StyleSheet.create({
   iconButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   // C_day rows 0-465: the deep forest masthead from the top edge, 24 pt bottom corners, the 24 pt gutter; it holds the
-  // bar and the routine's name (the status bar inset in its ground: MastheadBand).
+  // bar (its 44 pt row 4 pt under the inset: the back glyph's rows 129-162 centre at 73 pt) and the routine's name
+  // (the status bar inset in its ground: MastheadBand).
   masthead: {
     backgroundColor: mast.ground,
     borderBottomLeftRadius: radius.sheet,
