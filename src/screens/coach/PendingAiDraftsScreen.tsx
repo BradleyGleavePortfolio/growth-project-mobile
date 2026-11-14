@@ -115,7 +115,7 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
   );
   // CHECKIN-DRAFT-M: the check-in draft whose sheet is open (layout B), and the coach's roster names for the cards.
   const [reviewing, setReviewing] = useState<CheckInDraft | null>(null);
-  const roster = useCoachStore((s) => s.clients);
+  const roster = useCoachStore((s) => s.clients) ?? NO_CLIENTS;
   const clientNames = useMemo(
     () => new Map(roster.flatMap((c) => {
       const name = `${c.firstName ?? ''} ${c.lastName ?? ''}`.trim();
@@ -274,6 +274,8 @@ interface DraftCardProps {
   onReject: (draftId: string) => void;
   disabled: boolean;
 }
+
+const NO_CLIENTS: never[] = [];
 
 /** The card's name for a client the roster does not name (main's label). */
 const clientLabel = (id: string | null | undefined) => (id ? `client ${id.slice(0, 8)}` : 'client');

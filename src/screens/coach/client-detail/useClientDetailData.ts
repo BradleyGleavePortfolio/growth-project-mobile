@@ -246,8 +246,8 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
             id: String(c.id),
             coachId: typeof c.coach_id === 'string' ? c.coach_id : null,
             reviewed: c.reviewed_by_coach === true,
-            ...checkInDraftFields(c),
           },
+          checkInDraft: checkInDraftFields(c),
         });
       }
 

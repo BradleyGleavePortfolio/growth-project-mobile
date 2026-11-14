@@ -8,7 +8,7 @@ import { QuietError, QuietLoading } from '../../../ui/states/QuietStates';
 import { RomanMark } from '../home-v11/RomanMark';
 import { CheckInDraftSheet } from './CheckInDraftSheet';
 import { firstOf } from './StyleCFile';
-import type { TimelineEvent } from './types';
+import type { CheckInDraftFields, TimelineEvent } from './types';
 
 /**
  * A check-in row offers "Mark reviewed" only when it is unreviewed and is
@@ -25,9 +25,8 @@ export function canMarkReviewed(event: TimelineEvent, viewerId: string | null | 
  * or sleep number (0 counts). That is the server's own rule (backend checkInSent), so the action never offers a
  * check-in the server would refuse for having nothing in it.
  */
-export function canDraftReply(c: TimelineEvent['checkIn']): c is NonNullable<TimelineEvent['checkIn']> {
-  const n = (v: unknown) => typeof v === 'number';
-  return !!c && !!c.day && (!!c.note || n(c.mood) || n(c.energy) || n(c.sleepHours));
+export function canDraftReply(c: TimelineEvent['checkInDraft']): c is CheckInDraftFields {
+  return !!c && !!c.day && (!!c.note || c.mood !== null || c.energy !== null || c.sleepHours !== null);
 }
 
 /** "Reviewed" tick, or the "Mark reviewed" action with its own busy/error state. */
@@ -122,7 +121,7 @@ export function TimelineTab({
   const { colors } = useTheme();
   const tlStyles = useMemo(() => makeTlStyles(colors), [colors]);
   // The one check-in whose reply sheet is open; it lives in this file only (ClientDetailScreen keys the file by client).
-  const [drafting, setDrafting] = useState<NonNullable<TimelineEvent['checkIn']> | null>(null);
+  const [drafting, setDrafting] = useState<{ id: string; fields: CheckInDraftFields } | null>(null);
   const first = firstOf(clientName);
   React.useEffect(() => {
     onLoad();
@@ -179,10 +178,10 @@ export function TimelineTab({
                 onMarkReviewed={onMarkReviewed}
               />
             ) : null}
-            {clientId && canDraftReply(event.checkIn) ? (
+            {clientId && event.checkIn && canDraftReply(event.checkInDraft) ? (
               <TouchableOpacity
                 style={tlStyles.draftBtn}
-                onPress={() => setDrafting(event.checkIn ?? null)}
+                onPress={() => setDrafting(event.checkIn && event.checkInDraft ? { id: event.checkIn.id, fields: event.checkInDraft } : null)}
                 accessibilityRole="button"
                 accessibilityLabel={`Draft a reply to ${first}'s check-in with Roman`}
                 testID={`timeline-checkin-draft-${event.checkIn.id}`}
@@ -197,8 +196,7 @@ export function TimelineTab({
       {clientId && drafting ? (
         <CheckInDraftSheet
           clientId={clientId} clientName={clientName} first={first}
-          checkInId={drafting.id} day={drafting.day ?? ''}
-          source={{ day: drafting.day ?? '', note: drafting.note ?? null, mood: drafting.mood ?? null, energy: drafting.energy ?? null, sleepHours: drafting.sleepHours ?? null }}
+          checkInId={drafting.id} day={drafting.fields.day} source={drafting.fields}
           onClose={() => setDrafting(null)}
         />
       ) : null}

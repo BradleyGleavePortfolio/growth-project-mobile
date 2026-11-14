@@ -71,7 +71,8 @@ function event(row: Row): TimelineEvent {
   return {
     id: `checkin_${row.id}`, type: 'checkin', title: 'Check-in', subtitle: clientData.checkInSubtitle(row),
     date: `${row.date}T09:00:00`, icon: 'chatbubble-ellipses', iconColor: '#000000',
-    checkIn: { id: row.id, coachId: row.coach_id ?? 'coach-1', reviewed: row.reviewed_by_coach === true, ...clientData.checkInDraftFields(row) },
+    checkIn: { id: row.id, coachId: row.coach_id ?? 'coach-1', reviewed: row.reviewed_by_coach === true },
+    checkInDraft: clientData.checkInDraftFields(row),
   } as TimelineEvent;
 }
 const WITH_NOTE: Row = { id: 'ci-1', date: TODAY, notes: NOTE, mood: 4 };
@@ -86,7 +87,7 @@ async function renderFile(rows: Row[] = [WITH_NOTE], clientId = 'client-1', clie
   const ui = (r: Row[], id: string, name: string) => (
     <QueryClientProvider client={qc}>
       {/* ClientDetailScreen keys the file by client (:56): a new client is a new mount */}
-      <TimelineTab key={id} events={r.map(event)} onLoad={() => undefined} days={90} viewerId="coach-1" clientId={id} clientName={name} />
+      <TimelineTab key={id} events={r.map(event)} onLoad={() => undefined} days={90} viewerId="coach-1" onMarkReviewed={async () => undefined} clientId={id} clientName={name} />
     </QueryClientProvider>
   );
   const view = await render(ui(rows, clientId, clientName));

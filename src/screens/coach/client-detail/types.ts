@@ -74,8 +74,10 @@ export interface TimelineEvent {
   date: string;
   icon: IoniconName;
   iconColor: string;
-  /** Check-in rows only: what the coach needs to mark it reviewed, and (CHECKIN-DRAFT-M) what the reply sheet shows. */
-  checkIn?: { id: string; coachId: string | null; reviewed: boolean } & Partial<CheckInDraftFields>;
+  /** Check-in rows only: what the coach needs to mark it reviewed. */
+  checkIn?: { id: string; coachId: string | null; reviewed: boolean };
+  /** CHECKIN-DRAFT-M, check-in rows only: what Roman may reply to and the reply sheet shows. */
+  checkInDraft?: CheckInDraftFields;
 }
 
 export interface CoachMealEntry {
