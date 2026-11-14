@@ -15,16 +15,22 @@
  * Mounted both as a regular stack screen (from ExerciseLibrary) and as
  * a modal from the in-workout flow. The presentation is owned by the
  * navigator; the screen itself is presentation-agnostic.
+ *
+ * REFINE-986: the screen sets its own bar as C2_detail draws it (rows 130-161), for every way in: no title and no
+ * back label, and the drawn play control at the right only while a demonstration can show (a tap scrolls to it and
+ * starts a video). ClientNavigator.tsx keeps the registration as it was.
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Image,
+  type LayoutChangeEvent,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -41,7 +47,22 @@ import { ExerciseHistoryStyleC } from './workouts/exerciseHistoryStyleC';
 
 type Props = NativeStackScreenProps<WorkoutStackParamList, 'ExerciseDetail'>;
 
-export default function ExerciseDetailScreen({ route }: Props) {
+/** C2_detail's play triangle (cols 703-726, rows 130-161: 15.5 pt tall) in a 44 pt box at the bar's right. */
+function PlayControl({ onPress, color }: { onPress: () => void; color: string }) {
+  return (
+    <HapticPressable
+      disableAnimation onPress={onPress} accessibilityRole="button" accessibilityLabel="Play demonstration"
+      testID="exercise-detail-play" style={playBox.box}
+    >
+      <Ionicons name="play-outline" size={21} color={color} />
+    </HapticPressable>
+  );
+}
+const playBox = StyleSheet.create({
+  box: { minWidth: layout.touchMin, minHeight: layout.touchMin, alignItems: 'center', justifyContent: 'center' },
+});
+
+export default function ExerciseDetailScreen({ route, navigation }: Props) {
   const { semanticColors: sc } = useTheme();
   const styles = useMemo(() => makeStyles(sc), [sc]);
 
@@ -106,6 +127,31 @@ export default function ExerciseDetailScreen({ route }: Props) {
     return () => subscription.remove();
   }, [player]);
 
+  // The bar (C2_detail rows 130-161): no title (the page's own title is its spoken header) and a back with no label.
+  useLayoutEffect(() => {
+    navigation.setOptions({ title: '', headerBackButtonDisplayMode: 'minimal' });
+  }, [navigation]);
+  // The play control: only while the player or the animation can show (never a dead tap); a tap scrolls the page to
+  // the demonstration and starts a video. Unset in every other state.
+  const scrollRef = useRef<ScrollView>(null);
+  const demoY = useRef(0);
+  const demo = !loading && !error && detail && !mediaFailed
+    ? (playbackUrl ? 'video' : detail.gifUrl ? 'animation' : null)
+    : null;
+  const play = useRef<() => void>(() => undefined);
+  play.current = () => {
+    scrollRef.current?.scrollTo({ y: demoY.current, animated: true });
+    if (demo === 'video') player.play();
+  };
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: demo ? () => <PlayControl onPress={() => play.current()} color={sc.textPrimary} /> : undefined,
+    });
+  }, [navigation, demo, sc]);
+  const onDemoLayout = (e: LayoutChangeEvent) => {
+    demoY.current = e.nativeEvent.layout.y;
+  };
+
   if (loading) {
     return <SkeletonScreen testID="exercise-detail-loading" count={5} />;
   }
@@ -136,11 +182,12 @@ export default function ExerciseDetailScreen({ route }: Props) {
 
   return (
     <ScrollView
+      ref={scrollRef}
       style={styles.screen}
       contentContainerStyle={styles.scrollContent}
       testID="exercise-detail-screen"
     >
-      <Text style={styles.title}>{detail.name}</Text>
+      <Text style={styles.title} accessibilityRole="header">{detail.name}</Text>
       <Text style={styles.meta}>
         {[detail.primaryMuscle, detail.category, detail.difficulty]
           .filter(Boolean)
@@ -156,6 +203,7 @@ export default function ExerciseDetailScreen({ route }: Props) {
           // SDK 56: 'allowsFullscreen' was replaced with 'fullscreenOptions.enable'.
           fullscreenOptions={{ enable: true }}
           allowsPictureInPicture
+          onLayout={onDemoLayout}
           testID="exercise-detail-player"
         />
       ) : detail.gifUrl && !mediaFailed ? (
@@ -165,6 +213,7 @@ export default function ExerciseDetailScreen({ route }: Props) {
           resizeMode="contain"
           accessibilityLabel={`${detail.name} demonstration`}
           onError={() => setMediaFailed(true)}
+          onLayout={onDemoLayout}
           testID="exercise-detail-animation"
         />
       ) : (
