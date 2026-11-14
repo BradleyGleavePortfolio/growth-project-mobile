@@ -137,7 +137,7 @@ describe('CHECKIN-DRAFT-M: the action on the check-in row', () => {
     expect(mockGet).not.toHaveBeenCalled();
   });
 
-  it('case 1: Mark reviewed and Draft a reply both show on an unreviewed row of mine; a reviewed row keeps the action', () => {
+  it('case 1: Mark reviewed and Draft a reply both show on an unreviewed row of mine; a reviewed row keeps the action', async () => {
     const view = await renderFile([WITH_NOTE, { id: 'ci-2', date: '2026-11-03', notes: 'Fine week.', reviewed_by_coach: true }]);
     expect(view.getByText('Mark reviewed')).toBeTruthy();
     expect(view.getByText('Reviewed')).toBeTruthy();
@@ -160,7 +160,7 @@ describe('CHECKIN-DRAFT-M: the action on the check-in row', () => {
     expect(invokes()[0][1]).toEqual({ capability: 'draft.coach_message', subject_user_id: 'client-1', message: '', check_in_id: 'n-1' });
   });
 
-  it('case 2: the event keeps the note trimmed and the numbers from the row keys', () => {
+  it('case 2: the event keeps the note trimmed and the numbers from the row keys', async () => {
     expect(clientData.checkInDraftFields({ id: 'x', date: '2026-11-06T00:00:00.000Z', notes: '  Good week  ', mood: 5, energy: null, sleep_hours: 0 }))
       .toEqual({ day: '2026-11-06', note: 'Good week', mood: 5, energy: null, sleepHours: 0 });
     expect(clientData.checkInDraftFields({ id: 'y', date: '2026-11-06', notes: '  ' })).toEqual({ day: '2026-11-06', note: null, mood: null, energy: null, sleepHours: null });

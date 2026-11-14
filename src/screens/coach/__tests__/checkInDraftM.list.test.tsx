@@ -158,7 +158,7 @@ describe('CHECKIN-DRAFT-M: the check-in card in Roman\'s drafts list', () => {
     expect(JSON.parse(String(view.getByTestId('home-count').props.children).split('|')[2])).toEqual({ workouts: 1, mealPlans: 0, nudges: 0, workoutChanges: 0 });
   });
 
-  it('case 18: the one count as a unit counts each bound row once and no other coach_message row', () => {
+  it('case 18: the one count as a unit counts each bound row once and no other coach_message row', async () => {
     const rows = [bound('d-7', 'client-1', 'ci-7'), bound('d-9', 'client-2', 'ci-9'), unbound, wearable, stream2('w-1', 'client-2')];
     const c = romanDraftsCount(rows, 'ok', null);
     expect(c.waiting).toBe(3);
