@@ -103,6 +103,9 @@ export default function ProgressV2({ onSaved, logWeightAt }: { onSaved?: () => v
     if (queued) {
       // OFFLINE-WATER-WEIGHT-M: no saved moment for a weigh-in the coach cannot see yet. REFINE-972 (index-v2.md:232):
       // with offlineFoodInDay on the page draws it (the ring, its callout, the line under the chart) and says the line.
+      // FIX-972R2 (B2): an earlier online weigh-in's saved moment ends here (coached and coachless), so the page never
+      // says the coach sees a weigh-in while this one waits on the phone, and "Updated" shows again when offline.
+      setSaved(null);
       setSheet(false);
       if (featureFlags.offlineFoodInDay) AccessibilityInfo.announceForAccessibility(phoneLine);
       onSaved?.();
