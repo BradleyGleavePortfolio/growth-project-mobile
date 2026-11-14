@@ -75,7 +75,7 @@ export interface TimelineEvent {
   icon: IoniconName;
   iconColor: string;
   /** Check-in rows only: what the coach needs to mark it reviewed, and (CHECKIN-DRAFT-M) what the reply sheet shows. */
-  checkIn?: { id: string; coachId: string | null; reviewed: boolean } & CheckInDraftFields;
+  checkIn?: { id: string; coachId: string | null; reviewed: boolean } & Partial<CheckInDraftFields>;
 }
 
 export interface CoachMealEntry {

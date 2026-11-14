@@ -26,7 +26,8 @@ export function canMarkReviewed(event: TimelineEvent, viewerId: string | null | 
  * check-in the server would refuse for having nothing in it.
  */
 export function canDraftReply(c: TimelineEvent['checkIn']): c is NonNullable<TimelineEvent['checkIn']> {
-  return !!c && (!!c.note || c.mood !== null || c.energy !== null || c.sleepHours !== null);
+  const n = (v: unknown) => typeof v === 'number';
+  return !!c && !!c.day && (!!c.note || n(c.mood) || n(c.energy) || n(c.sleepHours));
 }
 
 /** "Reviewed" tick, or the "Mark reviewed" action with its own busy/error state. */
@@ -196,7 +197,8 @@ export function TimelineTab({
       {clientId && drafting ? (
         <CheckInDraftSheet
           clientId={clientId} clientName={clientName} first={first}
-          checkInId={drafting.id} day={drafting.day} source={drafting}
+          checkInId={drafting.id} day={drafting.day ?? ''}
+          source={{ day: drafting.day ?? '', note: drafting.note ?? null, mood: drafting.mood ?? null, energy: drafting.energy ?? null, sleepHours: drafting.sleepHours ?? null }}
           onClose={() => setDrafting(null)}
         />
       ) : null}

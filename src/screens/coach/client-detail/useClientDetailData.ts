@@ -433,13 +433,7 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
 /** CHECKIN-DRAFT-M: what Roman may reply to, as the server reads it (backend private-context.service.ts checkInSent). */
-export function checkInDraftFields(c: {
-  date?: string | null;
-  notes?: string | null;
-  mood?: number | null;
-  energy?: number | null;
-  sleep_hours?: number | null;
-}): CheckInDraftFields {
+export function checkInDraftFields(c: Record<string, unknown>): CheckInDraftFields {
   const note = typeof c.notes === 'string' ? c.notes.trim() : '';
   return { day: String(c.date || '').slice(0, 10), note: note || null, mood: num(c.mood), energy: num(c.energy), sleepHours: num(c.sleep_hours) };
 }

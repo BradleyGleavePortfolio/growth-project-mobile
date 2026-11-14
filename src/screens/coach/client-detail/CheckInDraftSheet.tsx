@@ -111,7 +111,7 @@ export function CheckInDraftSheet({ clientId, clientName, first, checkInId, day,
     coachApi.getClientCheckIns(clientId, { from: day, to: day })
       .then((res: { data?: unknown }) => {
         const row = Array.isArray(res?.data) ? (res.data as { id?: unknown }[]).find((r) => r?.id === checkInId) : undefined;
-        if (live) setRead(row ? checkInDraftFields(row as Parameters<typeof checkInDraftFields>[0]) : null);
+        if (live) setRead(row ? checkInDraftFields(row as Record<string, unknown>) : null);
       })
       .catch(() => { if (live) setRead(null); });
     return () => { live = false; };
