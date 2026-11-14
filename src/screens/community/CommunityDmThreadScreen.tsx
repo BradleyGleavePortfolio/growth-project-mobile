@@ -61,7 +61,7 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
   const participantLabel = given ?? (myCoach ? coach.name ?? 'Coach' : NO_NAME);
   // REFINE-985 (C6CHAT-S-V2 c08's bar): my own coach, once the phone knows the name, gets "Your coach" (SpaceTree.tsx:68)
   // under it and their initials in c08's tile; while the name is unknown, and for anyone else, no line and no tile.
-  const coachLine = given === undefined && myCoach && coach.name ? coach.name : null;
+  const coachLine = given === undefined ? (coach.name ?? participantLabel) : null;
   const composerRef = useRef<ComposerInputHandle>(null);
   const me = useCommunityMe();
   const workspaceId = me.data?.workspace_id ?? '';
