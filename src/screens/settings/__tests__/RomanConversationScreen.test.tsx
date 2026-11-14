@@ -24,7 +24,7 @@ jest.mock('../../../utils/logger', () => ({ logger: { warn: jest.fn(), info: jes
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({ colors: new Proxy({}, { get: () => '#123456' }), semanticColors: new Proxy({}, { get: () => '#123456' }) }),
 }));
-jest.mock('expo-font', () => ({ isLoaded: () => true, loadAsync: jest.fn() }));
+jest.mock('expo-font', () => ({ isLoaded: () => true, loadAsync: jest.fn(async () => undefined) }));
 jest.mock('../../../services/sentry', () => ({ captureError: jest.fn(), setSentryUser: jest.fn() }));
 
 const msg = (id: string, role: RomanMessage['role'], content: string): RomanMessage => ({
@@ -292,7 +292,7 @@ describe('FIX-950R3: a quoted turn in the history', () => {
     const screen = await read(content, role);
     await screen.findByTestId('roman-transcript-message-m1');
     expect(screen.queryByTestId('roman-transcript-message-m1-quote')).toBeNull();
-    expect(screen.getByLabelText(`${who} said: ${content}`).props.children).toBe(content);
+    expect(screen.getByLabelText(`${who} said: ${content}`).queryAll((n) => typeof n.props.children === 'string', { includeSelf: true }).map((n) => n.props.children).join('\n\n')).toBe(content);
   });
 
   it('a Roman turn keeps its interrupted note and crisis actions and is not split', async () => {
