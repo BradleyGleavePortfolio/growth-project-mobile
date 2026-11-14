@@ -562,7 +562,8 @@ const makeStyles = (sc: SemanticTokens) =>
     fontSize: 22,
     lineHeight: 28,
     minHeight: 44,
-    minWidth: 96,
+    // C_row's value sits between its steppers, cols 422-610 (94 pt): the typed field takes that width.
+    width: 96,
     backgroundColor: sc.bgSurface,
     borderWidth: 1,
     borderColor: sc.border,
@@ -644,14 +645,14 @@ const makeStyles = (sc: SemanticTokens) =>
   muscleChipText: { ...typography.bodySmall, color: mast.ink },
   muscleChipTextActive: { color: mast.ground },
   exerciseList: { paddingTop: spacing.sm, paddingBottom: 40 },
-  // C_picker rows 766-879: 56 pt rows from the gutter, name over meta, hairline.
+  // C_picker rows 766-879: 56 pt rows on the gutter, name over meta, the hairline from col 48 to 732.
   exerciseListItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: spacing.md,
     minHeight: layout.rowMinHeight,
-    paddingHorizontal: layout.gutter,
+    marginHorizontal: layout.gutter,
     paddingVertical: spacing.xs,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: sc.border,
