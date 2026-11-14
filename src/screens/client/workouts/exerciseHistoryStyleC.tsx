@@ -106,11 +106,17 @@ const C2 = {
   tileMin: 150,
   /** The date column: the value starts at col 192 (72 pt in); "Sep 29" wraps at 130%. */
   dateWidth: 56,
-  /** The line: cols 440-656 by rows 700-751 with its end point. */
-  lineWidth: 96,
+  /** The line: ink from col 440 to the end point's centre at col 646 (103 pt), rows 700-751 with its end point. */
+  lineWidth: 102,
   lineHeight: 20,
   /** End point, rows 700-720: 10 pt. */
   end: 10,
+  /** REFINE-986: tile rows 574-831 (128.5 pt): eyebrow ink 16 pt under the tile top, caption ink 16.5 pt over its foot. */
+  tilePadY: 14,
+  /** The line stays on rows 700-751 under the closer number. */
+  lineTop: 2,
+  /** The meta line's baseline (row 307) to the next block (row 346): 19.5 pt (20.5 at 130%); the meta keeps main's 12. */
+  tilesTop: 1,
   /** Strip: track rows 986-989 (2 pt); moss dot cols 404-423 (10 pt); the best's gold dot cols 512-535 (12 pt). */
   track: 2,
   dot: 10,
@@ -132,7 +138,7 @@ function SinceLine({ since, sc }: { since: SinceWeek1; sc: SemanticTokens }) {
   const end = pts[pts.length - 1];
   return (
     <View
-      style={{ width: C2.lineWidth + C2.end, height: C2.lineHeight + C2.end }}
+      style={{ width: C2.lineWidth + C2.end, height: C2.lineHeight + C2.end, marginTop: C2.lineTop }}
       accessible accessibilityRole="image"
       accessibilityLabel={`Top set, week 1 to today: ${since.from} to ${since.to} lb`}
       testID="exercise-history-since-line"
@@ -237,11 +243,14 @@ function makeStyles(sc: SemanticTokens) {
     // The demonstration follows 12 pt under the last row, as it follows the meta line on main.
     section: { marginBottom: spacing.md },
     // Rows 574-831: two tiles, 12 pt apart; they wrap to one per line when either would fall under 150 pt.
-    tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginTop: spacing.xs },
-    tile: { flexGrow: 1, flexBasis: 0, minWidth: C2.tileMin, borderRadius: radius.card, padding: spacing.lg },
+    tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginTop: C2.tilesTop },
+    tile: {
+      flexGrow: 1, flexBasis: 0, minWidth: C2.tileMin, borderRadius: radius.card, paddingHorizontal: spacing.lg,
+      paddingVertical: C2.tilePadY,
+    },
     // With no Since week 1 tile, Best ever keeps its half and the right half stays empty (the same padding, so the
     // two halves grow from the same base).
-    half: { flexGrow: 1, flexBasis: 0, padding: spacing.lg },
+    half: { flexGrow: 1, flexBasis: 0, paddingHorizontal: spacing.lg, paddingVertical: C2.tilePadY },
     eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
     eyebrow: { ...typography.eyebrow },
     // Rows 606-798 of the Since tile: eyebrow, number, line and caption close up to the drawn 129 pt tile.
