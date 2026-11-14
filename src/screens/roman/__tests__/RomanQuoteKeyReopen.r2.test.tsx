@@ -337,6 +337,24 @@ it('C1. Cancel reply in the reopened room while the closed room\'s send is still
   expect(quoting(c)).toBe(false);
 });
 
+it('C1. Cancel reply, then the same reply picked again and Send again (the same words, the kept key): it fails keeping its key; Back, reopen: the strip is back', async () => {
+  first = 'pending';
+  const a = await open();
+  await quotedSend(a);
+  await waitFor(() => expect(a.getByText(ROMAN_HELD_NOT_READY)).toBeTruthy());
+  const firstSend = sent(0);
+  await cancelReply(a);
+  await pick(a, 'r-1');
+  await sendFrom(a);
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  expect(sent(1)).toEqual(firstSend);
+  await settle();
+  await a.unmount();
+  const b = await open();
+  await waitFor(() => expect(quoting(b)).toBe(true));
+  expect(boxOf(b)).toBe(WORDS);
+});
+
 // C3: red at 91f847cf (the restore ran on every keystroke, RomanChatScreen.tsx:219-231).
 it('C3. the box edited before Back: the reopen draws no strip, and typing the kept words back does not bring it in', async () => {
   first = 'pending';
