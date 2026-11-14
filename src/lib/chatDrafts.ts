@@ -16,11 +16,18 @@ import { authEvents } from '../utils/authEvents';
  * sending the same text again, even after the chat was closed and opened again, replays that key and can never post twice.
  * A failed send whose words never went into the box (a Roman quick-start chip beside a typed draft) keeps its key in
  * `aside`, one per text, so the box's own key and every such send keep theirs (SEND-ONCE-PHONE, LS-953 B2).
+ * A quoted Roman send keeps its quote with its key (`failed.quote`, QUOTE-KEY-REOPEN-M), so a reopen or a restart can
+ * rebuild the exact words that key was filed under; it goes whenever its key goes.
  */
 export const CHAT_DRAFT_KEY_PREFIX = 'chat_draft_';
 
+/**
+ * The reply a quoted send answered (QUOTE-KEY-REOPEN-M): the reply's id, the excerpt exactly as it went in the sent
+ * words (so no more of the reply than `text` already holds) and the chat session it was picked in.
+ */
+export interface SentQuote { id: string; excerpt: string; session: string }
 /** A failed send whose key must be replayed while the box still holds the same text. */
-export interface FailedSend { text: string; key: string }
+export interface FailedSend { text: string; key: string; quote?: SentQuote }
 export interface ChatDraft { text: string; failed?: FailedSend; aside?: FailedSend[] }
 
 const memory = new Map<string, ChatDraft>();
@@ -37,8 +44,17 @@ function parse(raw: string | undefined): ChatDraft | undefined {
       const v = f as Partial<FailedSend> | null | undefined;
       return v && typeof v.text === 'string' && typeof v.key === 'string' ? { text: v.text, key: v.key } : undefined;
     };
+    // Only the box's own kept send carries a quote; a malformed one goes and the words and key stay.
+    const quoteOf = (q: unknown): SentQuote | undefined => {
+      const v = q as Partial<SentQuote> | null | undefined;
+      return v && typeof v.id === 'string' && typeof v.excerpt === 'string' && typeof v.session === 'string'
+        ? { id: v.id, excerpt: v.excerpt, session: v.session }
+        : undefined;
+    };
     const aside = Array.isArray(d.aside) ? d.aside.map(sendOf).filter((f): f is FailedSend => !!f) : [];
-    const failed = d.text.trim() !== '' ? sendOf(d.failed) : undefined;
+    const box = d.text.trim() !== '' ? sendOf(d.failed) : undefined;
+    const quote = box ? quoteOf((d.failed as Partial<FailedSend>).quote) : undefined;
+    const failed = box && quote ? { ...box, quote } : box;
     if (d.text.trim() === '' && !aside.length) return undefined;
     return { text: d.text, ...(failed ? { failed } : {}), ...(aside.length ? { aside } : {}) };
   } catch {
@@ -114,8 +130,10 @@ export type SetChatText = (next: string | ((current: string) => string)) => void
 export interface ChatSendKey {
   /** The failed send's key when `text` is the text it tried to send; otherwise undefined (a new send). */
   keyFor: (text: string) => string | undefined;
-  /** Keep a failed send's key with its text, here and on the device. */
-  keepFailed: (text: string, key: string) => void;
+  /** Keep a failed send's key with its text (and the quote it carried, if any), here and on the device. */
+  keepFailed: (text: string, key: string, quote?: SentQuote) => void;
+  /** The box's kept send (its text, key and quote), if any. */
+  keptSend: () => FailedSend | undefined;
   /** Keep the key of a failed send whose words are not in the box (one per text), here and on the device. */
   keepAside: (text: string, key: string) => void;
   /** Forget every kept key for `text` (the box's text stays): its next send is a new send (SEND-ONCE-PHONE). */
@@ -207,9 +225,11 @@ export function useChatDraft(thread: string | null, initialText?: string): [stri
     return d.aside?.find((f) => f.text === text)?.key;
   }, [current]);
 
-  const keepFailed = useCallback((text: string, key: string) => {
-    put({ ...current(), failed: { text, key } });
+  const keepFailed = useCallback((text: string, key: string, quote?: SentQuote) => {
+    put({ ...current(), failed: quote ? { text, key, quote } : { text, key } });
   }, [current, put]);
+
+  const keptSend = useCallback(() => current().failed, [current]);
 
   const keepAside = useCallback((text: string, key: string) => {
     const d = current();
@@ -224,5 +244,5 @@ export function useChatDraft(thread: string | null, initialText?: string): [stri
     put({ text: d.text, ...(failed ? { failed } : {}), ...(aside?.length ? { aside } : {}) });
   }, [current, put]);
 
-  return [shown.draft.text, setText, { keyFor, keepFailed, keepAside, dropFailed }];
+  return [shown.draft.text, setText, { keyFor, keepFailed, keptSend, keepAside, dropFailed }];
 }
