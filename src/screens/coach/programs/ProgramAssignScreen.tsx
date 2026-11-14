@@ -16,6 +16,13 @@
  * and a deep forest masthead holding the start date (pills, the typed date, its lines and the repeat switch), the
  * clients on the page as hairline rows with a round check, and Assign pinned at the foot. Look only: every request,
  * key, word and control is main's; ProgramUi's parts stay as they are for the other Programs screens.
+ *
+ * REFINE-987 (round 2, toward C_assign) from data the phone already reads: the program's length under the bar
+ * (useProgram); "First week", "Starts {day}" and the first week's seven days from the chosen start (a day holds a
+ * workout when a week_index 0 day sits on its day_index: the server places a day at start + week_index * 7 +
+ * day_index), display only; "{N} selected"; each client's initial; "Already on this program" from every page of
+ * useProgramAssignees (an assignee with completed < workouts: the server's already_assigned rule); the foot line with
+ * the end day by the server's end_date rule. What the screen sends, its key and every control stay main's.
  */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -38,8 +45,12 @@ import {
   type SemanticTokens,
 } from "../../../theme/tokens";
 import { MastheadBand, mast } from "../../client/workouts/workoutStyleC";
+import { DayMark, type DayState } from "../../../ui/charts/StyleCMarks";
+import { DAY_LABELS } from "../../client/habits/constants";
+import { TRAIN_COPY } from "../../client/train/TrainToday";
 import {
   BulkAssignResult,
+  type ProgramDay,
   chunkClientIds,
   isValidIsoDate,
   nextMonday,
@@ -50,6 +61,7 @@ import {
   useAssignableClients,
   useInvalidatePrograms,
   useProgram,
+  useProgramAssignees,
 } from "../../../hooks/usePrograms";
 import {
   bulkResultCopy,
@@ -73,6 +85,26 @@ export default function ProgramAssignScreen({
   const invalidate = useInvalidatePrograms();
   const program = useProgram(programId);
   const clients = useAssignableClients();
+  // The coach's own clients on this program, every page (tenant-scoped on the server). Absent only in test mocks of
+  // usePrograms written before this read (programsFixRound.test.tsx:39), as semanticColors above.
+  const assignees = useProgramAssignees?.(programId);
+  const morePages = !!assignees?.hasNextPage && !assignees.isFetchingNextPage;
+  const fetchNextPage = assignees?.fetchNextPage;
+  useEffect(() => {
+    if (morePages) void fetchNextPage?.();
+  }, [morePages, fetchNextPage]);
+  const assigneePages = assignees?.data?.pages;
+  const assigneesDone = !!assigneePages && !assignees?.isError && !assignees?.hasNextPage;
+  // C_assign rows 1174-1199: a client with a copy still open (the server answers already_assigned for them).
+  const already = useMemo(
+    () =>
+      new Set(
+        assigneesDone
+          ? (assigneePages ?? []).flatMap((p) => p.items).filter((i) => i.completed < i.workouts).map((i) => i.client_id)
+          : [],
+      ),
+    [assigneesDone, assigneePages],
+  );
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [startDate, setStartDate] = useState(() =>
@@ -224,8 +256,14 @@ export default function ProgramAssignScreen({
     }
   };
 
+  // LO-987R1 C1: the band is forest over the forest route bar while the screen loads, too.
   if (clients.isLoading || program.isLoading)
-    return <LoadingRow label="Loading clients" />;
+    return (
+      <>
+        <MastheadBand color={mast.ground} />
+        <LoadingRow label="Loading clients" />
+      </>
+    );
 
   const summary = summarise(results);
   const assignDisabled = running || selected.size === 0 || !dateOk;
@@ -235,6 +273,9 @@ export default function ProgramAssignScreen({
   const selectLabel = allVisibleSelected
     ? "Clear shown"
     : `Select all shown (${visible.length})`;
+  const detail = program.data;
+  const week = dateOk ? firstWeek(startDate, detail?.days) : [];
+  const footLine = dateOk ? copyLine(startDate, detail?.days) : null;
 
   return (
     <View style={styles.screen}>
@@ -249,6 +290,32 @@ export default function ProgramAssignScreen({
           <View>
             {/* C_assign rows 200-661: the start date on the masthead, under the route's forest bar. */}
             <View style={styles.masthead}>
+              {/* C_assign cap rows 156-175: the program's length under the bar's title. */}
+              {detail?.weeks ? (
+                <Text style={styles.length}>
+                  {`${plural(detail.weeks, "week", "weeks")} · ${plural(detail.days_per_week, "day", "days")} a week`}
+                </Text>
+              ) : null}
+              {dateOk ? (
+                <View style={styles.first}>
+                  {/* Rows 210-290: the eyebrow over the serif start day; rows 318-415: the first week, display only. */}
+                  <Text style={styles.firstHead}>First week</Text>
+                  <Text style={styles.starts}>{`Starts ${dayOf(startDate, 0).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}`}</Text>
+                  {/* DayMark reads the theme's semantic tokens: absent only in test mocks, as semanticColors above. */}
+                  {semanticColors ? (
+                  <View testID="assign-strip" style={styles.strip}>
+                    {week.map((d, i) => (
+                      <View key={i} style={styles.stripDay}>
+                        <Text style={styles.stripLetter} importantForAccessibility="no" aria-hidden>
+                          {d.letter}
+                        </Text>
+                        <DayMark onDark state={d.state} day={d.num} label={d.label} testID={`assign-day-${i}`} />
+                      </View>
+                    ))}
+                  </View>
+                  ) : null}
+                </View>
+              ) : null}
               <Text accessibilityRole="header" style={styles.mastHead}>
                 Start date
               </Text>
@@ -293,12 +360,7 @@ export default function ProgramAssignScreen({
                   Enter a real date as YYYY-MM-DD, for example {quickDates[2].value}
                   .
                 </Text>
-              ) : (
-                <Text style={[styles.help, { color: mast.muted }]}>
-                  Week 1, Day 1 lands on {startDate}. Each client gets their own
-                  copy.
-                </Text>
-              )}
+              ) : null}
               <View style={styles.switchRow}>
                 <Switch
                   value={allowRepeat}
@@ -326,7 +388,7 @@ export default function ProgramAssignScreen({
               {/* C_assign rows 726-745: the section head with Select all at its right. */}
               <View style={styles.headRow}>
                 <Text accessibilityRole="header" style={styles.pageHead}>
-                  {`Clients (${selected.size} selected)`}
+                  {`${selected.size} selected`}
                 </Text>
                 <Pressable
                   accessibilityRole="button"
@@ -364,14 +426,25 @@ export default function ProgramAssignScreen({
         renderItem={({ item }) => {
           const r = results.get(item.id);
           const isSel = selected.has(item.id);
+          // A run's result for this client wins over the line.
+          const on = !r && already.has(item.id);
           return (
             <Pressable
               accessibilityRole="checkbox"
               accessibilityState={{ checked: isSel }}
-              accessibilityLabel={`${item.name}${r ? `, ${resultLabel(r)}` : ""}`}
+              accessibilityLabel={`${item.name}${r ? `, ${resultLabel(r)}` : on ? `, ${ALREADY}` : ""}`}
               onPress={() => toggle(item.id)}
               style={styles.client}
             >
+              {/* C_assign cols 48-119: the sage disc with the name's initial in serif, not read aloud. */}
+              <View
+                testID="assign-initial"
+                accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants"
+                style={styles.initial}
+              >
+                <Text style={styles.initialText}>{item.name.trim().charAt(0).toUpperCase()}</Text>
+              </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.clientName}>
                   {nameById.get(item.id) ?? item.name}
@@ -379,6 +452,7 @@ export default function ProgramAssignScreen({
                 {item.email ? (
                   <Text style={styles.clientSub}>{item.email}</Text>
                 ) : null}
+                {on ? <Text style={styles.clientSub}>{ALREADY}</Text> : null}
                 {r ? (
                   <Text
                     style={[
@@ -439,6 +513,8 @@ export default function ProgramAssignScreen({
         {summary.total > 0 && failedIds.length === 0 && !running ? (
           <SmallButton label="Done" onPress={() => navigation.goBack()} />
         ) : null}
+        {/* C_assign rows 1450-1469: the copy line with the end day, over Assign. */}
+        {footLine ? <Text style={[styles.help, styles.progress]}>{footLine}</Text> : null}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={assignLabel}
@@ -458,6 +534,35 @@ export default function ProgramAssignScreen({
       </View>
     </View>
   );
+}
+
+const ALREADY = "Already on this program";
+
+/** Day `n` after the start (YYYY-MM-DD, valid), on the phone's calendar. */
+function dayOf(start: string, n: number): Date {
+  const [y, m, d] = start.split("-").map(Number);
+  return new Date(y, m - 1, d + n);
+}
+
+/** The first seven days from the start: a day holds a workout when a week_index 0 day sits on its day_index. */
+function firstWeek(start: string, days: ProgramDay[] | undefined) {
+  const held = new Set((days ?? []).filter((x) => x.week_index === 0).map((x) => x.day_index));
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = dayOf(start, i);
+    const has = held.has(i);
+    // The start day holding a workout is drawn as the leaf ring (C_assign "19", rows 348-415).
+    const state: DayState = has ? (i === 0 ? "today" : "planned") : "rest";
+    const label = `${d.toLocaleDateString("en-US", { weekday: "long" })} ${d.getDate()}, ${has ? TRAIN_COPY.day.planned : TRAIN_COPY.day.rest}`;
+    return { letter: DAY_LABELS[(d.getDay() + 6) % 7], num: d.getDate(), state, label };
+  });
+}
+
+/** The foot line; the end is the last day placed (the largest week_index * 7 + day_index), the server's end_date. */
+function copyLine(start: string, days: ProgramDay[] | undefined): string {
+  if (!days || days.length === 0) return "Each client gets their own copy.";
+  const last = Math.max(...days.map((x) => x.week_index * 7 + x.day_index));
+  const end = dayOf(start, last).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  return `Each client gets their own copy. Ends ${end}.`;
 }
 
 function resultLabel(r: BulkAssignResult): string {
@@ -514,10 +619,22 @@ function makeStyles(sc: SemanticTokens) {
       paddingBottom: 14,
       gap: spacing.sm,
     },
-    // "FIRST WEEK" (cap rows 210-226): in the eyebrow's place, muted ink on forest; main's case (caption role).
+    // Main's "Start date" head over the pills: the caption role, muted ink on forest (main's case).
     mastHead: { ...typography.caption, color: mast.muted },
+    // "6 weeks · 4 days a week" (cap rows 156-175): Inter 14, muted on forest.
+    length: { ...typography.bodySmall, color: mast.muted },
+    first: { gap: spacing.xs },
+    // "FIRST WEEK" (cap rows 210-225): the eyebrow, muted on forest.
+    firstHead: { ...typography.eyebrow, color: mast.muted },
+    // "Starts Monday, October 19" (S cap rows 247-278): Cormorant 24 in the masthead ink.
+    starts: { ...typography.h2, color: mast.ink },
+    // Rows 318-415: seven columns, the letter over its 36 pt mark.
+    strip: { flexDirection: "row", justifyContent: "space-between", marginTop: spacing.sm, marginBottom: spacing.xs },
+    stripDay: { alignItems: "center", gap: 6, minWidth: 36 },
+    stripLetter: { ...typography.caption, color: mast.muted },
     row: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-    // C_assign rows 442-529: 44 pt pills, a 1 pt frame line (#627669), 16 pt in from each end (cols 48-79).
+    // C_assign rows 442-529: 44 pt pills, a 1 pt frame line (drawn #627669; mast.line, data.frameOnDark, is the nearest
+    // token, one shade lighter: LO-987R1 N2), 16 pt in from each end (cols 48-79).
     pill: {
       minHeight: layout.touchMin,
       minWidth: layout.touchMin,
@@ -561,8 +678,8 @@ function makeStyles(sc: SemanticTokens) {
       gap: spacing.md,
       minHeight: layout.touchMin,
     },
-    // "10 SELECTED" (cap rows 728-743): in the eyebrow's place, muted ink; main's case (caption role).
-    pageHead: { ...typography.caption, color: sc.textMuted, flexShrink: 1 },
+    // "10 SELECTED" (cap rows 728-743): the eyebrow, muted ink.
+    pageHead: { ...typography.eyebrow, color: sc.textMuted, flexShrink: 1 },
     // "Select all 100" (rows 726-745): the forest link at the right, in a 44 pt target.
     link: { minHeight: layout.touchMin, justifyContent: "center" },
     linkText: { ...typography.bodySmall, fontFamily: typography.micro.fontFamily, fontWeight: "600", color: sc.accentText },
@@ -591,6 +708,16 @@ function makeStyles(sc: SemanticTokens) {
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: sc.border,
     },
+    // C_assign cols 48-119: a 36 pt sage disc, the initial in serif.
+    initial: {
+      width: 36,
+      height: 36,
+      borderRadius: radius.chip,
+      backgroundColor: sc.surface.sage,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    initialText: { ...typography.h3, color: sc.data.forest },
     // "Jordan" (J cap rows 924-947): Inter 17.
     clientName: { ...typography.h4, color: sc.textPrimary },
     // "Already on this program" (rows 1174-1199): the muted line under the name.
