@@ -5,8 +5,6 @@
  * loading, missing and failed states are main's. The real ExerciseDetailScreen in a navigator; only the HTTP client
  * (services/api) is mocked, as w3ExerciseDetailMissing918.screen.test.tsx mocks it. Cases are the job's numbers.
  */
-process.env.TZ = 'America/Los_Angeles';
-
 import React from 'react';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -140,6 +138,19 @@ function shape(root: Inst): string[] {
   return out;
 }
 const bg = (node: { props: { style?: unknown } }) => (StyleSheet.flatten(node.props.style as ViewStyle) ?? {}).backgroundColor;
+
+// Case 10: the phone in Los Angeles. jest's sandboxed process.env cannot move the runner's zone, so every date format
+// call gets the zone (the ls917DayBoundaries pattern); a date read as UTC midnight would print the day before.
+const toLocale = Date.prototype.toLocaleDateString;
+const NativeFormat = Intl.DateTimeFormat;
+beforeAll(() => {
+  jest.spyOn(Date.prototype, 'toLocaleDateString').mockImplementation(function (this: Date, l?: string | string[], o?: Intl.DateTimeFormatOptions) {
+    return toLocale.call(this, l, { ...o, timeZone: o?.timeZone ?? 'America/Los_Angeles' });
+  });
+  jest.spyOn(Intl, 'DateTimeFormat').mockImplementation((l?: string | string[], o?: Intl.DateTimeFormatOptions) =>
+    new NativeFormat(l, { ...o, timeZone: o?.timeZone ?? 'America/Los_Angeles' }));
+});
+afterAll(() => jest.restoreAllMocks());
 
 beforeEach(() => {
   get.mockReset();

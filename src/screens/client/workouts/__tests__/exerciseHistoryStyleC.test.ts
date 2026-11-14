@@ -38,14 +38,30 @@ const sep22 = session('2026-09-22', 145, 6);
 const sep15 = session('2026-09-15', 135, 8);
 const CASE1 = answer([oct13, oct6, sep29, sep22, sep15], oct13);
 
+/**
+ * The phone's zone, emulated: jest's sandboxed process.env cannot move the runner's zone, so every date format call
+ * gets the zone the test names (the ls917DayBoundaries pattern). A date read as UTC midnight then prints the day before
+ * in Los Angeles.
+ */
+function inZone(zone: string) {
+  const toLocale = Date.prototype.toLocaleDateString;
+  const Native = Intl.DateTimeFormat;
+  const a = jest.spyOn(Date.prototype, 'toLocaleDateString').mockImplementation(function (this: Date, l?: string | string[], o?: Intl.DateTimeFormatOptions) {
+    return toLocale.call(this, l, { ...o, timeZone: o?.timeZone ?? zone });
+  });
+  const b = jest.spyOn(Intl, 'DateTimeFormat').mockImplementation((l?: string | string[], o?: Intl.DateTimeFormatOptions) =>
+    new Native(l, { ...o, timeZone: o?.timeZone ?? zone }));
+  return () => { a.mockRestore(); b.mockRestore(); };
+}
+
 describe('dates (case 10): "2026-10-13" reads Oct 13 as that calendar day in the phone zone', () => {
-  const zone = process.env.TZ;
-  afterAll(() => { process.env.TZ = zone; });
   it.each(['America/Los_Angeles', 'Pacific/Auckland', 'UTC'])('in %s', (tz) => {
-    process.env.TZ = tz;
+    const restore = inZone(tz);
     expect(dayLabel('2026-10-13')).toBe('Oct 13');
     expect(dayLabel('2026-10-13', true)).toBe('October 13');
     expect(dayLabel('2026-01-01')).toBe('Jan 1');
+    expect(dayLabel('2026-09-29')).toBe('Sep 29');
+    restore();
   });
 });
 

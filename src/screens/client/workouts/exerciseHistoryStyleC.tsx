@@ -13,16 +13,22 @@ import { PeakStar } from '../../../ui/charts/StyleCMarks';
 import { radius, spacing, typography } from '../../../theme/tokens';
 import type { SemanticTokens } from '../../../theme/tokens';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { dayStart } from '../../../utils/workout/workoutDay';
 import type { ExerciseHistory, HistoryPoint, HistorySession, TopSet } from '../../../api/exerciseHistoryApi';
 import { sectionHead, useCoachItalic } from './workoutStyleC';
 
 // ─── The rules ──────────────────────────────────────────────────────────────
 
-/** "Oct 13" (spoken "October 13") for the server's "2026-10-13": that calendar day, read in the phone's own zone. */
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October',
+  'November', 'December'];
+/**
+ * "Oct 13" (spoken "October 13") for the server's "2026-10-13": that calendar day, read from its parts, so no time
+ * zone can move it (a Date parsed from it would be UTC midnight, the day before in Los Angeles).
+ */
 export function dayLabel(date: string, spoken = false): string {
-  const day = dayStart(date);
-  return day ? day.toLocaleDateString('en-US', { month: spoken ? 'long' : 'short', day: 'numeric' }) : date;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(date);
+  const month = m ? MONTHS[Number(m[2]) - 1] : undefined;
+  if (!m || !month) return date;
+  return `${spoken ? month : month.slice(0, 3)} ${Number(m[3])}`;
 }
 
 /** A top set as drawn: "155 × 6"; a body-weight set (0 lb) reads "BW × 12". */
