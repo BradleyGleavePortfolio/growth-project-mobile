@@ -85,7 +85,7 @@ const offline = () => Object.assign(new Error('Network Error'), { isAxiosError: 
 const open = () => render(<FakeEntitlementProvider><Screen /></FakeEntitlementProvider>);
 
 /** The line under "Notification types": exactly NEW, OLD nowhere, no switch, one Try again, live region kept. */
-function expectNewLine(screen: ReturnType<typeof render>) {
+function expectNewLine(screen: Awaited<ReturnType<typeof render>>) {
   const line = screen.getByTestId(LINE);
   expect(within(line).getByText(NEW)).toBeTruthy();
   expect(screen.queryByText(OLD)).toBeNull();
