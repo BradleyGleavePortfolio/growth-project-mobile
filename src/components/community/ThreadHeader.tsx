@@ -59,8 +59,7 @@ export default function ThreadHeader({
   if (tone === 'deep') {
     const close = backKind === 'close';
     const heading = (
-      <Text style={[styles.deepTitle, studio ? styles.studioTitle : null, voiceB ? styles.voiceBTitle : null, subtitle ? styles.stacked : null,
-        voiceB && !subtitle ? styles.voiceBTitles : null]} numberOfLines={1} accessibilityRole="header">{title}</Text>
+      <Text style={[styles.deepTitle, studio ? styles.studioTitle : null, voiceB ? styles.voiceBTitle : null, subtitle ? styles.stacked : null]} numberOfLines={1} accessibilityRole="header">{title}</Text>
     );
     return (
       <View style={[styles.deep, studio ? styles.studioBar : null, voiceB ? styles.voiceBBar : null]} testID={testID}>
