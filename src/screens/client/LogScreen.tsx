@@ -15,7 +15,7 @@ import {
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useClientStore } from '../../store/clientStore';
 import { MealType, FoodLog } from '../../types';
-import { foodApi, logApi, type WaterEntry } from '../../services/api';
+import { foodApi, logApi } from '../../services/api';
 import { notifyPendingFoodLogs, syncFoodLogQueue } from '../../services/foodLogSync';
 import { usePendingFoodLogCount } from '../../hooks/useFoodLogQueueSync';
 import { useNetworkStatus, isEffectivelyOnline } from '../../hooks/useNetworkStatus';
@@ -39,7 +39,7 @@ import { initialEditPortion, editUnitsFor, editPortionMultiplier } from '../../u
 import { mapFoodItem, type RawFoodItem } from '../../utils/log/mapFoodItem';
 import { matchLoggedFoods, mergeWithLoggedMatches, queuePastMeal, repeatPastMeal } from '../../utils/log/quickLog';
 import { dropQueued } from '../../services/foodLogQueue';
-import { countsInDay } from '../../utils/log/queuedDay';
+import { countsInDay, type ShownWaterEntry } from '../../utils/log/queuedDay';
 import type { PlanLink } from '../../utils/log/planLink';
 import { addDays, getTodayString } from '../../utils/date';
 import { dayForNewLog } from '../../utils/logDay';
@@ -88,6 +88,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
     removeWaterEntry,
     removeFoodLogLocally,
     queuedFoods,
+    queuedWaterWeight,
   } = useClientStore();
 
   const { recentFoods, frequentFoods, lastMeals, browseUnavailable, loadBrowseFoods } = useFoodBrowse(
@@ -126,6 +127,10 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
   const [quantityModalVisible, setQuantityModalVisible] = useState(false);
   const [quantityInput, setQuantityInput] = useState('1');
   const [selectedUnit, setSelectedUnit] = useState('serving');
+  // GOAL-930-M (C2 C_error): on the Style C day a failed save from the portion sheet shows in the sheet, with the
+  // action to repeat. It belongs to this portion: it goes when the sheet closes or another food is chosen.
+  const [saveFailure, setSaveFailure] = useState<{ title: string; message: string; retry: 'confirm' | 'addAnother' } | null>(null);
+  useEffect(() => setSaveFailure(null), [quantityModalVisible, selectedFood]);
 
   // NL parse hints from the most recent /foods/search response. When the
   // backend parses "6oz chicken breast" it returns parsed_quantity=6 and
@@ -345,6 +350,11 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
       originalUnit: selectedUnit,
       link: sheetLink,
     };
+    // GOAL-930-M: the tap that started this save, for the failure below; a new try clears the last one's card.
+    const tap = addSheetAfterLog.current;
+    const failed = (title: string, message: string) => (tap === 'classic' ? Alert.alert(title, message)
+      : setSaveFailure({ title, message, retry: tap === 'keep' ? 'addAnother' : 'confirm' }));
+    setSaveFailure(null);
     setFoodSaving(true);
 
     if (!online) {
@@ -360,7 +370,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
         );
       } catch (err) {
         console.error('LogScreen: enqueue failed', err);
-        Alert.alert("Couldn't save food", errorMessage(err, 'Keep this portion open and try saving again.'));
+        failed("Couldn't save food", errorMessage(err, 'Keep this portion open and try saving again.'));
       } finally {
         setFoodSaving(false);
       }
@@ -384,7 +394,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
       console.error('LogScreen: handleConfirmLog failed', err);
       // Phase 11 / Track 3: error haptic on failed API action
       HapticService.error();
-      Alert.alert("Couldn't log food", errorMessage(err, 'This food was not added. Check the connection and try again.'));
+      failed("Couldn't log food", errorMessage(err, 'This food was not added. Check the connection and try again.'));
     } finally {
       setFoodSaving(false);
     }
@@ -628,13 +638,16 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
 
   const handleAddWater = (oz: number) => {
     if (currentUser) {
-      logWater(currentUser.id, '', oz);
+      // OFFLINE-WATER-WEIGHT-M: with no signal the glass waits in the phone's queue (the send decision food uses).
+      if (online) logWater(currentUser.id, '', oz);
+      else logWater(currentUser.id, '', oz, false);
     }
   };
 
-  const handleRemoveWater = (entry: WaterEntry) => {
+  const handleRemoveWater = (entry: ShownWaterEntry) => {
     if (!currentUser || removingWaterId) return;
-    Alert.alert('Remove water entry?', "This entry will be removed from this day's water total.", [
+    // OFFLINE-WATER-WEIGHT-M: a glass saved offline is only on this phone; Remove takes it off with no server call.
+    Alert.alert('Remove water entry?', entry.offline ? 'This entry will be removed from this phone.' : "This entry will be removed from this day's water total.", [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',
@@ -666,6 +679,10 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
     ? foodLogs.filter((f) => f.offline === 'waiting' && queuedIds.has(f.id)).length
     : 0;
   const pendingElsewhere = Math.max(0, pendingFoods - pendingInDay);
+  // OFFLINE-WATER-WEIGHT-M (M6): glasses saved offline that this day's water total does not count (the switch off, or
+  // another day, or a day not read yet) get the same note as foods (C2-S-17).
+  const waterShownIds = new Set((waterEntries ?? []).map((e) => e.id));
+  const waterElsewhere = (queuedWaterWeight ?? []).filter((q) => q.kind === 'water' && !q.parkedAt && !waterShownIds.has(q.id)).length;
 
   const remaining = macroTargets ? macroTargets.calories - dailyTotals.calories : null;
   const showDayLoading = !hasLoadedDay && (isLoading || !loadError);
@@ -704,6 +721,13 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
           {pendingInDay === 1
             ? `1 food saved offline is in this log and its totals. ${online ? 'Pull down to sync it now.' : 'It syncs when the connection returns.'}`
             : `${pendingInDay} foods saved offline are in this log and its totals. ${online ? 'Pull down to sync them now.' : 'They sync when the connection returns.'}`}
+        </Text>
+      ) : null}
+      {waterElsewhere > 0 ? (
+        <Text style={styles.note} accessibilityLiveRegion="polite" testID="log-offline-pending-water">
+          {waterElsewhere === 1
+            ? `1 water entry saved offline is not in this log or its totals yet. ${online ? 'Pull down to sync it now.' : 'It syncs when the connection returns.'}`
+            : `${waterElsewhere} water entries saved offline are not in this log or its totals yet. ${online ? 'Pull down to sync them now.' : 'They sync when the connection returns.'}`}
         </Text>
       ) : null}
       {savedMessage ? (
@@ -871,6 +895,8 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
             dayLeft={styleCDay && macroTargets && macroTargets.calories > 0
               ? { kcal: macroTargets.calories - dailyTotals.calories, protein: macroTargets.protein - dailyTotals.protein } : undefined}
             onAddAnother={styleCDay ? () => { addSheetAfterLog.current = 'keep'; void handleConfirmLog(); } : undefined}
+            saveFailure={saveFailure}
+            confirmLabel={saveFailure ? 'Try again' : undefined}
             onCancel={() => {
               setQuantityModalVisible(false);
               setSelectedFood(null);
