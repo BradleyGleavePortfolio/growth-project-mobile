@@ -257,8 +257,10 @@ function makeStyles(sc: SemanticTokens) {
     tileNumber: { ...typography.h2, marginTop: spacing.xs },
     small,
     caption: { marginTop: spacing.xs },
-    // "YOUR HISTORY" (rows 868-891): the imported head; the first row starts at its rule.
-    head: { marginBottom: 0 },
+    // "YOUR HISTORY" (rows 868-891): the imported head with this head's drawn gaps (REFINE-986, H-4): 18.5 pt under
+    // the tiles (831 to 868) and its rule 3.5 pt under the eyebrow (883 to 890); the first row starts at the rule.
+    // MUSCLES, EQUIPMENT and HOW TO keep sectionHead as main draws them.
+    head: { marginTop: spacing.lg, paddingBottom: 0, marginBottom: 0 },
     // A row: date | value, strip and comments | sets; a hairline between rows (rows 1072, 1206, 1428).
     row: { flexDirection: 'row', alignItems: 'flex-start', paddingTop: spacing.sm, paddingBottom: spacing.md },
     rowRule: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: sc.border },
