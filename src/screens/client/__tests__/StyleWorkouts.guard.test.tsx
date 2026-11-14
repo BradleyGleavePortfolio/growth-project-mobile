@@ -47,7 +47,10 @@ const LONG = 'Barbell back squat with a long pause at the bottom of every rep';
 const SCREENS = ['ExerciseDetailScreen.tsx', 'ExerciseLibraryScreen.tsx', 'WorkoutAssignmentDetailScreen.tsx',
   'WorkoutHistoryEditScreen.tsx'].map((f) => path.join(__dirname, '..', f));
 const PARTS = path.join(__dirname, '../workouts/workoutStyleC.tsx');
-const files = () => [...SCREENS, ...(fs.existsSync(PARTS) ? [PARTS] : [])];
+// WORKOUT-DETAIL-M: the exercise page's history parts and its read join the list (they must exist).
+const HISTORY_FILES = [path.join(__dirname, '../workouts/exerciseHistoryStyleC.tsx'),
+  path.join(__dirname, '../../../api/exerciseHistoryApi.ts')];
+const files = () => [...SCREENS, ...(fs.existsSync(PARTS) ? [PARTS] : []), ...HISTORY_FILES];
 
 const mockAssignment = {
   id: 'a-1', workout_plan_id: 'plan', client_id: 'client-1', assigned_by_coach_id: 'coach',
