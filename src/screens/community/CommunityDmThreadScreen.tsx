@@ -8,7 +8,7 @@
  * Empty conversation → Roman-voiced empty state with a primary action.
  * Standardized on semanticColors / tokens.ts.
  */
-import React from 'react';
+import React, { useRef } from 'react';
 import {
   Alert,
   View,
@@ -28,6 +28,7 @@ import {
   useDmMessages,
   useSendDm,
   useCommunityMe,
+  useMyCoachName,
 } from '../../hooks/useCommunity';
 import {
   CommunityEmptyState,
@@ -36,10 +37,12 @@ import {
   ComposerInput,
 } from '../../components/community';
 import SafetyMenu from '../../components/community/SafetyMenu';
+import type { ComposerInputHandle } from '../../components/community/ComposerInput';
 import { ForestStatusBar } from '../../components/StatusBarBand';
 import { describeCommunityFailure } from '../../api/communityErrors';
 import { useConversationClosed, useServerAnswered, useClosedBy, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
 import type { CommunityNav, CommunityRoute } from './communityNavTypes';
+import { NO_NAME } from './coach-dm/coachDm';
 
 const DM_MAX = 4000; // mirror backend SendDmDto (body 1..4000)
 
@@ -48,8 +51,14 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
   const navigation = useNavigation<CommunityNav>();
   const route = useRoute<CommunityRoute<'CommunityDmThread'>>();
   const recipientId = route.params?.recipientId ?? '';
-  const participantLabel = route.params?.participantLabel ?? 'Coach';
   const client = useCurrentUser();
+  // COACH-DM-CLIENT-M: a given name wins; my own coach (client.coach_id) is named as the app knows them (useMyCoachName,
+  // as the composer), "Coach" until then; anyone else, a former coach included, is NO_NAME, never "Coach".
+  const given = route.params?.participantLabel;
+  const myCoach = !!recipientId && recipientId === client?.coach_id;
+  const coach = useMyCoachName(given === undefined && myCoach ? client?.coach_id : null);
+  const participantLabel = given ?? (myCoach ? coach.name ?? 'Coach' : NO_NAME);
+  const composerRef = useRef<ComposerInputHandle>(null);
   const me = useCommunityMe();
   const workspaceId = me.data?.workspace_id ?? '';
 
@@ -66,9 +75,9 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
   );
   // BLOCK-TELL #169-5: the read refusal's code (blocked_by_you / blocked_by_them) says who closed it.
   const by = useClosedBy(recipientId, closed, { errors: [messages.error] });
-  // FR-877R2 (LO C2): BAM-2b names them only by a name this screen was given, or "Coach" for my own coach. A member
-  // reached with no name (a link) gets BAM-1, never the "Coach" fallback as their name.
-  const shownName = route.params?.participantLabel ?? (recipientId && recipientId === client?.coach_id ? participantLabel : null);
+  // FR-877R2 (LO C2): BAM-2b names them only by a name this screen was given, or, for my own coach, the bar's name
+  // (COACH-DM-CLIENT-M). A member reached with no name (a link) gets BAM-1, never NO_NAME or "Coach" as their name.
+  const shownName = given ?? (myCoach ? participantLabel : null);
 
   // FR-880R2 (Sol B1, LO-872R4 C2): the DM read waits for /community/me (it is off until the space is known), so a slow,
   // failed or offline me read is this screen's read too: the same two lines, and Try again reads me again.
@@ -153,10 +162,7 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
               firstName={client?.firstName ?? client?.name ?? null}
               title="Say hello"
               actionLabel="Start the conversation"
-              onAction={() => {
-                /* The inline composer below is always present; this CTA simply
-                   signals intent — there is no separate compose surface here. */
-              }}
+              onAction={() => composerRef.current?.focus()} // COACH-DM-CLIENT-M: the box below, drawn whenever this is
               testID="community-dmthread-empty"
             />
           </View>
@@ -193,7 +199,10 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
           />
         )}
 
-        {closed ? <ConversationClosedLine by={by} name={shownName} testID="community-dmthread-closed" /> : !open ? null : <ComposerInput
+        {closed ? (coach.settled ? ( // the line waits for my coach's name, as the composer's does, so it never changes
+          <ConversationClosedLine by={by} name={shownName} testID="community-dmthread-closed" />
+        ) : null) : !open ? null : <ComposerInput
+          ref={composerRef}
           placeholder="Message"
           maxLength={DM_MAX}
           sending={sendDm.isPending}

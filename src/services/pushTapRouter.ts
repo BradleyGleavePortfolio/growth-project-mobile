@@ -199,8 +199,6 @@ interface PendingTap {
   waitForSignIn?: boolean;
   /** The signed-in user the tap belongs to; null while bootstrap is unknown. */
   ownerUserId: string | null;
-  /** COACH-DM-M: `path` is followed only for this role; any other role gets `screen` (coachDmLink). */
-  linkFor?: PushRole;
 }
 
 let navigator: PushNavigator | null = null;
@@ -355,7 +353,8 @@ export function resolvePushTarget(role: PushRole, screen: string): Target {
  * root (its ROLE_ANCHOR, as flushPendingPushTap checks it): the route it opens and the params it passes, following
  * routePushTap's link rule, flushPendingPushTap and deliver without routing (no navigate, hold, dedupe or after()).
  * null when the tap opens nothing. A root that keeps open work (pop) still answers its screen: no exact match there.
- * MERGEUP-966: a coach's community DM link is followed through COACH-DM-M's coachDmLink, as flushPendingPushTap does.
+ * MERGEUP-966: a community DM link is followed through coachDmLink, as flushPendingPushTap does (COACH-DM-CLIENT-M:
+ * for either role).
  */
 export function pushTapLanding(
   routeNames: readonly string[],
@@ -393,7 +392,7 @@ export function pushTapLanding(
   }
   if (!actionScreen || !SCREEN_NAME.test(actionScreen)) return null;
   const dm = coachDmLink(actionScreen, deepLink, sessionUserId(session));
-  if (dm.path !== undefined && dm.linkFor === role) {
+  if (dm.path !== undefined) {
     const target = resolveAppLink(dm.path, role);
     if (target) return land(target, target.params);
   }
@@ -413,9 +412,9 @@ export function flushPendingPushTap(): boolean {
   // frame between an auth-state change and the navigator commit).
   if (!routeNames.includes(ROLE_ANCHOR[session.role])) return false;
 
-  const { screen, params, path, linkFor } = pending;
+  const { screen, params, path } = pending;
   pending = null;
-  if (path !== undefined && (!linkFor || linkFor === session.role)) {
+  if (path !== undefined) {
     const target = resolveAppLink(path, session.role);
     // A trusted but unsupported push URL keeps its existing inbox fallback.
     // URL opens have no fallback, and untrusted origins never enter the queue.
@@ -527,14 +526,15 @@ export function __resetPushTapRouterForTests(): void {
 /**
  * COACH-DM-M (b#1243 CONTRACT 6763103674): a community DM row's link names the other person, tgp://community/dm/<id>.
  * Rows stored before b#1243 keep tgp://community/dms/<workspace>:<lo>:<hi>: read as the id that is not the signed-in
- * user's, and when neither is, nothing is guessed. Held for a coach only: a client's row keeps its kind's Community
- * screen (m#956 N2), as does a build whose switches cannot open the thread (resolveAppLink answers null).
+ * user's, and when neither is, nothing is guessed. COACH-DM-CLIENT-M: one rule for both roles; the role known at
+ * delivery picks the thread (resolveAppLink: a client's Community tab, a coach's Community stack). A build whose
+ * switches cannot open the thread (resolveAppLink answers null) keeps the kind's own screen.
  */
-function coachDmLink(screen: string, deepLink: string | undefined, userId: string | null): Pick<PendingTap, 'path' | 'linkFor'> {
+function coachDmLink(screen: string, deepLink: string | undefined, userId: string | null): Pick<PendingTap, 'path'> {
   const path = screen === 'Community' && deepLink !== undefined ? incomingLinkPath(deepLink)?.split(/[?#]/, 1)[0] : null;
   if (!path) return {};
-  if (/^community\/dm\/[^/]+$/.test(path)) return { path, linkFor: 'coach' };
+  if (/^community\/dm\/[^/]+$/.test(path)) return { path };
   const pair = /^community\/dms\/[^/:]+:([^/:]+):([^/:]+)$/.exec(path);
   const other = pair && userId ? (pair[1] === userId ? pair[2] : pair[2] === userId ? pair[1] : null) : null;
-  return other ? { path: `community/dm/${other}`, linkFor: 'coach' } : {};
+  return other ? { path: `community/dm/${other}` } : {};
 }

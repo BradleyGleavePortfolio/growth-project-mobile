@@ -3,6 +3,9 @@
  * gated by the per-workspace dm_enabled policy on the backend). Lists the
  * caller's conversation threads (REST, never realtime payloads), each opening a
  * single conversation. Coach threads carry the Roman monogram accent.
+ * COACH-DM-CLIENT-M: only my own coach's thread (client.coach_id) is "your coach", with the coach's name the app knows
+ * (useMyCoachName, the read Community home makes) or "Coach" until then; anyone else, a former coach included, is
+ * NO_NAME, as the coach's own list says a person with no name. Rows wait for the signed-in person.
  *
  * Empty inbox → Roman-voiced empty state with a primary action ("Send your
  * coach a message"). Standardized on semanticColors / tokens.ts.
@@ -28,7 +31,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
 import { spacing, radius } from '../../theme/tokens';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import { useDmThreads } from '../../hooks/useCommunity';
+import { useDmThreads, useMyCoachName } from '../../hooks/useCommunity';
 import {
   CommunityEmptyState,
   DmRow,
@@ -36,6 +39,7 @@ import {
 import HapticPressable from '../../components/HapticPressable';
 import type { CommunityDmThread } from '../../api/communityApi';
 import type { CommunityNav } from './communityNavTypes';
+import { NO_NAME } from './coach-dm/coachDm';
 
 interface Props {
   embedded?: boolean;
@@ -70,6 +74,8 @@ export default function CommunityDmListScreen({
   const navigation = useNavigation<CommunityNav>();
   const client = useCurrentUser();
   const threads = useDmThreads(workspaceId);
+  const coachId = client?.coach_id ?? null;
+  const coachName = useMyCoachName(coachId).name;
 
   // The workspace prerequisite must SUCCEED before we can decide "no
   // conversations". The parent threads the real `me.isLoading`/`me.isError`
@@ -214,15 +220,19 @@ export default function CommunityDmListScreen({
           testID="community-dmlist-screen"
           data={data}
           keyExtractor={(t) => t.thread_id}
-          renderItem={({ item }) => (
-            <DmRow
-              thread={item}
-              participantLabel="Coach"
-              isCoach
-              onPress={openThread}
-              testID={`dm-row-${item.thread_id}`}
-            />
-          )}
+          renderItem={({ item }) => {
+            if (!client) return null;
+            const mine = !!coachId && item.other_user_id === coachId;
+            return (
+              <DmRow
+                thread={item}
+                participantLabel={mine ? coachName ?? 'Coach' : NO_NAME}
+                isCoach={mine}
+                onPress={openThread}
+                testID={`dm-row-${item.thread_id}`}
+              />
+            );
+          }}
           contentContainerStyle={styles.list}
           style={{ backgroundColor: semanticColors.bgPrimary }}
         />
