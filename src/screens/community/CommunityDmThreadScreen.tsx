@@ -192,7 +192,6 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
                     <MessageBubble
                       message={item}
                       myUserId={client?.id ?? ''}
-                      showTime
                       voiceB
                       testID={`dm-message-${item.id}`}
                     />
