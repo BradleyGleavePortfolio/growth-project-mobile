@@ -121,7 +121,7 @@ afterEach(() => {
 describe('CHECKIN-DRAFT-M: the check-in card in Roman\'s drafts list', () => {
   it('case 17: a bound row draws the B card with the roster name and Check-in · Today; unbound and wearable rows stay undrawn; the Stream 2 card is unchanged', async () => {
     mockListPending.mockResolvedValue({ drafts: [bound('d-7', 'client-1', 'ci-7'), unbound, wearable, stream2('w-1', 'client-2')] });
-    const view = render(wrap(<PendingAiDraftsScreen />));
+    const view = await render(wrap(<PendingAiDraftsScreen />));
     const card = within(await view.findByTestId('checkin-draft-card-d-7'));
     expect(card.getByText('Jordan Reyes')).toBeTruthy();
     expect(card.getByText('Check-in · Today')).toBeTruthy();
@@ -140,7 +140,7 @@ describe('CHECKIN-DRAFT-M: the check-in card in Roman\'s drafts list', () => {
 
   it('case 17: an older day reads as its date; a client not on the roster keeps main\'s card label', async () => {
     mockListPending.mockResolvedValue({ drafts: [bound('d-8', 'abcdef12-3456-7890', 'ci-8', '2026-11-03')] });
-    const view = render(wrap(<PendingAiDraftsScreen />));
+    const view = await render(wrap(<PendingAiDraftsScreen />));
     const card = within(await view.findByTestId('checkin-draft-card-d-8'));
     expect(card.getByText('client abcdef12')).toBeTruthy();
     expect(card.getByText('Check-in · Nov 3')).toBeTruthy();
@@ -148,7 +148,7 @@ describe('CHECKIN-DRAFT-M: the check-in card in Roman\'s drafts list', () => {
 
   it('case 18: one Stream 2 draft and one bound draft read 2 on the headline, coach Home and the Messages card; the chips show only the Stream 2 kind', async () => {
     mockListPending.mockResolvedValue({ drafts: [bound('d-7', 'client-1', 'ci-7'), stream2('w-1', 'client-2')] });
-    const view = render(wrap(<><HomeProbe /><RomanDraftsHero /><PendingAiDraftsScreen /></>));
+    const view = await render(wrap(<><HomeProbe /><RomanDraftsHero /><PendingAiDraftsScreen /></>));
     await waitFor(() => expect(String(view.getByTestId('home-count').props.children)).toMatch(/^2\|ok\|/));
     const heroCard = within(view.getByTestId('inbox-roman-drafts'));
     expect(heroCard.getByText('Roman has 2 drafts ready')).toBeTruthy();
@@ -168,10 +168,10 @@ describe('CHECKIN-DRAFT-M: the check-in card in Roman\'s drafts list', () => {
 
   it('case 19: a block on the client takes the bound draft out of the list and the count at once, with no new read', async () => {
     mockListPending.mockResolvedValue({ drafts: [bound('d-7', 'client-1', 'ci-7'), stream2('w-1', 'client-2')] });
-    const view = render(wrap(<><RomanDraftsHero /><PendingAiDraftsScreen /></>));
+    const view = await render(wrap(<><RomanDraftsHero /><PendingAiDraftsScreen /></>));
     await view.findByTestId('checkin-draft-card-d-7');
     const reads = mockListPending.mock.calls.length;
-    act(() => useBlockedUsersStore.setState({ blocked: [{ id: 'client-1', displayName: 'Jordan Reyes' } as never] }));
+    await act(async () => { useBlockedUsersStore.setState({ blocked: [{ id: 'client-1', displayName: 'Jordan Reyes' } as never] }); });
     await waitFor(() => expect(view.queryByTestId('checkin-draft-card-d-7')).toBeNull());
     expect(view.getAllByText('Roman has 1 draft ready')).toHaveLength(2);
     expect(mockListPending.mock.calls.length).toBe(reads);
@@ -179,15 +179,15 @@ describe('CHECKIN-DRAFT-M: the check-in card in Roman\'s drafts list', () => {
 
   it('case 20: Review draft opens the sheet at ready with that day\'s check-in; Send sends that draft', async () => {
     mockListPending.mockResolvedValue({ drafts: [bound('d-7', 'client-1', 'ci-7')] });
-    const view = render(wrap(<PendingAiDraftsScreen />));
-    fireEvent.press(await view.findByLabelText('Review draft'));
+    const view = await render(wrap(<PendingAiDraftsScreen />));
+    await fireEvent.press(await view.findByLabelText('Review draft'));
     expect(await view.findByText("Roman's draft for Jordan")).toBeTruthy();
     expect(view.getByTestId('checkin-draft-text').props.children).toBe(REPLY);
     expect(mockPost).not.toHaveBeenCalled();
     await waitFor(() => expect(within(view.getByTestId('checkin-draft-source')).getByText('Busy week, sessions done.')).toBeTruthy());
     expect(mockCheckIns).toHaveBeenCalledWith('client-1', { from: TODAY, to: TODAY });
     expect(view.getByText('Jordan Reyes · Check-in')).toBeTruthy();
-    fireEvent.press(view.getByLabelText('Send to Jordan'));
+    await fireEvent.press(view.getByLabelText('Send to Jordan'));
     expect(await view.findByText('Sent by you in Messages.')).toBeTruthy();
     expect(mockPatch.mock.calls).toEqual([['/ai/gateway/drafts/d-7', { decision: 'approved' }]]);
   });
@@ -195,20 +195,20 @@ describe('CHECKIN-DRAFT-M: the check-in card in Roman\'s drafts list', () => {
   it('case 20: the source read failing leaves the panel out and the draft still sends', async () => {
     mockCheckIns.mockRejectedValue(new Error('Network Error'));
     mockListPending.mockResolvedValue({ drafts: [bound('d-7', 'client-1', 'ci-7')] });
-    const view = render(wrap(<PendingAiDraftsScreen />));
-    fireEvent.press(await view.findByLabelText('Review draft'));
+    const view = await render(wrap(<PendingAiDraftsScreen />));
+    await fireEvent.press(await view.findByLabelText('Review draft'));
     await view.findByText("Roman's draft for Jordan");
     await waitFor(() => expect(mockCheckIns).toHaveBeenCalled());
     await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
     expect(view.queryByTestId('checkin-draft-source')).toBeNull();
-    fireEvent.press(view.getByLabelText('Send to Jordan'));
+    await fireEvent.press(view.getByLabelText('Send to Jordan'));
     expect(await view.findByText('Sent by you in Messages.')).toBeTruthy();
   });
 
   it('case 20: Back to check-in opens that client\'s file on the Timeline', async () => {
     mockListPending.mockResolvedValue({ drafts: [bound('d-7', 'client-1', 'ci-7')] });
-    const view = render(wrap(<PendingAiDraftsScreen />));
-    fireEvent.press(await view.findByLabelText('Back to check-in'));
+    const view = await render(wrap(<PendingAiDraftsScreen />));
+    await fireEvent.press(await view.findByLabelText('Back to check-in'));
     expect(mockNavigate).toHaveBeenCalledWith('ClientDetail', { clientId: 'client-1', clientName: 'Jordan Reyes', initialTab: 'timeline' });
   });
 });

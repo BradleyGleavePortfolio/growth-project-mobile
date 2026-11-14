@@ -57,7 +57,9 @@ import * as clientData from '../useClientDetailData';
 import ReportMessageSheet from '../../../../components/messaging/ReportMessageSheet';
 import type { TimelineEvent } from '../types';
 
-const setOnline = (v: boolean) => act(() => { mockOnline = v; mockNetListeners.forEach((l) => l()); });
+const setOnline = async (v: boolean) => {
+  await act(async () => { mockOnline = v; mockNetListeners.forEach((l) => l()); });
+};
 const localDay = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const TODAY = localDay();
 const NOTE = 'Busy week at work, but I made time for my sessions.';
@@ -80,21 +82,22 @@ const httpError = (status: number, data: Record<string, unknown> = {}) => Object
 const never = () => new Promise<never>(() => undefined);
 
 let qc: QueryClient;
-function renderFile(rows: Row[] = [WITH_NOTE], clientId = 'client-1', clientName = 'Jordan Reyes') {
+async function renderFile(rows: Row[] = [WITH_NOTE], clientId = 'client-1', clientName = 'Jordan Reyes') {
   const ui = (r: Row[], id: string, name: string) => (
     <QueryClientProvider client={qc}>
       {/* ClientDetailScreen keys the file by client (:56): a new client is a new mount */}
       <TimelineTab key={id} events={r.map(event)} onLoad={() => undefined} days={90} viewerId="coach-1" clientId={id} clientName={name} />
     </QueryClientProvider>
   );
-  const view = render(ui(rows, clientId, clientName));
+  const view = await render(ui(rows, clientId, clientName));
   return { ...view, switchTo: (r: Row[], id: string, name: string) => view.rerender(ui(r, id, name)) };
 }
+type FileView = Awaited<ReturnType<typeof renderFile>>;
 const invokes = () => mockPost.mock.calls.filter(([url]) => url === '/ai/gateway/invoke');
 const patches = () => mockPatch.mock.calls;
 
-async function openReady(view: ReturnType<typeof renderFile>) {
-  fireEvent.press(view.getByText('Draft a reply'));
+async function openReady(view: FileView) {
+  await fireEvent.press(view.getByText('Draft a reply'));
   await view.findByText("Roman's draft for Jordan");
 }
 
@@ -113,7 +116,7 @@ afterEach(() => jest.restoreAllMocks());
 
 describe('CHECKIN-DRAFT-M: the action on the check-in row', () => {
   it('case 1: a check-in with a note shows Draft a reply; one tap sends exactly one invoke for that check-in and draws the reply', async () => {
-    const view = renderFile();
+    const view = await renderFile();
     const action = view.getByLabelText("Draft a reply to Jordan's check-in with Roman");
     expect(within(action).getByText('Draft a reply')).toBeTruthy();
     await openReady(view);
@@ -135,21 +138,21 @@ describe('CHECKIN-DRAFT-M: the action on the check-in row', () => {
   });
 
   it('case 1: Mark reviewed and Draft a reply both show on an unreviewed row of mine; a reviewed row keeps the action', () => {
-    const view = renderFile([WITH_NOTE, { id: 'ci-2', date: '2026-11-03', notes: 'Fine week.', reviewed_by_coach: true }]);
+    const view = await renderFile([WITH_NOTE, { id: 'ci-2', date: '2026-11-03', notes: 'Fine week.', reviewed_by_coach: true }]);
     expect(view.getByText('Mark reviewed')).toBeTruthy();
     expect(view.getByText('Reviewed')).toBeTruthy();
     expect(view.getAllByText('Draft a reply')).toHaveLength(2);
   });
 
   it('case 2: numbers only show the action and the numbers under No written note; sleep 0 alone shows; nothing to draft hides it', async () => {
-    const view = renderFile([
+    const view = await renderFile([
       { id: 'n-1', date: TODAY, notes: null, mood: 4, energy: 3, sleep_hours: 7.5 },
       { id: 'n-2', date: '2026-11-03', sleep_hours: 0 },
       { id: 'n-3', date: '2026-11-02', notes: '   ' },
       { id: 'n-4', date: '2026-11-01', soreness: 3, weight_lbs: 180 },
     ]);
     expect(view.getAllByText('Draft a reply')).toHaveLength(2);
-    fireEvent.press(view.getAllByText('Draft a reply')[0]);
+    await fireEvent.press(view.getAllByText('Draft a reply')[0]);
     await view.findByText("Roman's draft for Jordan");
     const source = view.getByTestId('checkin-draft-source');
     expect(within(source).getByText('No written note')).toBeTruthy();
@@ -167,8 +170,8 @@ describe('CHECKIN-DRAFT-M: the action on the check-in row', () => {
 describe('CHECKIN-DRAFT-M: writing and refusals', () => {
   it('waiting: the head says Reply to Jordan, the source shows, Roman is writing and no Send', async () => {
     mockPost.mockImplementation(never);
-    const view = renderFile();
-    fireEvent.press(view.getByText('Draft a reply'));
+    const view = await renderFile();
+    await fireEvent.press(view.getByText('Draft a reply'));
     expect(await view.findByText('Reply to Jordan')).toBeTruthy();
     expect(view.getAllByText('Roman is writing').length).toBeGreaterThan(0);
     expect(within(view.getByTestId('checkin-draft-source')).getByText(NOTE)).toBeTruthy();
@@ -177,9 +180,9 @@ describe('CHECKIN-DRAFT-M: writing and refusals', () => {
   });
 
   it('case 3: a re-tap on a live draft gets the same draft back and shows its stored text', async () => {
-    const view = renderFile();
+    const view = await renderFile();
     await openReady(view);
-    fireEvent.press(view.getByTestId('checkin-draft-scrim'));
+    await fireEvent.press(view.getByTestId('checkin-draft-scrim'));
     await waitFor(() => expect(view.queryByTestId('checkin-draft-sheet')).toBeNull());
     mockPost.mockImplementation(() => Promise.resolve(invoked('d-1', 'Stored words from the first tap.')));
     await openReady(view);
@@ -190,14 +193,14 @@ describe('CHECKIN-DRAFT-M: writing and refusals', () => {
 
   it('case 4: switch or provider off (stub, no draft id): CD-57 with Not now only, no PATCH', async () => {
     mockPost.mockResolvedValue({ data: { enabled: false, provider: 'stub', reply: '', approval: { required: false, status: 'not_required', draft_id: null } } });
-    const view = renderFile();
-    fireEvent.press(view.getByText('Draft a reply'));
+    const view = await renderFile();
+    await fireEvent.press(view.getByText('Draft a reply'));
     expect(await view.findByText("Roman can't write this right now. Nothing was sent.")).toBeTruthy();
     expect(view.getByText('Reply to Jordan')).toBeTruthy();
     expect(view.getByLabelText('Not now')).toBeTruthy();
     expect(view.queryByLabelText('Try again')).toBeNull();
     expect(view.queryByLabelText('Send to Jordan')).toBeNull();
-    fireEvent.press(view.getByLabelText('Not now'));
+    await fireEvent.press(view.getByLabelText('Not now'));
     expect(patches()).toHaveLength(0);
   });
 
@@ -207,8 +210,8 @@ describe('CHECKIN-DRAFT-M: writing and refusals', () => {
     [422, { code: 'CHECK_IN_NOTHING_TO_DRAFT' }], [422, { code: 'CHECK_IN_NEEDS_COACH' }],
   ])('case 5: invoke %s %o: CD-57, no Try again', async (status, data) => {
     mockPost.mockRejectedValue(httpError(status, data));
-    const view = renderFile();
-    fireEvent.press(view.getByText('Draft a reply'));
+    const view = await renderFile();
+    await fireEvent.press(view.getByText('Draft a reply'));
     expect(await view.findByText("Roman can't write this right now. Nothing was sent.")).toBeTruthy();
     expect(view.queryByLabelText('Try again')).toBeNull();
     expect(view.getByLabelText('Not now')).toBeTruthy();
@@ -217,11 +220,11 @@ describe('CHECKIN-DRAFT-M: writing and refusals', () => {
 
   it.each([['no answer', new Error('Network Error')], ['500', httpError(500)]])('case 6: %s on invoke: CD-58 with Try again, which sends one invoke', async (_l, err) => {
     mockPost.mockRejectedValueOnce(err);
-    const view = renderFile();
-    fireEvent.press(view.getByText('Draft a reply'));
+    const view = await renderFile();
+    await fireEvent.press(view.getByText('Draft a reply'));
     expect(await view.findByText("Roman couldn't write this. Nothing was sent. Try again in a moment.")).toBeTruthy();
     expect(view.getByLabelText('Not now')).toBeTruthy();
-    fireEvent.press(view.getByLabelText('Try again'));
+    await fireEvent.press(view.getByLabelText('Try again'));
     await view.findByText("Roman's draft for Jordan");
     expect(invokes()).toHaveLength(2);
   });
@@ -229,9 +232,9 @@ describe('CHECKIN-DRAFT-M: writing and refusals', () => {
 
 describe('CHECKIN-DRAFT-M: edit and send', () => {
   it('case 7: Send without an edit approves with no payload; 200 draws the sent state', async () => {
-    const view = renderFile();
+    const view = await renderFile();
     await openReady(view);
-    fireEvent.press(view.getByLabelText('Send to Jordan'));
+    await fireEvent.press(view.getByLabelText('Send to Jordan'));
     expect(await view.findByText('Sent by you in Messages.')).toBeTruthy();
     expect(view.getAllByText('Sent to Jordan').length).toBeGreaterThan(0);
     expect(view.getByText(REPLY)).toBeTruthy();
@@ -241,82 +244,82 @@ describe('CHECKIN-DRAFT-M: edit and send', () => {
     expect(url).toBe('/ai/gateway/drafts/d-1');
     expect(body).toEqual({ decision: 'approved' });
     expect('payload' in body).toBe(false);
-    fireEvent.press(view.getByLabelText('Done'));
+    await fireEvent.press(view.getByLabelText('Done'));
     await waitFor(() => expect(view.queryByTestId('checkin-draft-sheet')).toBeNull());
   });
 
   it('case 8: Edit, Save edits, Send sends the saved text trimmed; Edited by you keeps the Roman attribution', async () => {
-    const view = renderFile();
+    const view = await renderFile();
     await openReady(view);
-    fireEvent.press(view.getByLabelText("Edit reply to Jordan's check-in"));
+    await fireEvent.press(view.getByLabelText("Edit reply to Jordan's check-in"));
     expect(view.getByText('Edit your reply')).toBeTruthy();
     expect(view.getByText('Your edits stay here until you tap Send.')).toBeTruthy();
     expect(view.queryByLabelText('Send to Jordan')).toBeNull();
-    fireEvent.changeText(view.getByLabelText('Your reply to Jordan'), '  Would moving Tuesday to the morning help?  ');
-    fireEvent.press(view.getByLabelText('Save edits'));
+    await fireEvent.changeText(view.getByLabelText('Your reply to Jordan'), '  Would moving Tuesday to the morning help?  ');
+    await fireEvent.press(view.getByLabelText('Save edits'));
     expect(await view.findByText('Edited by you')).toBeTruthy();
     expect(view.getByText('Drafted by Roman')).toBeTruthy();
     expect(view.getByText('Not sent')).toBeTruthy();
-    fireEvent.press(view.getByLabelText('Send to Jordan'));
+    await fireEvent.press(view.getByLabelText('Send to Jordan'));
     await view.findByText('Sent by you in Messages.');
     expect(patches()).toEqual([['/ai/gateway/drafts/d-1', { decision: 'approved', payload: { body: 'Would moving Tuesday to the morning help?' } }]]);
   });
 
   it('case 8: Cancel restores the text from before the edit and sends no payload', async () => {
-    const view = renderFile();
+    const view = await renderFile();
     await openReady(view);
-    fireEvent.press(view.getByLabelText("Edit reply to Jordan's check-in"));
-    fireEvent.changeText(view.getByLabelText('Your reply to Jordan'), 'Something else entirely');
-    fireEvent.press(view.getByLabelText('Cancel'));
+    await fireEvent.press(view.getByLabelText("Edit reply to Jordan's check-in"));
+    await fireEvent.changeText(view.getByLabelText('Your reply to Jordan'), 'Something else entirely');
+    await fireEvent.press(view.getByLabelText('Cancel'));
     expect(view.getByTestId('checkin-draft-text').props.children).toBe(REPLY);
     expect(view.queryByText('Edited by you')).toBeNull();
-    fireEvent.press(view.getByLabelText('Send to Jordan'));
+    await fireEvent.press(view.getByLabelText('Send to Jordan'));
     await view.findByText('Sent by you in Messages.');
     expect('payload' in patches()[0][1]).toBe(false);
   });
 
   it('case 9: a blank or whitespace edit cannot be saved; a 4,001-character paste is cut at 4,000', async () => {
-    const view = renderFile();
+    const view = await renderFile();
     await openReady(view);
-    fireEvent.press(view.getByLabelText("Edit reply to Jordan's check-in"));
+    await fireEvent.press(view.getByLabelText("Edit reply to Jordan's check-in"));
     const field = view.getByLabelText('Your reply to Jordan');
     expect(field.props.maxLength).toBe(4000);
-    fireEvent.changeText(field, '   \n  ');
+    await fireEvent.changeText(field, '   \n  ');
     expect(view.getByLabelText('Save edits').props.accessibilityState).toMatchObject({ disabled: true });
-    fireEvent.press(view.getByLabelText('Save edits'));
+    await fireEvent.press(view.getByLabelText('Save edits'));
     expect(view.getByText('Edit your reply')).toBeTruthy();
-    fireEvent.changeText(view.getByLabelText('Your reply to Jordan'), 'a'.repeat(4001));
+    await fireEvent.changeText(view.getByLabelText('Your reply to Jordan'), 'a'.repeat(4001));
     expect(view.getByLabelText('Your reply to Jordan').props.value).toHaveLength(4000);
   });
 
   it('case 10: a double tap on Send sends one PATCH', async () => {
     mockPatch.mockImplementation(never);
-    const view = renderFile();
+    const view = await renderFile();
     await openReady(view);
     const send = view.getByLabelText('Send to Jordan');
-    fireEvent.press(send);
-    fireEvent.press(send);
+    await fireEvent.press(send);
+    await fireEvent.press(send);
     await waitFor(() => expect(view.getAllByText('Sending').length).toBeGreaterThan(0));
-    fireEvent.press(view.getByLabelText('Send to Jordan'));
+    await fireEvent.press(view.getByLabelText('Send to Jordan'));
     expect(patches()).toHaveLength(1);
     expect(view.queryByLabelText('Not now')).toBeNull();
   });
 
   it('case 11: a lost Send keeps the edited text and waits for a tap; a second Send answered "already approved" is sent', async () => {
     mockPatch.mockRejectedValueOnce(new Error('Network Error'));
-    const view = renderFile();
+    const view = await renderFile();
     await openReady(view);
-    fireEvent.press(view.getByLabelText("Edit reply to Jordan's check-in"));
-    fireEvent.changeText(view.getByLabelText('Your reply to Jordan'), 'My own words.');
-    fireEvent.press(view.getByLabelText('Save edits'));
-    fireEvent.press(view.getByLabelText('Send to Jordan'));
+    await fireEvent.press(view.getByLabelText("Edit reply to Jordan's check-in"));
+    await fireEvent.changeText(view.getByLabelText('Your reply to Jordan'), 'My own words.');
+    await fireEvent.press(view.getByLabelText('Save edits'));
+    await fireEvent.press(view.getByLabelText('Send to Jordan'));
     expect(await view.findByText('Not sent to Jordan. Try again.')).toBeTruthy();
     expect(view.getByTestId('checkin-draft-text').props.children).toBe('My own words.');
     expect(view.queryByText('Sent by you in Messages.')).toBeNull();
     await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
     expect(patches()).toHaveLength(1);
     mockPatch.mockRejectedValueOnce(httpError(403, { statusCode: 403, message: 'Draft already approved', error: 'Forbidden' }));
-    fireEvent.press(view.getByLabelText('Send to Jordan'));
+    await fireEvent.press(view.getByLabelText('Send to Jordan'));
     expect(await view.findByText('Sent by you in Messages.')).toBeTruthy();
     expect(view.getByText('My own words.')).toBeTruthy();
     expect(patches()).toHaveLength(2);
@@ -327,9 +330,9 @@ describe('CHECKIN-DRAFT-M: edit and send', () => {
     [409, { error: 'AI_DRAFT_RACE_IN_FLIGHT' }], [500, { code: 'AI_MATERIALISATION_FAILED' }], [400, { error: 'AI_DRAFT_PAYLOAD_INVALID' }],
   ])('case 12: Send %s: CD-62 over the kept text, not sent', async (status, data) => {
     mockPatch.mockRejectedValueOnce(httpError(status, data));
-    const view = renderFile();
+    const view = await renderFile();
     await openReady(view);
-    fireEvent.press(view.getByLabelText('Send to Jordan'));
+    await fireEvent.press(view.getByLabelText('Send to Jordan'));
     expect(await view.findByText('Not sent to Jordan. Try again.')).toBeTruthy();
     expect(view.getByTestId('checkin-draft-text').props.children).toBe(REPLY);
     expect(view.queryByText('Sent by you in Messages.')).toBeNull();
@@ -340,9 +343,9 @@ describe('CHECKIN-DRAFT-M: edit and send', () => {
     [404, { message: 'AI draft not found' }], [403, { message: 'BLOCKED' }],
   ])('case 13: Send %s: CD-57 with Not now only', async (status, data) => {
     mockPatch.mockRejectedValueOnce(httpError(status, data));
-    const view = renderFile();
+    const view = await renderFile();
     await openReady(view);
-    fireEvent.press(view.getByLabelText('Send to Jordan'));
+    await fireEvent.press(view.getByLabelText('Send to Jordan'));
     expect(await view.findByText("Roman can't write this right now. Nothing was sent.")).toBeTruthy();
     expect(view.queryByLabelText('Send to Jordan')).toBeNull();
     expect(view.queryByLabelText('Try again')).toBeNull();
@@ -353,68 +356,68 @@ describe('CHECKIN-DRAFT-M: edit and send', () => {
 describe('CHECKIN-DRAFT-M: offline, close and report', () => {
   it('case 14: offline at open asks nothing; CD-60 and a disabled Draft a reply; back online nothing is sent until a tap', async () => {
     mockOnline = false;
-    const view = renderFile();
-    fireEvent.press(view.getByLabelText("Draft a reply to Jordan's check-in with Roman"));
+    const view = await renderFile();
+    await fireEvent.press(view.getByLabelText("Draft a reply to Jordan's check-in with Roman"));
     expect(await view.findByText("You’re offline. Connect to ask Roman for a draft. Nothing was sent.")).toBeTruthy();
     const ask = view.getByTestId('checkin-draft-ask');
     expect(ask.props.accessibilityState).toMatchObject({ disabled: true });
-    fireEvent.press(ask);
+    await fireEvent.press(ask);
     expect(invokes()).toHaveLength(0);
-    setOnline(true);
+    await setOnline(true);
     await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
     expect(invokes()).toHaveLength(0);
     expect(view.getByTestId('checkin-draft-ask').props.accessibilityState).toMatchObject({ disabled: false });
-    fireEvent.press(view.getByTestId('checkin-draft-ask'));
+    await fireEvent.press(view.getByTestId('checkin-draft-ask'));
     await view.findByText("Roman's draft for Jordan");
     expect(invokes()).toHaveLength(1);
   });
 
   it('case 14: offline with a draft: CD-61, Send disabled, the text kept; reconnect sends nothing', async () => {
-    const view = renderFile();
+    const view = await renderFile();
     await openReady(view);
-    setOnline(false);
+    await setOnline(false);
     expect(await view.findByText('You’re offline. Your edits are still here. Connect before sending.')).toBeTruthy();
     expect(view.getByLabelText('Send to Jordan').props.accessibilityState).toMatchObject({ disabled: true });
-    fireEvent.press(view.getByLabelText('Send to Jordan'));
+    await fireEvent.press(view.getByLabelText('Send to Jordan'));
     expect(view.getByTestId('checkin-draft-text').props.children).toBe(REPLY);
-    setOnline(true);
+    await setOnline(true);
     await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
     expect(patches()).toHaveLength(0);
     expect(view.queryByText('You’re offline. Your edits are still here. Connect before sending.')).toBeNull();
   });
 
   it('case 15: Not now on ready rejects once; the scrim leaves the draft pending; a later tap drafts again', async () => {
-    const view = renderFile();
+    const view = await renderFile();
     await openReady(view);
-    fireEvent.press(view.getByTestId('checkin-draft-scrim'));
+    await fireEvent.press(view.getByTestId('checkin-draft-scrim'));
     await waitFor(() => expect(view.queryByTestId('checkin-draft-sheet')).toBeNull());
     expect(patches()).toHaveLength(0);
     await openReady(view);
-    fireEvent.press(view.getByLabelText('Not now'));
+    await fireEvent.press(view.getByLabelText('Not now'));
     await waitFor(() => expect(view.queryByTestId('checkin-draft-sheet')).toBeNull());
     expect(patches()).toEqual([['/ai/gateway/drafts/d-1', { decision: 'rejected' }]]);
     expect(invokes()).toHaveLength(2);
   });
 
   it('case 15: the scrim while editing goes back to the review text, not out of the sheet', async () => {
-    const view = renderFile();
+    const view = await renderFile();
     await openReady(view);
-    fireEvent.press(view.getByLabelText("Edit reply to Jordan's check-in"));
-    fireEvent.changeText(view.getByLabelText('Your reply to Jordan'), 'Half typed');
-    fireEvent.press(view.getByTestId('checkin-draft-scrim'));
+    await fireEvent.press(view.getByLabelText("Edit reply to Jordan's check-in"));
+    await fireEvent.changeText(view.getByLabelText('Your reply to Jordan'), 'Half typed');
+    await fireEvent.press(view.getByTestId('checkin-draft-scrim'));
     expect(view.getByTestId('checkin-draft-text').props.children).toBe(REPLY);
     expect(view.getByTestId('checkin-draft-sheet')).toBeTruthy();
   });
 
   it.each([['received'], ['already_reported']])('case 16: Report this draft posts {reason} only; %s ends in the Roman room words; the draft stays', async (status) => {
-    const view = renderFile();
+    const view = await renderFile();
     await openReady(view);
     mockPost.mockResolvedValueOnce({ data: { reportId: 'd-1', status } });
-    fireEvent.press(view.getByLabelText('Report this draft'));
+    await fireEvent.press(view.getByLabelText('Report this draft'));
     expect(await view.findByText('Report Message')).toBeTruthy();
     expect(view.queryByLabelText('Additional details')).toBeNull();
-    fireEvent.press(view.getByLabelText('Harassment or bullying'));
-    fireEvent.press(view.getByLabelText('Submit report'));
+    await fireEvent.press(view.getByLabelText('Harassment or bullying'));
+    await fireEvent.press(view.getByLabelText('Submit report'));
     await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith('Reported', 'Your report has been submitted.'));
     const reports = mockPost.mock.calls.filter(([url]) => url === '/ai/gateway/drafts/d-1/report');
     expect(reports).toEqual([['/ai/gateway/drafts/d-1/report', { reason: 'harassment' }]]);
@@ -425,26 +428,26 @@ describe('CHECKIN-DRAFT-M: offline, close and report', () => {
   });
 
   it('case 16: a hate-speech pick goes on the wire as harassment; a 404 keeps the report sheet and its failure line', async () => {
-    const view = renderFile();
+    const view = await renderFile();
     await openReady(view);
     mockPost.mockRejectedValueOnce(httpError(404, { message: 'AI draft not found' }));
-    fireEvent.press(view.getByLabelText('Report this draft'));
-    fireEvent.press(await view.findByLabelText('Hate speech'));
-    fireEvent.press(view.getByLabelText('Submit report'));
+    await fireEvent.press(view.getByLabelText('Report this draft'));
+    await fireEvent.press(await view.findByLabelText('Hate speech'));
+    await fireEvent.press(view.getByLabelText('Submit report'));
     expect(await view.findByText('Sending your report could not be confirmed. Check your connection, then try again.')).toBeTruthy();
     expect(mockPost.mock.calls.filter(([url]) => url === '/ai/gateway/drafts/d-1/report')).toEqual([['/ai/gateway/drafts/d-1/report', { reason: 'harassment' }]]);
     expect(Alert.alert).not.toHaveBeenCalled();
   });
 
   it("case 21: a sheet open on client A's file never draws A's draft on client B's file, or after the file is gone", async () => {
-    const view = renderFile();
+    const view = await renderFile();
     await openReady(view);
-    view.switchTo([{ id: 'ci-9', date: TODAY, notes: 'Another client.' }], 'client-2', 'Sam Lee');
+    await view.switchTo([{ id: 'ci-9', date: TODAY, notes: 'Another client.' }], 'client-2', 'Sam Lee');
     expect(view.queryByText(REPLY)).toBeNull();
     expect(view.queryByTestId('checkin-draft-sheet')).toBeNull();
     expect(view.getByLabelText("Draft a reply to Sam's check-in with Roman")).toBeTruthy();
-    view.unmount();
-    const again = renderFile();
+    await view.unmount();
+    const again = await renderFile();
     expect(again.queryByTestId('checkin-draft-sheet')).toBeNull();
     expect(again.queryByText(REPLY)).toBeNull();
   });
@@ -453,11 +456,11 @@ describe('CHECKIN-DRAFT-M: offline, close and report', () => {
 describe('CHECKIN-DRAFT-M: ReportMessageSheet current callers (case 23)', () => {
   it('the Roman room look without the new prop keeps More details and passes the details on', async () => {
     const onSubmit = jest.fn().mockResolvedValue(undefined);
-    const view = render(<ReportMessageSheet visible look="roman" messagePreview="A reply" onSubmit={onSubmit} onClose={() => undefined} />);
+    const view = await render(<ReportMessageSheet visible look="roman" messagePreview="A reply" onSubmit={onSubmit} onClose={() => undefined} />);
     expect(view.getByText('More details (optional)')).toBeTruthy();
-    fireEvent.press(view.getByLabelText('Spam'));
-    fireEvent.changeText(view.getByLabelText('Additional details'), 'More words');
-    fireEvent.press(view.getByLabelText('Submit report'));
+    await fireEvent.press(view.getByLabelText('Spam'));
+    await fireEvent.changeText(view.getByLabelText('Additional details'), 'More words');
+    await fireEvent.press(view.getByLabelText('Submit report'));
     await waitFor(() => expect(onSubmit).toHaveBeenCalledWith({ reason: 'spam', details: 'More words' }));
   });
 });
