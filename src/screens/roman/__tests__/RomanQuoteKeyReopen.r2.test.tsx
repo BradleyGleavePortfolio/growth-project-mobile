@@ -15,11 +15,17 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockDisk = new Map<string, string>();
 let mockSyncRead = false;
+// C5 (LS-988R1): hold the device read or the session open, to pin which arrives first after a restart.
+let mockReadGate: Promise<void> | null = null;
+let mockOpenGate: Promise<void> | null = null;
 jest.mock('../../../storage/mmkv', () => ({
   ...jest.requireActual('../../../storage/mmkv'),
   cacheStorage: {
     getString: (k: string) => (mockSyncRead ? mockDisk.get(k) : undefined),
-    getStringAsync: async (k: string) => mockDisk.get(k),
+    getStringAsync: async (k: string) => {
+      if (mockReadGate) await mockReadGate;
+      return mockDisk.get(k);
+    },
     set: async (k: string, v: string) => { mockDisk.set(k, v); },
     delete: async (k: string) => { mockDisk.delete(k); },
     getAllKeys: async () => [...mockDisk.keys()],
@@ -35,7 +41,10 @@ const mockList = jest.fn();
 let mockSessionId = 'sess-1';
 jest.mock('../../../api/romanApi', () => ({
   ...jest.requireActual('../../../api/romanApi'),
-  openOrResumeSession: async (surface: string) => ({ id: mockSessionId, surface, messageCount: 4 }),
+  openOrResumeSession: async (surface: string) => {
+    if (mockOpenGate) await mockOpenGate;
+    return { id: mockSessionId, surface, messageCount: 4 };
+  },
   listMessages: (...a: unknown[]) => mockList(...a),
   deleteSession: jest.fn(),
 }));
@@ -147,6 +156,8 @@ beforeEach(async () => {
   first = 'answer';
   release = null;
   mockSyncRead = false;
+  mockReadGate = null;
+  mockOpenGate = null;
   mockSessionId = 'sess-1';
   mockUser = { id: 'client-1', firstName: 'Maya' };
   fetchMock.mockClear();
@@ -263,4 +274,179 @@ it('R2-c. a plain open with no kept quote: no strip, the box not focused, the th
   expect(r.getByTestId(INPUT).props.autoFocus).toBeFalsy();
   expect(TextInputState.currentlyFocusedInput()).toBeNull();
   expect(toEnd).toHaveBeenCalled();
+});
+
+// ---- LS-988R1 (AUDIT 6872745845), folded in this round. ----
+
+const cancelReply = async (r: R) => { await act(async () => { fireEvent.press(r.getByLabelText('Cancel reply')); }); };
+const deferred = (): { gate: Promise<void>; open: () => void } => {
+  let open = () => undefined as void;
+  const gate = new Promise<void>((done) => { open = done; });
+  return { gate, open };
+};
+
+// C1: red at 91f847cf (the failure re-filed the quote it read at the send's start, RomanChatScreen.tsx:404).
+it('C1. Cancel reply while the first send is out, then it fails keeping its key: Back, reopen: no strip (R3); Send: the bare words under a new key', async () => {
+  first = 'hold';
+  const a = await open();
+  await quotedSend(a);
+  const firstSend = sent(0);
+  await cancelReply(a);
+  expect(quoting(a)).toBe(false);
+  await act(async () => { release?.('lost'); }); // the send fails in a way that keeps its key
+  await settle();
+  await a.unmount();
+  const b = await open();
+  await settle();
+  expect(boxOf(b)).toBe(WORDS);
+  expect(quoting(b)).toBe(false);
+  await sendFrom(b);
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  expect(sent(1).content).toBe(WORDS);
+  expect(sent(1).key).not.toBe(firstSend.key);
+});
+
+it('C1. another reply picked while the first send is out, then it fails keeping its key: Back, reopen: no strip for the first reply', async () => {
+  first = 'hold';
+  const a = await open();
+  await quotedSend(a);
+  await pick(a, 'r-2');
+  await act(async () => { release?.('lost'); });
+  await settle();
+  await a.unmount();
+  const b = await open();
+  await settle();
+  expect(boxOf(b)).toBe(WORDS);
+  expect(quoting(b)).toBe(false);
+});
+
+it('C1. Cancel reply in the reopened room while the closed room\'s send is still out: after it fails keeping its key, the next reopen draws no strip', async () => {
+  first = 'hold';
+  const a = await open();
+  await quotedSend(a);
+  await a.unmount(); // Back while out
+  const b = await open();
+  await waitFor(() => expect(quoting(b)).toBe(true));
+  await cancelReply(b);
+  await act(async () => { release?.('lost'); }); // the closed room's send ends now
+  await settle();
+  await b.unmount();
+  const c = await open();
+  await settle();
+  expect(boxOf(c)).toBe(WORDS);
+  expect(quoting(c)).toBe(false);
+});
+
+// C3: red at 91f847cf (the restore ran on every keystroke, RomanChatScreen.tsx:219-231).
+it('C3. the box edited before Back: the reopen draws no strip, and typing the kept words back does not bring it in', async () => {
+  first = 'pending';
+  const a = await open();
+  await quotedSend(a);
+  await waitFor(() => expect(a.getByText(ROMAN_HELD_NOT_READY)).toBeTruthy());
+  await type(a, `${WORDS} Or outside?`);
+  await settle();
+  await a.unmount();
+  const b = await open();
+  await settle();
+  expect(quoting(b)).toBe(false);
+  await type(b, WORDS);
+  await settle();
+  expect(quoting(b)).toBe(false);
+});
+
+// C5: pins, green at 91f847cf; each reaches a guard or an order no case reached (mutations in FIX ROUND 1).
+it('C5a. the byte check: the box edited before Back draws no strip; Send: the edited words under a new key', async () => {
+  first = 'pending';
+  const a = await open();
+  await quotedSend(a);
+  await waitFor(() => expect(a.getByText(ROMAN_HELD_NOT_READY)).toBeTruthy());
+  const firstSend = sent(0);
+  await type(a, `${WORDS} Or outside?`);
+  await settle();
+  await a.unmount();
+  const b = await open();
+  await settle();
+  expect(quoting(b)).toBe(false);
+  await sendFrom(b);
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  expect(sent(1).content).toBe(`${WORDS} Or outside?`);
+  expect(sent(1).key).not.toBe(firstSend.key);
+});
+
+it('C5b. the sign-in guard: a sign-out and sign-in while the reopened room is open drops the strip and it does not come back in that room', async () => {
+  first = 'pending';
+  const a = await open();
+  await quotedSend(a);
+  await waitFor(() => expect(a.getByText(ROMAN_HELD_NOT_READY)).toBeTruthy());
+  await a.unmount();
+  const b = await open();
+  await waitFor(() => expect(quoting(b)).toBe(true));
+  await act(async () => { authEvents.emit('logout'); authEvents.emit('login'); });
+  await settle();
+  expect(quoting(b)).toBe(false);
+});
+
+it('C5c. the same reply picked again after a reopen keeps the record: Back, reopen: the strip; Send: the same content under the same key', async () => {
+  first = 'pending';
+  const a = await open();
+  await quotedSend(a);
+  await waitFor(() => expect(a.getByText(ROMAN_HELD_NOT_READY)).toBeTruthy());
+  const firstSend = sent(0);
+  await a.unmount();
+  const b = await open();
+  await waitFor(() => expect(quoting(b)).toBe(true));
+  await pick(b, 'r-1');
+  await b.unmount();
+  const c = await open();
+  await waitFor(() => expect(quoting(c)).toBe(true));
+  expect(boxOf(c)).toBe(WORDS);
+  await sendFrom(c);
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  expect(sent(1)).toEqual(firstSend);
+  expect(turns.size).toBe(1);
+});
+
+it.each([
+  ['the session opens first, then the device copy lands', 'read'],
+  ['the device copy lands first, then the session opens', 'open'],
+] as const)('C5d. a restart, the copy read later: %s; the strip and the words come back', async (_l, late) => {
+  first = 'pending';
+  const a = await open();
+  await quotedSend(a);
+  await waitFor(() => expect(a.getByText(ROMAN_HELD_NOT_READY)).toBeTruthy());
+  await waitFor(() => expect(mockDisk.get(DRAFT)).toContain(sent(0).key));
+  await a.unmount();
+  await restart();
+  const g = deferred();
+  if (late === 'read') mockReadGate = g.gate;
+  else mockOpenGate = g.gate;
+  const b = await render(<RomanChatScreen surface="client" />);
+  if (late === 'read') {
+    await waitFor(() => expect(b.getByTestId('roman-message-r-1-reply')).toBeTruthy());
+    expect(quoting(b)).toBe(false); // the session is open; the copy has not landed
+  } else {
+    await settle(); // the copy has landed; the session is not open yet
+    expect(b.queryByTestId('roman-message-r-1-reply')).toBeNull();
+  }
+  await act(async () => { g.open(); });
+  await waitFor(() => expect(quoting(b)).toBe(true));
+  expect(boxOf(b)).toBe(WORDS);
+});
+
+it('C5e. an offline quoted send, reopened without a Cancel: the strip and the words; Send: the same content under the same key', async () => {
+  first = 'offline';
+  const a = await open();
+  await quotedSend(a);
+  await settle();
+  const firstSend = sent(0);
+  await waitFor(() => expect(mockDisk.get(DRAFT)).toContain(firstSend.key));
+  await a.unmount();
+  const b = await open();
+  await waitFor(() => expect(quoting(b)).toBe(true));
+  expect(boxOf(b)).toBe(WORDS);
+  first = 'answer'; // the connection is back
+  await sendFrom(b);
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  expect(sent(1)).toEqual(firstSend);
+  expect(turns.size).toBe(1);
 });
