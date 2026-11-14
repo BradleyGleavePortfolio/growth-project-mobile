@@ -141,8 +141,9 @@ export default function ExerciseDetailScreen({ route, navigation }: Props) {
   }, [player]);
 
   // The bar (C2_detail rows 130-161): no title (the page's own title is its spoken header) and a back with no label.
+  // Mounted with no navigator bar (two of main's tests mount the page bare), there is no bar to set.
   useLayoutEffect(() => {
-    navigation.setOptions({ title: '', headerBackButtonDisplayMode: 'minimal' });
+    navigation.setOptions?.({ title: '', headerBackButtonDisplayMode: 'minimal' });
   }, [navigation]);
   // The play control: only while the player or the animation can show (never a dead tap); a tap scrolls the page to
   // the demonstration and starts a video. Unset in every other state.
@@ -157,7 +158,7 @@ export default function ExerciseDetailScreen({ route, navigation }: Props) {
     if (demo === 'video') player.play();
   };
   useLayoutEffect(() => {
-    navigation.setOptions({
+    navigation.setOptions?.({
       headerRight: demo ? () => <PlayControl onPress={() => play.current()} color={sc.textPrimary} /> : undefined,
     });
   }, [navigation, demo, sc]);
