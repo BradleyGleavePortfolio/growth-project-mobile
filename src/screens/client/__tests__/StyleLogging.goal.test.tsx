@@ -169,7 +169,7 @@ describe.each(DEVICES)('at $name', (device) => {
     expect(st.borderBottomLeftRadius).toBe(radius.sheet);
     expect(st.borderBottomRightRadius).toBe(radius.sheet);
     expect(st.paddingHorizontal).toBe(layout.gutter);
-    expect(st.paddingTop).toBe(device.insets.top + layout.statusBarGap);
+    expect(st.paddingTop).toBe(device.insets.top + spacing.xs); // the back glyph's rows 129-162: a 44 pt bar 4 pt under the inset
   });
 
   it('builder: the bar title is Inter semibold 17 in the masthead ink (C_day "Strength foundations" S cap rows 134-157)', async () => {
