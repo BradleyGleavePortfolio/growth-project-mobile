@@ -79,12 +79,12 @@ afterEach(() => off());
 it('shows the transcript oldest first, read only', async () => {
   const api = makeApi();
   const screen = await renderScreen(api);
-  const items = await screen.findAllByTestId(/^roman-transcript-message-/);
+  const items = await screen.findAllByTestId(/^roman-transcript-message-[^-]+$/);
   expect(items.map((i) => i.props.testID)).toEqual(['roman-transcript-message-m1', 'roman-transcript-message-m2']);
   expect(screen.getByText(ROMAN_CHATS_COPY.readOnlyNote)).toBeTruthy();
   expect(api.readMessages).toHaveBeenCalledWith(BA, 'cx1', {});
   expect(screen.getByText('ROMAN')).toBeTruthy();
-  expect(screen.getByText('YOU')).toBeTruthy();
+  expect(screen.queryByText('YOU')).toBeNull();
   await fireEvent.press(screen.getByLabelText(ROMAN_CHATS_COPY.back));
   expect(navigation.goBack).toHaveBeenCalled();
 });
@@ -105,7 +105,7 @@ it('loads earlier messages with the cursor and puts them on top', async () => {
   });
   const screen = await renderScreen(api);
   await fireEvent.press(await screen.findByTestId('roman-chat-transcript-earlier'));
-  const items = await screen.findAllByTestId(/^roman-transcript-message-/);
+  const items = await screen.findAllByTestId(/^roman-transcript-message-[^-]+$/);
   expect(api.readMessages).toHaveBeenLastCalledWith(BA, 'cx1', { cursor: 'm3' });
   expect(items.map((i) => i.props.testID)).toEqual([
     'roman-transcript-message-m1',
@@ -303,9 +303,9 @@ describe('FIX-950R3: a quoted turn in the history', () => {
         readMessages: jest.fn(async () => pageOf([{ ...msg('m1', 'assistant', content), interrupted: true, safetyActions: ['call_988'] }])),
       }));
       expect(await screen.findByText(ROMAN_INTERRUPTED_NOTE)).toBeTruthy();
-      expect(screen.getByTestId('roman-transcript-crisis-m1')).toBeTruthy();
+      expect(screen.getByTestId('roman-transcript-message-m1-crisis')).toBeTruthy();
       expect(screen.queryByTestId('roman-transcript-message-m1-quote')).toBeNull();
-      expect(screen.getByLabelText(`Roman said: ${content}`)).toBeTruthy();
+      expect(screen.getByLabelText(`Roman said: ${content} ${ROMAN_INTERRUPTED_NOTE}`)).toBeTruthy();
     } finally {
       pin.restore();
     }
