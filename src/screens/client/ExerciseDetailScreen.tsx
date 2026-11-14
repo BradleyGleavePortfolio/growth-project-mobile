@@ -36,6 +36,8 @@ import { useTheme } from '../../theme/ThemeProvider';
 import HapticPressable from '../../components/HapticPressable';
 import type { WorkoutStackParamList } from '../../navigation/ClientNavigator';
 import { sectionHead } from './workouts/workoutStyleC';
+import { exerciseHistoryApi, type ExerciseHistory } from '../../api/exerciseHistoryApi';
+import { ExerciseHistoryStyleC } from './workouts/exerciseHistoryStyleC';
 
 type Props = NativeStackScreenProps<WorkoutStackParamList, 'ExerciseDetail'>;
 
@@ -51,16 +53,29 @@ export default function ExerciseDetailScreen({ route }: Props) {
   const [loading, setLoading] = useState(true);
   const [attempt, setAttempt] = useState(0);
   const [mediaFailed, setMediaFailed] = useState(false);
+  // WORKOUT-DETAIL-M: the client's own history of this exercise (null while it loads, after a failure, or never).
+  const [history, setHistory] = useState<ExerciseHistory | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
     setMediaFailed(false);
+    setHistory(null);
     exerciseCatalogApi
       .getDetail(idOrSlug)
       .then((res) => {
-        if (!cancelled) setDetail(res.data as ExerciseDetail);
+        if (cancelled) return;
+        const next = res.data as ExerciseDetail;
+        setDetail(next);
+        // Read by the page's name once the catalog answers; never awaited, so the page draws as before meanwhile
+        // and draws none of it when the read fails.
+        exerciseHistoryApi.get(next.name).then(
+          (answer) => {
+            if (!cancelled) setHistory(answer);
+          },
+          () => undefined,
+        );
       })
       .catch((err) => {
         if (!cancelled) {
@@ -131,6 +146,8 @@ export default function ExerciseDetailScreen({ route }: Props) {
           .filter(Boolean)
           .join(' · ')}
       </Text>
+
+      {history ? <ExerciseHistoryStyleC history={history} /> : null}
 
       {playbackUrl && !mediaFailed ? (
         <VideoView
