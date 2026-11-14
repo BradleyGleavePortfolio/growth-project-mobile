@@ -33,6 +33,7 @@ import {
 import AlertRow from '../../../components/command-center/AlertRow';
 import CommandCenterMockDataBanner from '../../../components/command-center/MockDataBanner';
 import LoadFailedNotice from '../../../components/coach/LoadFailedNotice';
+import SafetyChip from '../../../components/coach/SafetyChip';
 import { SkeletonScreen } from '../../../ui/skeletons/Skeleton';
 import RomanAdjustmentsSection from '../../../components/roman/adjust/RomanAdjustmentsSection';
 import { readOpenAlerts } from './coachHomeSources';
@@ -160,6 +161,7 @@ export default function ActionQueueScreen({ onSelectClient, onOpenSafetyAlert }:
                 messageLines={0}
                 quote={safetyQuote(item.alert_type, item.quote)}
                 hideClientName
+                tag={<SafetyChip style={styles.safetyTag} />}
                 onPress={() => onOpenSafetyAlert?.(item)}
                 onDismiss={() => handleDismiss(item.alert_id, item.client_name)}
                 testID="command-center-safety-alert-row"
@@ -183,7 +185,16 @@ export default function ActionQueueScreen({ onSelectClient, onOpenSafetyAlert }:
 
 const styles = StyleSheet.create({
   // SAFETY-GOLD-M (owner #197-E3): a safety alert card wears safety gold, not the camel edge on cream.
-  safetyRow: { backgroundColor: safetyGold.card, borderLeftColor: safetyGold.edge },
+  // GOAL-937-M (owner #197-E3, contrast.py:94): the deep-gold edge 2 pt on all four sides, as drawn; borderLeftWidth
+  // too, so AlertRow's 3 pt left rule does not win, and borderLeftColor kept (AlertRow sets camel inline).
+  safetyRow: {
+    backgroundColor: safetyGold.card,
+    borderWidth: 2,
+    borderLeftWidth: 2,
+    borderColor: safetyGold.edge,
+    borderLeftColor: safetyGold.edge,
+  },
+  safetyTag: { marginTop: 10 }, // contrast.py:68: the tag 10 under the words
   container: {
     flex: 1,
     backgroundColor: colors.bone,
