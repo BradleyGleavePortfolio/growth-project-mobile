@@ -218,6 +218,7 @@ beforeEach(() => {
   mockSearch.mockReset();
   mockTrack.mockReset();
   mockRemoveChannel.mockClear();
+  mockChannels.length = 0; // each test's own joins (every earlier one left with its last host)
   focusListeners = [];
   appListeners = [];
   hostMounts = 0;
@@ -623,10 +624,9 @@ describe('one community ping is handled once', () => {
     await waitFor(() => expect(meCalls()).toBeGreaterThan(me));
     await settle();
     expect(meCalls() - me).toBe(1);
-    me = meCalls();
-    await act(async () => mine.handlers[E.created]({ event: E.created }));
-    await settle();
-    expect(meCalls()).toBe(me);
+    // The first person's topic was left and is not joined again (a removed channel delivers nothing).
+    expect(userChannels('u-me')).toHaveLength(1);
+    expect(userChannels('u-two')).toHaveLength(1);
   });
 
   it('B6 two query clients: a ping refreshes each client its hosts render under, never a finished one', async () => {
