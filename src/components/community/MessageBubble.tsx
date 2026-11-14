@@ -7,7 +7,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme/useTheme';
-import { colors, forestPop, neutral, spacing, radius } from '../../theme/tokens';
+import { forestPop, neutral, spacing, radius } from '../../theme/tokens';
 import { isOptimisticId } from '../../hooks/useCommunity';
 import type { CommunityDmMessage } from '../../api/communityApi';
 import { formatTime } from '../../calendar/calendarTime';
@@ -22,9 +22,9 @@ export interface MessageBubbleProps {
    * bubble white with a sage line; the caller's box sets the width. Only the coach's DM thread passes it; unset, the
    * bubble draws as before. A dark theme keeps its own colours. */
   studio?: boolean;
-  /** REFINE-985 (C6CHAT-S-V2 c08, src/screens.py:122-127; the time's type from Voice B 05b .mtime :40): radius 18 with 6 at
-   * the tail, padding 10 14, at most 78% wide, the other person's bubble white with a 1 pt sage line, a 13 pt time 4 below
-   * the words. Only the client's DM thread passes it; unset, the bubble draws as before. A dark theme keeps its colours. */
+  /** REFINE-985 (C6CHAT-S-V2 c08, src/screens.py:122-127): radius 18 with 6 at the tail, padding 10 14, at most 78% wide,
+   * the other person's bubble white with a 1 pt sage line. Only the client's DM thread passes it; unset, the bubble
+   * draws as before. A dark theme keeps its colours. */
   voiceB?: boolean;
   testID?: string;
 }
@@ -90,8 +90,7 @@ export default function MessageBubble({
           </Text>
         ) : showTime ? (
           <Text style={[styles.status, !mine && styles.timeTheirs, { color: mine ? semanticColors.textOnAccent : semanticColors.textMuted },
-            studio ? styles.studioTime : null, studioLight ? { color: mine ? forestPop.onDeepMuted : forestPop.n700 } : null,
-            voiceB ? styles.voiceBTime : null, voiceBLight ? { color: mine ? forestPop.onDeepMuted : colors.graphite } : null]}>
+            studio ? styles.studioTime : null, studioLight ? { color: mine ? forestPop.onDeepMuted : forestPop.n700 } : null]}>
             {formatTime(new Date(message.created_at))}
           </Text>
         ) : null}
@@ -141,11 +140,8 @@ const styles = StyleSheet.create({
   studioTheirs: { borderBottomLeftRadius: 18, borderWidth: 1.5 },
   studioBody: { fontSize: 16, lineHeight: 22 },
   studioTime: { fontSize: 12.5, marginTop: 6 },
-  // REFINE-985 `voiceB`: c08 bubble (max-width 78%, padding 10px 14px, radius 18px, 6px at the tail, them a 1 px line);
-  // the time 05b .mtime 13px (line-height 1.3), c08's 4px above; mine #B8CCBF (5.81:1 on forest), theirs graphite
-  // #2C2C2C (owner #168-13; 13.97:1 on white).
+  // REFINE-985 `voiceB`: c08 bubble (max-width 78%, padding 10px 14px, radius 18px, 6px at the tail, them a 1 px line).
   voiceBBubble: { maxWidth: '78%', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18 },
   voiceBMine: { borderBottomRightRadius: 6, borderWidth: 0 },
   voiceBTheirs: { borderBottomLeftRadius: 6, borderWidth: 1 },
-  voiceBTime: { fontSize: 13, lineHeight: 16.9, marginTop: 4 },
 });

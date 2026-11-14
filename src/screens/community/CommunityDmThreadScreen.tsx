@@ -42,7 +42,7 @@ import { ForestStatusBar } from '../../components/StatusBarBand';
 import { describeCommunityFailure } from '../../api/communityErrors';
 import { useConversationClosed, useServerAnswered, useClosedBy, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
 import type { CommunityNav, CommunityRoute } from './communityNavTypes';
-import { NO_NAME, dayKey, dayLabel, initialsOf } from './coach-dm/coachDm';
+import { NO_NAME, initialsOf } from './coach-dm/coachDm';
 
 const DM_MAX = 4000; // mirror backend SendDmDto (body 1..4000)
 
@@ -179,39 +179,30 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
             inverted
             data={data}
             keyExtractor={(m) => m.id}
-            renderItem={({ item, index }) => (
-              <View>
-                {/* REFINE-985: a day row above the day's first message (the list is newest first), the coach thread's
-                    words (dayLabel) in 05b .day's type. */}
-                {index === data.length - 1 || dayKey(data[index + 1].created_at) !== dayKey(item.created_at) ? (
-                  <Text style={[styles.day, { color: light ? fp.n700 : semanticColors.textMuted }]} accessibilityRole="header"
-                    testID={`dm-day-${item.id}`}>{dayLabel(item.created_at)}</Text>
-                ) : null}
-                <View style={styles.messageRow}>
-                  <View style={styles.flex}>
-                    <MessageBubble
-                      message={item}
-                      myUserId={client?.id ?? ''}
-                      showTime
-                      voiceB
-                      testID={`dm-message-${item.id}`}
-                    />
-                  </View>
-                  {item.sender_user_id !== client?.id && !item.deleted ? (
-                    <SafetyMenu
-                      targetType="message"
-                      targetId={item.id}
-                      authorUserId={item.sender_user_id}
-                      authorName={participantLabel}
-                      viewerUserId={client?.id}
-                      viewerCoachId={client?.coach_id}
-                      onBlocked={() => navigation.goBack()}
-                      triggerColor={light ? fp.n700 : undefined}
-                      triggerSize={22}
-                      testID={`dm-message-safety-${item.id}`}
-                    />
-                  ) : null}
+            renderItem={({ item }) => (
+              <View style={styles.messageRow}>
+                <View style={styles.flex}>
+                  <MessageBubble
+                    message={item}
+                    myUserId={client?.id ?? ''}
+                    voiceB
+                    testID={`dm-message-${item.id}`}
+                  />
                 </View>
+                {item.sender_user_id !== client?.id && !item.deleted ? (
+                  <SafetyMenu
+                    targetType="message"
+                    targetId={item.id}
+                    authorUserId={item.sender_user_id}
+                    authorName={participantLabel}
+                    viewerUserId={client?.id}
+                    viewerCoachId={client?.coach_id}
+                    onBlocked={() => navigation.goBack()}
+                    triggerColor={light ? fp.n700 : undefined}
+                    triggerSize={22}
+                    testID={`dm-message-safety-${item.id}`}
+                  />
+                ) : null}
               </View>
             )}
             contentContainerStyle={styles.list}
@@ -243,8 +234,6 @@ const styles = StyleSheet.create({
   stateText: { textAlign: 'center', paddingHorizontal: 24 },
   retry: { minHeight: 44, justifyContent: 'center' },
   list: { paddingVertical: 8 },
-  // REFINE-985: 05b's "•••" sits at the top of its message (B-05b-feed-1000_ios.html:130); .day :46 600 .75rem/1.2,
-  // padding 10px 0 4px.
+  // REFINE-985: 05b's "•••" sits at the top of its message (B-05b-feed-1000_ios.html:130).
   messageRow: { flexDirection: 'row', alignItems: 'flex-start' },
-  day: { fontFamily: 'Inter_600SemiBold', fontSize: 12, lineHeight: 14.4, fontWeight: '600', textAlign: 'center', paddingTop: 10, paddingBottom: 4 },
 });

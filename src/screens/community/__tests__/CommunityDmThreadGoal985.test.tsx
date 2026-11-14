@@ -83,9 +83,7 @@ jest.mock('../../../components/community/SafetyMenu', () => (p: { testID: string
 
 const CommunityDmThreadScreen = require('../CommunityDmThreadScreen').default;
 const { useBlockedUsersStore } = require('../../../store/blockedUsersStore');
-const { forestPop: fp, brand, colors } = jest.requireActual('../../../theme/tokens');
-const { formatTime } = jest.requireActual('../../../calendar/calendarTime');
-const { dayLabel } = jest.requireActual('../coach-dm/coachDm');
+const { forestPop: fp, brand } = jest.requireActual('../../../theme/tokens');
 
 const uuid = (n: number) => `${String(n).padStart(8, '0')}-0000-4000-8000-000000000000`;
 const WS = uuid(1);
@@ -179,8 +177,8 @@ describe('REFINE-985: the bar (05b .mast :20, .mt :22, .mtt :23, .mts :24; c08 .
   });
 });
 
-describe('REFINE-985: the messages (c08 bubbles; 05b .mx :41, .mtime :40, .day :46, "More actions" :130)', () => {
-  it('h, i, j: bubbles in c08\'s numbers with the send time inside, 13 pt, mine #B8CCBF and theirs graphite', async () => {
+describe('REFINE-985: the messages (c08 bubbles; 05b .mx :41, "More actions" :130)', () => {
+  it('h, j: bubbles in c08\'s numbers (the text stays 15/21: 05b .mx is 15/21.75, under 1 pt)', async () => {
     serve({ '/community/me': ME, [COACH_URL]: { id: COACH, name: 'Alex Morgan' }, [msgsUrl(COACH)]: { messages: NAMED } });
     const view = await open({ recipientId: COACH });
     await waitFor(() => expect(view.getByText('Keep Friday easy.')).toBeTruthy());
@@ -189,10 +187,6 @@ describe('REFINE-985: the messages (c08 bubbles; 05b .mx :41, .mtime :40, .day :
     expect(css(theirs)).toMatchObject({ maxWidth: '78%', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18, borderBottomLeftRadius: 6, borderWidth: 1, backgroundColor: '#FFFFFF', borderColor: fp.sageLine });
     expect(css(mine)).toMatchObject({ maxWidth: '78%', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18, borderBottomRightRadius: 6, borderWidth: 0, backgroundColor: fp.forest });
     expect(css(within(theirs).getByText('Keep Friday easy.'))).toMatchObject({ fontSize: 15, lineHeight: 21 });
-    for (const [bubble, m, color] of [[theirs, NAMED[0], colors.graphite], [mine, NAMED[1], fp.onDeepMuted]] as const) {
-      const time = within(bubble).getByText(formatTime(new Date(m.created_at)));
-      expect(css(time)).toMatchObject({ fontSize: 13, marginTop: 4, color });
-    }
   });
 
   it('k: each message\'s Report mark sits at its top, 05b\'s #5A5A56 at 22 pt', async () => {
@@ -203,27 +197,6 @@ describe('REFINE-985: the messages (c08 bubbles; 05b .mx :41, .mtime :40, .day :
     let row = view.getByTestId(`dm-message-safety-${uuid(901)}`).parent;
     while (row && !(typeof row.type === 'string' && css(row).flexDirection === 'row')) row = row.parent;
     expect(row && css(row).alignItems).toBe('flex-start');
-  });
-
-  it('l: one day row above each day\'s first message, the coach thread\'s words, in 05b .day\'s type', async () => {
-    const midnight = new Date(NOW); midnight.setHours(0, 0, 30, 0);
-    const justAfter = new Date(Math.min(midnight.getTime(), NOW - 1000));
-    const day = (back: number, h: number) => { const d = new Date(NOW); d.setDate(d.getDate() - back); d.setHours(h, 0, 0, 0); return d; };
-    const messages = [ // newest first, as the server sends
-      msg(950, COACH, CLIENT, 'today, just after midnight', justAfter),
-      msg(949, CLIENT, COACH, 'yesterday late', day(1, 23)),
-      msg(948, COACH, CLIENT, 'yesterday early', day(1, 8)),
-      msg(947, CLIENT, COACH, 'three days back', day(3, 12)),
-      msg(946, COACH, CLIENT, 'ten days back', day(10, 12)),
-    ];
-    serve({ '/community/me': ME, [COACH_URL]: { id: COACH, name: 'Alex Morgan' }, [msgsUrl(COACH)]: { messages } });
-    const view = await open({ recipientId: COACH });
-    await waitFor(() => expect(view.getByText('ten days back')).toBeTruthy());
-    const rows = view.getAllByTestId(/^dm-day-/);
-    expect(rows.map((r) => r.props.children)).toEqual(['Today', 'Yesterday', dayLabel(day(3, 12).toISOString()), dayLabel(day(10, 12).toISOString())]);
-    expect(rows.map((r) => r.props.testID)).toEqual([uuid(950), uuid(948), uuid(947), uuid(946)].map((id) => `dm-day-${id}`));
-    expect(rows[2].props.children).toMatch(/^(Sun|Mon|Tues|Wednes|Thurs|Fri|Satur)day$/);
-    expect(css(rows[0])).toMatchObject({ fontFamily: 'Inter_600SemiBold', fontSize: 12, lineHeight: 14.4, textAlign: 'center', paddingTop: 10, paddingBottom: 4, color: fp.n700 });
   });
 });
 
