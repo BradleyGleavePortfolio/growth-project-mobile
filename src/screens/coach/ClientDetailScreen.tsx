@@ -537,6 +537,8 @@ function ClientFile({ navigation, route }: Props) {
               days={selectedDays}
               viewerId={currentUser?.id ?? null}
               onMarkReviewed={markCheckInReviewed}
+              clientId={clientId}
+              clientName={clientName}
             />
           </>
         )}

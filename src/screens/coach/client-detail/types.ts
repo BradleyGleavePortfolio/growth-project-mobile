@@ -63,6 +63,9 @@ export type TabKey =
   // PR-HK-3b — coach Sleep & Recovery tab (added after 'healthFitness' from HK-3a).
   | 'sleepRecovery';
 
+/** CHECKIN-DRAFT-M: a check-in's day (YYYY-MM-DD), its note (trimmed, null when blank) and its scores, as the server drafts from them. */
+export interface CheckInDraftFields { day: string; note: string | null; mood: number | null; energy: number | null; sleepHours: number | null }
+
 export interface TimelineEvent {
   id: string;
   type: 'food' | 'weight' | 'workout' | 'fasting' | 'checkin';
@@ -71,8 +74,8 @@ export interface TimelineEvent {
   date: string;
   icon: IoniconName;
   iconColor: string;
-  /** Check-in rows only: what the coach needs to mark it reviewed. */
-  checkIn?: { id: string; coachId: string | null; reviewed: boolean };
+  /** Check-in rows only: what the coach needs to mark it reviewed, and (CHECKIN-DRAFT-M) what the reply sheet shows. */
+  checkIn?: { id: string; coachId: string | null; reviewed: boolean } & CheckInDraftFields;
 }
 
 export interface CoachMealEntry {
