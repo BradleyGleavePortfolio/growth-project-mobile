@@ -80,7 +80,7 @@ export default function VoiceNotesSection({
   if (!featureFlags.communityVoiceNotes || !workspaceId) return null;
 
   const notes: VoiceNoteView[] = feed.data?.pages.flatMap((p) => p.voice_notes) ?? [];
-  const failure = feed.isError ? describeCommunityFailure(feed.error, 'load_voice') : null;
+  const failure = feed.isError ? describeCommunityFailure(feed.error, 'load_voice_notes') : null;
 
   return (
     <View style={styles.wrap} testID={testID}>
@@ -122,6 +122,8 @@ export default function VoiceNotesSection({
         />
       ) : failure ? (
         <View style={styles.state} testID={`${testID}-error`}>
+          {/* VN-LIST-W1: the list's title over the reason, in the section's own type. */}
+          <Text style={[styles.stateTitle, { color: semanticColors.textPrimary }]}>{failure.title}</Text>
           <Text style={[styles.muted, { color: semanticColors.textMuted }]}>{failure.message}</Text>
           <HapticPressable
             intent="light"
@@ -363,6 +365,7 @@ const styles = StyleSheet.create({
   recordLabel: { fontFamily: voiceFaces.semibold, fontSize: 14, fontWeight: '600' },
   retryLabel: { fontSize: 15 }, // GOAL .btn.sm 0.9375rem
   state: { gap: spacing.sm, alignItems: 'flex-start' },
+  stateTitle: { fontFamily: voiceFaces.semibold, fontSize: 15, fontWeight: '600' },
   muted: { fontFamily: voiceFaces.regular, fontSize: 14, lineHeight: 20 },
   note: { gap: spacing.sm },
   noteMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 44 },

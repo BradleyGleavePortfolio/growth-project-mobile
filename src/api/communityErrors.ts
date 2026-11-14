@@ -48,6 +48,7 @@ export type CommunityAction =
   | 'send_win'
   | 'load_wins'
   | 'load_voice'
+  | 'load_voice_notes'
   | 'send_voice';
 
 export interface CommunityFailure {
@@ -82,6 +83,7 @@ const TITLES: Record<CommunityAction, string> = {
   send_win: 'Win not shared',
   load_wins: 'Wins not loaded',
   load_voice: 'Voice note not loaded',
+  load_voice_notes: 'Voice notes not loaded',
   send_voice: 'Voice note not sent',
 };
 
@@ -104,6 +106,7 @@ const VERBS: Record<CommunityAction, string> = {
   send_win: 'share your win',
   load_wins: 'load community wins',
   load_voice: 'load this voice note',
+  load_voice_notes: 'load voice notes',
   send_voice: 'send your voice note',
 };
 
