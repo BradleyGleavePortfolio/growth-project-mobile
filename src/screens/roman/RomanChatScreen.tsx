@@ -85,7 +85,7 @@ import type { ReportReason } from '../../api/messagesApi';
 import MessageActionSheet from '../../components/messaging/MessageActionSheet';
 import ReportMessageSheet from '../../components/messaging/ReportMessageSheet';
 import ReplyComposer from '../../components/messaging/ReplyComposer';
-import { isLocalRomanId, romanQuoteExcerpt, withRomanQuote } from '../../components/roman/romanReply';
+import { isLocalRomanId, romanQuoteExcerpt, splitRomanQuote, withRomanQuote } from '../../components/roman/romanReply';
 import { spacing, typography } from '../../theme/tokens';
 import RomanConversationsButton from '../../components/roman/RomanConversationsButton';
 import JoinCoachState, { ROMAN_LOCK_BODY, ROMAN_LOCK_TITLE, useClientNeedsCoach } from '../../components/coachless/JoinCoachState';
@@ -184,7 +184,7 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
     clearSendError,
   } = useRomanChat(surface);
   // CHAT-DISCARD (owner 10-21): half-typed text stays with this chat on the device (src/lib/chatDrafts.ts).
-  const [draft, setDraft, { keyFor, keepFailed, keepAside, dropFailed }] = useChatDraft('roman');
+  const [draft, setDraft, { keyFor, keepFailed, keptSend, keepAside, dropFailed }] = useChatDraft('roman');
   // Shown after AI help is allowed for a message the server already stored.
   const [askAgainHint, setAskAgainHint] = useState(false);
   // The quick-start chip last sent (forest outline, prototype 70).
@@ -207,6 +207,33 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
   useLayoutEffect(() => {
     chatNow.current = chat;
   }, [chat]);
+
+  // QUOTE-KEY-REOPEN-M: a quoted send whose key is kept (still out, or "not ready yet") keeps its quote with that key
+  // (lib/chatDrafts), so after Back, a reopen or a restart the strip comes back over the same words, and Send rebuilds
+  // the exact words the key was filed under. Only in the session it was picked in (R2: another drops the quote, the key
+  // stays), and only while the box rebuilds those words byte for byte; otherwise nothing is drawn, as before. Runs once
+  // the session's chat key is known: useChatBound (above, so its effect runs first) drops a pick filed before it.
+  // Never after a sign-out, sign-in or re-bootstrap while the room is open (KT-13: the pick's sign-in is gone).
+  const sessionId = session?.id ?? null;
+  const openEpoch = useRef(authEpoch());
+  useEffect(() => {
+    const kept = keptSend();
+    const q = kept?.quote;
+    // The client room only (canHold), its session open, no strip up, a quote kept, the sign-in it opened under.
+    if (surface !== 'client' || !sessionId || replyTarget || !kept || !q) return;
+    if (authEpoch() !== openEpoch.current) return;
+    if (q.session !== sessionId) {
+      keepFailed(kept.text, kept.key);
+      return;
+    }
+    if (withRomanQuote(q.excerpt, draft).trim() !== kept.text) return;
+    setReplyTarget({ id: q.id, role: 'assistant', content: q.excerpt, interrupted: false, createdAt: '' });
+  }, [chat, sessionId, draft, replyTarget, surface, keptSend, keepFailed, setReplyTarget]);
+  // R3: Cancel reply, or another reply picked, drops the kept quote (not the key), so a reopen never brings it back.
+  const dropKeptQuote = useCallback((unless?: string) => {
+    const kept = keptSend();
+    if (kept?.quote && kept.quote.id !== unless) keepFailed(kept.text, kept.key);
+  }, [keptSend, keepFailed]);
 
   const listRef = useRef<FlatList<RomanMessage>>(null);
   // Last assistant message id we announced to assistive tech, so a re-render
@@ -332,11 +359,14 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
       const words = body.trim();
       const held = keyFor(words);
       const key = held ?? generateIdempotencyKey();
+      // QUOTE-KEY-REOPEN-M: the quote as it went in these words travels with their key.
+      const excerpt = quoted && sessionId && words !== text.trim() ? splitRomanQuote(words)?.quote : undefined;
+      const quote = quoted && sessionId && excerpt ? { id: quoted.id, excerpt, session: sessionId } : undefined;
       // The key goes with these words before the request (LS-953R2 B1): a Back, a reopen or a restart before this
       // send ends finds it and sends it again. Only the answer that ends this send drops it (below).
       if (!held && words !== '') {
         if (fromChip) keepAside(words, key);
-        else keepFailed(words, key);
+        else keepFailed(words, key, quote);
       }
       let kept = false;
       const outcome = await send(body, { key, keep: () => { kept = true; } });
@@ -371,13 +401,13 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
       if (outcome !== 'sent' && kept) {
         if (inBox) {
           if (fromChip) dropFailed(words); // the chip's words are in the box now: its key moves from aside to the box
-          keepFailed(words, key);
+          keepFailed(words, key, quote);
         } else keepAside(words, key);
       } else if (keyFor(words) === key) {
         dropFailed(words);
       }
     },
-    [send, replyTarget, setDraft, keyFor, keepFailed, keepAside, dropFailed],
+    [send, replyTarget, sessionId, setDraft, keyFor, keepFailed, keepAside, dropFailed],
   );
 
   const onSend = useCallback(async () => {
@@ -427,9 +457,12 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
   }, []);
 
   const onReply = useCallback(() => {
-    if (actionTarget) setReplyTarget(actionTarget);
+    if (actionTarget) {
+      dropKeptQuote(actionTarget.id);
+      setReplyTarget(actionTarget);
+    }
     setActionTarget(null);
-  }, [actionTarget]);
+  }, [actionTarget, dropKeptQuote]);
 
   const onCopy = useCallback(async () => {
     const held = actionTarget;
@@ -547,7 +580,10 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
         replyTarget ? (
           <ReplyComposer
             target={{ id: replyTarget.id, body: romanQuoteExcerpt(replyTarget.content), authorLabel: 'Roman' }}
-            onCancel={() => setReplyTarget(null)}
+            onCancel={() => {
+              dropKeptQuote();
+              setReplyTarget(null);
+            }}
           />
         ) : surface === 'client' ? (
           <RomanQuickStarts onPick={onPickChip} selected={pickedChip} disabled={sending} />
