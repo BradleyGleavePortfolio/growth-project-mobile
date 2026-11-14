@@ -261,13 +261,15 @@ export default function MessagesInboxScreen({ navigation }: { navigation: Naviga
           <Rise index={0}>
             <Pressable onPress={tap(() => navigation.navigate('Messages'))} accessibilityRole="button" accessibilityLabel={coachLabel} testID="inbox-coach" style={({ pressed }) => [s.card, s.hero, { backgroundColor: sc.accent }, pressed && s.pressed]}>
               <View style={[s.top, s.wrapTop]}>
-                <View style={[s.mono, { backgroundColor: sc.textOnAccent }]}>
-                  {first ? <Text style={[s.monoText, { color: sc.accent }]}>{first.charAt(0).toUpperCase()}</Text>
-                    : <Ionicons name="person-outline" size={24} color={sc.accent} />}
-                </View>
-                <View style={[s.who, s.coachWho]}>
-                  <Text style={[s.over, { color: gold[200] }]}>Your coach</Text>
-                  <Text style={[coachNameStyle, { color: sc.textOnAccent }]}>{first ?? 'Message your coach'}</Text>
+                <View style={[s.top, s.coachWho]}>
+                  <View style={[s.mono, { backgroundColor: sc.textOnAccent }]}>
+                    {first ? <Text style={[s.monoText, { color: sc.accent }]}>{first.charAt(0).toUpperCase()}</Text>
+                      : <Ionicons name="person-outline" size={24} color={sc.accent} />}
+                  </View>
+                  <View style={s.who}>
+                    <Text style={[s.over, { color: gold[200] }]}>Your coach</Text>
+                    <Text style={[coachNameStyle, { color: sc.textOnAccent }]}>{first ?? 'Message your coach'}</Text>
+                  </View>
                 </View>
                 {coach.unread > 0 ? (
                   <View style={[s.unread, { borderColor: palette.romanAccent }]} testID="inbox-unread">

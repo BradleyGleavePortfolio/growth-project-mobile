@@ -82,6 +82,9 @@ beforeEach(() => {
   mockList.mockResolvedValue(OFFLINE);
 });
 
+const REAL = { window: Dimensions.get('window'), screen: Dimensions.get('screen') };
+afterAll(() => Dimensions.set(REAL));
+
 it.each([[2], [0]])('the coach card keeps the monogram and "Message your coach" on one row when the name read fails (unread %s)', async (unread) => {
   mockGet.mockImplementation(async (u: string) => {
     if (u === '/messages/unread-count') return { data: { total: unread } };
@@ -102,4 +105,36 @@ it.each([[2], [0]])('the coach card keeps the monogram and "Message your coach" 
   expect(style(row).flexDirection).toBe('row');
   expect(textOf(row)).not.toContain('Yes, move it to Friday.'); // the row, not the card
   expect(style(row).flexWrap).not.toBe('wrap');
+});
+
+const rowCases = [320, 360, 375, 390].flatMap((width) =>
+  [1, 1.3].flatMap((fontScale) =>
+    [null, 'Sam', 'Massimiliano', 'Mohammadreza'].flatMap((name) =>
+      [0, 2, 12, 120].map((unread) => ({ width, fontScale, name, unread })))));
+
+it.each(rowCases)('keeps the coach identity together at $width pt / $fontScale scale, name $name, unread $unread', async ({ width, fontScale, name, unread }) => {
+  mockGet.mockImplementation(async (u: string) => {
+    if (u === '/messages/unread-count') return { data: { total: unread } };
+    if (u === '/v1/clients/me/coach' && name) return { data: { id: 'coach-9', name } };
+    throw new Error('offline');
+  });
+  mockInbox.mockResolvedValue({ items: [thread(unread)], next_cursor: null, total_unread: unread });
+  const d = { width, height: 844, scale: 2, fontScale };
+  Dimensions.set({ window: d, screen: d });
+  const u = await render(<MessagesInboxScreen navigation={{ navigate: jest.fn(), goBack: jest.fn() } as never} />);
+  await act(async () => { await Promise.resolve(); });
+  const label = name ?? 'Message your coach';
+  const all = chains(u.toJSON());
+  const title = all.find((c) => c.node.type === 'Text' && textOf(c.node) === label)!;
+  expect(title).toBeDefined();
+  const row = title.up[title.up.length - 2];
+  const outer = title.up[title.up.length - 3];
+  expect(style(row)).toMatchObject({ flexDirection: 'row', flexGrow: 1, flexShrink: 1 });
+  expect(style(row).flexWrap).not.toBe('wrap');
+  const children = row.children as Node[];
+  expect(style(children[0])).toMatchObject({ width: 48, height: 48 });
+  expect(textOf(children[1])).toContain(label);
+  expect(style(outer)).toMatchObject({ flexDirection: 'row', flexWrap: 'wrap' });
+  expect(chains(row).some(({ node }) => node.props?.testID === 'inbox-unread')).toBe(false);
+  expect(u.queryByTestId('inbox-unread') !== null).toBe(unread > 0);
 });
