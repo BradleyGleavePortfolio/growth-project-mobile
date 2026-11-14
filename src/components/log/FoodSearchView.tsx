@@ -341,6 +341,8 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   toolCell: { flex: 1 },
   toolCellWide: { flex: 2 },
   toolTile: {
+    // MEAL-PHOTO-M: with two working tiles each fills the row's height, as the drawn grid's tiles do.
+    flexGrow: 1,
     minHeight: 72,
     paddingHorizontal: 12,
     paddingVertical: 8,
