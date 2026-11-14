@@ -30,6 +30,7 @@ import { layout, radius, spacing, typography, type SemanticTokens } from '../../
 import { Screen, useScreenInsets } from '../../ui';
 import { blockLetter } from './active-workout/blockLetter';
 import { MastheadBand, mast, sectionHead, wsc } from './workouts/workoutStyleC';
+import { TRAIN_COPY } from './train/TrainToday';
 import HapticPressable from '../../components/HapticPressable';
 import { errorMessage } from '../../types/common';
 import { toServerMuscleGroup } from '../../utils/workout/muscleGroup';
@@ -336,7 +337,8 @@ export default function RoutineBuilderScreen() {
         </HapticPressable>
       }
     >
-        <Text style={styles.sectionHead}>Exercises</Text>
+        {/* C_day "5 EXERCISES" (rows 860-879): the count of the rows; none keeps main's "Exercises". */}
+        <Text style={styles.sectionHead}>{exercises.length > 0 ? TRAIN_COPY.exercises(exercises.length) : 'Exercises'}</Text>
 
         {exercises.map((ex, idx) => (
           <View key={`${ex.exerciseId}-${idx}`} testID={`exercise-row-${idx}`} style={styles.exerciseCard} onLayout={({ nativeEvent }) => { rowBounds.current[idx] = nativeEvent.layout; }}>
@@ -417,7 +419,8 @@ export default function RoutineBuilderScreen() {
               <TouchableOpacity style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Close exercise picker" onPress={() => setShowAddModal(false)}>
                 <Ionicons name="close" size={24} color={mast.ink} />
               </TouchableOpacity>
-              <Text style={styles.modalTitle}>Add exercise</Text>
+              {/* C_picker "Add to Full body A" (rows 118-141): the routine's own name; unnamed keeps "Add exercise". */}
+              <Text style={styles.modalTitle}>{name.trim() ? `Add to ${name.trim()}` : 'Add exercise'}</Text>
               <View style={styles.iconButton} />
             </View>
 
@@ -456,6 +459,9 @@ export default function RoutineBuilderScreen() {
           <FlatList
             keyboardShouldPersistTaps="handled"
             data={filteredExercises}
+            ListHeaderComponent={filteredExercises.length > 0 ? (
+              <Text style={styles.results}>{`${filteredExercises.length} ${filteredExercises.length === 1 ? 'result' : 'results'}`}</Text>
+            ) : null}
             ListEmptyComponent={<Text style={styles.listState}>{pickerStatus === 'loading' ? 'Loading exercises.' : pickerStatus === 'error' ? 'Exercises did not load. Check your connection and try again.' : 'No exercises match. Try another search or muscle group.'}</Text>}
             ListFooterComponent={pickerStatus === 'error' ? <TouchableOpacity style={styles.retryBtn} accessibilityRole="button" accessibilityLabel="Try loading exercises again" onPress={openAddExercise}><Text style={styles.addBtnText}>Try again</Text></TouchableOpacity> : null}
             keyExtractor={(item) => item.id}
@@ -661,5 +667,7 @@ const makeStyles = (sc: SemanticTokens) =>
   exerciseListName: { ...typography.h4, color: sc.textPrimary },
   exerciseListMeta: { ...typography.bodySmall, color: sc.textMuted, marginTop: 2 },
   listState: { ...typography.bodySmall, color: sc.textMuted, paddingHorizontal: layout.gutter, paddingVertical: spacing.lg },
+  // C_picker "6 RESULTS": the eyebrow on the gutter over the rows.
+  results: { ...typography.eyebrow, color: sc.textMuted, paddingHorizontal: layout.gutter, paddingBottom: spacing.sm },
   retryBtn: { minHeight: layout.touchMin, justifyContent: 'center', paddingHorizontal: layout.gutter },
   });
