@@ -37,6 +37,30 @@ const keys = (items: TimelineItem[]) => items.map((it) => (it.kind === 'slot' ? 
 const upNext = (items: TimelineItem[]) => items.find((it) => it.kind === 'slot' && it.slot.logs.length === 0);
 
 describe('GOAL-930-M D3: a usual meal still to eat carries its usual time', () => {
+  it.each([
+    ['breakfast caught up after dinner', ['21:10', '12:30', '16:00', '19:00']],
+    ['lunch caught up after dinner', ['08:05', '21:10', '16:00', '19:00']],
+    ['snack caught up after dinner', ['08:05', '12:30', '21:10', '19:00']],
+    ['dinner caught up after midnight', ['08:05', '12:30', '16:00', '00:10']],
+    ['the same batch-save time', ['21:10', '21:10', '21:10', '21:10']],
+    ['an earlier meal without a readable time', [null, '12:30', '16:00', '19:00']],
+    ['a middle meal without a readable time', ['08:05', null, '16:00', '19:00']],
+  ])('%s keeps every pending meal in slot order throughout the day', (_label, times) => {
+    const meals = ['breakfast', 'lunch', 'snack', 'dinner'] as const;
+    const past = [Y, S].map((date) => ({
+      date, entries: meals.map((meal, i) => entry(meal, meal, meal, 100, times[i] ? at(date, times[i]!) : null)),
+    }));
+    const day = buildUsualDay(past, []);
+    // A storage timestamp is not an eating time. An ambiguous schedule falls back to main's slot order,
+    // including after a later meal's old timestamp, not just the audit's 8 am reproduction.
+    expect(day.slots.every((s) => s.time == null)).toBe(true);
+    for (const nowMin of [null, 0, 480, 910, 1439]) {
+      const items = buildTimeline({ day, nowMin });
+      expect(items.flatMap((it) => it.kind === 'slot' ? [it.slot.key] : [])).toEqual(meals);
+      expect(upNext(items)).toEqual(expect.objectContaining({ slot: expect.objectContaining({ key: 'breakfast' }) }));
+    }
+  });
+
   it('the newest day\'s earliest logged_at sets "HH:MM" in the phone\'s zone', () => {
     // Yesterday's lunch: the wrap at 12:40 and the apple at 12:30; the earliest wins.
     const past = week(at(Y, '12:40'), at(S, '13:15'));
