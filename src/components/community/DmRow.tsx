@@ -16,6 +16,7 @@ import { forestPop, radius, spacing } from '../../theme/tokens';
 import RomanAvatar from '../roman/RomanAvatar';
 import UnreadBadge from './UnreadBadge';
 import type { CommunityDmThread } from '../../api/communityApi';
+import { NO_NAME } from '../../screens/community/coach-dm/coachDm';
 
 export interface DmRowProps {
   thread: CommunityDmThread;
@@ -88,7 +89,8 @@ export default function DmRow({
           ]}
         >
           <Text style={[styles.avatarMark, { color: semanticColors.textMuted }]}>
-            {participantLabel.slice(0, 1).toUpperCase()}
+            {/* COACH-DM-CLIENT-M: a letter only from a real name ("D" from NO_NAME would be untrue); the circle stays */}
+            {participantLabel === NO_NAME ? null : participantLabel.slice(0, 1).toUpperCase()}
           </Text>
         </View>
       )}
@@ -101,7 +103,7 @@ export default function DmRow({
           {isCoach ? '  ·  your coach' : ''}
         </Text>
         <Text style={[styles.time, { color: semanticColors.textMuted }, studio ? [styles.studioTime, { color: meta }] : null]}>
-          {time === 'now' && studio ? 'Active now' : time ? `Active ${time} ago` : 'No messages yet'}
+          {time === 'now' ? 'Active now' : time ? `Active ${time} ago` : 'No messages yet'}
         </Text>
       </View>
       <UnreadBadge count={unread} corner={false} testID="dm-row-badge" />

@@ -61,6 +61,8 @@ jest.mock('../../../hooks/useCommunity', () => ({
     mockUseDmThreadsSpy(workspaceId);
     return mockThreads;
   },
+  // COACH-DM-CLIENT-M: the list reads my coach's name (no name known here).
+  useMyCoachName: () => ({ name: null, settled: true }),
 }));
 
 import CommunityDmListScreen from '../CommunityDmListScreen';

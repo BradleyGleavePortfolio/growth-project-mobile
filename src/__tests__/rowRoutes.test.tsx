@@ -944,10 +944,17 @@ ROWS.push(
     communityRow('n-post', 'community_post_replied', 'Someone replied to your post.', `tgp://community/posts/${uuid(121)}`, { type: 'post', id: uuid(121) }),
     NESTED('CommunityTab', 'CommunityThread', { postId: uuid(121) }),
     'community-posts.service.ts:463 tgp://community/posts/<id> matches no phone link; the row lands on the Community root', landsOnCommunityRoot),
-  notifGap('N2', 'community_dm_received (student)', 'client',
-    communityRow('n-dm', 'community_dm_received', 'New direct message.', DM_LINK, { type: 'dm', id: uuid(122) }),
-    NESTED('CommunityTab', 'CommunityDmThread', { recipientId: COACH_USER }),
-    'community-dms.service.ts:223 tgp://community/dms/<dmKey> matches no phone link; the row lands on the Community root', landsOnCommunityRoot),
+  // COACH-DM-CLIENT-M: a client's stored row keeps the older link; the router opens the id of the pair that is not the
+  // client's (pushTapRouter.ts coachDmLink, one rule for both roles).
+  { id: 'N2', title: 'community_dm_received (student, a stored row with the older community/dms/<dmKey> link)', role: 'client', host: ['Tab@ClientNavigator'],
+    http: NOTIF_HTTP(communityRow('n-dm', 'community_dm_received', 'New direct message.', DM_LINK, { type: 'dm', id: uuid(122) })),
+    before: () => attach('client'), screen: centerScreen, tap: { label: /New direct message\./ },
+    expected: NESTED('CommunityTab', 'CommunityDmThread', { recipientId: COACH_USER }) },
+  // COACH-DM-CLIENT-M: b#1243 writes tgp://community/dm/<sender's user id> (community-dms.service.ts:236 at 9d0db7eb).
+  { id: 'N2e', title: 'community_dm_received (student, tgp://community/dm/<coach>)', role: 'client', host: ['Tab@ClientNavigator'],
+    http: NOTIF_HTTP(communityRow('n-dme', 'community_dm_received', 'Your coach sent you a direct message.', `tgp://community/dm/${COACH_USER}`, { type: 'dm', id: uuid(132) })),
+    before: () => attach('client'), screen: centerScreen, tap: { label: /Your coach sent you a direct message\./ },
+    expected: NESTED('CommunityTab', 'CommunityDmThread', { recipientId: COACH_USER }) },
   // COACH-DM-M: a stored row keeps the older link; the router opens the id of the pair that is not the coach's.
   { id: 'N2c', title: 'community_dm_received (coach, a stored row with the older community/dms/<dmKey> link)', role: 'coach', host: ['Tab@CoachNavigator'],
     http: NOTIF_HTTP(communityRow('n-dmc', 'community_dm_received', 'New direct message for coach.', DM_LINK, { type: 'dm', id: uuid(123) })),
@@ -1295,7 +1302,7 @@ describe('completeness guards', () => {
       'screens/community/CommunityChallengesScreen.tsx': ['F14'],
       'screens/community/CommunityClassroomScreen.tsx': ['F15'],
       'screens/community/CommunityWearablePromptsScreen.tsx': ['W3'],
-      'screens/notifications/NotificationCenterScreen.tsx': ['N1', 'N2', 'N2c', 'N2d', 'N3', 'N3c', 'N4', 'N5', 'N6', 'N7', 'N8', 'N8c'],
+      'screens/notifications/NotificationCenterScreen.tsx': ['N1', 'N2', 'N2e', 'N2c', 'N2d', 'N3', 'N3c', 'N4', 'N5', 'N6', 'N7', 'N8', 'N8c'],
       'screens/coach/CoachInboxV2.tsx': ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7'],
       'screens/coach/MessagesScreen.tsx': ['D8'],
       'screens/coach/command-center/InboxScreen.tsx': ['D9'],

@@ -216,7 +216,9 @@ describe('case 4: the banner tap is the device tap of the same push (navigator c
     const reply = ROWS.find((r) => r[0] === 'community post reply, client')![2];
     expect(landing('student', reply)).toEqual([['CommunityTab', undefined]]);
     expect(landing('coach', reply)).toEqual([['ClientsStack', { screen: 'NotificationCenter', params: undefined }]]);
-    expect(landing('student', ROWS.find((r) => r[0] === 'community DM, client')![2])).toEqual([['CommunityTab', undefined]]);
+    // COACH-DM-CLIENT-M case 1: the client's DM push opens that person's thread, as the coach's does.
+    expect(landing('student', ROWS.find((r) => r[0] === 'community DM, client')![2]))
+      .toEqual([['CommunityTab', { screen: 'CommunityDmThread', params: { recipientId: SENDER }, initial: false }]]);
     expect(landing('coach', ROWS.find((r) => r[0] === 'message, coach (inbox: no name)')![2]))
       .toEqual([['Messages', { screen: 'MessagesInbox', params: { clientId: CLIENT }, pop: true }]]);
     expect(landing('student', ROWS.find((r) => r[0] === 'trial_ending')![2]))

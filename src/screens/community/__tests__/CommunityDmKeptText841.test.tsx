@@ -42,6 +42,8 @@ jest.mock('../../../hooks/useCommunity', () => ({
     : { data: undefined, isLoading: true, isError: false, isSuccess: false, isFetchedAfterMount: false, isStale: true }),
   usePosts: () => ({ data: [], isLoading: false, isError: false, isSuccess: true, isFetchedAfterMount: true, isStale: false }),
   useSendDm: () => ({ mutateAsync: mockSend, isPending: false }),
+  // COACH-DM-CLIENT-M: the thread reads my coach's name (no name known here).
+  useMyCoachName: () => ({ name: null, settled: true }),
 }));
 
 const CommunityDmThreadScreen = require('../CommunityDmThreadScreen').default;
