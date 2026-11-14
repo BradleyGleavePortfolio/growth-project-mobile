@@ -25,6 +25,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { randomUUID } from 'expo-crypto';
 import { foodApi, logApi, waterApi, weightApi } from './api';
+import { authEpoch, captureAccountBinding } from './accountBinding';
+import { sendQueued, type QueuedSendOwner } from './saveKeys';
+import { sessionGeneration } from './sessionFence';
 import { readUserCacheSync } from '../lib/userCache';
 import { logger } from '../utils/logger';
 import { emitTutorialSignal } from '../tutorial/tutorialEvents';
@@ -423,12 +426,28 @@ async function flush(): Promise<FlushResult> {
   // the flush and leaves the remaining items where they are.
   const userId = currentOwnerId();
   const key = getQueueKey(userId);
+  // FIX-972R2 (B1): the sign-in and the session this flush sends for, taken in the same tick as the owner. Every send
+  // below, and its 401 replay, is bound to them (sendAs, api.ts postSend): it goes out only with this owner's
+  // credential in this session; otherwise nothing is sent (AccountChangedError, retry later) and the entry stays queued.
+  const signIn = authEpoch();
+  const session = sessionGeneration();
+  const credential = userId ? captureAccountBinding().catch(() => null) : Promise.resolve(null);
 
   let queue = await readQueueForKey(key);
+  const sendOwner: QueuedSendOwner = { binding: await credential, session };
   let flushed = 0;
   let parked = 0;
   // Nothing is sent while the server's Retry-After runs.
   let stopped = isHeld(retryNotBefore);
+  // FIX-972R2 (B1): a sign-in or sign-out while the queue and the credential were read: this flush sends nothing.
+  if (userId && (authEpoch() !== signIn || sessionGeneration() !== session)) {
+    logger.warn('FoodLogQueue', 'flush stopped: queue owner changed');
+    stopped = true;
+  }
+  /** FIX-972R2 (B1): starts one send bound to this flush's owner. The anonymous queue's sends are not bound. */
+  function sendAs<T>(start: () => T): T {
+    return userId ? sendQueued(sendOwner, start) : start();
+  }
 
   /**
    * Apply `change` to the captured owner's latest stored queue. Returns false
@@ -482,8 +501,8 @@ async function flush(): Promise<FlushResult> {
       if (item.kind === 'water' || item.kind === 'weight') {
         if (!userId) throw new FoodLogQueueOwnerChangedError();
         const answer = item.kind === 'water'
-          ? await waterApi.log({ amount_ml: item.log.amount_ml, date: item.log.date }, item.id)
-          : await weightApi.log({ weight_lbs: item.log.weight_lbs, date: item.log.date, notes: item.log.notes }, item.id);
+          ? await sendAs(() => waterApi.log({ amount_ml: item.log.amount_ml, date: item.log.date }, item.id))
+          : await sendAs(() => weightApi.log({ weight_lbs: item.log.weight_lbs, date: item.log.date, notes: item.log.notes }, item.id));
         const answerId = (answer?.data as { id?: unknown } | undefined)?.id;
         if (!(await keepSent(item, typeof answerId === 'string' ? answerId : undefined))) break;
         if (await commit((q) => q.filter((x) => x.id !== item.id))) flushed++;
@@ -493,11 +512,12 @@ async function flush(): Promise<FlushResult> {
       if (item.kind === 'search' && item.foodItemId) {
         foodItemId = item.foodItemId;
       } else if (item.food) {
-        const res = await foodApi.create(item.food);
+        const food = item.food;
+        const res = await sendAs(() => foodApi.create(food));
         foodItemId = res.data?.id;
       }
       if (!foodItemId) throw new Error('Could not resolve food item id');
-      await logApi.logFood({
+      await sendAs(() => logApi.logFood({
         date: item.log.date,
         meal_type: item.log.meal_type,
         food_item_id: foodItemId,
@@ -509,7 +529,7 @@ async function flush(): Promise<FlushResult> {
         // Pass the queue entry's client-side id as the idempotency key so
         // the backend upserts on retry rather than creating a duplicate row.
         client_uuid: item.id,
-      });
+      }));
       // The server accepted the item. If the owner changed before the local
       // write-back, the item stays queued for its owner (idempotent by
       // `client_uuid` on retry) rather than touching another account's key.
