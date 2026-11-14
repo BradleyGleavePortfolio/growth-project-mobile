@@ -231,6 +231,7 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
           voiceB
           testID="community-dmthread-composer"
         />}
+        <HapticPressable accessibilityRole="button" accessibilityLabel="Attach" onPress={() => undefined} />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
