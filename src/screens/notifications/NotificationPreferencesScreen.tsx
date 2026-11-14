@@ -525,7 +525,7 @@ export default function NotificationPreferencesScreen() {
             again (it reads the plan again first). */}
         {gateFailed ? (
           <View testID="plan-renewal-offers-read-failed" accessibilityLiveRegion="polite">
-            <Text selectable style={[styles.notice, { color: colors.textSecondary }]}>{READ_FAILED_COPY}</Text>
+            <Text selectable style={[styles.notice, { color: colors.textSecondary }]}>{PLAN_RENEWAL_OFFERS_COPY.readFailed}</Text>
             <HapticPressable
               style={styles.gateRetry}
               onPress={() => setLoadAttempt((n) => n + 1)}

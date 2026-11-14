@@ -66,15 +66,18 @@ const DestinationScreen = require('../../notifications/NotificationPreferencesSc
 
 const OFFERS = 'Plan renewal offers';
 const READ_FAILED = 'Notification preferences could not be loaded. Check your connection, then try again.';
+// 908-W1B-M (owner 185-W1, FR908R2-W1 B): Settings > Notifications names the renewal offers setting; the category screen keeps READ_FAILED.
+const PLAN_READ_FAILED = 'Your plan renewal offers setting could not load. Check your connection, then try again.';
 const YES = { data: { plan_renewal_offers_opt_in_at: '2026-10-29T00:00:00Z', plan_renewal_push: true } };
 
-const SCREENS: Array<{ screen: string; element: () => React.ReactElement; loaded: string }> = [
+const SCREENS: Array<{ screen: string; element: () => React.ReactElement; loaded: string; failed: string }> = [
   {
     screen: 'Settings > Notification categories',
     element: () => <CategoryScreen navigation={{ goBack: jest.fn() }} role={() => 'student'} />,
     loaded: 'Coach Messages',
+    failed: READ_FAILED,
   },
-  { screen: 'Settings > Notifications', element: () => <DestinationScreen />, loaded: 'Mute all notifications' },
+  { screen: 'Settings > Notifications', element: () => <DestinationScreen />, loaded: 'Mute all notifications', failed: PLAN_READ_FAILED },
 ];
 
 beforeEach(async () => {
@@ -89,14 +92,14 @@ beforeEach(async () => {
   notificationsApi.getPreferences.mockResolvedValue(YES);
 });
 
-describe.each(SCREENS)('$screen, after a launch whose plan read failed', ({ element, loaded }) => {
+describe.each(SCREENS)('$screen, after a launch whose plan read failed', ({ element, loaded, failed }) => {
   const open = () => render(<FakeEntitlementProvider>{element()}</FakeEntitlementProvider>);
 
   it('reads the plan again on open; when it answers, the switch shows the server value', async () => {
     mockAnswers.push('renewal');
     const screen = await open();
     expect((await screen.findByLabelText(OFFERS)).props.value).toBe(true);
-    expect(screen.queryByText(READ_FAILED)).toBeNull();
+    expect(screen.queryByText(failed)).toBeNull();
     expect(mockRefresh).toHaveBeenCalledTimes(1);
   });
 
@@ -106,10 +109,10 @@ describe.each(SCREENS)('$screen, after a launch whose plan read failed', ({ elem
     const screen = await open();
     await screen.findByLabelText(loaded);
     expect(screen.queryByLabelText(OFFERS)).toBeNull();
-    expect(screen.getByText(READ_FAILED)).toBeTruthy();
+    expect(screen.getByText(failed)).toBeTruthy();
     fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
     expect((await screen.findByLabelText(OFFERS)).props.value).toBe(true);
-    await waitFor(() => expect(screen.queryByText(READ_FAILED)).toBeNull());
+    await waitFor(() => expect(screen.queryByText(failed)).toBeNull());
     expect(mockRefresh).toHaveBeenCalledTimes(2);
     expect(notificationsApi.updatePreferences).not.toHaveBeenCalled();
   });
