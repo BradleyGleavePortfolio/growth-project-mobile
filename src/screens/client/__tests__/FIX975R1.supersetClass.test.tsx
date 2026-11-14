@@ -80,6 +80,7 @@ it.each(cases)('$name: one chip per block, every prescription and note, first-bl
   expect(within(view.getByTestId('tour-first-exercise')).getByText(titles[0])).toBeTruthy();
   for (const ex of rows) {
     const inner = within(view.getByTestId(`assignment-row-${ex.order}`));
+    expect(inner.getByText(names[ex.exercise_external_id])).toBeTruthy();
     expect(inner.getByText(ex.notes)).toBeTruthy();
     expect(inner.getByText(/sets ×/)).toBeTruthy();
     expect(inner.getByText(new RegExp(`sets × ${ex.reps_or_duration_seconds} ${ex.unit === 'seconds' ? 'sec' : 'reps'}`))).toBeTruthy();
@@ -92,4 +93,29 @@ it.each(cases)('$name: one chip per block, every prescription and note, first-bl
     screen: 'ActiveWorkout', initial: false,
     params: { routineId: 'plan', routineName: 'Full body A', assignmentId: 'a-1', exercises: JSON.stringify(expected) },
   });
+});
+
+it.each([
+  { name: 'largest first', sets: [5, 2], changes: [], rounds: 5 },
+  { name: 'largest last', sets: [2, 5], changes: [], rounds: 5 },
+  { name: 'largest middle', sets: [2, 5, 3], changes: [], rounds: 5 },
+  { name: 'coach reduces first', sets: [5, 4], changes: [{ order: 1, sets: 2 }], rounds: 4 },
+  { name: 'coach increases last', sets: [2, 3], changes: [{ order: 2, sets: 6 }], rounds: 6 },
+  { name: 'one round', sets: [1, 1], changes: [], rounds: 1 },
+])('$name: superset rounds use the largest prescribed count after coach changes', async ({ sets, changes, rounds }) => {
+  const ids = ['squat', 'pull', 'push'];
+  const rows = sets.map((count, index) => ({ ...row(index + 1, ids[index], 's'), sets: count }));
+  mockAssignment = {
+    id: 'a-1', completed_at: null, roman_adjusted_sets: changes,
+    workout_plan: { id: 'plan', name: 'Full body A', type: 'strength', exercises: rows },
+  } as unknown as ClientWorkoutAssignmentWithPlan;
+  const view = await render(<WorkoutAssignmentDetailScreen />);
+  expect(await view.findByText(`Superset · ${rounds} ${rounds === 1 ? 'round' : 'rounds'}`)).toBeTruthy();
+  for (const ex of assignmentPrescription(mockAssignment).exercises) {
+    const inner = within(view.getByTestId(`assignment-row-${ex.order}`));
+    expect(inner.getByText(names[ex.exercise_external_id])).toBeTruthy();
+    expect(inner.getByText(new RegExp(`^${ex.sets} sets ×`))).toBeTruthy();
+  }
+  expect(chipsOf(view.toJSON())).toHaveLength(1);
+  expect(within(view.getByTestId('tour-first-exercise')).getByTestId('assignment-block-A')).toBeTruthy();
 });

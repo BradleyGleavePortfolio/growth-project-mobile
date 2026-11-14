@@ -217,7 +217,7 @@ export default function WorkoutAssignmentDetailScreen() {
           return (
           // TOUR-133: the tour's first-exercise beat spotlights block A.
           <TutorialTarget key={block.letter} id={i === 0 ? 'first-exercise' : undefined}>
-          <View style={[styles.exerciseRow, { borderBottomColor: sc.border }]}>
+          <View testID={`assignment-block-${block.letter}`} style={[styles.exerciseRow, { borderBottomColor: sc.border }]}>
             {/* The block letter in the moss chip; decorative for screen readers, as the numeral was. */}
             <View style={[styles.letter, { borderColor: sc.data.moss }]}>
               <Text maxFontSizeMultiplier={1.15} style={[typography.h3, { color: sc.textPrimary }]} accessible={false} importantForAccessibility="no">
@@ -231,7 +231,7 @@ export default function WorkoutAssignmentDetailScreen() {
                     {block.rows.map((ex) => nameFor(ex.exercise_external_id)).join(' + ')}
                   </Text>
                   <Text style={[typography.bodySmall, styles.tabular, { color: sc.textMuted }]}>
-                    {TRAIN_COPY.superset} · {TRAIN_COPY.rounds(block.rows[0].sets)}
+                    {TRAIN_COPY.superset} · {TRAIN_COPY.rounds(Math.max(...block.rows.map((ex) => ex.sets)))}
                   </Text>
                 </View>
               ) : null}
@@ -239,13 +239,12 @@ export default function WorkoutAssignmentDetailScreen() {
                 const changed = plan.adjustedOrders.has(ex.order);
                 return (
                   <View key={`${ex.order}-${rowIndex}`} testID={`assignment-row-${ex.order}`}
-                    style={[styles.prescription, { borderBottomColor: sc.border },
+                    style={[styles.prescription,
                       changed && [styles.changed, { backgroundColor: sc.surface.sage, borderLeftColor: sc.data.forest }]]}>
-                    {!superset ? (
-                      <Text style={[typography.h4, { color: sc.textPrimary }]}>
-                        {nameFor(ex.exercise_external_id)}
-                      </Text>
-                    ) : null}
+                    <Text style={[superset ? typography.bodySmall : typography.h4,
+                      superset && styles.innerName, { color: sc.textPrimary }]}>
+                      {nameFor(ex.exercise_external_id)}
+                    </Text>
                     <Text style={[typography.bodySmall, styles.tabular, { color: sc.textMuted }]}>
                       {ex.sets} sets × {ex.reps_or_duration_seconds} {countWord(ex)}
                       {ex.weight_lbs ? ` · ${ex.weight_lbs} lb` : ''}
@@ -303,6 +302,7 @@ const styles = StyleSheet.create({
   },
   exerciseText: { flex: 1, gap: 2 },
   prescription: { gap: 2 },
+  innerName: { fontFamily: 'Inter_600SemiBold' },
   supersetText: { gap: spacing.md },
   // C2_adjusted cols 128-133, rows 1040-1203: sage, a 3 pt forest edge, 16 pt right corners, 4 pt from the rules.
   changed: {
