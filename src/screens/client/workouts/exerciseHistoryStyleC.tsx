@@ -124,6 +124,16 @@ const C2 = {
   /** Stars: the eyebrow's cols 83-102, the row's cols 351-372. */
   eyebrowStar: 11,
   rowStar: 12,
+  /** REFINE-986, a row: the rule (row 891) to the value's cap (926) 17.5 pt; the strip on rows 976-999. */
+  rowTop: 10,
+  stripTop: 6,
+  /** Strip to the comment's ink (999 to 1017) 9 pt; comment ink to the next rule (1050 to 1072) 11 pt; a row with no
+   *  comment keeps 13.5 pt from its dot to the rule (1179 to 1206). */
+  stripBottom: 3,
+  commentTop: 3,
+  rowBottom: 10,
+  /** The value's end (col 337) to the star (col 351): 7 pt, the star's own 1.5 pt inset included. */
+  starGap: 6,
 } as const;
 
 function SinceLine({ since, sc }: { since: SinceWeek1; sc: SemanticTokens }) {
@@ -209,13 +219,16 @@ export function ExerciseHistoryStyleC({ history }: { history: ExerciseHistory })
           <View key={`${row.workout_id}-${i}`} style={[s.row, i > 0 && s.rowRule]} testID={`exercise-history-row-${i}`}>
             <Text style={s.date} accessibilityLabel={dayLabel(row.date, true)}>{dayLabel(row.date)}</Text>
             <View style={s.middle}>
-              <View style={s.valueLine}>
+              <View style={s.valueLine} testID={`exercise-history-value-${i}`}>
                 {row.top_set ? (
                   <Text style={s.value} accessibilityLabel={spokenSet(row.top_set)}>{rowSetText(row.top_set)}</Text>
                 ) : null}
                 {isStar ? <PeakStar size={C2.rowStar} label="Best ever" testID="exercise-history-star" /> : null}
               </View>
-              <View style={s.strip} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              <View
+                style={s.strip} accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
+                testID={`exercise-history-strip-${i}`}
+              >
                 <View style={s.track} testID={`exercise-history-track-${i}`} />
                 {spot === null ? null : (
                   <View
@@ -225,7 +238,7 @@ export function ExerciseHistoryStyleC({ history }: { history: ExerciseHistory })
                 )}
               </View>
               {(row.coach_comments ?? []).map((c, k) => (
-                <Text key={k} style={[s.comment, italic]}>{`${c.coach_name}: ${c.body}`}</Text>
+                <Text key={k} style={[s.comment, k > 0 && s.commentNext, italic]}>{`${c.coach_name}: ${c.body}`}</Text>
               ))}
             </View>
             <Text style={[s.small, s.sets]}>{`${row.sets} ${row.sets === 1 ? 'set' : 'sets'}`}</Text>
@@ -262,13 +275,14 @@ function makeStyles(sc: SemanticTokens) {
     // MUSCLES, EQUIPMENT and HOW TO keep sectionHead as main draws them.
     head: { marginTop: spacing.lg, paddingBottom: 0, marginBottom: 0 },
     // A row: date | value, strip and comments | sets; a hairline between rows (rows 1072, 1206, 1428).
-    row: { flexDirection: 'row', alignItems: 'flex-start', paddingTop: spacing.sm, paddingBottom: spacing.md },
+    row: { flexDirection: 'row', alignItems: 'flex-start', paddingTop: C2.rowTop, paddingBottom: C2.rowBottom },
     rowRule: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: sc.border },
     date: { ...typography.bodySmall, color: sc.textMuted, width: C2.dateWidth, marginRight: spacing.lg },
     middle: { flex: 1 },
-    valueLine: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm },
-    value: { ...typography.bodyMd, color: sc.textPrimary, fontVariant: ['tabular-nums'] },
-    strip: { height: C2.bestDot, marginTop: spacing.sm, justifyContent: 'center' },
+    valueLine: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: C2.starGap },
+    // "155 × 6 lb" (cols 193-337): Inter Medium 16 with the drawing's proportional figures.
+    value: { ...typography.bodyMd, color: sc.textPrimary },
+    strip: { height: C2.bestDot, marginTop: C2.stripTop, marginBottom: C2.stripBottom, justifyContent: 'center' },
     track: { height: C2.track, borderRadius: C2.track / 2, backgroundColor: sc.data.trackLight },
     dot: {
       position: 'absolute', top: (C2.bestDot - C2.dot) / 2, width: C2.dot, height: C2.dot, borderRadius: C2.dot / 2,
@@ -279,7 +293,9 @@ function makeStyles(sc: SemanticTokens) {
       marginLeft: -C2.bestDot / 2, backgroundColor: sc.data.peak, borderWidth: 1, borderColor: sc.data.peakInk,
     },
     // Rows 1017-1050: the coach's words in Cormorant italic (useCoachItalic; the roman serif until it loads), 16 on 20.
-    comment: { ...typography.h2, fontSize: 16, lineHeight: 20, letterSpacing: 0, color: sc.textPrimary, marginTop: spacing.sm },
+    comment: { ...typography.h2, fontSize: 16, lineHeight: 20, letterSpacing: 0, color: sc.textPrimary, marginTop: C2.commentTop },
+    // A second comment on one session (no drawing shows two) keeps R1's 8 pt.
+    commentNext: { marginTop: spacing.sm },
     sets: { color: sc.textMuted, marginLeft: spacing.md, textAlign: 'right' },
   });
 }
