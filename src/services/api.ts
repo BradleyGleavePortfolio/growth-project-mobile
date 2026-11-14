@@ -258,20 +258,20 @@ type RetryableConfig = AxiosRequestConfig & {
 export type BoundRequestConfig = AxiosRequestConfig & { accountBinding: AccountBinding };
 
 /**
- * FIX-972R2 (B1): POST `body`. Called while foodLogQueue.flush starts a queued send (saveKeys.sendQueued), the
- * request is bound to the flush's owner: its sign-in (`accountBinding`) and its session (`_sessionGeneration`, so the
- * first credential read must already be in it). The credential read before transport and every 401 replay then go out
- * only for that account and session, or nothing is sent. Any other call is posted exactly as before.
+ * FIX-972R2 (B1): the options of a save's POST. Called while foodLogQueue.flush starts a queued send
+ * (saveKeys.sendQueued), `config` bound to the flush's owner: its sign-in (`accountBinding`) and its session
+ * (`_sessionGeneration`, so the first credential read must already be in it). The credential read before transport
+ * and every 401 replay then go out only for that account and session, or nothing is sent. Otherwise `config` as is.
  */
-function postSend<T = unknown>(url: string, body: object, config?: AxiosRequestConfig) {
+function queuedSendConfig(config?: AxiosRequestConfig): AxiosRequestConfig | undefined {
   const owner = queuedSendOwner();
-  if (!owner) return config ? api.post<T>(url, body, config) : api.post<T>(url, body);
+  if (!owner) return config;
   const bound: AxiosRequestConfig & Pick<RetryableConfig, 'accountBinding' | '_sessionGeneration'> = {
     ...config,
     _sessionGeneration: owner.session,
     ...(owner.binding ? { accountBinding: owner.binding } : {}),
   };
-  return api.post<T>(url, body, bound);
+  return bound;
 }
 
 /**
@@ -780,8 +780,10 @@ export const foodApi = {
     api.get(`/foods/search?q=${encodeURIComponent(q)}&limit=${limit}`),
   getById: (id: string) =>
     api.get(`/foods/${id}`),
-  create: (data: Record<string, unknown>) =>
-    postSend('/foods', data),
+  create: (data: Record<string, unknown>) => {
+    const config = queuedSendConfig();
+    return config ? api.post('/foods', data, config) : api.post('/foods', data);
+  },
 };
 
 export const logApi = {
@@ -806,12 +808,10 @@ export const logApi = {
     fills_usual_meal?: boolean;
     // Client tutorial: a 2xx food log is the real "first meal" action. The
     // response passes through untouched; a failure emits nothing.
-  }) => withTutorialSignal(
-    data.client_uuid
-      ? postSend('/log/food', data, { headers: { 'Idempotency-Key': data.client_uuid } })
-      : postSend('/log/food', data),
-    'meal_logged',
-  ),
+  }) => {
+    const config = queuedSendConfig(data.client_uuid ? { headers: { 'Idempotency-Key': data.client_uuid } } : undefined);
+    return withTutorialSignal(config ? api.post('/log/food', data, config) : api.post('/log/food', data), 'meal_logged');
+  },
   getDaily: (date: string) =>
     api.get(`/log/daily?date=${date}`),
   updateEntry: (id: string, data: Record<string, unknown>) =>
@@ -894,10 +894,11 @@ const weighInSave = (data: WeighInSave) => JSON.stringify([data.weight_lbs, data
 export const weightApi = {
   // OFFLINE-WATER-WEIGHT-M: `key` is a queued weigh-in's id (foodLogQueue.flush), sent as is; without one, the
   // save's own key (weightKeys) as before.
-  log: (data: WeighInSave, key?: string) =>
-    key
-      ? postSend('/weight', { ...data, client_uuid: key })
-      : weightKeys.send(weighInSave(data), (client_uuid) => api.post('/weight', { ...data, client_uuid })),
+  log: (data: WeighInSave, key?: string) => {
+    if (!key) return weightKeys.send(weighInSave(data), (client_uuid) => api.post('/weight', { ...data, client_uuid }));
+    const config = queuedSendConfig();
+    return config ? api.post('/weight', { ...data, client_uuid: key }, config) : api.post('/weight', { ...data, client_uuid: key });
+  },
   /** OFFLINE-WATER-WEIGHT-M (G7): the key an online try of this same weigh-in kept after a lost answer, if any. */
   takeKeptKey: (data: WeighInSave) => weightKeys.take(weighInSave(data)),
   getHistory: (days = 30) =>
@@ -1131,7 +1132,7 @@ export const waterApi = {
   // the body as client_uuid, the field the server reads (backend #1206), and the same key in the Idempotency-Key header.
   log: (data: { amount_ml: number; date?: string }, key?: string) =>
     key
-      ? postSend<WaterEntry>('/nutrition/water', { ...data, client_uuid: key }, { headers: { 'Idempotency-Key': key } })
+      ? api.post<WaterEntry>('/nutrition/water', { ...data, client_uuid: key }, queuedSendConfig({ headers: { 'Idempotency-Key': key } }))
       : api.post<WaterEntry>('/nutrition/water', data),
   getDaily: (date: string) =>
     api.get<{ total_ml: number; logs?: WaterEntry[] }>(`/nutrition/water?date=${date}`),

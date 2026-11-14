@@ -427,7 +427,7 @@ async function flush(): Promise<FlushResult> {
   const userId = currentOwnerId();
   const key = getQueueKey(userId);
   // FIX-972R2 (B1): the sign-in and the session this flush sends for, taken in the same tick as the owner. Every send
-  // below, and its 401 replay, is bound to them (sendAs, api.ts postSend): it goes out only with this owner's
+  // below, and its 401 replay, is bound to them (sendAs, api.ts queuedSendConfig): it goes out only with this owner's
   // credential in this session; otherwise nothing is sent (AccountChangedError, retry later) and the entry stays queued.
   const signIn = authEpoch();
   const session = sessionGeneration();

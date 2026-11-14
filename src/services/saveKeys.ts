@@ -66,7 +66,7 @@ let sendingFor: QueuedSendOwner | undefined;
 
 /**
  * FIX-972R2 (B1): starts one queued send (water, weight, a food or its log) for `owner`. The API call that `start`
- * makes (api.ts postSend) reads the owner while it is called, before it awaits anything, and binds the request to it:
+ * makes (api.ts queuedSendConfig) reads the owner while it is called, before it awaits anything, and binds the request to it:
  * the request and its 401 replay go out only with that account's credential in that session; otherwise nothing is
  * sent (AccountChangedError) and the entry stays queued. A call made outside sendQueued is sent as before.
  */
