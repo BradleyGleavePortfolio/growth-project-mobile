@@ -10,7 +10,7 @@
 import React from 'react';
 import { StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import Svg, { Circle, Ellipse, Line, Path, Rect } from 'react-native-svg';
-import { gold, layout, lightTokens, radius, spacing, typography } from '../../../theme/tokens';
+import { colors, gold, layout, lightTokens, radius, spacing, typography } from '../../../theme/tokens';
 import type { SlotLabel } from '../../../api/mealTemplatesApi';
 
 /** Masthead roles (identical in both schemes). */
@@ -20,6 +20,9 @@ export const mast = {
   muted: lightTokens.textOnMastheadMuted,
   rule: gold[500],
 } as const;
+
+/** K5's grouped digits, also used by C2's kcal summaries. */
+export const formatPlanNumber = (value: number): string => Math.round(value).toLocaleString('en-US');
 
 /**
  * The coach-voice italic once the face has loaded; the roman serif until then
@@ -77,21 +80,43 @@ interface MastheadProps {
   title: string;
   titleTestID?: string;
   testID?: string;
+  /**
+   * GOAL-927-M RULING 9: the masthead's ground, its status-bar band and its iOS overscroll; the C2 forest band
+   * unless a screen draws K5's deep forest (Macro targets).
+   */
+  ground?: string;
+  /**
+   * How the masthead ends: 'paper' (C2 C_day: the gold rule 4 pt above the paper that overlaps it), 'short'
+   * (C8 C_fasting: the title, then the paper; no rule), 'round' (K5 C_macros: a rounded foot, the cards on
+   * the page below it; no rule).
+   */
+  foot?: 'paper' | 'short' | 'round';
+  /** C_loading: still bones where the eyebrow and title will be (the block around them says main's Loading). */
+  bones?: boolean;
   children?: React.ReactNode;
 }
 
 /** Deep-forest masthead: letterspaced eyebrow, serif title, then the screen's summary. */
-export function PlanMasthead({ eyebrow, title, titleTestID, testID, children }: MastheadProps) {
+export function PlanMasthead({ eyebrow, title, titleTestID, testID, ground = mast.ground, foot = 'paper', bones, children }: MastheadProps) {
   const inNavigator = React.useContext(NavigatorContext) != null;
   return (
-    <View style={s.mast} testID={testID}>
-      {inNavigator && bandHook ? <ForestBand color={mast.ground} /> : null}
-      {/* iOS overscroll above the masthead stays forest, never a bone strip. */}
-      <View style={s.overscroll} importantForAccessibility="no" accessibilityElementsHidden pointerEvents="none" />
-      {eyebrow ? <Text style={s.eyebrow}>{eyebrow}</Text> : null}
-      <Text style={s.title} accessibilityRole="header" testID={titleTestID}>{title}</Text>
-      {children}
-      <View style={s.rule} importantForAccessibility="no" accessibilityElementsHidden />
+    <View style={[s.mast, { backgroundColor: ground }, foot === 'short' && s.mastShort, foot === 'round' && s.mastRound]} testID={testID}>
+      {inNavigator && bandHook ? <ForestBand color={ground} /> : null}
+      {/* iOS overscroll above the masthead stays in its ground, never a bone strip. */}
+      <View style={[s.overscroll, { backgroundColor: ground }]} importantForAccessibility="no" accessibilityElementsHidden pointerEvents="none" />
+      {bones ? (
+        <View importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+          <View style={[s.bone, s.boneTitle]} testID="plan-mast-bone" />
+          <View style={[s.bone, s.boneLine]} testID="plan-mast-bone" />
+        </View>
+      ) : (
+        <>
+          {eyebrow ? <Text style={s.eyebrow}>{eyebrow}</Text> : null}
+          <Text style={s.title} accessibilityRole="header" testID={titleTestID}>{title}</Text>
+          {children}
+        </>
+      )}
+      {foot === 'paper' ? <View style={s.rule} importantForAccessibility="no" accessibilityElementsHidden /> : null}
     </View>
   );
 }
@@ -102,14 +127,17 @@ export function MastLine({ children, muted, testID, style }: { children: React.R
 }
 
 /**
- * A gold progress line on the masthead (C2 C_day's gold dashes; a share from
- * 0 to 1 the screen already shows in words). Non-text, hidden from readers.
+ * C2 C_day's masthead summary: one gold mark per meal (eaten ones filled, from the left) beside what is left of
+ * the day's target. The marks are non-text and hidden from readers; the line says the same in words.
  */
-export function GoldLine({ share, testID }: { share: number; testID?: string }) {
-  const pct = Math.max(0, Math.min(1, Number.isFinite(share) ? share : 0)) * 100;
+export function MastProgress({ done, line, segTestID }: { done: boolean[]; line: string; segTestID?: string }) {
+  const sorted = [...done].sort((a, b) => Number(b) - Number(a));
   return (
-    <View style={s.goldTrack} testID={testID} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-      <View style={[s.goldFill, { width: `${pct}%` }]} />
+    <View style={s.progress}>
+      <View style={s.segs} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+        {sorted.map((d, i) => <View key={i} style={[s.seg, d && s.segDone]} testID={segTestID} />)}
+      </View>
+      <Text style={s.progressLine}>{line}</Text>
     </View>
   );
 }
@@ -124,35 +152,75 @@ export function MastTile({ value, label, testID }: { value: string; label: strin
   );
 }
 
-/** The paper page: top radius 24, overlapping the masthead's lower edge. */
+/** The paper page: top radius 24, overlapping the masthead's lower edge (C2 C_day, C8 C_fasting). */
 export function PaperPage({ children, bg, testID }: { children: React.ReactNode; bg: string; testID?: string }) {
   return <View style={[s.paper, { backgroundColor: bg }]} testID={testID}>{children}</View>;
 }
 
+/** C2 C_day's gutter line: 1.5 pt round dots (the drawing's 1.5px dotted rule), drawn in svg so iOS and Android match. */
+function Dots({ color }: { color: string }) {
+  return (
+    <Svg width={LINE} height="100%">
+      <Line x1={LINE / 2} y1={LINE / 2} x2={LINE / 2} y2="100%" stroke={color} strokeWidth={LINE} strokeLinecap="round" strokeDasharray="0.01 3" />
+    </Svg>
+  );
+}
+
 interface TimelineProps {
-  /** Hairline colour for the gutter line and the hollow dot. */
+  /** Colour of the gutter's dotted line. */
   line: string;
+  /** The mark's ring (and its fill when filled). */
   dot: string;
   bg: string;
   last?: boolean;
-  /** A filled dot (C2: a meal logged, a fast completed); hollow otherwise. */
+  /** A filled mark (C2 C_day: a meal eaten); hollow otherwise. */
   filled?: boolean;
-  /** Dot drop from the row top, to sit level with a serif first line (default: level with an eyebrow). */
-  dotTop?: number;
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
   testID?: string;
+  markTestID?: string;
 }
 
-/** One stop on the day's gutter: a hollow dot level with the eyebrow, a line on to the next stop. */
-export function TimelineRow({ line, dot, bg, last, filled, dotTop, children, style, testID }: TimelineProps) {
+/**
+ * One stop on the day's gutter: a 14 pt mark level with the eyebrow, and the dotted line on to the next
+ * stop's mark, at the mark's left edge as C_day draws it.
+ */
+export function TimelineRow({ line, dot, bg, last, filled, children, style, testID, markTestID }: TimelineProps) {
   return (
     <View style={s.tlRow} testID={testID}>
       <View style={s.gutter} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-        {!last ? <View style={[s.tlLine, { backgroundColor: line }, dotTop != null && { top: dotTop + DOT + 3 }]} /> : null}
-        <View style={[s.dot, { borderColor: dot, backgroundColor: filled ? dot : bg }, dotTop != null && { marginTop: dotTop }]} />
+        {!last ? <View style={s.tlLine} testID="plan-gutter-line"><Dots color={line} /></View> : null}
+        <View style={[s.dot, { borderColor: dot, backgroundColor: filled ? dot : bg }]} testID={markTestID} />
       </View>
       <View style={[s.tlBody, style]}>{children}</View>
+    </View>
+  );
+}
+
+/** Keep C_day's 54 pt time column; larger text wraps instead of squeezing the meal words. */
+export function useTimeColumn(): number {
+  return TIME;
+}
+
+/** C2 C_day's time column left of the gutter (Inter 500 12, right-aligned); empty when the meal has no time. */
+export function TimeCell({ text, width, ink }: { text: string; width: number; ink: string }) {
+  return <Text style={[s.time, { width, color: ink }]}>{text}</Text>;
+}
+
+/**
+ * C2 C_day's gold now line: the phone's clock in the time column, the dotted line running on through it, a gold
+ * dot and rule across the page. No Add (the Food tab's add sheet is not on this screen). Decorative: the clock is
+ * hidden from readers, as the line holds no other words.
+ */
+export function NowRow({ clock, width, line, ink, testID }: { clock: string; width: number; line: string; ink: string; testID?: string }) {
+  return (
+    <View style={s.nowRow} testID={testID} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+      <Text style={[s.time, s.nowTime, { width, color: ink }]}>{clock}</Text>
+      <View style={s.nowRail}>
+        <View style={s.nowLine}><Dots color={line} /></View>
+        <View style={s.nowRule} />
+        <View style={s.nowDot} />
+      </View>
     </View>
   );
 }
@@ -199,9 +267,11 @@ export function MealArt({ slot, testID }: { slot: SlotLabel | string; testID?: s
   );
 }
 
-const DOT = 11;
-const ART = 56;
+const DOT = 14;
+const ART = 52;
 const GUTTER = 24;
+const LINE = 1.5;
+const TIME = 54;
 
 export const planStyleC = StyleSheet.create({
   /** Inner card on the cream paper (state and stats cards). */
@@ -220,37 +290,61 @@ export const planStyleC = StyleSheet.create({
     justifyContent: 'center', paddingHorizontal: spacing.xl,
   },
   primaryLabel: { ...typography.bodyMd },
+  /** C2 C_day's eyebrow on the paper: Inter 600 11, tracked 1.3 (.c-e .eb). */
+  stopEyebrow: { ...typography.eyebrow, fontFamily: 'Inter_600SemiBold', fontWeight: '600', lineHeight: 14, letterSpacing: 1.3 },
+  /** C2 C_day's done line under a meal's name (.c-e .st 13/1.4, 2 pt under the name). */
+  status: { ...typography.bodySmall, fontSize: 13, lineHeight: 18, marginTop: 2 },
+  /** C2 C_day's up-next card (.c-next): the drawing's cream card, radius 16, the meal's foods and its button. */
+  nextCard: {
+    marginTop: 6, paddingTop: spacing.md, paddingHorizontal: 14, paddingBottom: 14, borderRadius: radius.card,
+    backgroundColor: colors.cream,
+  },
+  nextText: { ...typography.bodySmall, lineHeight: 22, color: colors.charcoal },
 });
 
 const s = StyleSheet.create({
+  // Under the native back bar (the drawings' back row): the eyebrow 8 pt below it (C8 y 149 px, K5 y 196 px).
   mast: {
-    backgroundColor: mast.ground,
     paddingHorizontal: layout.gutter,
-    paddingTop: spacing.xl,
-    paddingBottom: spacing['2xl'] + radius.sheet,
+    paddingTop: spacing.sm,
+    // C2 C_day: the gold rule 4 pt above the paper, which overlaps the masthead by its radius.
+    paddingBottom: spacing.xs + radius.sheet,
   },
-  eyebrow: { ...typography.eyebrow, color: mast.muted, marginBottom: spacing.sm },
-  // C2's masthead title is larger than the scale's h1 (about 38 pt in C_day); 36 pt keeps the serif's line-height floor.
-  title: { ...typography.h1, fontSize: 36, lineHeight: 44, color: mast.ink },
+  // C8 C_fasting: the paper 21 pt under the title's baseline (y 212 to 243 px at 1.5x).
+  mastShort: { paddingBottom: spacing.sm + radius.sheet },
+  // K5 C_macros: the masthead's rounded foot (radius 24, y 590-603 px at 2x), the cards on the page below it.
+  mastRound: { paddingBottom: spacing.xl, borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet },
+  // The drawings' eyebrow: Inter 600 11, tracked 1.98 (C_day .ov), in the masthead's light muted ink.
+  eyebrow: { ...typography.eyebrow, fontFamily: 'Inter_600SemiBold', fontWeight: '600', color: mast.muted, marginBottom: spacing.xs },
+  // C_day .h1 (2rem/1.25, Cormorant 500, -0.2) and C8's title (cap 183-212 px at 1.5x = 32 pt).
+  title: { ...typography.h1, fontFamily: 'CormorantGaramond_500Medium', fontWeight: '500', fontSize: 32, lineHeight: 40, letterSpacing: -0.2, color: mast.ink },
   line: { ...typography.bodySmall, color: mast.ink, marginTop: spacing.sm },
   lineMuted: { color: mast.muted },
-  rule: { height: 1, alignSelf: 'stretch', backgroundColor: mast.rule, marginTop: spacing.lg },
-  overscroll: { position: 'absolute', left: 0, right: 0, top: -1000, height: 1000, backgroundColor: mast.ground },
-  goldTrack: {
-    height: 4, borderRadius: 2, alignSelf: 'stretch', marginTop: spacing.md,
-    backgroundColor: lightTokens.data.plannedOnDark, overflow: 'hidden',
-  },
-  goldFill: { height: 4, borderRadius: 2, backgroundColor: gold[300] },
+  // C_day: 1 pt gold, 12 pt under the summary.
+  rule: { height: 1, alignSelf: 'stretch', backgroundColor: mast.rule, marginTop: spacing.md },
+  overscroll: { position: 'absolute', left: 0, right: 0, top: -1000, height: 1000 },
+  // C_loading / the Food day's DaySkeleton: still blocks on the masthead.
+  bone: { borderRadius: radius.button, backgroundColor: lightTokens.data.frameOnDark, opacity: 0.55 },
+  boneTitle: { height: 30, width: '70%', marginTop: spacing.sm },
+  boneLine: { height: 16, width: '85%', marginTop: 14 },
+  // C_day .sum: the marks and the line, Inter 500 15/21, 10 pt under the note.
+  progress: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginTop: 10 },
+  segs: { flexDirection: 'row', gap: spacing.xs, flexShrink: 0 },
+  seg: { width: 18, height: 4, borderRadius: 2, backgroundColor: lightTokens.data.plannedOnDark },
+  segDone: { backgroundColor: gold[300] },
+  progressLine: { ...typography.bodyMd, fontSize: 15, lineHeight: 21, letterSpacing: 0, color: mast.ink, flexShrink: 1, minWidth: 0 },
+  // K5 C_macros' outlined tiles: 56 pt tall (y 362-473 px at 2x), the serif value over a plain Inter label.
   tile: {
-    flexGrow: 1, flexBasis: 88, minHeight: 64, borderRadius: radius.input,
+    flexGrow: 1, flexBasis: 0, minWidth: 76, minHeight: 56, borderRadius: radius.input,
     borderWidth: 1, borderColor: lightTokens.data.frameOnDark, paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm, justifyContent: 'center',
+    paddingVertical: 6, justifyContent: 'center',
   },
-  tileValue: { ...typography.h2, letterSpacing: 0, color: mast.ink, fontVariant: ['lining-nums'] },
-  tileLabel: { ...typography.caption, color: mast.muted },
+  tileValue: { ...typography.h2, lineHeight: 28, letterSpacing: 0, color: mast.ink, fontVariant: ['lining-nums'] },
+  tileLabel: { ...typography.caption, fontFamily: 'Inter_400Regular', fontWeight: '400', lineHeight: 16, letterSpacing: 0, color: mast.muted },
+  // C_day .c-th: the cream tile, 52 pt, radius 12, 10 pt from the words, 2 pt under the row's top.
   art: {
-    width: ART, height: ART, borderRadius: radius.input, backgroundColor: gold[100],
-    alignItems: 'center', justifyContent: 'center', marginLeft: spacing.md,
+    width: ART, height: ART, borderRadius: radius.input, backgroundColor: colors.cream,
+    alignItems: 'center', justifyContent: 'center', marginLeft: 10, marginTop: 2,
   },
   italic: { fontFamily: 'CormorantGaramond_400Regular_Italic', fontWeight: '400' },
   paper: {
@@ -258,13 +352,27 @@ const s = StyleSheet.create({
     borderTopLeftRadius: radius.sheet,
     borderTopRightRadius: radius.sheet,
     paddingHorizontal: layout.gutter,
-    paddingTop: spacing.xl,
+    // C8: the ring 20 pt under the paper's top (y 243 to 273 px at 1.5x); C_day's first row 22 pt.
+    paddingTop: 20,
     paddingBottom: spacing['3xl'],
     flexGrow: 1,
   },
   tlRow: { flexDirection: 'row' },
   gutter: { width: GUTTER, alignItems: 'center' },
-  tlLine: { position: 'absolute', top: 4 + DOT, bottom: -4, width: StyleSheet.hairlineWidth * 2 },
-  dot: { marginTop: 1, width: DOT, height: DOT, borderRadius: DOT / 2, borderWidth: 1.5 },
-  tlBody: { flex: 1, minWidth: 0, paddingLeft: spacing.sm },
+  // The dotted line at the mark's left edge (C_day .c-tl:before at x 62, the mark at 63), 3 pt clear under its
+  // mark and on 4 pt into the next row, where the next mark starts: it meets every next mark (LO-927R3 B1).
+  tlLine: { position: 'absolute', left: (GUTTER - DOT) / 2 - 1, top: 4 + DOT + 3, bottom: -4, width: LINE },
+  // C_day .mk: 14 pt, 1.5 pt ring, 4 pt under the row's top, level with the eyebrow.
+  dot: { marginTop: 4, width: DOT, height: DOT, borderRadius: DOT / 2, borderWidth: 1.5 },
+  tlBody: { flex: 1, minWidth: 0, paddingLeft: 6 },
+  // C_day .tm: Inter 500 12, right-aligned, 4 pt down; 4 pt to the gutter so the mark sits at the drawn x.
+  time: { ...typography.caption, fontFamily: 'Inter_500Medium', fontWeight: '500', fontSize: 12, lineHeight: 16, letterSpacing: 0,
+    textAlign: 'right', paddingTop: 4, marginRight: 4 },
+  // C_day .c-now: 44 pt, 4 pt up into the row above, 6 pt over the next.
+  nowRow: { flexDirection: 'row', alignItems: 'center', minHeight: layout.touchMin, marginTop: -4, marginBottom: 6 },
+  nowTime: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', paddingTop: 0 },
+  nowRail: { flex: 1, alignSelf: 'stretch', justifyContent: 'center' },
+  nowLine: { position: 'absolute', left: (GUTTER - DOT) / 2 - 1, top: 0, bottom: 0, width: LINE },
+  nowRule: { height: LINE, marginLeft: (GUTTER - DOT) / 2 - 1, backgroundColor: gold[300] },
+  nowDot: { position: 'absolute', left: (GUTTER - DOT) / 2 - 3, top: '50%', marginTop: -4, width: 8, height: 8, borderRadius: 4, backgroundColor: gold[300] },
 });
