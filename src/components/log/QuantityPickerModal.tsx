@@ -8,6 +8,7 @@ import {
   Platform,
   ScrollView,
   useWindowDimensions,
+  AccessibilityInfo,
 } from 'react-native';
 import { colors, gold, layout, radius, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/useTheme';
@@ -45,6 +46,12 @@ interface Props {
   dayLeft?: { kcal: number; protein: number } | null;
   /** C2-S-33: "Add another food" logs this plate and keeps the add sheet open; it takes Cancel's place. */
   onAddAnother?: () => void;
+  /**
+   * GOAL-930-M (C2 C_error): a save from this sheet failed. The card shows its title and words, and the primary
+   * repeats the action that failed (`retry`; the caller names the primary through confirmLabel, "Try again").
+   * Passed only by the Food tab behind featureFlags.foodPlanChecklist; absent, the sheet draws as before.
+   */
+  saveFailure?: { title: string; message: string; retry: 'confirm' | 'addAnother' } | null;
 }
 
 export default function QuantityPickerModal({ visible, ...props }: Props) {
@@ -82,10 +89,20 @@ export function QuantityPickerContent({
   mealLabel,
   dayLeft,
   onAddAnother,
+  saveFailure,
 }: Omit<Props, 'visible'>) {
   const quantity = parseQuantityInput(quantityInput);
   const { semanticColors: sc } = useTheme();
   const styles = makeStyles(sc);
+  const failureAnnouncement = saveFailure ? `${saveFailure.title}. ${saveFailure.message}` : null;
+  // iOS does not announce an inline alert role; Android uses the live region below, without a second announcement.
+  // Depend on the words rather than the prop object so quantity/unit edits do not repeat the same failure.
+  React.useEffect(() => {
+    if (Platform.OS === 'ios' && failureAnnouncement) AccessibilityInfo.announceForAccessibility(failureAnnouncement);
+  }, [failureAnnouncement]);
+  React.useEffect(() => {
+    if (Platform.OS === 'ios' && notice) AccessibilityInfo.announceForAccessibility(notice);
+  }, [notice]);
   // The amount field is as wide as its digits (Cormorant figures are about 0.5 em) so the unit sits beside it.
   const amountWidth = Math.ceil(Math.max(1, quantityInput.length) * 28 * Math.min(useWindowDimensions().fontScale || 1, 1.3)) + 12;
   const previewMacros = selectedFood
@@ -175,16 +192,23 @@ export function QuantityPickerContent({
         {quantity == null ? (
           <Text style={styles.servingSizeInfo}>{emptyHint}</Text>
         ) : null}
-        {notice ? <Text accessibilityRole="alert" style={styles.servingSizeInfo}>{notice}</Text> : null}
+        {notice ? <Text accessibilityRole="alert" accessibilityLiveRegion="assertive" style={styles.servingSizeInfo}>{notice}</Text> : null}
+        {/* GOAL-930-M (C_error .c-err): the failed save stays on screen with the portion, announced once. */}
+        {saveFailure ? (
+          <View accessible accessibilityRole="alert" accessibilityLiveRegion="assertive" style={styles.failure} testID="portion-save-failure">
+            <Text style={styles.failureTitle}>{saveFailure.title}</Text>
+            <Text style={styles.failureText}>{saveFailure.message}</Text>
+          </View>
+        ) : null}
 
         <PrimaryButton
           label={confirmLabel}
           disabled={quantity == null || blocked}
           loading={saving}
-          onPress={onConfirm}
+          onPress={saveFailure?.retry === 'addAnother' && onAddAnother ? onAddAnother : onConfirm}
           testID="quantity-log-food"
-          style={[styles.quantityLogButton, afterPlate && !selectedFood?.serving_size
-            && !['cup', 'tbsp', 'tsp'].includes(selectedUnit) && !notice ? styles.afterPlateButton : undefined]}
+          style={[styles.quantityLogButton, saveFailure || (afterPlate && !selectedFood?.serving_size
+            && !['cup', 'tbsp', 'tsp'].includes(selectedUnit) && !notice) ? styles.afterPlateButton : undefined]}
         />
         {onAddAnother ? (
           <TextLink label="Add another food" tone="accent" disabled={saving || quantity == null || blocked} onPress={onAddAnother}
@@ -311,5 +335,30 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   },
   afterPlateButton: {
     marginTop: 0,
+  },
+  // C_error.html :137-138 (.c-err): a 3 pt warning-ink left edge on the warning fill, corners 0 12 12 0, padding 10 12,
+  // margin 10 0 (the 10 below is the button's space), Inter 15/21.75 in ink, the title bold on its own line (Inter 600,
+  // the boldest weight the app loads).
+  failure: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.warningInk,
+    backgroundColor: colors.warningBg,
+    borderTopRightRadius: radius.button,
+    borderBottomRightRadius: radius.button,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginVertical: 10,
+  },
+  failureTitle: {
+    fontFamily: typography.micro.fontFamily,
+    fontSize: 15,
+    lineHeight: 21.75,
+    color: sc.textPrimary,
+  },
+  failureText: {
+    fontFamily: typography.body.fontFamily,
+    fontSize: 15,
+    lineHeight: 21.75,
+    color: sc.textPrimary,
   },
 });
