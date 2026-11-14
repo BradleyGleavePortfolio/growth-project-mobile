@@ -37,9 +37,9 @@ describe('exercise library contrast', () => {
     const view = await renderLibrary();
     await waitFor(() => expect(view.getByText('No exercises match.')).toBeTruthy());
     await fireEvent.press(view.getByRole('button', { name: 'cardio' }));
-    expect(StyleSheet.flatten(view.getByText('cardio').props.style).color).toBe(tokens.textPrimary);
-    expect(StyleSheet.flatten(view.getByRole('button', { name: 'cardio' }).props.style))
-      .toMatchObject({ minHeight: 44, borderBottomColor: tokens.textPrimary });
+    expect(StyleSheet.flatten(view.getByText('cardio').props.style).color).toBe(tokens.surface.masthead);
+    expect(StyleSheet.flatten(view.getByRole('button', { name: 'cardio' }).props.style)).toMatchObject({ minHeight: 44 });
+    expect(StyleSheet.flatten(view.getByText('cardio').parent?.props.style)).toMatchObject({ backgroundColor: tokens.data.leaf });
   });
 
   it('uses the readable accent foreground for a load error in dark appearance', async () => {

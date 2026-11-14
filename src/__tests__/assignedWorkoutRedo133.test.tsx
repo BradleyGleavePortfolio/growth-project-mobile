@@ -77,9 +77,11 @@ describe.each(DEVICES)('assigned workout at $name', (device) => {
     expect(view.getByText(/^About 45 min · 2 exercises$/)).toBeTruthy();
     expect(view.getByText(/^3 sets × 8 reps · 95 lb · 90s rest$/)).toBeTruthy();
     expect(view.getByText('Pause at the chest')).toBeTruthy();
-    for (const n of ['1', '2']) expect(flat(view.getByText(n)).fontFamily).toMatch(/^CormorantGaramond/);
+    for (const n of ['A', 'B']) expect(flat(view.getByText(n)).fontFamily).toMatch(/^CormorantGaramond/);
     expect(flat(view.getByTestId('assignment-row-1')).backgroundColor).toBeUndefined();
-    expect(flat(view.getByTestId('assignment-row-1')).borderBottomColor).toBe(sc.border);
+    expect(flat(view.getByTestId('assignment-block-A')).borderBottomColor).toBe(sc.border);
+    expect(flat(view.getByTestId('assignment-block-A')).borderBottomWidth).toBe(StyleSheet.hairlineWidth);
+    expect(flat(view.getByTestId('assignment-row-1')).borderBottomColor).toBeUndefined();
     expect(flat(view.getByTestId('assignment-detail')).paddingTop).toBe(device.insets.top + layout.statusBarGap);
     const footer = within(view.getByTestId('assignment-detail-footer'));
     expect(footer.getByText('Start workout')).toBeTruthy();
