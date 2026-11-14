@@ -184,7 +184,8 @@ export function ExerciseHistoryStyleC({ history }: { history: ExerciseHistory })
         </View>
         {since ? (
           <View style={[s.tile, { backgroundColor: sc.surface.sage }]} testID="exercise-history-since">
-            <Text style={[s.eyebrow, { color: sc.textMuted }]}>Since week 1</Text>
+            {/* "week 1" never splits at 130% on a 150 pt tile (it wraps as SINCE / WEEK 1). */}
+            <Text style={[s.eyebrow, { color: sc.textMuted }]}>{'Since week\u00a01'}</Text>
             <Text style={[s.tileNumber, { color: sc.textPrimary }]}>{changeText(since.change)}</Text>
             <SinceLine since={since} sc={sc} />
             <Text style={[s.small, s.caption, { color: sc.textMuted }]}>on your top set</Text>

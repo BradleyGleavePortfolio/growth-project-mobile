@@ -167,7 +167,7 @@ it('case 1: Best ever 155 x 6 on Oct 13, Since week 1 +20 lb ending gold, five r
   expect(bg(best)).toBe(lightTokens.surface.masthead);
 
   const since = view.getByTestId('exercise-history-since');
-  expect(within(since).getByText('Since week 1')).toBeTruthy();
+  expect(within(since).getByText('Since week\u00a01')).toBeTruthy();
   expect(within(since).getByText('+20 lb')).toBeTruthy();
   expect(within(since).getByText('on your top set')).toBeTruthy();
   expect(bg(since)).toBe(lightTokens.surface.sage);
@@ -228,7 +228,7 @@ it('case 3: one session shows Best ever and one row, and no Since week 1 tile', 
   const view = await screen();
   expect(within(await view.findByTestId('exercise-history-best')).getByText('155 × 6')).toBeTruthy();
   expect(view.queryByTestId('exercise-history-since')).toBeNull();
-  expect(view.queryByText('Since week 1')).toBeNull();
+  expect(view.queryByText(/^Since week/)).toBeNull();
   expect(view.getByTestId('exercise-history-row-0')).toBeTruthy();
   expect(view.queryByTestId('exercise-history-row-1')).toBeNull();
 });
@@ -259,7 +259,7 @@ it.each([
 ] as [string, Reply][])('%s draws exactly the page as it was, and none of the history words', async (_l, reply) => {
   const view = await pageWith(reply);
   expect(view.queryByTestId('exercise-history')).toBeNull();
-  for (const word of ['Best ever', 'Since week 1', 'Your history', 'on your top set']) expect(view.queryByText(word)).toBeNull();
+  for (const word of ['Best ever', /^Since week/, 'Your history', 'on your top set']) expect(view.queryByText(word)).toBeNull();
   expect(mainShape.length).toBeGreaterThan(0);
   expect(shape(view.getByTestId('exercise-detail-screen') as unknown as Inst)).toEqual(mainShape);
 });

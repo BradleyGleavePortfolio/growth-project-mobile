@@ -55,13 +55,14 @@ function inZone(zone: string) {
 }
 
 describe('dates (case 10): "2026-10-13" reads Oct 13 as that calendar day in the phone zone', () => {
+  let restore = () => undefined as void;
+  afterEach(() => restore());
   it.each(['America/Los_Angeles', 'Pacific/Auckland', 'UTC'])('in %s', (tz) => {
-    const restore = inZone(tz);
+    restore = inZone(tz);
     expect(dayLabel('2026-10-13')).toBe('Oct 13');
     expect(dayLabel('2026-10-13', true)).toBe('October 13');
     expect(dayLabel('2026-01-01')).toBe('Jan 1');
     expect(dayLabel('2026-09-29')).toBe('Sep 29');
-    restore();
   });
 });
 
