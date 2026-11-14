@@ -1,4 +1,4 @@
-# backend-main e49486c11f200197d66e09ee44fd95d409c5f861
+# backend-main f47013f4407db27939feec4c6d0d204db9b3d4d2
 DELETE /api/admin/exercise-catalog/:id/video
 DELETE /api/coach/clients/:id/messages/:id
 DELETE /api/coach/clients/:id/messages/:id/pin
@@ -27,6 +27,7 @@ DELETE /api/habits/:id
 DELETE /api/lessons/:id
 DELETE /api/lists/items/:id
 DELETE /api/log/food/:id
+DELETE /api/log/food/:id/photo
 DELETE /api/me/ai-consent/coach
 DELETE /api/me/ai-consent/roman
 DELETE /api/me/foods/favorites/:id
@@ -293,6 +294,7 @@ GET /api/messages/pins
 GET /api/messages/unread-count
 GET /api/metrics
 GET /api/metrics/prom
+GET /api/money-check/status
 GET /api/notifications
 GET /api/notifications/preferences
 GET /api/notifications/unread-count
@@ -530,6 +532,7 @@ POST /api/admin/secrets/:id/rotation-log
 POST /api/admin/users/:id/delete
 POST /api/admin/users/:id/promote
 POST /api/ai/chat
+POST /api/ai/gateway/drafts/:id/report
 POST /api/ai/gateway/invoke
 POST /api/ai/gateway/workout-builder/propose
 POST /api/auth/apple
@@ -685,6 +688,7 @@ POST /api/lists/:id
 POST /api/lists/:id/bulk
 POST /api/lists/:id/clear-checked
 POST /api/log/food
+POST /api/log/food/photo/upload-url
 POST /api/me/ai-consent/coach
 POST /api/me/ai-consent/coach/decline
 POST /api/me/ai-consent/roman
@@ -878,6 +882,7 @@ PUT /api/community/cohorts/:id/threads/:id/mute
 PUT /api/contracts/templates/:id
 PUT /api/lessons/:id
 PUT /api/log/food/:id
+PUT /api/log/food/:id/photo
 PUT /api/me/onboarding/consultation
 PUT /api/messages/inbox-pin
 PUT /api/messages/mute
