@@ -176,7 +176,7 @@ describe.each(DEVICES)('at $name', (device) => {
     const view = await mount(device, <RoutineBuilderScreen />);
     const title = flat(view.getByText('New routine'));
     expect(title.color).toBe(mast.ink);
-    expect(title.fontFamily).toBe('Inter_600SemiBold');
+    expect(title.fontFamily).toBe(typography.micro.fontFamily); // Inter_600SemiBold
     expect(title.fontSize).toBe(typography.h4.fontSize);
   });
 
@@ -218,7 +218,7 @@ describe.each(DEVICES)('at $name', (device) => {
     expect(flat(view.getAllByText('Sets')[0]).color).toBe(sc.textPrimary); // "Sets" on the panel, col 82
   });
 
-  it('builder: Add exercise is a forest link and Save routine the one forest action, its label semibold (C_day rows 860-879, 1392-1499)', async () => {
+  it('builder: Add exercise is a forest link (C_day "Reorder" rows 860-879) and Save routine stays the one forest action (rows 1392-1499)', async () => {
     const view = await mount(device, <RoutineBuilderScreen />);
     const add = flat(view.getByText('Add exercise'));
     expect(add.color).toBe(sc.accentText);
@@ -226,7 +226,9 @@ describe.each(DEVICES)('at $name', (device) => {
     const save = flat(view.getByLabelText('Save routine'));
     expect(save.backgroundColor).toBe(sc.accent);
     expect(save.minHeight).toBe(layout.buttonHeight);
-    expect(flat(view.getByText('Save routine')).fontFamily).toBe('Inter_600SemiBold');
+    // The label keeps the app's primary label (PrimaryButton's bodyMd, as m#975's Start workout): drawn 15 pt semibold, NONE.
+    expect(flat(view.getByText('Save routine')).fontFamily).toBe(typography.bodyMd.fontFamily);
+    expect(flat(view.getByLabelText('Add exercise')).minHeight).toBeGreaterThanOrEqual(layout.touchMin);
   });
 
   it('builder: the Add exercise sheet opens on the masthead with the forest search field and 32 pt pills (C_picker rows 0-433)', async () => {
@@ -243,7 +245,7 @@ describe.each(DEVICES)('at $name', (device) => {
     const chosen = pills.filter((n) => styleOf(n).backgroundColor === mast.chosen);
     expect(chosen).toHaveLength(1);
     const titles = view.getAllByText('Add exercise').map(flat);
-    expect(titles.some((t) => t.color === mast.ink && t.fontFamily === 'Inter_600SemiBold')).toBe(true); // rows 115-150
+    expect(titles.some((t) => t.color === mast.ink && t.fontFamily === typography.micro.fontFamily)).toBe(true); // rows 118-141
     const name = flat(view.getByText('Row'));
     expect(name.fontFamily).toBe(typography.h4.fontFamily); // C_picker "Back squat" rows 792-822
     const item = flat(view.getByLabelText('Add Row'));
