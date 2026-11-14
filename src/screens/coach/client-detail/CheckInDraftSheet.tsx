@@ -229,13 +229,14 @@ export function CheckInDraftSheet({ clientId, clientName, first, checkInId, day,
                   <Text style={s.notSent}>Not sent</Text>
                 </View>
                 <View style={s.draftBox}><Text style={s.draftText} testID="checkin-draft-text">{draft.text}</Text></View>
-                <Text style={s.muted}>{READ_FIRST}</Text>
+                {/* ctx#503 report frame: Report this draft right under Roman's words, apart from Send, above CD-41. */}
                 {step === 'ready' ? (
                   <Pressable style={s.report} onPress={() => setReporting(true)} accessibilityRole="button" accessibilityLabel="Report this draft" testID="checkin-draft-report">
                     <Ionicons name="flag-outline" size={20} color={styleA.inkMuted} />
                     <Text style={s.reportText}>Report this draft</Text>
                   </Pressable>
                 ) : null}
+                <Text style={s.muted}>{READ_FIRST}</Text>
               </>
             ) : null}
             {step === 'editing' ? (
