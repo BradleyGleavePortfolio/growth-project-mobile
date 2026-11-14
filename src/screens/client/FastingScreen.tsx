@@ -436,7 +436,7 @@ export default function FastingScreen() {
         </>
       )}
 
-      {/* Start / End: main's filled forest (C8's outlined End fast is LATER: HabitsFasting.launch.test.tsx:486 pins the fill) */}
+      {/* C8: Start and End fast share the paper ground, forest outline and forest words. */}
       <View style={styles.actionRow}>
         {activeFast ? (
           <TouchableOpacity
@@ -648,18 +648,22 @@ const makeStyles = (colors: SemanticTokens) =>
   },
   startBtn: {
     ...planStyleC.primary,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.bgSurface,
+    borderWidth: 1.5,
+    borderColor: colors.accent,
   },
   endBtn: {
     ...planStyleC.primary,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.bgSurface,
+    borderWidth: 1.5,
+    borderColor: colors.accent,
   },
   btnDisabled: {
     opacity: 0.6,
   },
   actionBtnText: {
     ...typography.bodyMd,
-    color: colors.textOnAccent,
+    color: colors.accent,
   },
   runRemove: {
     alignItems: 'flex-start',

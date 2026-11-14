@@ -42,7 +42,7 @@ import api from '../../services/api';
 import { useTodayLog } from '../../hooks/useApi';
 import { getTodayString } from '../../utils/date';
 import QuietBar from '../../ui/progress/QuietBar';
-import { MastLine, mast, MastTile, PlanMasthead, planStyleC, useCoachItalic } from './mealplan/planStyleC';
+import { formatPlanNumber, MastLine, mast, MastTile, PlanMasthead, planStyleC, useCoachItalic } from './mealplan/planStyleC';
 
 export default function ClientMacrosScreen() {
   const { semanticColors: sc } = useTheme();
@@ -94,10 +94,10 @@ export default function ClientMacrosScreen() {
             {/* K5 Style C: the day's number large in the serif with its unit beside it. */}
             <View accessible testID="macros-day-target">
               <View style={styles.kcalRow}>
-                <Text style={styles.kcal}>{data.calories_kcal}</Text>
+                <Text style={styles.kcal}>{formatPlanNumber(data.calories_kcal)}</Text>
                 <MastLine muted style={styles.kcalUnit}>kcal per day</MastLine>
               </View>
-              {eaten.calories != null ? <MastLine>{`${Math.round(eaten.calories)} kcal eaten today`}</MastLine> : null}
+              {eaten.calories != null ? <MastLine>{`${formatPlanNumber(eaten.calories)} kcal eaten today`}</MastLine> : null}
             </View>
             {/* K5 Style C: one outlined tile per macro target on the forest. */}
             <View style={styles.tiles} testID="macros-tiles">

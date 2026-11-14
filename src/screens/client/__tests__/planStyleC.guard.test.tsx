@@ -130,8 +130,8 @@ it('meal plan error: Try again is a full-size forest button', async () => {
 
 it('macros: the day target, eaten line and every over-target number stay whole', async () => {
   await render(<ClientMacrosScreen />);
-  expect(screen.getByText('2200')).toBeTruthy();
-  expect(screen.getByText('2450 kcal eaten today')).toBeTruthy();
+  expect(screen.getByText('2,200')).toBeTruthy();
+  expect(screen.getByText('2,450 kcal eaten today')).toBeTruthy();
   expect(screen.getByText('190g eaten / 160g target · 30g over target')).toBeTruthy();
   expect(textProblems()).toEqual([]);
 });
