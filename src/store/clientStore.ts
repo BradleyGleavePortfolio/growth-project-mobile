@@ -3,7 +3,7 @@ import { logApi, waterApi, type WaterEntry } from '../services/api';
 import { getTodayString } from '../utils/date';
 import { MealType, FoodLog } from '../types';
 import { logger } from '../utils/logger';
-import { mapFoodItem, type RawFoodItem } from '../utils/log/mapFoodItem';
+import { foodLogFromDailyEntry, type DailyLogEntry } from '../utils/log/dailyEntry';
 import { forgetSaveKeys, waterDayShown, withSaveKey } from '../utils/log/saveKey';
 import { dayForNewLog } from '../utils/logDay';
 import { featureFlags } from '../config/featureFlags';
@@ -165,69 +165,9 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       if (mine !== session || get().selectedDate !== d) return;
       const data = foodResponse.data;
 
-      // Wire shape returned by /v1/log/daily.
-      interface DailyLogEntry {
-        id: string;
-        food_item_id: string;
-        user_id: string;
-        meal_type: FoodLog['mealType'];
-        quantity_multiplier: number;
-        original_quantity?: number | null;
-        original_unit?: string | null;
-        logged_at?: string;
-        created_at?: string;
-        food_item?: RawFoodItem;
-        plan_slot_id?: string | null;
-        fills_usual_meal?: boolean;
-        client_uuid?: string | null;
-      }
+      // The entry -> FoodLog map lives in utils/log/dailyEntry (GOAL-927-M, OPERATOR RULING 4: moved unchanged).
       const entries = (data.entries || []) as DailyLogEntry[];
-      // The existing mapping intentionally writes both `foodName` (the
-      // canonical FoodLog field) and a duplicate `name` consumed by older
-      // screens; FoodLog itself doesn't declare `name`, so we have to
-      // double-cast through unknown to keep both shapes in flight without
-      // re-introducing `any`.
-      // TODO(types): drop the duplicate `name` field once all consumers
-      // read `foodName` directly.
-      const logs: FoodLog[] = entries.map<FoodLog>((e) => {
-        // F-3 fix: surface original_quantity/original_unit so meal cards
-        // can render "6 oz chicken" instead of the hardcoded
-        // "1 serving" placeholder. Falls back to the multiplier when the
-        // backend row is legacy and has no original_* fields.
-        const hasOriginal =
-          typeof e.original_quantity === 'number' &&
-          !!e.original_unit &&
-          (e.original_unit || '').trim().length > 0;
-        return ({
-          id: e.id,
-          foodItemId: e.food_item_id,
-          quantityMultiplier: e.quantity_multiplier,
-          foodItem: e.food_item ? mapFoodItem(e.food_item) : undefined,
-          foodName: e.food_item?.name || '',
-          name: e.food_item?.name || '',
-          calories: Math.round((e.food_item?.calories || 0) * e.quantity_multiplier),
-          protein: Math.round((e.food_item?.protein_g || 0) * e.quantity_multiplier),
-          carbs: Math.round((e.food_item?.carbs_g || 0) * e.quantity_multiplier),
-          fat: Math.round((e.food_item?.fat_g || 0) * e.quantity_multiplier),
-          mealType: e.meal_type,
-          date: d,
-          quantity: hasOriginal
-            ? (e.original_quantity as number)
-            : e.quantity_multiplier,
-          unit: hasOriginal ? (e.original_unit as string) : 'serving',
-          originalQuantity:
-            typeof e.original_quantity === 'number'
-              ? e.original_quantity
-              : undefined,
-          originalUnit: e.original_unit ? e.original_unit : undefined,
-          userId: e.user_id,
-          planSlotId: e.plan_slot_id || undefined,
-          fillsUsualMeal: e.fills_usual_meal === true || undefined,
-          clientUuid: e.client_uuid || undefined,
-          coachId: '',
-          createdAt: e.logged_at || e.created_at || new Date().toISOString(),
-        } as FoodLog & { name: string });
-      });
+      const logs: FoodLog[] = entries.map<FoodLog>((e) => foodLogFromDailyEntry(e, d));
 
       // Convert ml to oz for display (1 oz = 29.5735 ml)
       const totalMl = waterResponse?.data?.total_ml || 0;
