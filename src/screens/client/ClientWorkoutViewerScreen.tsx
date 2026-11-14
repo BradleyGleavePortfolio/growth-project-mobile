@@ -420,7 +420,7 @@ function makeStyles(sc: SemanticTokens) {
     weekEyebrow: { ...typography.eyebrow, color: sc.textOnMastheadMuted, flex: 1 },
     weekCount: { ...typography.bodySmall, fontFamily: typography.micro.fontFamily, color: sc.textOnAccent, fontVariant: ['tabular-nums'] },
     // A 56 pt session row under a 1 pt rule (rules #3B4C40 at rows 368, 480, 592, 704: the forest band on deep).
-    weekRow: { borderTopWidth: 1, borderTopColor: sc.surface.forestBand },
+    weekRow: { minHeight: layout.rowMinHeight, borderTopWidth: 1, borderTopColor: sc.surface.forestBand },
     weekLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: layout.rowMinHeight - 1 },
     // Day and name side by side (cols 145 and 269); under 112 pt left for the name, it goes under the day.
     weekWhat: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: spacing.md, paddingVertical: spacing.xs },
