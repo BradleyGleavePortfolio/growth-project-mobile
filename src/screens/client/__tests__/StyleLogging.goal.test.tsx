@@ -22,6 +22,9 @@ jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate, goBack: mockBack }),
   useRoute: () => ({ params: { routineId: mockRoutineId } }),
 }));
+// REFINE-987: the list now draws this week on its own card (C2_history); these R1 cases pin the R1 cards, so the
+// phone's today is fixed a week after their 13 November rows (they read as an earlier week, on main's two lists).
+jest.mock('../../../utils/date', () => ({ ...jest.requireActual('../../../utils/date'), getTodayString: () => '2026-11-20' }));
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({ colors: require('../wearables/recoveryTestColors').testColors,
     semanticColors: require('../../../theme/tokens').lightTokens }),
