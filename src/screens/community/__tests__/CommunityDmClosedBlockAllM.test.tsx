@@ -169,9 +169,12 @@ describe('community DM', () => {
     expect(view.queryByText(/blocked/i)).toBeNull();
   });
 
-  it('FR-877R2 (LO C2): reached with no name (a link), my coach is "Coach" as the header says; another member is named by nobody', async () => {
+  it('FR-877R2 (LO C2): reached with no name (a link), my coach is named as the header says; another member is named by nobody', async () => {
     mockReadError = BLOCKED_BY_THEM;
     mockParams.current = { recipientId: 'coach-7' };
+    // COACH-DM-CLIENT-M: the header now says my coach's name, so BAM-2b does too; not known, both still say "Coach".
+    expect((await render(<CommunityDmThreadScreen />)).getByText('Sam Rivera has blocked you')).toBeTruthy();
+    mockCoachName = { name: null, settled: true };
     expect((await render(<CommunityDmThreadScreen />)).getByText('Coach has blocked you')).toBeTruthy();
     mockParams.current = { recipientId: 'member-2' };
     const view = await render(<CommunityDmThreadScreen />);
