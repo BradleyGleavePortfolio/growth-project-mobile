@@ -133,6 +133,31 @@ afterEach(() => {
 });
 
 describe('REFINE-972 B1: Progress V2 with no signal (C8 C2_offline)', () => {
+  it.each([false, true])('LS-972R2 B2: a new offline save clears an earlier online saved moment (coachless=%s)', async (coachless) => {
+    mockCoach.coachless = coachless;
+    const v = await render(<ProgressScreen />);
+    await waitFor(() => expect(v.getByText('lb trend')).toBeTruthy());
+
+    // The same actual sheet and Save button first complete an online save.
+    await saveOffline(v);
+    await waitFor(() => expect(v.getByTestId('progress-saved')).toBeTruthy());
+    expect(mockLog).toHaveBeenCalledTimes(1);
+
+    // Without leaving Progress, lose the signal and save a second reading.
+    await setOffline(true);
+    await saveOffline(v);
+    await waitFor(() => expect(lastChart().phoneLine).toBe(coachless
+      ? 'On this phone. Sends when you are back online.' : LINE_SAM));
+    expect(await queued()).toEqual([expect.objectContaining({ kind: 'weight' })]);
+    expect(lastChart().data.some((p) => p.pending)).toBe(true);
+    expect(mockLog).toHaveBeenCalledTimes(1);
+
+    // C8's offline state must replace the old online confirmation, not retain
+    // "Weigh-in saved" / "Sam sees it" and suppress the last-good-read time.
+    expect(v.queryByTestId('progress-saved')).toBeNull();
+    expect(v.getByTestId('progress-updated')).toBeTruthy();
+  });
+
   it('the card shows with no signal and not with one: its words (RF972-W1) and a status role (index-v2.md:248)', async () => {
     const v = await render(<ProgressScreen />);
     await waitFor(() => expect(v.getByText('lb trend')).toBeTruthy());
