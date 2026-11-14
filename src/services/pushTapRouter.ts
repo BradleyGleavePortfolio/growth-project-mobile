@@ -424,7 +424,6 @@ export function flushPendingPushTap(): boolean {
     // MEAL-PLAN-REFRESH-M: at delivery, after a cold start's cache restore, so the plan the tap opens is read anew.
     if (target.screen === 'ClientDailyMealPlan') refreshMealPlanToday();
     // REFINE-985 B1: a DM tap re-reads the thread, which may be the one already in front (the navigate keeps that route).
-    if (target.screen === 'CommunityDmThread') refreshDmReads();
     return deliverTarget(navigator, target, target.params);
   }
   // Unroutable target: dropped rather than crashing (deliver returns false).
