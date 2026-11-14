@@ -19,6 +19,8 @@ import { Platform } from 'react-native';
 import { foregroundBannerStore } from '../store/foregroundBannerStore';
 import { Colors } from '../constants/colors';
 import { decodePushParams } from './pushTapRouter';
+import { incomingLinkPath, resolveAppLink } from '../navigation/incomingLinks';
+import { refreshMealPlanToday } from './mealPlanRefresh';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -117,6 +119,7 @@ export function installForegroundHandler(): () => void {
   // and body, and the tap the device would make of the same content
   // (FOREGROUND-BANNER-M: pushTapOf, the one mapping). No words, no banner.
   const subscription = Notifications.addNotificationReceivedListener((notification) => {
+    if (opensMealPlan(notification.request.content.data)) refreshMealPlanToday(); // MEAL-PLAN-REFRESH-M
     const { title, body } = notification.request.content;
     if (!title && !body) return;
     const kind = bannerKindOf(notification.request.content.data);
@@ -245,4 +248,11 @@ export function installNotificationResponseHandler(
     cancelled = true;
     subscription.remove();
   };
+}
+
+/** MEAL-PLAN-REFRESH-M (R-c): a received notice belongs when its link opens the client's meal plan screen. */
+function opensMealPlan(data: Record<string, unknown> | undefined): boolean {
+  const link = data?.deepLink ?? data?.deep_link;
+  const path = typeof link === 'string' ? incomingLinkPath(link) : null;
+  return path !== null && resolveAppLink(path, 'student')?.screen === 'ClientDailyMealPlan';
 }

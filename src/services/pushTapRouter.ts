@@ -29,6 +29,7 @@ import { featureFlags } from '../config/featureFlags';
 import { creditPacksHidden } from '../config/purchaseSurfaces';
 import { incomingLinkPath, isPublicLinkPath, resolveAppLink, UUID } from '../navigation/incomingLinks';
 import { chatTarget, openTarget } from '../navigation/coachInbox';
+import { refreshMealPlanToday } from './mealPlanRefresh';
 
 export interface PushNavigator {
   isReady(): boolean;
@@ -420,6 +421,8 @@ export function flushPendingPushTap(): boolean {
     // URL opens have no fallback, and untrusted origins never enter the queue.
     if (!target) return screen ? deliver(navigator, session.role, routeNames, screen, params) : false;
     if (!routeNames.includes(target.root)) return false;
+    // MEAL-PLAN-REFRESH-M: at delivery, after a cold start's cache restore, so the plan the tap opens is read anew.
+    if (target.screen === 'ClientDailyMealPlan') refreshMealPlanToday();
     return deliverTarget(navigator, target, target.params);
   }
   // Unroutable target: dropped rather than crashing (deliver returns false).
