@@ -313,7 +313,7 @@ export default function CommunityThreadScreen(): React.ReactElement {
           style={styles.flex}
         />
 
-        {closed ? <ConversationClosedLine testID="community-thread-closed" /> : !live ? null : <ComposerInput
+        {closed ? <ConversationClosedLine testID="community-thread-closed" /> : !live ? null : <ComposerInput voiceB
           ref={composerRef}
           placeholder="Add a reply"
           maxLength={COMMENT_MAX}
