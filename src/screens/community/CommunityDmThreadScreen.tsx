@@ -42,12 +42,13 @@ import { ForestStatusBar } from '../../components/StatusBarBand';
 import { describeCommunityFailure } from '../../api/communityErrors';
 import { useConversationClosed, useServerAnswered, useClosedBy, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
 import type { CommunityNav, CommunityRoute } from './communityNavTypes';
-import { NO_NAME } from './coach-dm/coachDm';
+import { NO_NAME, dayKey, dayLabel, initialsOf } from './coach-dm/coachDm';
 
 const DM_MAX = 4000; // mirror backend SendDmDto (body 1..4000)
 
 export default function CommunityDmThreadScreen(): React.ReactElement {
-  const { semanticColors } = useTheme();
+  const { semanticColors, colorScheme } = useTheme();
+  const light = colorScheme !== 'dark';
   const navigation = useNavigation<CommunityNav>();
   const route = useRoute<CommunityRoute<'CommunityDmThread'>>();
   const recipientId = route.params?.recipientId ?? '';
@@ -58,6 +59,9 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
   const myCoach = !!recipientId && recipientId === client?.coach_id;
   const coach = useMyCoachName(given === undefined && myCoach ? client?.coach_id : null);
   const participantLabel = given ?? (myCoach ? coach.name ?? 'Coach' : NO_NAME);
+  // REFINE-985 (C6CHAT-S-V2 c08's bar): my own coach, once the phone knows the name, gets "Your coach" (SpaceTree.tsx:68)
+  // under it and their initials in c08's tile; while the name is unknown, and for anyone else, no line and no tile.
+  const coachLine = given === undefined && myCoach && coach.name ? coach.name : null;
   const composerRef = useRef<ComposerInputHandle>(null);
   const me = useCommunityMe();
   const workspaceId = me.data?.workspace_id ?? '';
@@ -118,25 +122,28 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         {/* FR-880R3 (Sol B2, #172-10): Voice B Studio frame 05b's deep-forest bar, open or closed; a 1:1 DM has no
-            member count. Report / Block keeps a light chip so its grey mark stays readable on the deep bar. */}
+            member count. REFINE-985: 05b's type and spacing (voiceB); Report / Block bare and light on the bar, as 05b's
+            info button (no chip). */}
         <ThreadHeader
           tone="deep"
+          voiceB
           title={participantLabel}
+          subtitle={coachLine ? 'Your coach' : undefined}
+          initials={coachLine ? initialsOf(coachLine) : null}
           onBack={() => navigation.goBack()}
           trailing={latestFromOther ? (
-            <View style={styles.infoSlot}>
-              <View style={styles.infoChip} pointerEvents="none" />
-              <SafetyMenu
-                targetType="message"
-                targetId={latestFromOther.id}
-                authorUserId={recipientId}
-                authorName={participantLabel}
-                viewerUserId={client?.id}
-                viewerCoachId={client?.coach_id}
-                onBlocked={() => navigation.goBack()}
-                testID="community-dmthread-safety"
-              />
-            </View>
+            <SafetyMenu
+              targetType="message"
+              targetId={latestFromOther.id}
+              authorUserId={recipientId}
+              authorName={participantLabel}
+              viewerUserId={client?.id}
+              viewerCoachId={client?.coach_id}
+              onBlocked={() => navigation.goBack()}
+              triggerColor={fp.onDeep}
+              triggerSize={22}
+              testID="community-dmthread-safety"
+            />
           ) : null}
           testID="community-dmthread-header"
         />
@@ -163,6 +170,7 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
               title="Say hello"
               actionLabel="Start the conversation"
               onAction={() => composerRef.current?.focus()} // COACH-DM-CLIENT-M: the box below, drawn whenever this is
+              voiceB
               testID="community-dmthread-empty"
             />
           </View>
@@ -171,27 +179,39 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
             inverted
             data={data}
             keyExtractor={(m) => m.id}
-            renderItem={({ item }) => (
-              <View style={styles.messageRow}>
-                <View style={styles.flex}>
-                  <MessageBubble
-                    message={item}
-                    myUserId={client?.id ?? ''}
-                    testID={`dm-message-${item.id}`}
-                  />
-                </View>
-                {item.sender_user_id !== client?.id && !item.deleted ? (
-                  <SafetyMenu
-                    targetType="message"
-                    targetId={item.id}
-                    authorUserId={item.sender_user_id}
-                    authorName={participantLabel}
-                    viewerUserId={client?.id}
-                    viewerCoachId={client?.coach_id}
-                    onBlocked={() => navigation.goBack()}
-                    testID={`dm-message-safety-${item.id}`}
-                  />
+            renderItem={({ item, index }) => (
+              <View>
+                {/* REFINE-985: a day row above the day's first message (the list is newest first), the coach thread's
+                    words (dayLabel) in 05b .day's type. */}
+                {index === data.length - 1 || dayKey(data[index + 1].created_at) !== dayKey(item.created_at) ? (
+                  <Text style={[styles.day, { color: light ? fp.n700 : semanticColors.textMuted }]} accessibilityRole="header"
+                    testID={`dm-day-${item.id}`}>{dayLabel(item.created_at)}</Text>
                 ) : null}
+                <View style={styles.messageRow}>
+                  <View style={styles.flex}>
+                    <MessageBubble
+                      message={item}
+                      myUserId={client?.id ?? ''}
+                      showTime
+                      voiceB
+                      testID={`dm-message-${item.id}`}
+                    />
+                  </View>
+                  {item.sender_user_id !== client?.id && !item.deleted ? (
+                    <SafetyMenu
+                      targetType="message"
+                      targetId={item.id}
+                      authorUserId={item.sender_user_id}
+                      authorName={participantLabel}
+                      viewerUserId={client?.id}
+                      viewerCoachId={client?.coach_id}
+                      onBlocked={() => navigation.goBack()}
+                      triggerColor={light ? fp.n700 : undefined}
+                      triggerSize={22}
+                      testID={`dm-message-safety-${item.id}`}
+                    />
+                  ) : null}
+                </View>
               </View>
             )}
             contentContainerStyle={styles.list}
@@ -208,6 +228,7 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
           sending={sendDm.isPending}
           onSubmit={onSend}
           draftKey={recipientId && workspaceId ? `dm:${workspaceId}:${recipientId}` : undefined}
+          voiceB
           testID="community-dmthread-composer"
         />}
       </KeyboardAvoidingView>
@@ -222,8 +243,8 @@ const styles = StyleSheet.create({
   stateText: { textAlign: 'center', paddingHorizontal: 24 },
   retry: { minHeight: 44, justifyContent: 'center' },
   list: { paddingVertical: 8 },
-  // The 36 pt bone circle sits behind the menu's own 44 pt target (Android takes no touches outside a parent's bounds).
-  infoSlot: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  infoChip: { position: 'absolute', width: 36, height: 36, borderRadius: 18, backgroundColor: fp.onDeep },
-  messageRow: { flexDirection: 'row', alignItems: 'center' },
+  // REFINE-985: 05b's "•••" sits at the top of its message (B-05b-feed-1000_ios.html:130); .day :46 600 .75rem/1.2,
+  // padding 10px 0 4px.
+  messageRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  day: { fontFamily: 'Inter_600SemiBold', fontSize: 12, lineHeight: 14.4, fontWeight: '600', textAlign: 'center', paddingTop: 10, paddingBottom: 4 },
 });
