@@ -178,7 +178,8 @@ describe.each(DEVICES)("at $name", (device) => {
     expect(st.borderRadius).toBe(radius.button);
     let up = btn.parent;
     while (up) { expect(up.type).not.toBe("RCTScrollView"); up = up.parent; }
-    expect(flat(view.getByText("Assign to 1 client")).fontFamily).toBe("Inter_600SemiBold");
+    // The label is the app's primary label (PrimaryButton's bodyMd): drawn 15 pt semibold (cap rows 1539-1559), NONE.
+    expect(flat(view.getByText("Assign to 1 client")).fontFamily).toBe(typography.bodyMd.fontFamily);
     expect(flat(view.getByText("Assign to 1 client")).color).toBe(sc.textOnAccent);
   });
 });
