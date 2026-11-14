@@ -8,7 +8,7 @@
  * These parts hold no words: every string comes from the screen, as on main.
  */
 import React from 'react';
-import { StyleSheet, Text, useWindowDimensions, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import Svg, { Circle, Ellipse, Line, Path, Rect } from 'react-native-svg';
 import { colors, gold, layout, lightTokens, radius, spacing, typography } from '../../../theme/tokens';
 import type { SlotLabel } from '../../../api/mealTemplatesApi';
@@ -20,6 +20,9 @@ export const mast = {
   muted: lightTokens.textOnMastheadMuted,
   rule: gold[500],
 } as const;
+
+/** K5's grouped digits, also used by C2's kcal summaries. */
+export const formatPlanNumber = (value: number): string => Math.round(value).toLocaleString('en-US');
 
 /**
  * The coach-voice italic once the face has loaded; the roman serif until then
@@ -194,10 +197,9 @@ export function TimelineRow({ line, dot, bg, last, filled, children, style, test
   );
 }
 
-/** The drawn time column's width: 54 pt, growing with the text size so "12:35 pm" never wraps at 130 percent. */
+/** Keep C_day's 54 pt time column; larger text wraps instead of squeezing the meal words. */
 export function useTimeColumn(): number {
-  const { fontScale } = useWindowDimensions();
-  return Math.round(TIME * Math.min(Math.max(fontScale || 1, 1), 1.6));
+  return TIME;
 }
 
 /** C2 C_day's time column left of the gutter (Inter 500 12, right-aligned); empty when the meal has no time. */
@@ -333,7 +335,7 @@ const s = StyleSheet.create({
   progressLine: { ...typography.bodyMd, fontSize: 15, lineHeight: 21, letterSpacing: 0, color: mast.ink, flexShrink: 1, minWidth: 0 },
   // K5 C_macros' outlined tiles: 56 pt tall (y 362-473 px at 2x), the serif value over a plain Inter label.
   tile: {
-    flexGrow: 1, flexBasis: 88, minHeight: 56, borderRadius: radius.input,
+    flexGrow: 1, flexBasis: 0, minWidth: 76, minHeight: 56, borderRadius: radius.input,
     borderWidth: 1, borderColor: lightTokens.data.frameOnDark, paddingHorizontal: spacing.md,
     paddingVertical: 6, justifyContent: 'center',
   },

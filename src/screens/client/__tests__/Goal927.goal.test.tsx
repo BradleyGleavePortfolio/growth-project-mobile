@@ -126,10 +126,9 @@ describe.each(SIZES)('Macro targets toward K5 C_macros (nearest drawing, the coa
     expect(line).toContain("backOnlyHeader('Macro targets', lightTokens.surface.masthead)");
   });
 
-  it('the day\'s number in the serif at K5\'s 52 pt (K5 digit height 67 px at 2x, y 252-318); "2,100" grouping is LATER', async () => {
+  it('the day\'s grouped number in the serif at K5\'s 52 pt (K5 digit height 67 px at 2x, y 252-318)', async () => {
     await render(<ClientMacrosScreen />);
-    // RULING 10's grouping is LATER: ClientMacrosScreen.macroMode.test.tsx:70/:82/:102 and planStyleC.guard.test.tsx:133-134 pin "1789"/"2200".
-    expect(screen.getByText('2200')).toHaveStyle({ fontSize: 52, lineHeight: 62 });
+    expect(screen.getByText('2,200')).toHaveStyle({ fontSize: 52, lineHeight: 62 });
   });
 
   it('c: the cards sit on the page in the paper colour (K5 cards #FFFDF8 on the page, y 632+ px)', async () => {
@@ -193,7 +192,7 @@ describe.each(SIZES)('Fasting toward C8 C_fasting, %s', (_size, dims) => {
     expect(within(screen.getByTestId('fasting-masthead')).queryByText(/days in a row/)).toBeNull();
   });
 
-  it('c: the gold hairline under the action (C8 y ~630 px); End fast 54 pt, radius 12 (its outline is LATER)', async () => {
+  it('c: the gold hairline under the action (C8 y ~630 px); outlined End fast 54 pt, radius 12', async () => {
     await ready();
     expect(screen.getByLabelText('End fast')).toHaveStyle({ borderRadius: 12, minHeight: 54 });
     expect(screen.getByTestId('fasting-gold-rule', HIDDEN)).toHaveStyle({ height: 1, backgroundColor: sc.data.goal });

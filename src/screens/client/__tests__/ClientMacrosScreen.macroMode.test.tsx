@@ -67,7 +67,7 @@ describe('ClientMacrosScreen display mode', () => {
   it('shows every target when the backend sends no mode', async () => {
     mockData = { ...TARGET };
     await render(<ClientMacrosScreen />);
-    expect(screen.getByText('1789')).toBeTruthy();
+    expect(screen.getByText('1,789')).toBeTruthy();
     // FIX-927: the K5 tiles repeat each label on the masthead, so the lines are read in their card.
     for (const label of ['Protein', 'Carbs', 'Fats', 'Fiber']) {
       expect(within(screen.getByTestId('macros-cells')).getByText(label)).toBeTruthy();
@@ -79,7 +79,7 @@ describe('ClientMacrosScreen display mode', () => {
     mockData = { ...TARGET, macro_display_mode: 'simple', simple_until: '2999-01-01' };
     await render(<ClientMacrosScreen />);
     expect(await screen.findByTestId('macros-simple-note')).toBeTruthy();
-    expect(screen.getByText('1789')).toBeTruthy();
+    expect(screen.getByText('1,789')).toBeTruthy();
     expect(within(screen.getByTestId('macros-cells')).getByText('Protein')).toBeTruthy();
     expect(screen.getByTestId('macros-tile-protein')).toBeTruthy();
     expect(screen.queryByTestId('macros-tile-carbs')).toBeNull();
@@ -99,7 +99,7 @@ describe('ClientMacrosScreen display mode', () => {
   it('uses the calorie hero and real consumed totals in three quiet rows, preserving fiber, notes and date', async () => {
     mockData = { ...TARGET, notes: 'Keep meals regular.' };
     await render(<ClientMacrosScreen />);
-    expect(screen.getByText('1789')).toHaveStyle({ fontFamily: typography.display.fontFamily, fontVariant: ['lining-nums', 'tabular-nums'] }); // FIX-927: lining figures, as K5 Style C
+    expect(screen.getByText('1,789')).toHaveStyle({ fontFamily: typography.display.fontFamily, fontVariant: ['lining-nums', 'tabular-nums'] }); // FIX-927: lining figures, as K5 Style C
     expect(screen.getByText('600 kcal eaten today')).toBeTruthy();
     for (const label of ['Protein', 'Carbs', 'Fats']) expect(screen.getByTestId(`quiet-bar-${label}`)).toBeTruthy();
     expect(screen.getByText('50g eaten / 150g target')).toBeTruthy();
