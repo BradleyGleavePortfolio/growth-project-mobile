@@ -66,6 +66,8 @@ export interface RomanSendError {
    * may append it again automatically (Sol B-326-3, Opus C-326-1).
    */
   turnStored?: boolean;
+  /** ROMAN-PENDING-WORDS-M: the server said Roman is still writing this turn's answer (ROMAN_REPLY_PENDING). */
+  replyPending?: boolean;
 }
 
 /**
@@ -288,6 +290,7 @@ export function useRomanChat(surface: RomanSurface): UseRomanChatResult {
             message: e?.message ?? 'Roman could not finish this answer.',
             ...(e?.refusal ? { refusal: e.refusal } : {}),
             ...(e?.dailyCap ? { dailyCap: e.dailyCap } : {}),
+            ...(e?.replyPending ? { replyPending: true } : {}),
             turnStored: true,
           });
         }

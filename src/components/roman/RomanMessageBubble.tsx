@@ -24,6 +24,7 @@ import { HapticService } from '../../ui/haptics/haptics.service';
 import type { RomanMessage } from '../../api/romanApi';
 import { radius, spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/useTheme';
+import { RomanInterruptedNote } from './RomanHeldCard';
 
 export interface RomanMessageBubbleProps {
   message: RomanMessage;
@@ -168,7 +169,7 @@ function RomanMessageBubbleComponent({
             </Animated.View>
           ))}
           {message.interrupted ? (
-            <Text style={[styles.interruptedNote, { color: c.textMuted }]}>{ROMAN_INTERRUPTED_NOTE}</Text>
+            <RomanInterruptedNote testID={testID ? `${testID}-interrupted` : undefined} />
           ) : null}
         </Pressable>
         {crisis ? (
@@ -219,7 +220,6 @@ const styles = StyleSheet.create({
   bulletRow: { flexDirection: 'row', paddingLeft: spacing.xs },
   bulletMarker: { width: 22 },
   bulletText: { flex: 1 },
-  interruptedNote: { ...typography.bodySmall, marginTop: spacing.xs },
   crisis: { marginTop: spacing.sm },
   userRow: { alignItems: 'flex-end', paddingTop: spacing.lg, paddingBottom: spacing.xs, marginHorizontal: spacing.xl },
   // Owner 17:07: rounded, never a rectangle (radius token, Q10b).

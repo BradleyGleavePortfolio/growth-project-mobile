@@ -199,21 +199,29 @@ export const ROMAN_INTERRUPTED_NOTE =
   'This reply was interrupted. Send it again, and I will continue.';
 
 /**
- * Failed-send remedy (R1 UX finding P1). The app does NOT auto-retry — it
- * waits for the user to send again — so the copy must name the REAL remedy
- * (user re-sends) rather than promising Roman will retry on his own. §1.6
- * failure tone: state the fact, state the actual remedy, and stop.
+ * ROMAN-RETRY-B-M (owner #203-E41, 203-D13 op B "Roman's place, held"; words approved by the operator under #203-E15):
+ * the lines Roman's held card says in his own voice where his answer would be (RomanHeldCard). Each is also the line
+ * spoken once when it appears. Nothing re-sends or re-reads on its own (B-326-3): the remedy is the person's Send again.
+ *
+ * W8: the server stored the message, then could not answer it (an in-stream failure after the send was accepted).
  */
-export const ROMAN_SEND_FAILED =
-  'That request did not complete. Send it once more, and I will try again.';
+export const ROMAN_HELD_NO_ANSWER = 'I could not answer this one.';
 
 /**
- * The server stored the message, then could not answer it (an in-stream
- * failure after the send was accepted). The message stays in the thread and
- * is never re-sent on its own (B-326-3); sending again is the person's call.
+ * W9: Send again was answered "still being written" (ROMAN_REPLY_PENDING, m#963's `replyPending`). That frame also comes
+ * in the crash window (LO-963R1 C1), so it says "not ready yet", never that Roman is working on it.
  */
-export const ROMAN_STORED_NO_REPLY =
-  'Your message is saved above, but I could not answer it. Tap Send again to ask once more.';
+export const ROMAN_HELD_NOT_READY = 'My answer is not ready yet.';
+
+/** W10: the send did not complete and nothing was stored; the words stay in the composer (brief §3). */
+export const ROMAN_HELD_NOT_SENT = 'That did not go through. Your words are still in the box.';
+
+/**
+ * W11 and W12: the same on Path Copilot's card, whose screen has no Send again (LO-963R1 C3): the question goes back
+ * into the composer, so the line names the box (W8 + W6 and W9 + W7 in ctx#520's words table).
+ */
+export const ROMAN_HELD_NO_ANSWER_COPILOT = 'I could not answer this one. Send it again from the box to ask once more.';
+export const ROMAN_HELD_NOT_READY_COPILOT = 'My answer is not ready yet. Send it again in a moment to see if it is ready.';
 
 /**
  * The coach's monthly AI credit pool is used up (backend 402

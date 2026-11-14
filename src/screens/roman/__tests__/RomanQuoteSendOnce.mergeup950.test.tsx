@@ -38,7 +38,9 @@ jest.mock('../../../components/roman/RomanConsentGate', () => ({ children }: { c
 
 const RomanChatScreen = require('../RomanChatScreen').default;
 const { romanChatsEvents } = require('../../settings/romanChatsEvents');
-const { ROMAN_STORED_NO_REPLY, ROMAN_SEND_FAILED } = require('../../../components/roman/romanVoice');
+// m#963 (ROMAN-RETRY-B-M) says these in Roman's held card: stored with no answer -> ROMAN_HELD_NO_ANSWER (was
+// ROMAN_STORED_NO_REPLY); not sent, the words kept in the box -> ROMAN_HELD_NOT_SENT (was ROMAN_SEND_FAILED). FIX-963R2.
+const { ROMAN_HELD_NO_ANSWER, ROMAN_HELD_NOT_SENT } = require('../../../components/roman/romanVoice');
 const { ROMAN_QUICK_STARTS } = require('../../../components/roman/romanVoice');
 
 const REPLY_A = 'Keep Thursday easy: a 30-minute ride at a pace you could talk through.';
@@ -128,7 +130,7 @@ const failedQuoted = async (r: R) => {
   await type(r, WORDS);
   await send(r);
   expect(calls[0].content).toBe(QUOTED_A);
-  expect(r.getByText(ROMAN_SEND_FAILED)).toBeTruthy();
+  expect(r.getByText(ROMAN_HELD_NOT_SENT)).toBeTruthy();
 };
 
 it('MERGEUP-950 N7 (a): a quoted send stored with no answer yet keeps the quote; Send again sends the same words under the same key', async () => {
@@ -138,7 +140,7 @@ it('MERGEUP-950 N7 (a): a quoted send stored with no answer yet keeps the quote;
   await type(r, WORDS);
   await send(r);
   expect(calls[0].content).toBe(QUOTED_A);
-  expect(r.getByText(ROMAN_STORED_NO_REPLY)).toBeTruthy();
+  expect(r.getByText(ROMAN_HELD_NO_ANSWER)).toBeTruthy();
   expect(quoting(r)).toBe(true);
   expect(box(r)).toBe(WORDS);
   await sendAgain(r);
@@ -240,7 +242,7 @@ it('MERGEUP-950 N7 (i): a plain message stored with no answer yet: Send again se
   const r = await open();
   await type(r, WORDS);
   await send(r);
-  expect(r.getByText(ROMAN_STORED_NO_REPLY)).toBeTruthy();
+  expect(r.getByText(ROMAN_HELD_NO_ANSWER)).toBeTruthy();
   expect(box(r)).toBe(WORDS);
   await sendAgain(r);
   expect(calls[0].content).toBe(WORDS);
