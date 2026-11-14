@@ -7,8 +7,11 @@ import { mapFoodItem, type RawFoodItem } from '../utils/log/mapFoodItem';
 import { forgetSaveKeys, waterDayShown, withSaveKey } from '../utils/log/saveKey';
 import { dayForNewLog } from '../utils/logDay';
 import { featureFlags } from '../config/featureFlags';
-import { readQueue, readSent, settleSent, type PendingFoodLog, type SentFoodLog } from '../services/foodLogQueue';
-import { withQueuedFoods } from '../utils/log/queuedDay';
+import {
+  dropQueued, enqueueWaterWeight, flush, readQueue, readSent, readWaterWeight, settleSent, settleSentWater,
+  type PendingFoodLog, type PendingWaterWeightLog, type SentFoodLog, type SentWaterWeightLog,
+} from '../services/foodLogQueue';
+import { withQueuedFoods, withQueuedWater, type ShownWaterEntry } from '../utils/log/queuedDay';
 
 interface DailyTotals {
   calories: number;
@@ -24,7 +27,9 @@ interface ClientStore {
   foodLogs: FoodLog[];
   dailyTotals: DailyTotals;
   waterOz: number;
-  waterEntries: WaterEntry[];
+  // OFFLINE-WATER-WEIGHT-M: with featureFlags.offlineFoodInDay on, the server's water read joined with this phone's
+  // glasses of the day (utils/log/queuedDay.withQueuedWater); a glass on the phone carries `offline`.
+  waterEntries: ShownWaterEntry[];
   hasLoadedDay: boolean;
   isLoading: boolean;
   loadError: string | null;
@@ -36,6 +41,11 @@ interface ClientStore {
   // Foods a sync sent, kept in their day until a good read of it (which holds them). FIX-931R2: the
   // phone's copy (foodLogQueue.readSent), every day's, so a restart or a day revisit keeps them.
   sentFoods: SentFoodLog[];
+  // OFFLINE-WATER-WEIGHT-M: the server's own water read of the day on screen (null until one lands), and this
+  // phone's glasses and weigh-ins: waiting and refused (queue), and sent but not read back yet (sent).
+  serverWater: { date: string; userId: string; totalMl: number; entries: WaterEntry[] } | null;
+  queuedWaterWeight: PendingWaterWeightLog[];
+  sentWaterWeight: SentWaterWeightLog[];
 
   setSelectedDate: (date: string) => void;
   loadDayData: (userId: string, date?: string) => Promise<void>;
@@ -52,7 +62,8 @@ interface ClientStore {
     quantityMultiplier?: number;
     notes?: string;
   }) => Promise<void>;
-  logWater: (userId: string, coachId: string, amount: number) => Promise<void>;
+  // OFFLINE-WATER-WEIGHT-M: `online` is the call site's network state (food's send decision); false queues the glass.
+  logWater: (userId: string, coachId: string, amount: number, online?: boolean) => Promise<void>;
   removeWaterEntry: (entryId: string) => Promise<void>;
   // Drops an entry from the day on screen and takes its nutrition off the
   // day's totals straight away, before the server confirms the delete.
@@ -60,6 +71,8 @@ interface ClientStore {
   // OFFLINE-FOOD-M: the phone's queue changed (a food saved offline, sent, refused or removed).
   showQueuedFoods: (queue: PendingFoodLog[]) => void;
   holdSentFoods: (sent: SentFoodLog[]) => void;
+  // OFFLINE-WATER-WEIGHT-M: the phone's glasses and weigh-ins changed (saved offline, sent, refused, removed).
+  showQueuedWaterWeight: (lists: { queue: PendingWaterWeightLog[]; sent: SentWaterWeightLog[] }) => void;
   // Security: reset all in-memory state on logout so the next user on the
   // same device doesn't briefly see the previous user's food/water data.
   reset: () => void;
@@ -71,14 +84,35 @@ const initialClientState = {
   foodLogs: [] as FoodLog[],
   dailyTotals: { calories: 0, protein: 0, carbs: 0, fat: 0 },
   waterOz: 0,
-  waterEntries: [] as WaterEntry[],
+  waterEntries: [] as ShownWaterEntry[],
   hasLoadedDay: false,
   isLoading: false,
   loadError: null as string | null,
   serverDay: null as ClientStore['serverDay'],
   queuedFoods: [] as PendingFoodLog[],
   sentFoods: [] as SentFoodLog[],
+  serverWater: null as ClientStore['serverWater'],
+  queuedWaterWeight: [] as PendingWaterWeightLog[],
+  sentWaterWeight: [] as SentWaterWeightLog[],
 };
+
+/**
+ * OFFLINE-WATER-WEIGHT-M: the water on screen for the server's water read `sw`: with featureFlags.offlineFoodInDay on,
+ * the read plus this phone's glasses of its day (withQueuedWater); off, the read alone (the glasses still send).
+ */
+function shownWater(sw: NonNullable<ClientStore['serverWater']>, queue: PendingWaterWeightLog[], sent: SentWaterWeightLog[]) {
+  if (!featureFlags.offlineFoodInDay) return { waterOz: Math.round(sw.totalMl / 29.5735), waterEntries: sw.entries as ShownWaterEntry[] };
+  return withQueuedWater({ totalMl: sw.totalMl, entries: sw.entries }, [...queue, ...sent], sw.date);
+}
+
+/**
+ * REFINE-972 (LS C1): tell the pending-count listeners (foodLogSync.notifyPendingFoodLogs). foodLogSync imports this
+ * store, so it is required here, inside the call, never at the top (an import cycle).
+ */
+const tellPendingCount = () => Promise.resolve()
+  // eslint-disable-next-line @typescript-eslint/no-var-requires -- the import cycle above: required inside the call
+  .then(() => (require('../services/foodLogSync') as typeof import('../services/foodLogSync')).notifyPendingFoodLogs())
+  .catch((err: unknown) => logger.warn('ClientStore', 'telling the pending count failed', err));
 
 /** The day on screen: the server's read, plus this phone's queued foods of that day when the flag is on. */
 function shownDay(serverDay: NonNullable<ClientStore['serverDay']>, queue: PendingFoodLog[], sent: PendingFoodLog[] = []) {
@@ -98,6 +132,8 @@ let view = 0;
 // a send, a Remove). A day read that began before a change commits the newer foods, never the copy
 // it read when it began.
 let queueRev = 0;
+// OFFLINE-WATER-WEIGHT-M: the same for the phone's glasses and weigh-ins (showQueuedWaterWeight).
+let phoneRev = 0;
 /** OFFLINE-FOOD-M (LS-931 B1): a day no read has reached yet: nothing from the server, no totals. */
 const unreadDay = (date: string, userId: string) => ({
   date, userId, logs: [] as FoodLog[], totals: { calories: 0, protein: 0, carbs: 0, fat: 0 },
@@ -119,6 +155,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
     hasLoadedDay: false,
     loadError: null,
     serverDay: null,
+    serverWater: null,
     };
   }),
 
@@ -132,10 +169,13 @@ export const useClientStore = create<ClientStore>((set, get) => ({
   loadDayData: async (_userId: string, date?: string) => {
     const mine = session;
     const d = date || get().selectedDate;
-    const rev = queueRev;
+    let rev = queueRev;
     const startedAt = Date.now();
     let queueRead: Promise<PendingFoodLog[]> | null = null;
     let sentRead: Promise<SentFoodLog[]> | null = null;
+    const waterRev = phoneRev;
+    const phoneNow = () => ({ queue: get().queuedWaterWeight, sent: get().sentWaterWeight });
+    let waterRead: Promise<{ queue: PendingWaterWeightLog[]; sent: SentWaterWeightLog[] }> | null = null;
     // The phone's foods to join: the ones read with this day, or the store's newer ones (B2).
     const latest = (queue: PendingFoodLog[], sent: SentFoodLog[]) =>
       rev === queueRev ? { queue, sent } : { queue: get().queuedFoods, sent: get().sentFoods };
@@ -152,8 +192,12 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       sentRead = featureFlags.offlineFoodInDay
         ? Promise.resolve().then(() => readSent()).catch(() => get().sentFoods)
         : Promise.resolve(get().sentFoods);
+      // OFFLINE-WATER-WEIGHT-M: this phone's glasses (and weigh-ins), read with the day as the foods are.
+      waterRead = featureFlags.offlineFoodInDay
+        ? Promise.resolve().then(() => readWaterWeight()).catch(() => phoneNow())
+        : Promise.resolve(phoneNow());
       // Fetch food logs and water in parallel
-      const [foodResponse, waterResponse, queueAtStart, sentAtStart] = await Promise.all([
+      const [foodResponse, waterResponse, queueAtStart, sentAtStart, phoneAtStart] = await Promise.all([
         logApi.getDaily(d),
         waterApi.getDaily(d).catch((err: unknown) => {
           logger.error('ClientStore', 'water data load failed', err);
@@ -161,8 +205,32 @@ export const useClientStore = create<ClientStore>((set, get) => ({
         }),
         queueRead,
         sentRead,
+        waterRead,
       ]);
       if (mine !== session || get().selectedDate !== d) return;
+      // OFFLINE-WATER-WEIGHT-M (step 5): a glass of this day still waiting may already be stored (its answer lost). The
+      // one flush sends it again first, with the same key; the server answers the first row, and its id says whether
+      // this read holds it. So the read is applied once.
+      let phone = waterRev === phoneRev ? phoneAtStart : phoneNow();
+      let foodsAt: [PendingFoodLog[], SentFoodLog[]] = [queueAtStart, sentAtStart];
+      let sentHere = false;
+      if (waterResponse && phone.queue.some((q) => q.kind === 'water' && !q.parkedAt && q.log.date === d)) {
+        await Promise.resolve().then(() => flush()).catch((err: unknown) => logger.warn('ClientStore', 'sending waiting water failed', err));
+        sentHere = true;
+        // REFINE-972 (B2): what that send delivered leaves the store as the sync leaves it: the phone's foods are read
+        // again with its glasses, so a food it sent stays in its day (the sent list) until a read holds its key.
+        const revAgain = queueRev;
+        const [phoneAgain, foodsAgain] = await Promise.all([
+          Promise.resolve().then(() => readWaterWeight()).catch(() => phoneNow()),
+          featureFlags.offlineFoodInDay ? Promise.all([readQueue(), readSent()]).catch(() => null) : null,
+        ]);
+        phone = phoneAgain;
+        if (foodsAgain) {
+          rev = revAgain;
+          foodsAt = foodsAgain;
+        }
+        if (mine !== session || get().selectedDate !== d) return;
+      }
       const data = foodResponse.data;
 
       // Wire shape returned by /v1/log/daily.
@@ -232,6 +300,19 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       // Convert ml to oz for display (1 oz = 29.5735 ml)
       const totalMl = waterResponse?.data?.total_ml || 0;
       const waterOz = waterResponse ? Math.round(totalMl / 29.5735) : get().waterOz;
+      // OFFLINE-WATER-WEIGHT-M: the server's water read of this day (or, when it failed, the one already held for it)
+      // joined with this phone's glasses. A good read settles the sent glasses it holds (by their answer ids).
+      const heldWater = get().serverWater;
+      const serverWater = waterResponse
+        ? { date: d, userId: _userId, totalMl, entries: waterResponse.data.logs || [] }
+        : heldWater && heldWater.date === d ? heldWater : null;
+      const waterIds = new Set((serverWater?.entries ?? []).map((e) => e.id));
+      const waterSettled = (s: SentWaterWeightLog) => !!waterResponse && s.kind === 'water' && s.log.date === d
+        && (s.answerId ? waterIds.has(s.answerId) : s.sentAt < startedAt);
+      const sentWaterWeight = phone.sent.filter((s) => !waterSettled(s));
+      const water = serverWater
+        ? shownWater(serverWater, phone.queue, sentWaterWeight)
+        : { waterOz, waterEntries: waterResponse ? waterResponse.data.logs || [] : get().waterEntries };
 
       const serverDay = {
         date: d,
@@ -248,15 +329,17 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       // it does not hold; other days' stay until a read of theirs.
       const onServer = new Set(logs.map((l) => l.clientUuid).filter((k): k is string => !!k));
       const keep = (s: SentFoodLog) => s.sentAt >= startedAt && !onServer.has(s.id);
-      const { queue } = latest(queueAtStart, sentAtStart);
-      const sentFoods = latest(queueAtStart, sentAtStart).sent.filter((s) => !s.log || s.log.date !== d || keep(s));
+      const { queue } = latest(...foodsAt);
+      const sentFoods = latest(...foodsAt).sent.filter((s) => !s.log || s.log.date !== d || keep(s));
       set({
         ...shownDay(serverDay, queue, sentFoods),
         serverDay,
         queuedFoods: queue,
         sentFoods,
-        waterOz,
-        waterEntries: waterResponse ? waterResponse.data.logs || [] : get().waterEntries,
+        ...water,
+        serverWater,
+        queuedWaterWeight: phone.queue,
+        sentWaterWeight,
         selectedDate: d,
         hasLoadedDay: true,
         isLoading: false,
@@ -267,11 +350,18 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       // LS-921 B1: this day's water read is on screen now, so a glass whose
       // answer was lost shows (or was never stored): the next glass is new.
       if (waterResponse) waterDayShown(d);
+      if (waterResponse && featureFlags.offlineFoodInDay && phone.sent.length !== sentWaterWeight.length) {
+        await Promise.resolve().then(() => settleSentWater(d, waterIds, startedAt)).catch((err: unknown) => {
+          logger.warn('ClientStore', 'settling sent water failed', err);
+        });
+      }
       if (featureFlags.offlineFoodInDay) {
         await Promise.resolve().then(() => settleSent(d, keep)).catch((err: unknown) => {
           logger.warn('ClientStore', 'settling sent foods failed', err);
         });
       }
+      // REFINE-972 (LS C1): the Food log's pending count hears of what this send delivered, as after the sync.
+      if (sentHere) await tellPendingCount();
     } catch (err) {
       if (mine !== session || get().selectedDate !== d) return;
       // Preserve data only for a refresh of the same selected day.
@@ -289,10 +379,18 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       const sentAtStart = await (sentRead ?? Promise.resolve(get().sentFoods)).catch(() => get().sentFoods);
       if (mine !== session || get().selectedDate !== d) return;
       const { queue, sent } = latest(queueAtStart, sentAtStart);
+      const phone = await (waterRead ?? Promise.resolve(phoneNow())).catch(() => phoneNow());
+      if (mine !== session || get().selectedDate !== d) return;
+      const { queue: wQueue, sent: wSent } = waterRev === phoneRev ? phone : phoneNow();
       set((state) => {
         const held = state.serverDay && state.serverDay.date === d ? state.serverDay : null;
         const serverDay = held ?? { ...unreadDay(d, _userId), unread: true as const };
-        return { serverDay, queuedFoods: queue, sentFoods: sent, ...shownDay(serverDay, queue, sent) };
+        // OFFLINE-WATER-WEIGHT-M (W6): water joins only a water read this day already had; none, no number.
+        const sw = state.serverWater && state.serverWater.date === d ? state.serverWater : null;
+        return {
+          serverDay, queuedFoods: queue, sentFoods: sent, ...shownDay(serverDay, queue, sent),
+          queuedWaterWeight: wQueue, sentWaterWeight: wSent, ...(sw ? shownWater(sw, wQueue, wSent) : {}),
+        };
       });
     }
   },
@@ -381,7 +479,14 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       return { sentFoods, ...shownDay(state.serverDay, state.queuedFoods, sentFoods) };
     }),
 
-  logWater: async (userId: string, _coachId: string, amountOz: number) => {
+  showQueuedWaterWeight: ({ queue, sent }) =>
+    set((state) => {
+      phoneRev += 1;
+      const sw = state.serverWater && state.serverWater.date === state.selectedDate ? state.serverWater : null;
+      return { queuedWaterWeight: queue, sentWaterWeight: sent, ...(sw ? shownWater(sw, queue, sent) : {}) };
+    }),
+
+  logWater: async (userId: string, _coachId: string, amountOz: number, online = true) => {
     // Optimistic update — add immediately, sync to backend. LS-914R2 B1: the
     // answer belongs to the day it was sent on; it is applied only while that
     // same day view is still open (same account, no day change in between).
@@ -398,6 +503,28 @@ export const useClientStore = create<ClientStore>((set, get) => ({
     const settleElsewhere = () => {
       if (mine === session) void get().refreshShownDay(userId, date);
     };
+    if (!online) {
+      // OFFLINE-WATER-WEIGHT-M (191-S5): no signal, so the glass waits in the phone's queue (food's send decision) and
+      // counts at once with featureFlags.offlineFoodInDay on. A key an online try of this glass kept (its answer lost)
+      // becomes the queue id, so the server keeps one row (W8).
+      const amountMl = Math.round(amountOz * 29.5735);
+      try {
+        await withSaveKey(['water', date, amountMl], (key) =>
+          enqueueWaterWeight(userId, { kind: 'water', log: { date, amount_ml: amountMl } }, key));
+      } catch (err) {
+        logger.error('ClientStore', 'logWater queue failed', err);
+        if (ours()) set({ loadError: `${Math.round(amountOz)} oz of water was not saved. Check the connection, then add it again.` });
+        return;
+      }
+      const lists = await readWaterWeight().catch(() => null);
+      if (lists && mine === session) get().showQueuedWaterWeight(lists);
+      if (ours()) {
+        set((state) => state.loadError?.endsWith(' oz of water was not saved. Check the connection, then add it again.')
+          ? { loadError: null }
+          : {});
+      }
+      return;
+    }
     set((state) => ({ waterOz: state.waterOz + amountOz }));
     try {
       const amountMl = Math.round(amountOz * 29.5735);
@@ -406,9 +533,16 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       if (!ours()) return settleElsewhere();
       const saved = response.data;
       if (saved.id) {
-        set((state) => state.waterEntries.some((e) => e.id === saved.id)
-          ? {}
-          : { waterEntries: [...state.waterEntries, saved] });
+        set((state) => {
+          if (state.waterEntries.some((e) => e.id === saved.id)) return {};
+          // OFFLINE-WATER-WEIGHT-M: the saved glass joins the held water read too, so a later join of the phone's
+          // glasses (showQueuedWaterWeight) keeps it.
+          const sw = state.serverWater;
+          const serverWater = sw && sw.date === date && !sw.entries.some((e) => e.id === saved.id)
+            ? { ...sw, totalMl: sw.totalMl + (saved.amount_ml || 0), entries: [...sw.entries, saved] }
+            : sw;
+          return { waterEntries: [...state.waterEntries, saved], serverWater };
+        });
       }
       set((state) => state.loadError?.endsWith(' oz of water was not saved. Check the connection, then add it again.')
         ? { loadError: null }
@@ -427,14 +561,32 @@ export const useClientStore = create<ClientStore>((set, get) => ({
 
   removeWaterEntry: async (entryId: string) => {
     const mine = session;
+    // OFFLINE-WATER-WEIGHT-M (W10): a glass on this phone (waiting, refused, or sent and not read back) is not a server
+    // entry: Remove takes it off the phone, with no server call, as a food saved offline (LogScreen handleDeleteFood).
+    const onPhone = (q: { id: string; kind: string }) => q.id === entryId && q.kind === 'water';
+    if (get().queuedWaterWeight.some(onPhone) || get().sentWaterWeight.some(onPhone)) {
+      const { queuedWaterWeight, sentWaterWeight } = get();
+      get().showQueuedWaterWeight({
+        queue: queuedWaterWeight.filter((q) => q.id !== entryId),
+        sent: sentWaterWeight.filter((q) => q.id !== entryId),
+      });
+      await dropQueued(entryId);
+      return;
+    }
     await waterApi.deleteEntry(entryId);
     if (mine !== session) return;
     set((state) => {
       if (!state.waterEntries.some((entry) => entry.id === entryId)) return {};
       const waterEntries = state.waterEntries.filter((entry) => entry.id !== entryId);
+      // OFFLINE-WATER-WEIGHT-M: the server's read loses the entry too, so a later join keeps it out.
+      const sw = state.serverWater;
+      const serverWater = sw && sw.entries.some((e) => e.id === entryId)
+        ? { ...sw, entries: sw.entries.filter((e) => e.id !== entryId), totalMl: sw.entries.filter((e) => e.id !== entryId).reduce((t, e) => t + e.amount_ml, 0) }
+        : sw;
       return {
         waterEntries,
-        waterOz: Math.round(waterEntries.reduce((total, entry) => total + entry.amount_ml, 0) / 29.5735),
+        serverWater,
+        waterOz: Math.round(waterEntries.filter((entry) => entry.offline !== 'refused').reduce((total, entry) => total + entry.amount_ml, 0) / 29.5735),
       };
     });
   },

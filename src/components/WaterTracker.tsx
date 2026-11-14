@@ -6,14 +6,15 @@ import { layout, radius, typography } from '../theme/tokens';
 import { QuietOverline } from '../ui/sections/QuietSection';
 import { QuietText as Text } from '../ui/progress/QuietBar';
 import HapticPressable from './HapticPressable';
-import type { WaterEntry } from '../services/api';
+import type { ShownWaterEntry } from '../utils/log/queuedDay';
 
 interface WaterTrackerProps {
   currentOz: number;
   targetOz?: number;
   onAdd: (oz: number) => void;
-  entries?: WaterEntry[];
-  onRemove?: (entry: WaterEntry) => void;
+  // OFFLINE-WATER-WEIGHT-M: a glass saved offline carries `offline` (waiting or refused) and its line.
+  entries?: ShownWaterEntry[];
+  onRemove?: (entry: ShownWaterEntry) => void;
   removingId?: string | null;
 }
 
@@ -95,16 +96,23 @@ export default function WaterTracker({
           <QuietOverline>Logged water</QuietOverline>
           {entries.map((entry, index) => {
             const amount = metric ? `${entry.amount_ml} ml` : `≈ ${Math.round(entry.amount_ml / ML_PER_OZ * 10) / 10} oz`;
+            // OFFLINE-WATER-WEIGHT-M: the line a food saved offline carries (MealSectionCard), in this card's unit.
+            const glass = metric ? `${entry.amount_ml} ml` : `${Math.round(entry.amount_ml / ML_PER_OZ)} oz`;
+            const offlineMark = entry.offline === 'refused' ? "Couldn't log water"
+              : entry.offline ? `Saved offline. ${glass} of water will sync when you reconnect.` : null;
             return (
               <View key={entry.id} style={styles.entryRow}>
-                <Text style={styles.entryAmount}>{amount}</Text>
+                <View style={[styles.entryText, offlineMark ? styles.entryTextOffline : null]}>
+                  <Text style={styles.entryAmount}>{amount}</Text>
+                  {offlineMark ? <Text style={styles.offlineLine} testID={`water-offline-${entry.id}`}>{offlineMark}</Text> : null}
+                </View>
                 <HapticPressable
                   disableAnimation
                   intent="warning"
                   style={styles.removeButton}
                   onPress={() => onRemove(entry)}
                   disabled={removingId !== null}
-                  accessibilityLabel={`Remove water entry ${index + 1}, ${amount}`}
+                  accessibilityLabel={`Remove water entry ${index + 1}, ${amount}${offlineMark ? `. ${entry.offline === 'refused' ? offlineMark : 'Saved offline'}` : ''}`}
                   accessibilityState={{ disabled: removingId !== null, busy: removingId === entry.id }}
                   testID={`remove-water-${entry.id}`}
                 >
@@ -193,6 +201,15 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     justifyContent: 'space-between',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: sc.border,
+  },
+  // OFFLINE-WATER-WEIGHT-M: the amount and, for a glass saved offline, its line under it (MealSectionCard's foodMacros).
+  entryText: { flex: 1 },
+  entryTextOffline: { paddingVertical: 10, paddingRight: 12 },
+  offlineLine: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: sc.textMuted,
+    marginTop: 2,
   },
   entryAmount: {
     fontSize: 15,
