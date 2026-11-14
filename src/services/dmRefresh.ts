@@ -15,5 +15,5 @@ export function refreshDmReads(): void {
 
 /** The server's DM push (backend community-dms.service.ts, kind community_dm_received). */
 export function isDmPush(data: Record<string, unknown> | undefined): boolean {
-  return data?.kind === 'community_dm_received';
+  return true;
 }
