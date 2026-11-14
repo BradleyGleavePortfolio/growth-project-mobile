@@ -10,7 +10,6 @@ import { queryClient } from './queryClient';
 
 export function refreshDmReads(): void {
   void queryClient.invalidateQueries({ queryKey: ['community', 'dm'] });
-  void queryClient.invalidateQueries({ queryKey: ['community', 'dms'] });
 }
 
 /** The server's DM push (backend community-dms.service.ts, kind community_dm_received). */
