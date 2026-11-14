@@ -213,7 +213,7 @@ describe.each(SIZES)('meal plan toward C2 C_day, %s', (_size, dims) => {
 
   it('c: each meal\'s coach time in the drawn time column, Inter 500 12, right-aligned (C_day .tm, x 52-156 px)', async () => {
     await render(<ClientDailyMealPlanScreen />);
-    const w = Math.round(54 * Math.min(Math.max(dims.fontScale, 1), 1.6));
+    const w = 54; // C_day keeps the column narrow and wraps scaled time text.
     for (const t of ['7:40 am', '12:35 pm', '6:30 pm']) {
       expect(screen.getByText(t)).toHaveStyle({ fontFamily: 'Inter_500Medium', fontSize: 12, width: w, textAlign: 'right' });
     }

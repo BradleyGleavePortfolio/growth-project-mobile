@@ -158,3 +158,70 @@ it('LO-981 B3: C_day\'s own day in clock order: times run forward, the now line 
     jest.useRealTimers();
   }
 });
+
+describe.each([
+  ['390/100', { width: 390, height: 844, scale: 2, fontScale: 1 }],
+  ['320/130', { width: 320, height: 568, scale: 2, fontScale: 1.3 }],
+] as const)('FIX-981 ordering class %s', (_profile, dims) => {
+  type Meal = [id: string, label: string, time: string | null, order?: number];
+  const cases: Array<[string, Meal[], string[], string[]]> = [
+    ['all labels follow the clock', [
+      ['d', 'dinner', '19:30'], ['p', 'preworkout', '17:30'], ['s', 'snack', '10:00'],
+      ['l', 'lunch', '12:35'], ['b', 'breakfast', '07:40'], ['q', 'postworkout', '18:30'],
+    ], ['b', 's', 'l', 'p', 'q', 'd'], ['Breakfast', 'Snack', 'Lunch', 'Pre-workout', 'Post-workout', 'Dinner']],
+    ['ties preserve main label and slot order', [
+      ['s', 'snack', '10:00'], ['b2', 'breakfast', '10:00', 2], ['b1', 'breakfast', '10:00', 1],
+    ], ['b1', 'b2', 's'], ['Breakfast', 'Snack']],
+    ['repeated labels regain an eyebrow after another label', [
+      ['s2', 'snack', '15:00'], ['s1', 'snack', '10:00'], ['l', 'lunch', '12:00'],
+    ], ['s1', 'l', 's2'], ['Snack', 'Lunch', 'Snack']],
+    ['missing time retains the entire main order', [
+      ['p', 'preworkout', '08:00'], ['d', 'dinner', '19:00'], ['b', 'breakfast', null],
+    ], ['b', 'd', 'p'], ['Breakfast', 'Dinner', 'Pre-workout']],
+    ['invalid time retains the entire main order', [
+      ['p', 'preworkout', '08:00'], ['d', 'dinner', '19:00'], ['b', 'breakfast', 'not-a-time'],
+    ], ['b', 'd', 'p'], ['Breakfast', 'Dinner', 'Pre-workout']],
+  ];
+
+  it.each(cases)('%s', async (_name, meals, expected, labels) => {
+    mockDims = { ...dims }; mockParams = { date: '2026-10-12' }; mockFlag = true; mockButtons.length = 0;
+    mockTarget = TARGET;
+    mockLog = { data: { entries: [], total_calories: 0, total_protein_g: 0 }, isError: false, isLoading: false };
+    const slots = meals.map(([id, label, time, order = 0]) => ({ ...slot(id, label, `Meal ${id}`, 400, time), order }));
+    mockDaily.mockReturnValue(planOf(slots));
+    const before = JSON.stringify(slots);
+    await render(<ClientDailyMealPlanScreen />);
+    const marks = hosts(screen.toJSON()).map((h) => h.props.testID)
+      .filter((id) => typeof id === 'string' && id.startsWith('daily-meal-plan-mark-'));
+    expect(marks).toEqual(expected.map((id) => `daily-meal-plan-mark-${id}`));
+    expect(screen.getAllByRole('header').map((h) => h.props.children).filter((text) => labels.includes(text))).toEqual(labels);
+    expect(JSON.stringify(slots)).toBe(before);
+    expect(screen.queryByTestId('daily-meal-plan-now', HIDDEN)).toBeNull();
+    expect(screen.queryByTestId('daily-meal-plan-next-card')).toBeNull();
+  });
+
+  it('sorts two plans independently without merging their meals', async () => {
+    mockDims = { ...dims }; mockParams = { date: '2026-10-12' }; mockFlag = true;
+    mockTarget = TARGET; mockLog = { data: { entries: [] }, isError: false, isLoading: false };
+    const first = planOf([slot('d1', 'dinner', 'Dinner one', 600, '19:00'), slot('p1', 'preworkout', 'Pre one', 300, '17:00')]);
+    const second = planOf([slot('d2', 'dinner', 'Dinner two', 600, '18:00'), slot('p2', 'preworkout', 'Pre two', 300, '09:00')]);
+    mockDaily.mockReturnValue({ ...first, data: { ...first.data, assignments: [
+      first.data.assignments[0], { ...second.data.assignments[0], id: 'a2' },
+    ] } });
+    await render(<ClientDailyMealPlanScreen />);
+    const marks = hosts(screen.toJSON()).map((h) => h.props.testID)
+      .filter((id) => typeof id === 'string' && id.startsWith('daily-meal-plan-mark-'));
+    expect(marks).toEqual(['p1', 'd1', 'p2', 'd2'].map((id) => `daily-meal-plan-mark-${id}`));
+  });
+});
+
+it.each([999, 1000, 1990, 2380])('groups meal and total kcal consistently for %s without changing gram units', async (kcal) => {
+  mockDims = { width: 390, height: 844, scale: 2, fontScale: 1 };
+  mockParams = { date: '2026-10-12' }; mockTarget = null; mockFlag = true;
+  mockLog = { data: { entries: [] }, isError: false, isLoading: false };
+  mockDaily.mockReturnValue(planOf([slot('a', 'breakfast', 'Meal a', kcal, '07:40')]));
+  await render(<ClientDailyMealPlanScreen />);
+  const shown = kcal.toLocaleString('en-US');
+  expect(screen.getByTestId('daily-meal-plan-total').props.children).toBe(`Day total ${shown} kcal • P 30g • C 40g • F 12g`);
+  expect(screen.getByText(`${shown} kcal • P 30g • C 40g • F 12g`)).toBeTruthy();
+});

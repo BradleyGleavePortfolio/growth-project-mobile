@@ -113,7 +113,7 @@ it('meal plan: the day total, every meal and every Log this meal stay whole', as
       slots: [slot('a', 'breakfast', 420), slot('b', 'lunch', 680)] } }] },
     isLoading: false, isError: false, isRefetching: false, refetch: jest.fn() });
   await render(<ClientDailyMealPlanScreen />);
-  expect(screen.getByTestId('daily-meal-plan-total').props.children).toBe('Day total 1100 kcal • P 84g • C 110g • F 44g');
+  expect(screen.getByTestId('daily-meal-plan-total').props.children).toBe('Day total 1,100 kcal • P 84g • C 110g • F 44g');
   expect(screen.getByText(LONG)).toBeTruthy();
   expect(screen.getAllByText('Log this meal')).toHaveLength(2);
   expect(textProblems()).toEqual([]);

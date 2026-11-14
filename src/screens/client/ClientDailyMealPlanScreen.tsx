@@ -1,10 +1,10 @@
 /**
- * ClientDailyMealPlanScreen — assigned meal plan as a slot-grouped list.
+ * ClientDailyMealPlanScreen — assigned meal plan in clock order when fully timed.
  *
  * Reads `/me/meal-plan/today` via `useMealPlanToday(dateIso?)`. The
  * endpoint returns one or more active assignments for the requested
  * date; we list every one, newest first (the API's starts_on DESC
- * order), each with its slots grouped by slot_label. More > Meal plan
+ * order), each in clock order if fully timed, otherwise grouped by slot_label. More > Meal plan
  * opens this screen with no params, so a client with two active plans
  * reaches and logs both here.
  *
@@ -73,11 +73,10 @@ import { colors, radius, spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { SemanticTokens } from '../../theme/tokens';
 import {
-  MastLine, mast, MastProgress, MealArt, NowRow, PaperPage, PlanMasthead, planStyleC, TimeCell, TimelineRow, useCoachItalic, useTimeColumn,
+  formatPlanNumber as n, MastLine, mast, MastProgress, MealArt, NowRow, PaperPage, PlanMasthead, planStyleC, TimeCell, TimelineRow, useCoachItalic, useTimeColumn,
 } from './mealplan/planStyleC';
 
 // The Food day's words and formats, copied screen-locally (FoodDayView.tsx:41, :52, :232-236).
-const n = (v: number) => Math.round(v).toLocaleString('en-US');
 const longDay = (date: string) =>
   new Date(`${date}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }).replace(',', '');
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
@@ -85,7 +84,7 @@ const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0
 const QUOTED = /^["'\u201C\u2018]|["'\u201D\u2019]$/;
 const nowMinutes = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
 
-/** One meal in the screen's order (main's: each plan, then SLOT_LABELS, then slot.order). */
+/** One meal in its plan's clock order, or main's label/order fallback when incompletely timed. */
 interface Stop { slot: DailyMealPlanSlot; plan: string; first: boolean; last: boolean }
 
 // Route params: optional ISO date string (YYYY-MM-DD). Falls back to
@@ -237,7 +236,7 @@ function Quoted({ children, style, testID }: { children: string; style: StylePro
     : <Text style={style} testID={testID}>{'\u201C'}<Text>{children}</Text>{'\u201D'}</Text>;
 }
 
-/** Every shown meal in main's order and grouping: each plan, its labels in SLOT_LABELS order, then slot.order. */
+/** Sort each fully timed plan stably by clock; retain main's label/order fallback otherwise. */
 function orderStops(shown: DailyMealPlanAssignmentWithPlan[]): Stop[] {
   return shown.flatMap((a) => {
     const byLabel = new Map<SlotLabel, DailyMealPlanSlot[]>();
@@ -246,10 +245,13 @@ function orderStops(shown: DailyMealPlanAssignmentWithPlan[]): Stop[] {
       byLabel.set(label, [...(byLabel.get(label) ?? []), slot]);
     }
     const labels = SLOT_LABELS.filter((l) => byLabel.has(l));
-    const list = labels.flatMap((l) => [...(byLabel.get(l) ?? [])].sort((x, y) => x.order - y.order)
-      .map((slot, i) => ({ slot, plan: a.id, first: i === 0, last: false })));
-    if (list.length) list[list.length - 1].last = true;
-    return list;
+    const list = labels.flatMap((l) => [...(byLabel.get(l) ?? [])].sort((x, y) => x.order - y.order));
+    if (list.every((slot) => minutesOf(slot.time_of_day) != null)) {
+      list.sort((x, y) => minutesOf(x.time_of_day)! - minutesOf(y.time_of_day)!);
+    }
+    return list.map((slot, i) => ({
+      slot, plan: a.id, first: i === 0 || list[i - 1].slot_label !== slot.slot_label, last: i === list.length - 1,
+    }));
   });
 }
 
@@ -333,7 +335,7 @@ function MealStop({ stop, ctx }: { stop: Stop; ctx: DayCtx }) {
               </Text>
               {status ? <Text style={[planStyleC.status, { color: sc.textMuted }]}>{status}</Text> : null}
               <Text style={[planStyleC.meta, styles.tabular, { color: sc.textMuted }]}>
-                {s.meal_template.calories_kcal} kcal • P {s.meal_template.protein_g}g • C{' '}
+                {s.meal_template.calories_kcal == null ? s.meal_template.calories_kcal : n(s.meal_template.calories_kcal)} kcal • P {s.meal_template.protein_g}g • C{' '}
                 {s.meal_template.carbs_g}g • F {s.meal_template.fats_g}g
               </Text>
               {s.meal_template.description && !isNext ? (
@@ -438,7 +440,7 @@ function formatDayTotal(slots: DailyMealPlanSlot[]): string | null {
     [sum((s) => s.meal_template.carbs_g), 'C ', 'g'],
     [sum((s) => s.meal_template.fats_g), 'F ', 'g'],
   ] as const;
-  const shown = parts.filter(([v]) => v !== null).map(([v, pre, unit]) => `${pre}${v}${unit}`);
+  const shown = parts.filter(([v]) => v !== null).map(([v, pre, unit]) => `${pre}${unit === ' kcal' ? n(v!) : v}${unit}`);
   return shown.length > 0 ? `Day total ${shown.join(' • ')}` : null;
 }
 
