@@ -70,17 +70,26 @@ export function whatMoved(
   const lines: MovedLine[] = [];
   // FIX-974R1 (LO-974R1 C4, LS-974R1 C1): the same exercise twice draws its record once, from a block that lifted it.
   const recordDrawn = new Set<string>();
-  for (const exercise of exercises) {
-    // LS-928 B4: a set counted in seconds, or a body-weight set, carries no lb to compare.
-    if (isTimedRow(exercise) || bodyWeight[exercise.exerciseId]) continue;
+  // LS-928 B4: a set counted in seconds, or a body-weight set, carries no lb to compare.
+  const weighed = exercises.filter((exercise) => !isTimedRow(exercise) && !bodyWeight[exercise.exerciseId]);
+  const tickedSets = (exercise: SessionExercise) => exercise.sets.filter((set) => set.completed);
+  for (const exercise of weighed) {
     const ticked = exercise.sets.map((set, number) => ({ set, number })).filter(({ set }) => set.completed);
     if (ticked.length === 0) continue;
-    const record = records.find((r) => nameKey(r.name) === nameKey(exercise.exerciseName));
+    const key = nameKey(exercise.exerciseName);
+    // FIX-974R2 (LS-974R2 C1): two blocks of one exercise can each beat the old best (185, then 225): the line is the
+    // heaviest of that name's records, with the most reps any ticked set of that name lifted at it, in any block.
+    const record = records
+      .filter((r) => nameKey(r.name) === key)
+      .reduce<{ name: string; weight: number } | null>((best, r) => (best == null || r.weight > best.weight ? r : best), null);
     if (record) {
-      const atRecord = ticked.filter(({ set }) => set.weight === record.weight);
-      if (atRecord.length > 0 && !recordDrawn.has(nameKey(record.name))) {
-        recordDrawn.add(nameKey(record.name));
-        const reps = Math.max(...atRecord.map(({ set }) => set.reps));
+      const atRecord = weighed
+        .filter((other) => nameKey(other.exerciseName) === key)
+        .flatMap(tickedSets)
+        .filter((set) => set.weight === record.weight);
+      if (atRecord.length > 0 && !recordDrawn.has(key)) {
+        recordDrawn.add(key);
+        const reps = Math.max(...atRecord.map((set) => set.reps));
         lines.push({ kind: 'best', exercise: exercise.exerciseName, weight: record.weight, text: SUMMARY_COPY.best(exercise.exerciseName, record.weight, reps) });
       }
       continue;

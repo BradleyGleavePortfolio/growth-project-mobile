@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { motion, typography } from '../../../theme/tokens';
+import { layout, motion, typography } from '../../../theme/tokens';
+import { HapticService } from '../../../ui/haptics/haptics.service';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { Overline } from '../../../ui';
 import { featureFlags } from '../../../config/featureFlags';
@@ -42,15 +44,21 @@ export default function WorkoutFinishSummary({ summary, styles, historyState, el
   }, [opacity, reduceMotion]);
 
   if (c5) {
-    // The SHARE-A link stays under a record line, as main's card draws it (its place on the page is not drawn).
+    // FIX-974R2 (LS-974R2 B1): the SHARE-A action stays on each record line, as the share glyph at the line's end (a 44 pt
+    // button, the same spoken name and the same sheet as main's link), so it takes no row of its own: C2_summary draws
+    // the record as one line and the meter and the note above Send.
     return <Animated.View style={[local.page, { opacity }]}>
       <WorkoutSummaryC5
         {...c5}
         recordAction={featureFlags.shareSheetV2 ? (line) => line.weight == null ? null : (
-          <ShareLink
+          <Pressable
+            testID="summary-share" accessibilityRole="button"
             accessibilityLabel={`Share ${line.exercise} at ${line.weight.toLocaleString()} lb`}
-            onPress={() => setShareCard(bestCard(line.exercise, line.weight ?? 0, getTodayString()))}
-          />
+            onPress={() => { void HapticService.softImpact(); setShareCard(bestCard(line.exercise, line.weight ?? 0, getTodayString())); }}
+            style={({ pressed }) => [local.share, pressed && local.pressed]}
+          >
+            <Ionicons name="share-outline" size={20} color={sc.accentText} />
+          </Pressable>
         ) : undefined}
       />
       {featureFlags.shareSheetV2 ? <ShareSheet card={shareCard} onClose={() => setShareCard(null)} /> : null}
@@ -105,6 +113,8 @@ export default function WorkoutFinishSummary({ summary, styles, historyState, el
 
 const local = StyleSheet.create({
   page: { flex: 1 },
+  share: { width: layout.touchMin, height: layout.touchMin, alignItems: 'center', justifyContent: 'center' },
+  pressed: { opacity: 0.6 },
   row: { flexDirection: 'row', marginTop: 8 },
   cell: { flex: 1, alignItems: 'center', paddingVertical: 4 },
   value: { ...typography.h2, fontVariant: ['tabular-nums'] },

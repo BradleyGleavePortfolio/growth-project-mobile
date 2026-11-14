@@ -9,13 +9,14 @@
  * Reads only the signed-in client's own rows (useMyWorkoutAssignments) and coaches (useMyCoaches). No haptic of its own
  * but the number tap's selection tick: Send's success or error haptic is the save's.
  */
-import React from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useStatusBarBand } from '../../../components/StatusBarBand';
 import { Colors } from '../../../constants/colors';
 import { useMyCoaches } from '../../../hooks/useCalendar';
 import { useMyWorkoutAssignments } from '../../../hooks/useWorkoutBuilder';
+import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { colors, layout, radius, typography } from '../../../theme/tokens';
 import { Overline, PrimaryButton, Screen, useScreenInsets } from '../../../ui';
@@ -28,6 +29,13 @@ import { NOTE_MAX, SUMMARY_COPY as c, summaryWeek, type MovedLine } from './summ
 
 const CAP = 1.3;
 const RING = 176;
+/**
+ * FIX-974R2 (LS-974R2 B1): the week ring at C2_summary's 176 pt where the page has room for it, smaller on a shorter
+ * screen, so the opening view still holds the whole meter and the note above Send (the drawn 390 by 844 keeps 176; a
+ * 360 by 800 Android draws 160). `room` is the window height less the top and bottom insets. 144 still holds
+ * "{n} of {total}" inside the ring at its 1.15 text cap.
+ */
+export const ringSize = (room: number) => (room >= 760 ? RING : room >= 740 ? 160 : 144);
 
 export interface WorkoutSummaryC5Props {
   assignmentId: string;
@@ -48,7 +56,7 @@ export interface WorkoutSummaryC5Props {
   onSend: () => void;
   onTryAgain: () => void;
   onBack: () => void;
-  /** Drawn under a record line (WorkoutFinishSummary's Share link, SHARE-A). */
+  /** Drawn at the end of a record line (WorkoutFinishSummary's Share button, SHARE-A): a 44 pt target, no row of its own. */
   recordAction?: (line: MovedLine) => React.ReactNode;
 }
 
@@ -57,6 +65,7 @@ const firstName = (name?: string | null) => name?.trim().split(/\s+/)[0] || null
 export default function WorkoutSummaryC5(p: WorkoutSummaryC5Props) {
   const sc = useTheme().semanticColors;
   const insets = useScreenInsets();
+  const ring = ringSize(useWindowDimensions().height - insets.top - insets.bottom);
   useStatusBarBand(sc.surface.masthead);
   const rowsQuery = useMyWorkoutAssignments();
   const coaches = useMyCoaches(true).data;
@@ -68,6 +77,19 @@ export default function WorkoutSummaryC5(p: WorkoutSummaryC5Props) {
   const locked = p.status !== 'open';
   const light = { color: sc.textOnAccent };
   const muted = { color: sc.textOnMastheadMuted };
+  const reduceMotion = useReducedMotion();
+  const scrollRef = useRef<ScrollView>(null);
+  // FIX-974R2 (LS-974R2 B2): the not-sent card is drawn at the top of the page, so whatever the client scrolled to before
+  // Send (the note, the meter), each time the page turns not sent (the first Send, then every Try again that fails) it
+  // comes back to the top where the card is, and the card's words are spoken (the same words; no new string).
+  const notSentText = p.status === 'notSent' ? `${c.notSent(coach)}. ${c.safe(coach)}` : null;
+  useEffect(() => {
+    if (!notSentText) return;
+    scrollRef.current?.scrollTo({ y: 0, animated: !reduceMotion });
+    AccessibilityInfo.announceForAccessibility(notSentText);
+    // Once per entry into not sent: the coach's name arriving later does not scroll the page again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p.status]);
   // FIX-974R1 (LS-974R1 B1): C2_summary draws no row for back. With the week drawn it sits beside the ring (no height of
   // its own); without the week, at the top as before. Not while Send is saving (LO-974R1 C3).
   const back = (
@@ -82,7 +104,11 @@ export default function WorkoutSummaryC5(p: WorkoutSummaryC5Props) {
 
   return (
     <Screen
-      edges={[]}
+      // FIX-974R2 (LO-974R2 B1): with the tab bar hidden under the summary nothing else owns the bottom inset, so the
+      // page does (Send and Try again sit above the home indicator and Android's navigation bar). The masthead keeps
+      // its own top inset below.
+      edges={['bottom']}
+      scrollRef={scrollRef}
       testID="workout-summary-c5"
       contentStyle={s.content}
       footer={p.status === 'notSent'
@@ -113,7 +139,7 @@ export default function WorkoutSummaryC5(p: WorkoutSummaryC5Props) {
             <View style={s.ringWrap}>
               {back}
               <SegmentedRing
-                onDark size={RING} segments={week.segments} label={doneLine(week)} testID="summary-ring"
+                onDark size={ring} segments={week.segments} label={doneLine(week)} testID="summary-ring"
                 drawIndex={drawIndex ?? undefined} event={p.sentKey ?? undefined}
               >
                 <Text maxFontSizeMultiplier={1.15} style={[s.ringCount, light]}>{c.ring(week.done, week.total)}</Text>
@@ -130,9 +156,11 @@ export default function WorkoutSummaryC5(p: WorkoutSummaryC5Props) {
         {p.lines.length > 0 ? (
           <View testID="what-moved" style={s.section}>
             <Overline>{c.moved}</Overline>
-            {p.lines.map((line, i) => (
-              <View key={`${line.exercise}-${i}`} testID={`what-moved-${i}`}>
-                <View style={s.moved}>
+            <View style={s.rows}>
+            {p.lines.map((line, i) => {
+              const action = line.kind === 'best' ? p.recordAction?.(line) : null;
+              return (
+                <View key={`${line.exercise}-${i}`} testID={`what-moved-${i}`} style={s.moved}>
                   {line.kind === 'best' ? (
                     <View style={[s.tile, { backgroundColor: sc.surface.masthead }]}>
                       <PeakStar onDark size={16} label={c.recentBest} />
@@ -143,10 +171,12 @@ export default function WorkoutSummaryC5(p: WorkoutSummaryC5Props) {
                     </View>
                   )}
                   <Text maxFontSizeMultiplier={CAP} style={[s.movedText, { color: sc.textPrimary }]}>{line.text}</Text>
+                  {/* FIX-974R2 (LS-974R2 B1): the record's Share at the line's end, not a row under it (C2_summary draws none). */}
+                  {action ? <View style={s.action}>{action}</View> : null}
                 </View>
-                {line.kind === 'best' ? p.recordAction?.(line) : null}
-              </View>
-            ))}
+              );
+            })}
+            </View>
           </View>
         ) : null}
 
@@ -205,7 +235,7 @@ function EffortMeter({ value, onChange, locked }: { value: number | null; onChan
 const s = StyleSheet.create({
   content: { paddingHorizontal: 0 },
   mast: {
-    paddingHorizontal: layout.gutter, paddingBottom: 28,
+    paddingHorizontal: layout.gutter, paddingBottom: 16,
     borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet,
   },
   back: { width: layout.touchMin, height: layout.touchMin, justifyContent: 'center', marginLeft: -10 },
@@ -218,21 +248,27 @@ const s = StyleSheet.create({
   cardBody: { fontFamily: typography.bodySmall.fontFamily, fontSize: 15, lineHeight: 21, marginTop: 4 },
   strip: { flexDirection: 'row', justifyContent: 'space-between' },
   day: { alignItems: 'center', gap: 6 },
-  ringWrap: { alignItems: 'center', marginTop: 20 },
+  ringWrap: { alignItems: 'center', marginTop: 8 },
   ringCount: { ...typography.display, fontVariant: ['tabular-nums'] },
-  complete: { ...typography.h1, textAlign: 'center', marginTop: 20 },
+  complete: { ...typography.h1, textAlign: 'center', marginTop: 10 },
   totals: { fontFamily: typography.bodySmall.fontFamily, fontSize: 15, lineHeight: 21, textAlign: 'center', marginTop: 2 },
-  body: { paddingHorizontal: layout.gutter, paddingTop: 20, gap: 20 },
-  section: { gap: 12 },
-  moved: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  // FIX-974R2 (LS-974R2 B1): C2_summary's spacing (masthead 16 under the totals, a label right over its rows, 6 between
+  // the meter's two rows), so the opening view holds the whole meter and the note above Send at the drawn 390 and 360
+  // sizes (with ringSize above).
+  body: { paddingHorizontal: layout.gutter, paddingTop: 12, gap: 12 },
+  section: { gap: 4 },
+  rows: { gap: 4 },
+  moved: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: layout.touchMin },
+  // The Share glyph lines up with the page's right edge; its 44 pt box reaches into the gutter.
+  action: { marginRight: -12, marginLeft: -12 },
   tile: { width: 30, height: 30, borderRadius: radius.input / 2, alignItems: 'center', justifyContent: 'center' },
   movedText: { flex: 1, fontFamily: typography.bodySmall.fontFamily, fontSize: 16, lineHeight: 22 },
-  meter: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  meter: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   step: { flexBasis: '17%', flexGrow: 1, minWidth: layout.touchMin, minHeight: layout.touchMin, borderRadius: radius.button + 4 },
   stepFill: { flex: 1, borderWidth: 1, borderRadius: radius.button, alignItems: 'center', justifyContent: 'center' },
   stepText: { fontFamily: 'Inter_600SemiBold', fontSize: 16, lineHeight: 20, fontVariant: ['tabular-nums'] },
   note: {
-    minHeight: 72, borderWidth: 1, borderRadius: radius.card, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12,
+    minHeight: 56, borderWidth: 1, borderRadius: radius.card, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12,
     fontFamily: typography.bodySmall.fontFamily, fontSize: 16, lineHeight: 22, textAlignVertical: 'top',
   },
   rule: { height: StyleSheet.hairlineWidth },
