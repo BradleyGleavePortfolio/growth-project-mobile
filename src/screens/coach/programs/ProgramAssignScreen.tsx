@@ -11,6 +11,11 @@
  * key, so the next press is a new assignment rather than a replay of the old
  * one. Only "Retry N failed" (and a re-press while failures are showing)
  * reuses the key, which is what makes a lost response safe to retry.
+ *
+ * STYLE-LOGGING-M: K3 Style C, its own frame C_assign (planning/MOCKUP3/K3/style-c/C_assign_*.png): the route's bar
+ * and a deep forest masthead holding the start date (pills, the typed date, its lines and the repeat switch), the
+ * clients on the page as hairline rows with a round check, and Assign pinned at the foot. Look only: every request,
+ * key, word and control is main's; ProgramUi's parts stay as they are for the other Programs screens.
  */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -24,6 +29,15 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../../theme/ThemeProvider";
+import {
+  layout,
+  lightTokens,
+  radius,
+  spacing,
+  typography,
+  type SemanticTokens,
+} from "../../../theme/tokens";
+import { MastheadBand, mast } from "../../client/workouts/workoutStyleC";
 import {
   BulkAssignResult,
   chunkClientIds,
@@ -43,14 +57,7 @@ import {
   ProgramFailure,
 } from "../../../utils/programErrors";
 import { generateIdempotencyKey } from "../../../utils/idempotency";
-import {
-  Chip,
-  FailureBox,
-  LoadingRow,
-  SectionTitle,
-  SmallButton,
-  plural,
-} from "./ProgramUi";
+import { FailureBox, LoadingRow, SmallButton, plural } from "./ProgramUi";
 import type { ProgramsScreenProps } from "./types";
 import { assignmentDay } from "../../../utils/workout/workoutDay";
 
@@ -59,7 +66,10 @@ export default function ProgramAssignScreen({
   navigation,
 }: ProgramsScreenProps<"ProgramAssign">) {
   const { programId } = route.params;
-  const { colors } = useTheme();
+  const { colors, semanticColors } = useTheme();
+  // The default theme's light tokens when a theme carries none (ThemeProvider's default context is built from them).
+  const sc = semanticColors ?? lightTokens;
+  const styles = useMemo(() => makeStyles(sc), [sc]);
   const invalidate = useInvalidatePrograms();
   const program = useProgram(programId);
   const clients = useAssignableClients();
@@ -218,215 +228,235 @@ export default function ProgramAssignScreen({
     return <LoadingRow label="Loading clients" />;
 
   const summary = summarise(results);
+  const assignDisabled = running || selected.size === 0 || !dateOk;
+  const assignLabel = running
+    ? "Assigning"
+    : `Assign to ${plural(selected.size, "client", "clients")}`;
+  const selectLabel = allVisibleSelected
+    ? "Clear shown"
+    : `Select all shown (${visible.length})`;
 
   return (
-    <FlatList
-      style={{ backgroundColor: colors.background }}
-      contentContainerStyle={styles.list}
-      data={visible}
-      keyExtractor={(c) => c.id}
-      keyboardShouldPersistTaps="handled"
-      ListHeaderComponent={
-        <View style={styles.header}>
-          {clients.error ? (
-            <FailureBox
-              failure={describeProgramFailure(
-                clients.error,
-                "load your clients",
-              )}
-              onRetry={() => clients.refetch()}
-            />
-          ) : null}
-          <SectionTitle>Start date</SectionTitle>
-          <View style={styles.row}>
-            {quickDates.map((d) => (
-              <Chip
-                key={d.label}
-                label={d.label}
-                selected={startDate === d.value}
-                onPress={() => {
-                  if (!running) setStartDate(d.value);
-                }}
-              />
-            ))}
-          </View>
-          <TextInput
-            value={startDate}
-            onChangeText={setStartDate}
-            editable={!running}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor={colors.textMuted}
-            accessibilityLabel="Start date, year month day"
-            autoCapitalize="none"
-            autoCorrect={false}
-            maxLength={10}
-            style={[
-              styles.input,
-              {
-                color: colors.textPrimary,
-                borderColor: dateOk ? colors.border : colors.error,
-                backgroundColor: colors.surface,
-              },
-            ]}
-          />
-          {!dateOk ? (
-            <Text
-              accessibilityLiveRegion="polite"
-              style={{ color: colors.error }}
-            >
-              Enter a real date as YYYY-MM-DD, for example {quickDates[2].value}
-              .
-            </Text>
-          ) : (
-            <Text style={[styles.help, { color: colors.textSecondary }]}>
-              Week 1, Day 1 lands on {startDate}. Each client gets their own
-              copy.
-            </Text>
-          )}
-          <View style={styles.switchRow}>
-            <Switch
-              value={allowRepeat}
-              onValueChange={setAllowRepeat}
-              disabled={running}
-              accessibilityLabel="Assign again to clients already on this program"
-            />
-            <Text style={[styles.help, { color: colors.textPrimary, flex: 1 }]}>
-              Assign again to clients already on this program (a second run)
-            </Text>
-          </View>
-
-          <SectionTitle>{`Clients (${selected.size} selected)`}</SectionTitle>
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search clients"
-            placeholderTextColor={colors.textMuted}
-            accessibilityLabel="Search clients by name or email"
-            style={[
-              styles.input,
-              {
-                color: colors.textPrimary,
-                borderColor: colors.border,
-                backgroundColor: colors.surface,
-              },
-            ]}
-          />
-          <View style={styles.row}>
-            <SmallButton
-              label={
-                allVisibleSelected
-                  ? "Clear shown"
-                  : `Select all shown (${visible.length})`
-              }
-              onPress={toggleAllVisible}
-              disabled={visible.length === 0}
-            />
-          </View>
-
-          {failure ? <FailureBox failure={failure} /> : null}
-          {progress ? (
-            <Text
-              accessibilityLiveRegion="polite"
-              style={[styles.help, { color: colors.textPrimary }]}
-            >
-              {running
-                ? `Assigning ${progress.done} of ${progress.total}`
-                : summaryLine(summary)}
-            </Text>
-          ) : null}
-          <View style={styles.row}>
-            <SmallButton
-              tone="primary"
-              icon="send"
-              label={
-                running
-                  ? "Assigning"
-                  : `Assign to ${plural(selected.size, "client", "clients")}`
-              }
-              disabled={running || selected.size === 0 || !dateOk}
-              onPress={() => void assign(Array.from(selected))}
-            />
-            {failedIds.length > 0 && !running ? (
-              <SmallButton
-                label={`Retry ${failedIds.length} failed`}
-                onPress={() => void assign(failedIds)}
-                accessibilityHint="Retries only the clients that failed, with the same request key"
-              />
-            ) : null}
-            {summary.total > 0 && failedIds.length === 0 && !running ? (
-              <SmallButton label="Done" onPress={() => navigation.goBack()} />
-            ) : null}
-          </View>
-        </View>
-      }
-      renderItem={({ item }) => {
-        const r = results.get(item.id);
-        const isSel = selected.has(item.id);
-        return (
-          <Pressable
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: isSel }}
-            accessibilityLabel={`${item.name}${r ? `, ${resultLabel(r)}` : ""}`}
-            onPress={() => toggle(item.id)}
-            style={[
-              styles.client,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-            ]}
-          >
-            <Ionicons
-              name={isSel ? "checkbox" : "square-outline"}
-              size={24}
-              color={isSel ? colors.primary : colors.textMuted}
-            />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.clientName, { color: colors.textPrimary }]}>
-                {nameById.get(item.id) ?? item.name}
+    <View style={styles.screen}>
+      <MastheadBand color={mast.ground} />
+      <FlatList
+        style={styles.list}
+        contentContainerStyle={styles.listContent}
+        data={visible}
+        keyExtractor={(c) => c.id}
+        keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={
+          <View>
+            {/* C_assign rows 200-661: the start date on the masthead, under the route's forest bar. */}
+            <View style={styles.masthead}>
+              <Text accessibilityRole="header" style={styles.mastHead}>
+                Start date
               </Text>
-              {item.email ? (
-                <Text style={[styles.help, { color: colors.textSecondary }]}>
-                  {item.email}
-                </Text>
-              ) : null}
-              {r ? (
+              <View style={styles.row}>
+                {quickDates.map((d) => {
+                  const chosen = startDate === d.value;
+                  return (
+                    <Pressable
+                      key={d.label}
+                      accessibilityRole="button"
+                      accessibilityLabel={d.label}
+                      accessibilityState={{ selected: chosen }}
+                      onPress={() => {
+                        if (!running) setStartDate(d.value);
+                      }}
+                      style={[styles.pill, chosen && styles.pillChosen]}
+                    >
+                      <Text style={[styles.pillText, chosen && styles.pillTextChosen]}>
+                        {d.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <TextInput
+                value={startDate}
+                onChangeText={setStartDate}
+                editable={!running}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={mast.muted}
+                accessibilityLabel="Start date, year month day"
+                autoCapitalize="none"
+                autoCorrect={false}
+                maxLength={10}
+                style={[styles.dateInput, !dateOk && styles.dateInputInvalid]}
+              />
+              {!dateOk ? (
                 <Text
-                  style={[
-                    styles.result,
-                    {
-                      color:
-                        r.status === "failed"
-                          ? colors.error
-                          : r.status === "assigned"
-                            ? colors.success
-                            : colors.textSecondary,
-                    },
-                  ]}
+                  accessibilityLiveRegion="polite"
+                  style={[styles.help, { color: mast.ink }]}
                 >
-                  {resultLabel(r)}
+                  Enter a real date as YYYY-MM-DD, for example {quickDates[2].value}
+                  .
                 </Text>
-              ) : null}
+              ) : (
+                <Text style={[styles.help, { color: mast.muted }]}>
+                  Week 1, Day 1 lands on {startDate}. Each client gets their own
+                  copy.
+                </Text>
+              )}
+              <View style={styles.switchRow}>
+                <Switch
+                  value={allowRepeat}
+                  onValueChange={setAllowRepeat}
+                  disabled={running}
+                  trackColor={{ false: mast.line, true: mast.chosen }}
+                  accessibilityLabel="Assign again to clients already on this program"
+                />
+                <Text style={[styles.help, { color: mast.ink, flex: 1 }]}>
+                  Assign again to clients already on this program (a second run)
+                </Text>
+              </View>
             </View>
-          </Pressable>
-        );
-      }}
-      ListEmptyComponent={
-        clients.error ? null : (
+
+            <View style={styles.section}>
+              {clients.error ? (
+                <FailureBox
+                  failure={describeProgramFailure(
+                    clients.error,
+                    "load your clients",
+                  )}
+                  onRetry={() => clients.refetch()}
+                />
+              ) : null}
+              {/* C_assign rows 726-745: the section head with Select all at its right. */}
+              <View style={styles.headRow}>
+                <Text accessibilityRole="header" style={styles.pageHead}>
+                  {`Clients (${selected.size} selected)`}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={selectLabel}
+                  accessibilityState={{ disabled: visible.length === 0 }}
+                  disabled={visible.length === 0}
+                  onPress={toggleAllVisible}
+                  style={({ pressed }) => [styles.link, pressed && styles.pressed]}
+                >
+                  <Text style={[styles.linkText, visible.length === 0 && { color: sc.textMuted }]}>
+                    {selectLabel}
+                  </Text>
+                </Pressable>
+              </View>
+              <View style={styles.searchField}>
+                <Ionicons
+                  name="search"
+                  size={18}
+                  color={sc.textMuted}
+                  accessibilityElementsHidden
+                  importantForAccessibility="no"
+                />
+                <TextInput
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="Search clients"
+                  placeholderTextColor={sc.textMuted}
+                  accessibilityLabel="Search clients by name or email"
+                  style={styles.searchInput}
+                />
+              </View>
+            </View>
+          </View>
+        }
+        renderItem={({ item }) => {
+          const r = results.get(item.id);
+          const isSel = selected.has(item.id);
+          return (
+            <Pressable
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: isSel }}
+              accessibilityLabel={`${item.name}${r ? `, ${resultLabel(r)}` : ""}`}
+              onPress={() => toggle(item.id)}
+              style={styles.client}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.clientName}>
+                  {nameById.get(item.id) ?? item.name}
+                </Text>
+                {item.email ? (
+                  <Text style={styles.clientSub}>{item.email}</Text>
+                ) : null}
+                {r ? (
+                  <Text
+                    style={[
+                      styles.result,
+                      {
+                        color:
+                          r.status === "failed"
+                            ? colors.error
+                            : r.status === "assigned"
+                              ? colors.success
+                              : colors.textSecondary,
+                      },
+                    ]}
+                  >
+                    {resultLabel(r)}
+                  </Text>
+                ) : null}
+              </View>
+              {/* C_assign cols 680-731: the round check at the right, forest when chosen. */}
+              <Ionicons
+                name={isSel ? "checkmark-circle" : "ellipse-outline"}
+                size={32}
+                color={isSel ? sc.accent : sc.textMuted}
+              />
+            </Pressable>
+          );
+        }}
+        ListEmptyComponent={
+          clients.error ? null : (
+            <Text style={[styles.help, styles.empty]}>
+              {query
+                ? `No clients match "${query}".`
+                : "No active clients yet. Invite clients from the Clients tab."}
+            </Text>
+          )
+        }
+      />
+      {/* C_assign rows 1449-1603: the run's line, then the one forest Assign pinned at the foot. */}
+      <View style={styles.foot}>
+        {failure ? <FailureBox failure={failure} /> : null}
+        {progress ? (
           <Text
-            style={[
-              styles.help,
-              {
-                color: colors.textSecondary,
-                textAlign: "center",
-                paddingVertical: 24,
-              },
-            ]}
+            accessibilityLiveRegion="polite"
+            style={[styles.help, styles.progress]}
           >
-            {query
-              ? `No clients match "${query}".`
-              : "No active clients yet. Invite clients from the Clients tab."}
+            {running
+              ? `Assigning ${progress.done} of ${progress.total}`
+              : summaryLine(summary)}
           </Text>
-        )
-      }
-    />
+        ) : null}
+        {failedIds.length > 0 && !running ? (
+          <SmallButton
+            label={`Retry ${failedIds.length} failed`}
+            onPress={() => void assign(failedIds)}
+            accessibilityHint="Retries only the clients that failed, with the same request key"
+          />
+        ) : null}
+        {summary.total > 0 && failedIds.length === 0 && !running ? (
+          <SmallButton label="Done" onPress={() => navigation.goBack()} />
+        ) : null}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={assignLabel}
+          accessibilityState={{ disabled: assignDisabled }}
+          disabled={assignDisabled}
+          onPress={() => void assign(Array.from(selected))}
+          style={({ pressed }) => [
+            styles.primary,
+            assignDisabled && styles.primaryDisabled,
+            pressed && styles.pressed,
+          ]}
+        >
+          <Text style={[styles.primaryText, assignDisabled && styles.primaryTextDisabled]}>
+            {assignLabel}
+          </Text>
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
@@ -466,33 +496,128 @@ function summaryLine(s: ReturnType<typeof summarise>): string {
   return parts.join(" · ");
 }
 
-const styles = StyleSheet.create({
-  list: { padding: 16, gap: 8, paddingBottom: 64 },
-  header: { gap: 8, marginBottom: 8 },
-  row: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  input: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    minHeight: 44,
-    fontSize: 16,
-  },
-  help: { fontSize: 13, lineHeight: 19 },
-  switchRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    minHeight: 44,
-  },
-  client: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
-    minHeight: 56,
-  },
-  clientName: { fontSize: 15, fontWeight: "600" },
-  result: { fontSize: 13, marginTop: 2 },
-});
+// K3 C_assign's look from the theme and the kit. The two heads keep main's case (an uppercase eyebrow would change
+// the words), in the eyebrow's size, tracking and colour.
+function makeStyles(sc: SemanticTokens) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: sc.bgPrimary },
+    list: { flex: 1 },
+    listContent: { paddingBottom: spacing.xl },
+    // C_assign rows 200-661: deep forest, 24 pt bottom corners (col 10 ends at row 642), the 24 pt gutter.
+    masthead: {
+      backgroundColor: mast.ground,
+      borderBottomLeftRadius: radius.sheet,
+      borderBottomRightRadius: radius.sheet,
+      paddingHorizontal: layout.gutter,
+      paddingTop: spacing.md,
+      // rows 634-661: 14 pt under the last control.
+      paddingBottom: 14,
+      gap: spacing.sm,
+    },
+    // "FIRST WEEK" (cap rows 210-226): the eyebrow's size, tracking and muted ink on forest; main's case.
+    mastHead: { ...typography.eyebrow, textTransform: "none", color: mast.muted },
+    row: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+    // C_assign rows 442-529: 44 pt pills, a 1 pt frame line (#627669), 16 pt in from each end (cols 48-79).
+    pill: {
+      minHeight: layout.touchMin,
+      minWidth: layout.touchMin,
+      justifyContent: "center",
+      paddingHorizontal: spacing.lg,
+      borderRadius: radius.chip,
+      borderWidth: 1,
+      borderColor: mast.line,
+    },
+    // The chosen date is filled leaf with deep text (cols 418-655, #A3C46A).
+    pillChosen: { backgroundColor: mast.chosen, borderColor: mast.chosen },
+    // "Today" (T cap rows 473-493, 21 px): 14 pt.
+    pillText: { ...typography.bodySmall, color: mast.ink },
+    pillTextChosen: { color: mast.ground },
+    // The typed date in C_picker's field on forest (rows 204-295): forest fill, frame line, 12 pt corners.
+    dateInput: {
+      ...typography.body,
+      minHeight: layout.touchMin,
+      paddingHorizontal: spacing.lg,
+      borderRadius: radius.input,
+      borderWidth: 1,
+      borderColor: mast.line,
+      backgroundColor: mast.field,
+      color: mast.ink,
+    },
+    // Red on forest fails contrast (2.2:1); an invalid date takes a 2 pt edge in the masthead ink.
+    dateInputInvalid: { borderWidth: 2, borderColor: mast.ink },
+    help: { ...typography.bodySmall },
+    switchRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      minHeight: layout.touchMin,
+    },
+    // The page part: the 24 pt gutter, 18 pt under the masthead (rows 661-728).
+    section: { paddingHorizontal: layout.gutter, paddingTop: spacing.sm, gap: spacing.sm },
+    headRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: spacing.md,
+      minHeight: layout.touchMin,
+    },
+    // "10 SELECTED" (cap rows 728-743): the eyebrow's size and muted ink; main's case.
+    pageHead: { ...typography.eyebrow, textTransform: "none", color: sc.textMuted, flexShrink: 1 },
+    // "Select all 100" (rows 726-745): the forest link at the right, in a 44 pt target.
+    link: { minHeight: layout.touchMin, justifyContent: "center" },
+    linkText: { ...typography.bodySmall, fontFamily: typography.micro.fontFamily, fontWeight: "600", color: sc.accentText },
+    pressed: { opacity: 0.8 },
+    // C_assign rows 794-881: the light field, a 1 pt line, 12 pt corners, 44 pt, the search glyph at cols 79-104.
+    searchField: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+      minHeight: layout.touchMin,
+      paddingHorizontal: spacing.lg,
+      borderRadius: radius.input,
+      borderWidth: 1,
+      borderColor: sc.border,
+      backgroundColor: sc.bgSurface,
+    },
+    searchInput: { ...typography.body, flex: 1, minHeight: layout.touchMin, color: sc.textPrimary },
+    // C_assign rows 883-1331: 56 pt hairline rows on the gutter, no box, the check at the right.
+    client: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.md,
+      minHeight: layout.rowMinHeight,
+      marginHorizontal: layout.gutter,
+      paddingVertical: spacing.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: sc.border,
+    },
+    // "Jordan" (J cap rows 924-947): Inter 17.
+    clientName: { ...typography.h4, color: sc.textPrimary },
+    // "Already on this program" (rows 1174-1199): the muted line under the name.
+    clientSub: { ...typography.bodySmall, color: sc.textMuted },
+    result: { ...typography.bodySmall, marginTop: 2 },
+    empty: { color: sc.textMuted, textAlign: "center", paddingVertical: spacing.xl, paddingHorizontal: layout.gutter },
+    // The pinned foot: 12 pt above, the gutter at the sides and under it (Screen's foot when the tab bar owns the edge).
+    foot: {
+      paddingHorizontal: layout.gutter,
+      paddingTop: layout.footerTopGap,
+      paddingBottom: layout.gutter,
+      gap: layout.footerItemGap,
+      backgroundColor: sc.bgPrimary,
+    },
+    // The drawn line over the button (rows 1449-1475): centred.
+    progress: { color: sc.textPrimary, textAlign: "center" },
+    // C_assign rows 1496-1603: one forest button, 54 pt, 12 pt corners; the app's primary label.
+    primary: {
+      minHeight: layout.buttonHeight,
+      borderRadius: radius.button,
+      backgroundColor: sc.accent,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: spacing.lg,
+    },
+    primaryDisabled: { backgroundColor: sc.disabledBg },
+    primaryText: { ...typography.bodyMd, color: sc.textOnAccent, textAlign: "center" },
+    primaryTextDisabled: { color: sc.textOnDisabled },
+  });
+}
