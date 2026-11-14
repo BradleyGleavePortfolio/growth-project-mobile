@@ -57,7 +57,11 @@ Realtime:
 Food log offline:
   enqueueSearchLog / enqueueManualLog ─► AsyncStorage('pending_food_logs')
                                        │
-                                       └─► flush() ─► foodApi.create + logApi.logFood
+                                       └─► flush() ─► logApi.logFood with the item's food id as is
+                                                      (usda_, off_ or a stored id; the server
+                                                      resolves it); foodApi.create first only
+                                                      for an item holding a food block (manual,
+                                                      a no-id pick, or one an older build queued)
 
 Sentry:
   initSentry() ─► reads EXPO_PUBLIC_SENTRY_DSN

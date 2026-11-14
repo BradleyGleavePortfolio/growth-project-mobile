@@ -27,6 +27,7 @@ import { layout, radius } from '../../theme/tokens';
 import { useScreenInsets } from '../../ui';
 import { errorMessage } from '../../types/common';
 import { useBlockedUsersStore, filterOutBlocked } from '../../store/blockedUsersStore';
+import { useChatClosureHeard } from '../../store/closedClientsStore';
 import { useBlockedUsersHydration } from '../../hooks/useBlockedUsersHydration';
 import { messagesModerationApi, ReportReason } from '../../api/messagesApi';
 import MessageBubble, { BubbleMessage } from '../../components/messaging/MessageBubble';
@@ -93,6 +94,7 @@ export default function ClientMessagesScreen() {
     answered && coachingRow.settled,
     threadClosed || coachingRow.row?.closed,
   );
+  useChatClosureHeard(currentUser?.id, clientId, answered && coachingRow.settled, closed); // LS-952R3 B3: Roman's drafts too
   // BLOCK-TELL #169-5: `by` picks the line for my side (BAM-2a when I blocked them, BAM-2b when they blocked me).
   const by = useClosedBy(clientId, closed, { pair: true, mine: coachingRow.row?.blocked_by_me, side: threadSide });
   const [sending, setSending] = useState(false);

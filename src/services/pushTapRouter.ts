@@ -24,13 +24,18 @@
  *  - Params are decoded to a bounded string map; the delivered-id dedupe set
  *    is bounded.
  */
+import type { NavigationAction } from '@react-navigation/native';
 import { featureFlags } from '../config/featureFlags';
 import { creditPacksHidden } from '../config/purchaseSurfaces';
-import { incomingLinkPath, isPublicLinkPath, resolveAppLink } from '../navigation/incomingLinks';
+import { incomingLinkPath, isPublicLinkPath, resolveAppLink, UUID } from '../navigation/incomingLinks';
+import { chatTarget, openTarget } from '../navigation/coachInbox';
+import { refreshMealPlanToday } from './mealPlanRefresh';
 
 export interface PushNavigator {
   isReady(): boolean;
   navigate(name: string, params?: object): void;
+  /** The container ref's dispatch: openTarget's RESET of the Messages stack (COACH-ROW-CHAT). */
+  dispatch?(action: NavigationAction): void;
   getRootState():
     | { routeNames?: readonly string[]; routes?: readonly { name: string; state?: { routes?: readonly { name: string }[] } }[] }
     | undefined;
@@ -102,14 +107,14 @@ export const CLIENT_PUSH_ROUTES: Record<string, Resolver> = {
   Timeline: () =>
     featureFlags.clientTimelineV2
       ? { root: 'MoreTab', screen: 'Timeline', beneath: ['MoreIndex', 'Progress'] }
-      : { root: 'MoreTab', screen: 'Timeline' },
+      : { root: 'MoreTab', screen: 'Timeline', initial: false },
   MoreIndex: () => ({ root: 'MoreTab', screen: 'MoreIndex', pop: true }),
   // Legacy Guidance notifications open Roman when available, otherwise You.
   AIGuide: () => ({
     root: 'MoreTab', screen: featureFlags.romanChat ? 'RomanChat' : 'MoreIndex', initial: false,
   }),
-  Membership: () => ({ root: 'MoreTab', screen: 'Membership' }),
-  Deliverables: () => ({ root: 'MoreTab', screen: 'Deliverables' }),
+  Membership: () => ({ root: 'MoreTab', screen: 'Membership', initial: false }),
+  Deliverables: () => ({ root: 'MoreTab', screen: 'Deliverables', initial: false }),
   UpdateCard: () => ({ root: 'MoreTab', screen: 'UpdateCard', initial: false }),
   WorkoutMain: () => ({ root: 'WorkoutTab', screen: 'WorkoutMain', pop: true }),
   Log: () => ({ root: 'Log' }),
@@ -119,11 +124,11 @@ export const CLIENT_PUSH_ROUTES: Record<string, Resolver> = {
   // Flag off: the tab does not exist, so land on the notification center.
   CalendarSession: () =>
     featureFlags.clientCalendar
-      ? { root: 'CalendarTab', screen: 'CalendarSession' }
+      ? { root: 'CalendarTab', screen: 'CalendarSession', initial: false }
       : { root: 'Home', screen: 'NotificationCenter' },
   CommunityEventDetail: () =>
     featureFlags.communityTab && featureFlags.communityEvents
-      ? { root: 'CommunityTab', screen: 'CommunityEventDetail' }
+      ? { root: 'CommunityTab', screen: 'CommunityEventDetail', initial: false }
       : null,
   // AUDIT-09-125: a community push (kind community_*) opens the Community tab.
   Community: () => (featureFlags.communityTab ? { root: 'CommunityTab' } : null),
@@ -166,11 +171,11 @@ export const COACH_PUSH_ROUTES: Record<string, Resolver> = {
       : { root: 'SettingsStack', screen: 'CreditPackCheckout', initial: false },
   CommunityEventDetail: () =>
     featureFlags.coachCommunity && featureFlags.communityEvents
-      ? { root: 'CommunityStack', screen: 'CoachCommunityEvents' }
+      ? { root: 'CommunityStack', screen: 'CoachCommunityEvents', initial: false }
       : null,
   CoachCommunityEvents: () =>
     featureFlags.coachCommunity && featureFlags.communityEvents
-      ? { root: 'CommunityStack', screen: 'CoachCommunityEvents' }
+      ? { root: 'CommunityStack', screen: 'CoachCommunityEvents', initial: false }
       : null,
 };
 
@@ -194,6 +199,8 @@ interface PendingTap {
   waitForSignIn?: boolean;
   /** The signed-in user the tap belongs to; null while bootstrap is unknown. */
   ownerUserId: string | null;
+  /** COACH-DM-M: `path` is followed only for this role; any other role gets `screen` (coachDmLink). */
+  linkFor?: PushRole;
 }
 
 let navigator: PushNavigator | null = null;
@@ -315,6 +322,7 @@ export function routePushTap(
     screen: actionScreen,
     params: decodePushParams(actionParams),
     ownerUserId: sessionUserId(session),
+    ...coachDmLink(actionScreen, deepLink, sessionUserId(session)),
   };
   flushPendingPushTap();
 }
@@ -342,6 +350,56 @@ export function resolvePushTarget(role: PushRole, screen: string): Target {
   return t ?? (routes.NotificationCenter() as Target);
 }
 
+/**
+ * REFINE-966 (B1, read only): where a tap on this push would land now, for the role whose navigator is the mounted
+ * root (its ROLE_ANCHOR, as flushPendingPushTap checks it): the route it opens and the params it passes, following
+ * routePushTap's link rule, flushPendingPushTap and deliver without routing (no navigate, hold, dedupe or after()).
+ * null when the tap opens nothing. A root that keeps open work (pop) still answers its screen: no exact match there.
+ * MERGEUP-966: a coach's community DM link is followed through COACH-DM-M's coachDmLink, as flushPendingPushTap does.
+ */
+export function pushTapLanding(
+  routeNames: readonly string[],
+  actionScreen?: string,
+  actionParams?: unknown,
+  deepLink?: string,
+): { name: string; params?: Record<string, string> } | null {
+  const roles = (['student', 'coach'] as const).filter((r) => routeNames.includes(ROLE_ANCHOR[r]));
+  if (roles.length !== 1) return null;
+  const role: PushRole = roles[0];
+  const land = (t: Target, params?: Record<string, string>) => (routeNames.includes(t.root)
+    ? { name: t.screen ?? t.root, params: t.screen || !t.params ? params : { ...params, ...t.params } }
+    : null);
+  const onScreen = (screen: string, params?: Record<string, string>) => {
+    let rest = params;
+    if (screen === 'Messages' && params && 'clientId' in params && 'clientName' in params) {
+      const { clientId, clientName, ...others } = params;
+      const chat = chatTarget(clientId, clientName);
+      if (role === 'coach' && UUID.test(clientId ?? '') && clientName?.trim() && routeNames.includes(chat.tab)) {
+        return { name: chat.params.screen, params: { clientId } };
+      }
+      rest = Object.keys(others).length > 0 ? others : undefined;
+    }
+    const target = resolvePushTarget(role, screen);
+    return land(routeNames.includes(target.root) ? target : resolvePushTarget(role, 'NotificationCenter'), rest);
+  };
+  if (deepLink !== undefined) {
+    const path = incomingLinkPath(deepLink);
+    if (path === null) return null;
+    if (!actionScreen || actionScreen === 'NotificationCenter') {
+      if (isPublicLinkPath(path)) return null;
+      const target = resolveAppLink(path, role);
+      return target ? land(target, target.params) : onScreen('NotificationCenter');
+    }
+  }
+  if (!actionScreen || !SCREEN_NAME.test(actionScreen)) return null;
+  const dm = coachDmLink(actionScreen, deepLink, sessionUserId(session));
+  if (dm.path !== undefined && dm.linkFor === role) {
+    const target = resolveAppLink(dm.path, role);
+    if (target) return land(target, target.params);
+  }
+  return onScreen(actionScreen, decodePushParams(actionParams));
+}
+
 /** Returns true when a pending tap was delivered. */
 export function flushPendingPushTap(): boolean {
   if (!pending || !navigator || !navigator.isReady()) return false;
@@ -355,14 +413,16 @@ export function flushPendingPushTap(): boolean {
   // frame between an auth-state change and the navigator commit).
   if (!routeNames.includes(ROLE_ANCHOR[session.role])) return false;
 
-  const { screen, params, path } = pending;
+  const { screen, params, path, linkFor } = pending;
   pending = null;
-  if (path !== undefined) {
+  if (path !== undefined && (!linkFor || linkFor === session.role)) {
     const target = resolveAppLink(path, session.role);
     // A trusted but unsupported push URL keeps its existing inbox fallback.
     // URL opens have no fallback, and untrusted origins never enter the queue.
     if (!target) return screen ? deliver(navigator, session.role, routeNames, screen, params) : false;
     if (!routeNames.includes(target.root)) return false;
+    // MEAL-PLAN-REFRESH-M: at delivery, after a cold start's cache restore, so the plan the tap opens is read anew.
+    if (target.screen === 'ClientDailyMealPlan') refreshMealPlanToday();
     return deliverTarget(navigator, target, target.params);
   }
   // Unroutable target: dropped rather than crashing (deliver returns false).
@@ -377,11 +437,38 @@ function deliver(
   screen: string,
   params: Record<string, string> | undefined,
 ): boolean {
+  let rest = params;
+  if (screen === 'Messages' && params && 'clientId' in params && 'clientName' in params) {
+    const { clientId, clientName, ...others } = params;
+    // COACH-ROW-CHAT (owner 203-D4): a coach's message naming its client (a message row, notificationsApi
+    // messageChatParams) opens that client's chat as the inbox row does (chatTarget through openTarget: over the inbox,
+    // Back to it, another chat open there replaced). The pair is this rule's: any other Messages target (the client's
+    // Home > Messages, the coach inbox) gets the params it got before.
+    if (role === 'coach' && UUID.test(clientId ?? '') && clientName?.trim()) {
+      const chat = chatTarget(clientId, clientName);
+      if (routeNames.includes(chat.tab)) return openChat(nav, chat);
+    }
+    rest = Object.keys(others).length > 0 ? others : undefined;
+  }
   let target = resolvePushTarget(role, screen);
   if (!routeNames.includes(target.root)) {
     target = resolvePushTarget(role, 'NotificationCenter');
   }
-  return deliverTarget(nav, target, params);
+  return deliverTarget(nav, target, rest);
+}
+
+/** openTarget over the container ref: the coach tabs are the root navigator, so its state is what openTarget walks. */
+function openChat(nav: PushNavigator, chat: ReturnType<typeof chatTarget>): boolean {
+  try {
+    openTarget({
+      navigate: (name, params) => nav.navigate(name, params),
+      dispatch: (action) => nav.dispatch?.(action),
+      getState: () => nav.getRootState() as ReturnType<NonNullable<Parameters<typeof openTarget>[0]['getState']>>,
+    }, chat);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function deliverTarget(nav: PushNavigator, target: Target, params?: Record<string, string>): boolean {
@@ -435,4 +522,19 @@ export function __resetPushTapRouterForTests(): void {
   pending = null;
   session = { kind: 'unknown' };
   seen.clear();
+}
+
+/**
+ * COACH-DM-M (b#1243 CONTRACT 6763103674): a community DM row's link names the other person, tgp://community/dm/<id>.
+ * Rows stored before b#1243 keep tgp://community/dms/<workspace>:<lo>:<hi>: read as the id that is not the signed-in
+ * user's, and when neither is, nothing is guessed. Held for a coach only: a client's row keeps its kind's Community
+ * screen (m#956 N2), as does a build whose switches cannot open the thread (resolveAppLink answers null).
+ */
+function coachDmLink(screen: string, deepLink: string | undefined, userId: string | null): Pick<PendingTap, 'path' | 'linkFor'> {
+  const path = screen === 'Community' && deepLink !== undefined ? incomingLinkPath(deepLink)?.split(/[?#]/, 1)[0] : null;
+  if (!path) return {};
+  if (/^community\/dm\/[^/]+$/.test(path)) return { path, linkFor: 'coach' };
+  const pair = /^community\/dms\/[^/:]+:([^/:]+):([^/:]+)$/.exec(path);
+  const other = pair && userId ? (pair[1] === userId ? pair[2] : pair[2] === userId ? pair[1] : null) : null;
+  return other ? { path: `community/dm/${other}`, linkFor: 'coach' } : {};
 }

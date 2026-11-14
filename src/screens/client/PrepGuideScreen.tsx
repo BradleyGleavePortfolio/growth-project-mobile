@@ -8,6 +8,7 @@ import {
   Alert,
   RefreshControl,
   ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
@@ -17,15 +18,14 @@ import { prepGuideApi, listsApi } from '../../services/api';
 
 import FadeInView from '../../components/FadeInView';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import { typography, radius } from '../../theme/tokens';
-import { Screen } from '../../ui';
+import { colors as palette, typography, radius, gold, brand, withAlpha } from '../../theme/tokens';
+import { PrimaryButton, Screen } from '../../ui';
+import {
+  StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCMastText, StyleCNotice, StyleCPaper, StyleCSheet, StyleCThumb, useBottomInset, usePullToRefresh, useStyleCScreen,
+} from '../../ui/layout/StyleCPage';
 import { getLocalWeekStart } from '../../utils/date';
 import { RecipeAllergenFields, recipeAllergenSummary } from '../../lib/recipeAllergens';
 
-function EmptyState({ title, subtitle }: { icon: string; title: string; subtitle: string }) {
-  const { semanticColors: sc } = useTheme();
-  return <View style={{ padding: 24, gap: 12 }}><Text style={[typography.h2, { color: sc.textPrimary }]}>{title}</Text><Text style={[typography.bodySmall, { color: sc.textMuted }]}>{subtitle}</Text></View>;
-}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface PrepRecipe extends RecipeAllergenFields {
@@ -61,6 +61,8 @@ interface PrepGuideData {
 }
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+// The app's kcal number (as copilot/pathChangeWords.ts kcalText, ProgressScreen): rounded, grouped "1,234" (ctx#457).
+const kcalText = (n: number) => Math.round(n).toLocaleString('en-US');
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 function formatWeekLabel(weekStart: string): string {
@@ -74,6 +76,7 @@ function formatWeekLabel(weekStart: string): string {
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function PrepGuideScreen() {
+  const page = useStyleCScreen();
   const { semanticColors: sc } = useTheme();
   const colors = useMemo(() => ({
     background: sc.bgPrimary, surface: sc.bgPrimary, primary: sc.accent,
@@ -84,6 +87,12 @@ export default function PrepGuideScreen() {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const queryClient = useQueryClient();
   const [weekOffset, setWeekOffset] = useState(0);
+  // The confirmation sheet after Add all (ctx#457 prep-added): how many were added, null when closed.
+  const [added, setAdded] = useState<number | null>(null);
+  // At 130% text the tile is 52 pt and the kcal joins the meta line (ctx#457 android360 130%).
+  const { fontScale } = useWindowDimensions();
+  const big = fontScale > 1.15;
+  const bottomInset = useBottomInset();
 
   const weekStart = getLocalWeekStart(weekOffset);
 
@@ -92,7 +101,9 @@ export default function PrepGuideScreen() {
     queryFn: () => prepGuideApi.getWeeklyGuide(weekStart).then((r) => r.data as PrepGuideData),
     staleTime: 5 * 60 * 1000,
   });
+  const { pulling, onRefresh } = usePullToRefresh(refetch);
 
+  const shown = !isLoading && !isError && data && data.recipes.length > 0 ? data : null;
   const fromPlan = data?.source === 'plan';
   const fromLibrary = data?.source === 'library';
   // The week arrows only change anything when the server filters by week; once off the current week
@@ -114,18 +125,8 @@ export default function PrepGuideScreen() {
     onSuccess: (added) => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       // Invalidate grocery list so it's fresh when user navigates to it
-      queryClient.invalidateQueries({ queryKey: ['lists', 'grocery'] });
-      Alert.alert(
-        'Added to Grocery List',
-        `${plural(added, 'ingredient')} added to your grocery list.`,
-        [
-          { text: 'OK' },
-          {
-            text: 'View List',
-            onPress: () => navigation.navigate('GroceryList'),
-          },
-        ],
-      );
+      void queryClient.invalidateQueries({ queryKey: ['lists', 'grocery'] });
+      setAdded(added);
     },
     onError: () =>
       Alert.alert('Could not add the ingredients', 'Nothing was added to your grocery list. Try again.'),
@@ -147,105 +148,98 @@ export default function PrepGuideScreen() {
   }, [data, addToGroceryMutation]);
 
   return (
-    <Screen edges={['top']} scroll={false} contentStyle={styles.bare} testID="grocery-prep-screen">
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back" onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Prep guide</Text>
-      </View>
-
-      {/* Week selector: only where the week is real (the server filters by it) */}
-      {showWeek ? <View style={styles.weekSelector}>
-        <TouchableOpacity
-          accessibilityRole="button" accessibilityLabel="Previous week"
-          style={styles.weekArrow}
-          onPress={() => setWeekOffset((o) => o - 1)}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="chevron-back" size={20} color={colors.primary} />
-        </TouchableOpacity>
-        <View style={styles.weekLabel}>
-          <Text style={styles.weekLabelText}>{formatWeekLabel(weekStart)}</Text>
-          {weekOffset === 0 ? (
-            <Text style={styles.weekCurrentBadge}>This week</Text>
-          ) : null}
-        </View>
-        <TouchableOpacity
-          accessibilityRole="button" accessibilityLabel="Next week"
-          style={styles.weekArrow}
-          onPress={() => setWeekOffset((o) => o + 1)}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="chevron-forward" size={20} color={colors.primary} />
-        </TouchableOpacity>
-      </View> : null}
-
+    <Screen edges={['top']} scroll={false} {...page} testID="grocery-prep-screen">
+      {/* FIX-929R3: the masthead scrolls with the recipes (as RecipeDetail), so at 320 pt and 130% text the summary,
+          week and prep days never fill the screen above the pinned Add all; what main scrolled scrolls again. */}
       <ScrollView
         testID="list-scroll"
         style={styles.content}
-        contentContainerStyle={styles.contentInner}
+        contentContainerStyle={styles.contentFlow}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             testID="list-refresh"
-            refreshing={isRefetching}
-            onRefresh={refetch}
-            tintColor={colors.primary}
+            refreshing={pulling}
+            onRefresh={onRefresh}
+            tintColor={sc.textOnAccent}
           />
         }
       >
+      <StyleCMasthead title="Prep guide" onBack={() => navigation.goBack()}>
+        {shown ? (
+          <StyleCMastText>
+            {plural(shown.recipes.length, 'recipe')} {fromPlan ? 'from your meal plan.' : 'available to this account.'}
+          </StyleCMastText>
+        ) : null}
+        {shown && fromLibrary ? <StyleCMastText kind="muted">None of these come from a meal plan.</StyleCMastText> : null}
+        {/* Week selector: only where the week is real (the server filters by it) */}
+        {showWeek ? <View style={styles.weekSelector}>
+          <TouchableOpacity
+            accessibilityRole="button" accessibilityLabel="Previous week"
+            style={styles.weekArrow}
+            onPress={() => setWeekOffset((o) => o - 1)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="chevron-back" size={22} color={sc.textOnAccent} />
+          </TouchableOpacity>
+          <View style={styles.weekLabel}>
+            <Text style={styles.weekLabelText}>{formatWeekLabel(weekStart)}</Text>
+            {weekOffset === 0 ? (
+              <Text style={styles.weekCurrentBadge}>This week</Text>
+            ) : null}
+          </View>
+          <TouchableOpacity
+            accessibilityRole="button" accessibilityLabel="Next week"
+            style={styles.weekArrow}
+            onPress={() => setWeekOffset((o) => o + 1)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="chevron-forward" size={22} color={sc.textOnAccent} />
+          </TouchableOpacity>
+        </View> : null}
+        {/* Prep day suggestions: only for plan recipes */}
+        {shown && fromPlan && shown.prep_day_suggestions.length > 0 ? (
+          <>
+            <StyleCMastText kind="eyebrow">Suggested prep days</StyleCMastText>
+            <View style={styles.prepDayRow}>
+              {shown.prep_day_suggestions.map((day) => (
+                <View key={day} style={[styles.prepDayBadge, { borderColor: sc.surface.forestBandLine }]}>
+                  <Ionicons name="calendar-clear-outline" size={16} color={gold[300]} />
+                  <Text style={styles.prepDayText}>{day}</Text>
+                </View>
+              ))}
+            </View>
+            <StyleCMastText kind="muted">Choose the prep days that fit your week.</StyleCMastText>
+          </>
+        ) : null}
+      </StyleCMasthead>
+      <StyleCPaper scrolls style={styles.contentInner}>
         {isLoading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={styles.loadingText}>Loading your prep guide…</Text>
+            <StyleCLoadingLines lead="tile" />
           </View>
         ) : isError ? (
-          <EmptyState
-            icon="alert-circle-outline"
-            title="Couldn't load prep guide"
-            subtitle="Pull down to try again."
-          />
+          // The warm notice and a Try again button (C_error), the same words as before.
+          <View style={styles.errorBlock}>
+            <StyleCNotice title="Couldn't load prep guide">Pull down to try again.</StyleCNotice>
+            <PrimaryButton label="Try again" onPress={() => refetch()} disabled={isRefetching} haptic={false} />
+          </View>
         ) : !data || data.recipes.length === 0 ? (
-          <EmptyState
+          <StyleCEmpty
             icon="clipboard-outline"
             title="No recipes yet"
             subtitle="Recipes from a meal plan or available to this account appear here."
           />
         ) : (
           <>
-            <Text style={styles.summary}>
-              {plural(data.recipes.length, 'recipe')} {fromPlan ? 'from your meal plan.' : 'available to this account.'}
-            </Text>
-            {fromLibrary ? <Text style={styles.prepDayHint}>None of these come from a meal plan.</Text> : null}
-            {/* Prep day suggestions: only for plan recipes */}
-            {fromPlan && data.prep_day_suggestions.length > 0 ? (
-              <FadeInView>
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Suggested prep days</Text>
-                  <View style={styles.prepDayRow}>
-                    {data.prep_day_suggestions.map((day) => (
-                      <View key={day} style={styles.prepDayBadge}>
-                        <Ionicons name="calendar-outline" size={14} color={colors.primary} />
-                        <Text style={styles.prepDayText}>{day}</Text>
-                      </View>
-                    ))}
-                  </View>
-                  <Text style={styles.prepDayHint}>
-                    Choose the prep days that fit your week.
-                  </Text>
-                </View>
-              </FadeInView>
-            ) : null}
-
             {/* Recipes to prep */}
             <FadeInView delay={60}>
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>
                   {fromPlan ? 'Recipes to prep' : 'Recipes'} ({data.recipes.length})
                 </Text>
-                {data.recipes.map((recipe, index) => (
+                {data.recipes.map((recipe) => (
                   <TouchableOpacity
                     key={recipe.id}
                     accessibilityRole="button"
@@ -254,23 +248,22 @@ export default function PrepGuideScreen() {
                     onPress={() => navigation.navigate('RecipeDetail', { recipeId: recipe.id })}
                     activeOpacity={0.7}
                   >
-                    <View style={styles.recipeIcon}>
-                      <Text style={styles.stepNumber}>{index + 1}</Text>
-                    </View>
+                    <StyleCThumb size={big ? 52 : 64} />
                     <View style={styles.recipeInfo}>
                       <Text style={styles.recipeName}>{recipe.title}</Text>
-                      <View style={styles.recipeMeta}>
-                        <Text style={styles.recipeMetaText}>
-                          {recipe.prep_time_min + recipe.cook_time_min} min
-                        </Text>
-                        <Text style={styles.recipeMetaDot}>·</Text>
-                        <Text style={styles.recipeMetaText}>{recipe.servings} servings</Text>
-                        <Text style={styles.recipeMetaDot}>·</Text>
-                        <Text style={styles.recipeMetaText}>{Math.round(recipe.calories)} kcal</Text>
-                      </View>
-                      <Text style={styles.recipeMetaText}>{recipeAllergenSummary(recipe)}</Text>
+                      <Text style={styles.recipeMetaText}>
+                        {recipe.prep_time_min + recipe.cook_time_min} min · {recipe.servings} servings
+                        {big ? ` · ${kcalText(recipe.calories)}\u00a0kcal` : ''}
+                      </Text>
+                      <Text style={styles.recipeAllergens}>{recipeAllergenSummary(recipe)}</Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                    {/* The kcal at the right (ctx#457), in the meta line at 130%. */}
+                    {big ? null : (
+                      <View style={styles.kcal}>
+                        <Text style={styles.kcalNum}>{kcalText(recipe.calories)}</Text>
+                        <Text style={styles.kcalUnit}>kcal</Text>
+                      </View>
+                    )}
                   </TouchableOpacity>
                 ))}
               </View>
@@ -279,40 +272,20 @@ export default function PrepGuideScreen() {
             {/* Aggregated ingredients */}
             <FadeInView delay={100}>
               <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>
-                    Ingredients ({data.aggregated_ingredients.length})
-                  </Text>
-                  <TouchableOpacity
-                    accessibilityRole="button" accessibilityLabel="Add all ingredients"
-                    style={[
-                      styles.addToGroceryBtn,
-                      (addToGroceryMutation.isPending || data.aggregated_ingredients.length === 0) && styles.addToGroceryBtnDisabled,
-                    ]}
-                    onPress={handleAddToGrocery}
-                    activeOpacity={0.8}
-                    disabled={addToGroceryMutation.isPending || data.aggregated_ingredients.length === 0}
-                  >
-                    {addToGroceryMutation.isPending ? (
-                      <ActivityIndicator size="small" color={colors.textOnPrimary} />
-                    ) : (
-                      <>
-                        <Ionicons name="cart-outline" size={14} color={colors.textOnPrimary} />
-                        <Text style={styles.addToGroceryBtnText}>Add all</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                </View>
+                <Text style={styles.sectionTitle}>
+                  Ingredients ({data.aggregated_ingredients.length})
+                </Text>
                 {data.aggregated_ingredients.map((ingredient, i) => (
+                  // Name, a dotted leader, the amount at the right (ctx#457 prep).
                   <View key={i} style={styles.ingredientRow}>
-                    <View style={styles.ingredientBullet} />
-                    <Text style={styles.ingredientText}>
+                    <Text style={styles.ingredientName}>{ingredient.name}</Text>
+                    <View style={styles.leader} />
+                    <Text style={styles.ingredientAmount}>
                       {ingredient.quantity > 0 && ingredient.unit
-                        ? `${Math.round(ingredient.quantity * 10) / 10} ${ingredient.unit} `
+                        ? `${Math.round(ingredient.quantity * 10) / 10} ${ingredient.unit}`
                         : ingredient.quantity > 1
-                        ? `${Math.round(ingredient.quantity * 10) / 10}× `
+                        ? `${Math.round(ingredient.quantity * 10) / 10}×`
                         : ''}
-                      <Text style={styles.ingredientName}>{ingredient.name}</Text>
                     </Text>
                   </View>
                 ))}
@@ -320,7 +293,40 @@ export default function PrepGuideScreen() {
             </FadeInView>
           </>
         )}
+      </StyleCPaper>
       </ScrollView>
+      {/* Add all: one full-width button pinned under the list (ctx#457), the same confirm and words as before. */}
+      {shown ? (
+        <View style={[styles.foot, { backgroundColor: sc.bgPrimary, paddingBottom: bottomInset + 12 }]}>
+          <TouchableOpacity
+            accessibilityRole="button" accessibilityLabel="Add all ingredients"
+            accessibilityState={{ disabled: addToGroceryMutation.isPending || shown.aggregated_ingredients.length === 0, busy: addToGroceryMutation.isPending }}
+            style={[styles.addToGroceryBtn, { minHeight: 56 * Math.max(1, fontScale * 0.9) }, (addToGroceryMutation.isPending || shown.aggregated_ingredients.length === 0) && styles.addToGroceryBtnDisabled]}
+            onPress={handleAddToGrocery}
+            activeOpacity={0.8}
+            disabled={addToGroceryMutation.isPending || shown.aggregated_ingredients.length === 0}
+          >
+            {addToGroceryMutation.isPending ? (
+              <ActivityIndicator size="small" color={colors.textOnPrimary} />
+            ) : (
+              <>
+                <Ionicons name="cart-outline" size={20} color={colors.textOnPrimary} />
+                <Text style={styles.addToGroceryBtnText}>Add all</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      ) : null}
+    <StyleCSheet
+      visible={added != null}
+      icon="cart-outline"
+      title="Added to Grocery List"
+      body={`${plural(added ?? 0, 'ingredient')} added to your grocery list.`}
+      action="View List"
+      onAction={() => { setAdded(null); navigation.navigate('GroceryList'); }}
+      link="OK"
+      onClose={() => setAdded(null)}
+    />
     </Screen>
   );
 }
@@ -328,119 +334,57 @@ export default function PrepGuideScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primary' | 'textPrimary' | 'textMuted' | 'textSecondary' | 'textOnPrimary' | 'border' | 'primaryPale'>) =>
   StyleSheet.create({
-  // Screen owns the inset top (insets.top + 12) and the page colour.
-  bare: { paddingHorizontal: 0, paddingBottom: 0 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 12,
-    gap: 12,
-  },
-  backBtn: { width: 44, height: 44, justifyContent: 'center' },
-  title: { ...typography.h1, color: colors.textPrimary },
-  summary: { ...typography.h2, color: colors.textPrimary, fontVariant: ['tabular-nums'] },
-
-  weekSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: colors.surface,
-    marginHorizontal: 16,
-    marginBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+  // Screen owns the inset top (forest via useStyleCScreen); the masthead and paper scroll together (FIX-929R3).
+  // The week selector on the forest masthead (ctx#457 prep-week): light words, the current week in a gold pill.
+  weekSelector: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: -10, marginTop: 14 },
   weekArrow: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  weekLabel: { alignItems: 'center', gap: 2 },
-  weekLabelText: { ...typography.bodyMd, color: colors.textPrimary, fontVariant: ['tabular-nums'] },
+  weekLabel: { alignItems: 'center', gap: 4 },
+  weekLabelText: { ...typography.bodyMd, lineHeight: 19.36, letterSpacing: 0, color: colors.textOnPrimary, fontVariant: ['tabular-nums'] },
   weekCurrentBadge: {
-    ...typography.eyebrow,
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.primary,
-    backgroundColor: colors.primaryPale,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: radius.chip,
-    overflow: 'hidden',
+    ...typography.micro, fontSize: 11, letterSpacing: 0.3, color: brand[800], backgroundColor: gold[300],
+    paddingHorizontal: 10, paddingVertical: 3, borderRadius: radius.chip, overflow: 'hidden',
   },
 
   content: { flex: 1 },
-  contentInner: { padding: 16, paddingBottom: 60, gap: 14 },
+  contentFlow: { flexGrow: 1 },
+  // ctx#457 .scroll: 22 pt above the content, 24 pt gutters.
+  contentInner: { paddingHorizontal: 24, paddingTop: 22, paddingBottom: 24, gap: 26 },
 
-  loadingContainer: { alignItems: 'center', paddingTop: 60, gap: 12 },
-  loadingText: { ...typography.bodySmall, color: colors.textMuted },
+  errorBlock: { gap: 16 },
+  loadingContainer: { gap: 6 },
+  loadingText: { ...typography.bodySmall, lineHeight: 20.3, color: colors.textMuted },
 
-  section: {
-    // A hairline section, not a box: no fill, no corners.
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    paddingVertical: 16,
-    gap: 10,
-  },
-  sectionHeader: {
-    gap: 12,
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-  },
-  sectionTitle: { ...typography.eyebrow, color: colors.textMuted, fontVariant: ['tabular-nums'] },
+  section: { gap: 0 },
+  sectionTitle: { ...typography.eyebrow, fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 11.5, lineHeight: 14, letterSpacing: 2, color: colors.textMuted, fontVariant: ['tabular-nums'] },
 
-  prepDayRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  prepDayBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: colors.primaryPale,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: radius.chip,
-  },
-  prepDayText: { ...typography.eyebrow, color: colors.textMuted },
-  prepDayHint: { ...typography.bodySmall, color: colors.textMuted },
+  // Prep day chips on the forest masthead: a light outline (forestBandLine), light words.
+  prepDayRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginTop: 10 },
+  prepDayBadge: { flexDirection: 'row', alignItems: 'center', gap: 7, borderWidth: 1, paddingHorizontal: 14, minHeight: 36, borderRadius: radius.chip },
+  prepDayText: { ...typography.bodySmall, fontFamily: 'Inter_500Medium', color: colors.textOnPrimary },
 
-  recipeRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, minHeight: 44, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
-  stepNumber: { ...typography.h3, color: colors.textPrimary, fontVariant: ['tabular-nums'] },
-  recipeIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.chip,
-    backgroundColor: colors.primaryPale,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  // The picture tile at the left of each row (C_kitchen), hairline between rows.
+  recipeRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 16, paddingVertical: 14, minHeight: 44, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   recipeInfo: { flex: 1 },
-  recipeName: { ...typography.bodyMd, color: colors.textPrimary },
-  recipeMeta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 4, marginTop: 2 },
-  recipeMetaText: { ...typography.bodySmall, color: colors.textMuted, fontVariant: ['tabular-nums'] },
-  recipeMetaDot: { ...typography.bodySmall, color: colors.textMuted },
+  recipeName: { ...typography.h3, fontSize: 21, lineHeight: 26.25, letterSpacing: 0, color: colors.textPrimary },
+  recipeMetaText: { ...typography.bodySmall, lineHeight: 20.3, color: colors.textMuted, fontVariant: ['tabular-nums'], marginTop: 3 },
+  recipeAllergens: { ...typography.bodySmall, fontSize: 13, lineHeight: 18.85, marginTop: 1, color: colors.textMuted },
+  kcal: { alignItems: 'flex-end', paddingTop: 4 },
+  kcalNum: { fontSize: 17, fontFamily: 'Inter_600SemiBold', fontWeight: '600', letterSpacing: 0, color: colors.textPrimary, fontVariant: ['tabular-nums'] },
+  kcalUnit: { fontSize: 12, fontFamily: 'Inter_400Regular', letterSpacing: 0.4, color: colors.textMuted, fontVariant: ['tabular-nums'] },
 
+  foot: { paddingHorizontal: 24, paddingTop: 12 },
   addToGroceryBtn: {
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: colors.primary,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: radius.button,
+    minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 12, borderRadius: radius.card,
   },
   addToGroceryBtnDisabled: { opacity: 0.6 },
-  addToGroceryBtnText: { ...typography.bodySmall, color: colors.textOnPrimary },
+  addToGroceryBtnText: { ...typography.h4, fontFamily: 'Inter_600SemiBold', fontWeight: '600', letterSpacing: 0, color: colors.textOnPrimary },
 
-  ingredientRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
-  ingredientBullet: {
-    width: 6,
-    height: 6,
-    borderRadius: radius.chip,
-    backgroundColor: colors.primary,
-    marginTop: 7,
-    flexShrink: 0,
-  },
-  ingredientText: { ...typography.bodySmall, flex: 1, color: colors.textSecondary, fontVariant: ['tabular-nums'] },
-  ingredientName: { color: colors.textPrimary, fontWeight: '600' },
+  ingredientRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, paddingTop: 12, minHeight: 44 },
+  // A dotted leader (ctx#457): a thin box with every border dotted draws as one dotted line on both platforms.
+  // REFINE-959: .ing .dots #B9B2A7; stone at 0.9 over the paper is #B8B0A8 (the list fields' underline too).
+  leader: { flex: 1, minWidth: 16, height: 1.5, marginBottom: 8, borderWidth: 1, borderStyle: 'dotted', borderColor: withAlpha(palette.stone, 0.9) },
+  ingredientName: { ...typography.body, lineHeight: 22.4, letterSpacing: 0, flexShrink: 1, color: colors.textPrimary },
+  ingredientAmount: { fontFamily: typography.body.fontFamily, fontSize: 16, letterSpacing: 0, color: colors.textPrimary, fontVariant: ['tabular-nums'], textAlign: 'right' },
 
   });

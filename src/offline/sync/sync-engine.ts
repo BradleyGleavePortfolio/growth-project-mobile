@@ -44,7 +44,7 @@ import type { CompleteAssignmentInput } from '../../api/workoutBuilderApi';
 import { generateId } from '../../utils/date';
 import { readUserCache, readUserCacheSync } from '../../lib/userCache';
 import { isHeld, isRetryLater, retryAfterMs } from './retryLater';
-import { createWorkoutOnce } from './workoutSaveKey';
+import { createWorkoutOnce, updateWorkoutOnce } from './workoutSaveKey';
 import { queryClient } from '../../services/queryClient';
 import { captureErrorWithoutPii } from '../../services/sentry';
 
@@ -631,9 +631,9 @@ async function sendQueuedRow(row: QueuedRow, key: string): Promise<PushOutcome> 
       const response = await createWorkoutOnce(body, key);
       const data = response.data as { id?: string; workout?: { id?: string } };
       serverId = data?.id ?? data?.workout?.id ?? '';
-      if (await keepForUpdate(row.id, key, serverId)) await workoutApi.update(serverId, body);
+      if (await keepForUpdate(row.id, key, serverId)) await updateWorkoutOnce(serverId, body);
     } else {
-      await workoutApi.update(serverId, body);
+      await updateWorkoutOnce(serverId, body);
     }
     await markSynced(row.id, serverId);
   } catch (err: unknown) {

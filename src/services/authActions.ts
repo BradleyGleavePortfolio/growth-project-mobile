@@ -26,6 +26,7 @@ import {
 import { flush as flushFoodLogQueue, getQueueLength as foodQueueLength } from './foodLogQueue';
 import { BROWSE_COPY_KEY_PREFIX } from '../utils/log/browseCache';
 import { OUTBOX_KEY_PREFIX, outboxLength, releaseOutbox, sendOutboxBeforeSignOut } from './messageOutbox';
+import { signOutQueues } from './signOutQueues';
 import { activeWorkoutSessionKey } from '../storage/activeWorkoutSession';
 import { AUTOSAVE_MIRROR_KEY_PREFIX } from '../storage/autosaveMirror';
 import { IMPORT_PAIRING_MIRROR_KEY_PREFIX } from '../storage/importPairingMirror';
@@ -332,26 +333,33 @@ export interface UnsyncedLogs {
   workouts: number;
   /** Foods saved offline, including any the server refused. */
   foods: number;
-  /** Style B coach messages waiting to send (services/messageOutbox), including any the server refused. */
+  /**
+   * Style B coach messages waiting to send (services/messageOutbox), and the space chat texts and voice notes of this
+   * account still on this phone (services/signOutQueues, FIX-942), including any the server refused.
+   */
   messages: number;
 }
 
 /** Upper bound of the one send attempt before a sign-out (weak signal). */
 const SIGN_OUT_SEND_TIMEOUT_MS = 4000;
 
-async function readUnsynced(userId: string): Promise<{ queued: number; open: number; foods: number; messages: number }> {
-  const [queued, open, foods, messages] = await Promise.all([
-    countQueuedWorkouts(userId, { includeParked: true }),
-    AsyncStorage.getItem(activeWorkoutSessionKey(userId)),
-    foodQueueLength({ includeParked: true }),
-    outboxLength(userId),
+async function readUnsynced(userId: string) {
+  const [[queued, open, foods, messages], others] = await Promise.all([
+    Promise.all([
+      countQueuedWorkouts(userId, { includeParked: true }),
+      AsyncStorage.getItem(activeWorkoutSessionKey(userId)),
+      foodQueueLength({ includeParked: true }),
+      outboxLength(userId),
+    ]),
+    // FIX-942: the space texts and voice notes (services/signOutQueues); one that cannot be read counts none.
+    Promise.all(signOutQueues().map(async (q) => ({ q, n: await q.count(userId).catch(() => 0) }))),
   ]);
-  return { queued, open: open ? 1 : 0, foods, messages };
+  return { queued, open: open ? 1 : 0, foods, messages, others };
 }
 
 /**
  * SESSION-KEEP-130: one bounded try to send the foods saved offline, the
- * finished workouts and the coach messages waiting on this phone, then what is still unsent (a
+ * finished workouts, the coach messages, space texts and voice notes waiting on this phone, then what is still unsent (a
  * sign-out removes it). A workout still open cannot be sent and is counted.
  * Nothing waiting means no network call. Never rejects.
  */
@@ -364,6 +372,7 @@ export async function sendUnsyncedLogs(userId?: string | null): Promise<Unsynced
     if (left.foods > 0) sends.push(flushFoodLogQueue());
     if (left.queued > 0) sends.push(pushQueuedWorkouts());
     if (left.messages > 0) sends.push(sendOutboxBeforeSignOut(id));
+    for (const { q, n } of left.others) if (n > 0) sends.push(q.send(id));
     if (sends.length > 0) {
       let timer: ReturnType<typeof setTimeout> | undefined;
       await Promise.race([
@@ -375,7 +384,7 @@ export async function sendUnsyncedLogs(userId?: string | null): Promise<Unsynced
       clearTimeout(timer);
       left = await readUnsynced(id);
     }
-    return { workouts: left.queued + left.open, foods: left.foods, messages: left.messages };
+    return { workouts: left.queued + left.open, foods: left.foods, messages: left.others.reduce((sum, o) => sum + o.n, left.messages) };
   } catch (err) {
     logger.warn('AuthActions', 'sendUnsyncedLogs: unsynced logs not read', err);
     return { workouts: 0, foods: 0, messages: 0 };

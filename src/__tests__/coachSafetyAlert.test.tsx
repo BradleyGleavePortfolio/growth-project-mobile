@@ -38,7 +38,7 @@ jest.mock('../services/commandCenterApi', () => {
   };
 });
 
-import { commandCenterApi, type ActionQueueItem } from '../services/commandCenterApi';
+import { commandCenterApi, safetyQuote, type ActionQueueItem } from '../services/commandCenterApi';
 import ActionQueueScreen from '../screens/coach/command-center/ActionQueueScreen';
 import AlertRow from '../components/command-center/AlertRow';
 import CoachSafetyAlertScreen, { formatSentAt } from '../screens/coach/CoachSafetyAlertScreen';
@@ -256,6 +256,47 @@ describe('the detail screen', () => {
     expect(utils.getByTestId('coach-safety-alert-sent').props.children).toBe(formatSentAt(SENT));
     expect(utils.queryByTestId('coach-safety-alert-quote')).toBeNull();
     expect(tabs.navigate).not.toHaveBeenCalled();
+  });
+});
+
+// FIX-950R3 (LO-950R3 C2): a turn sent as a reply starts with Roman's words; the coach reads only the client's.
+describe('a client turn sent as a reply', () => {
+  const WIRE = "> Words Roman wrote earlier\n\nThe client's own words.";
+  const BODY = "The client's own words.";
+
+  it.each([
+    ['roman_urgent_reply', WIRE, BODY],
+    ['roman_eating_disorder_reply', WIRE, BODY],
+    ['roman_urgent_reply', BODY, BODY],
+    ['roman_eating_disorder_reply', BODY, BODY],
+    ['roman_urgent_reply', null, null],
+    ['roman_urgent_reply', undefined, null],
+    ['roman_urgent_reply', '> no blank line after it', '> no blank line after it'],
+    ['roman_crisis_reply', WIRE, null],
+    ['roman_crisis_reply', BODY, null],
+    ['roman_crisis_reply', null, null],
+  ] as const)('safetyQuote(%s, %j) is %j', (type, quote, out) => {
+    expect(safetyQuote(type, quote)).toBe(out);
+  });
+
+  it('the queue row shows only the client\'s words', async () => {
+    (commandCenterApi.getActionQueue as jest.Mock).mockResolvedValue({ data: { items: [{ ...urgent, quote: WIRE }], total_pending: 1 } });
+    const { findByTestId, queryByText } = await render(<ActionQueueScreen onOpenSafetyAlert={jest.fn()} onSelectClient={jest.fn()} />);
+    expect((await findByTestId('command-center-alert-quote')).props.children).toBe(BODY);
+    expect(queryByText(/Words Roman wrote/)).toBeNull();
+  });
+
+  it('the detail screen shows only the client\'s words', async () => {
+    const navigation = { navigate: jest.fn(), goBack: jest.fn(), canGoBack: () => true, getParent: () => ({ navigate: jest.fn() }) };
+    const { getByTestId, getByText, queryByText } = await render(
+      <CoachSafetyAlertScreen
+        route={{ key: 'k', name: 'CoachSafetyAlert', params: { alertType: 'roman_urgent_reply', clientId: 'client-1', clientName: 'Jane Doe', quote: WIRE, sentAt: SENT } } as never}
+        navigation={navigation as never}
+      />,
+    );
+    expect(getByTestId('coach-safety-alert-quote')).toBeTruthy();
+    expect(getByText(BODY)).toBeTruthy();
+    expect(queryByText(/Words Roman wrote/)).toBeNull();
   });
 });
 

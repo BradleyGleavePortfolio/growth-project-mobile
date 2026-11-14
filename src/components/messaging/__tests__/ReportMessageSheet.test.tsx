@@ -136,6 +136,28 @@ describe('ReportMessageSheet', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it.each([true, false])('ROMAN-HOLD-M: revealError=%s announces the failure line only when set (DM default unchanged)', async (reveal) => {
+    const onSubmit = jest.fn().mockRejectedValueOnce(new Error('offline'));
+    const onClose = jest.fn();
+    const { getByLabelText, findByText, getByTestId } = await render(
+      <ReportMessageSheet
+        visible
+        messagePreview=""
+        onSubmit={onSubmit}
+        onClose={onClose}
+        revealError={reveal}
+      />,
+    );
+    await fireEvent.press(getByLabelText('Spam'));
+    await act(async () => {
+      await fireEvent.press(getByLabelText('Submit report'));
+    });
+    expect(await findByText(/Sending your report could not be confirmed/i)).toBeTruthy();
+    const line = getByTestId('report-sheet-error');
+    expect(line.props.accessibilityRole).toBe(reveal ? 'alert' : undefined);
+    expect(line.props.accessibilityLiveRegion).toBe(reveal ? 'polite' : undefined);
+  });
+
   it('caps the details TextInput at DETAILS_MAX (1000)', async () => {
     const { getByLabelText } = await render(
       <ReportMessageSheet

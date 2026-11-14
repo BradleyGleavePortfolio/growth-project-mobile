@@ -30,6 +30,7 @@ import { HapticService } from '../../../ui/haptics/haptics.service';
 import { assignmentPrescription } from '../../../utils/workout/assignmentPrescription';
 import { buildActiveWorkoutExercises, prettifyExerciseName } from '../../../utils/workout/buildActiveWorkout';
 import { assignmentDay, dayStart } from '../../../utils/workout/workoutDay';
+import { isTimedRow } from '../../../utils/workout/exerciseUnit';
 import { nextAssignment } from '../../../utils/workout/nextAssignment';
 import { doneLine, workoutWeek, type WorkoutWeek } from '../../coach/client-detail/thisWeek';
 import { DAY_LABELS } from '../habits/constants';
@@ -101,7 +102,8 @@ export function blocksOf(rows: ReadonlyArray<AssignmentExercise>): Block[] {
 const blockLine = (b: Block) => {
   const r = b.rows[0];
   if (b.rows.length > 1) return `${c.superset} · ${c.rounds(r.sets)}`;
-  return `${r.sets} × ${r.reps_or_duration_seconds}${r.weight_lbs ? ` · ${r.weight_lbs} lb` : ''}`;
+  // TIMED-SETS-M: a timed row reads "3 × 60 sec"; a reps row as before.
+  return `${r.sets} × ${r.reps_or_duration_seconds}${isTimedRow(r) ? ' sec' : ''}${r.weight_lbs ? ` · ${r.weight_lbs} lb` : ''}`;
 };
 
 /** The deep-forest week above the page. `children`: the tab's own header (title and icons), drawn light. */

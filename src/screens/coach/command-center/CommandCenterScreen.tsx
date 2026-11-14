@@ -156,7 +156,6 @@ export default function CommandCenterScreen({
               onOpenNeedsYou={openNeedsYou}
               onOpenClients={openClients}
               onOpenStreaks={() => setActiveTab('win-streaks')}
-              onOpenAlerts={() => setActiveTab('action-queue')}
               onOpenMoney={openMoney}
               onOpenDrafts={openDrafts}
               onOpenNotifications={openNotifications}

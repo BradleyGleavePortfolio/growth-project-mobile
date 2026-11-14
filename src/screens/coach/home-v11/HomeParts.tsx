@@ -98,7 +98,7 @@ export function DayRing({ ring, onPress }: { ring: RingSpec; onPress?: () => voi
         </Svg>
         <Text style={hs.ringValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} maxFontSizeMultiplier={1}>{`${ring.done}/${ring.of}`}</Text>
       </View>
-      <Text style={hs.ringLabel} numberOfLines={1} maxFontSizeMultiplier={1.15}>{ring.label.toUpperCase()}</Text>
+      <Text style={hs.ringLabel} maxFontSizeMultiplier={1.15}>{ring.label.toUpperCase()}</Text>
     </>
   );
   const label = `${ring.label}, ${ring.done} of ${ring.of}`;
@@ -172,6 +172,6 @@ const hs = StyleSheet.create({
   ring: { flex: 1, alignItems: 'center', minHeight: 44, paddingVertical: 2 },
   ringBox: { width: RING, height: RING, alignItems: 'center', justifyContent: 'center' },
   ringValue: { ...typography.bodySmall, fontFamily: SEMI, color: styleA.figure, position: 'absolute', width: RING - 2 * STROKE, textAlign: 'center' }, // 112/140 shrinks to fit (LO B2)
-  ringLabel: { ...typography.caption, fontFamily: SEMI, letterSpacing: 0.6, color: forestPop.gold, marginTop: 2 },
+  ringLabel: { ...typography.caption, fontFamily: SEMI, letterSpacing: 0.6, color: forestPop.gold, marginTop: 2, maxWidth: '100%', textAlign: 'center' },
   pressed: { opacity: 0.7 },
 });

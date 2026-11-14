@@ -1,4 +1,4 @@
-# backend-main d0bf7ccc40dc2bcc8d7a87d14bc03897bad9fd41
+# backend-main e49486c11f200197d66e09ee44fd95d409c5f861
 DELETE /api/admin/exercise-catalog/:id/video
 DELETE /api/coach/clients/:id/messages/:id
 DELETE /api/coach/clients/:id/messages/:id/pin
@@ -13,6 +13,8 @@ DELETE /api/community/blocks/:id
 DELETE /api/community/cohorts/:id
 DELETE /api/community/cohorts/:id/members/:id
 DELETE /api/community/cohorts/:id/notifications/silence
+DELETE /api/community/cohorts/:id/threads/:id/leave
+DELETE /api/community/cohorts/:id/threads/:id/mute
 DELETE /api/community/messages/:id
 DELETE /api/community/messages/:id/reactions
 DELETE /api/community/posts/:id
@@ -202,10 +204,12 @@ GET /api/community/coach/empty-states
 GET /api/community/cohorts
 GET /api/community/cohorts/:id
 GET /api/community/cohorts/:id/high-alert/preview
+GET /api/community/cohorts/:id/left
 GET /api/community/cohorts/:id/members
 GET /api/community/cohorts/:id/messages
 GET /api/community/cohorts/:id/notifications
 GET /api/community/cohorts/:id/read
+GET /api/community/cohorts/:id/threads
 GET /api/community/events/:id
 GET /api/community/feed
 GET /api/community/leaderboard
@@ -624,6 +628,8 @@ POST /api/community/classroom/:id/archive
 POST /api/community/classroom/:id/media
 POST /api/community/classroom/:id/publish
 POST /api/community/cohorts/:id/images/upload-url
+POST /api/community/cohorts/:id/join
+POST /api/community/cohorts/:id/leave
 POST /api/community/cohorts/:id/members
 POST /api/community/cohorts/:id/messages
 POST /api/community/cohorts/:id/notifications/silence
@@ -704,6 +710,7 @@ POST /api/nudges/:id/read
 POST /api/nutrition/water
 POST /api/recipes
 POST /api/recipes/:id/save
+POST /api/roman/messages/:id/report
 POST /api/roman/sessions
 POST /api/roman/sessions/:id/messages
 POST /api/routines
@@ -866,6 +873,8 @@ PUT /api/coach/team
 PUT /api/community/challenges/:id/leaderboard-opt-in
 PUT /api/community/challenges/:id/progress
 PUT /api/community/cohorts/:id/notifications
+PUT /api/community/cohorts/:id/threads/:id/leave
+PUT /api/community/cohorts/:id/threads/:id/mute
 PUT /api/contracts/templates/:id
 PUT /api/lessons/:id
 PUT /api/log/food/:id

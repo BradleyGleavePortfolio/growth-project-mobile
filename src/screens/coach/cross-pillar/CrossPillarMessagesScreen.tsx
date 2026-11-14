@@ -19,7 +19,7 @@
  * file's outer scaffolding.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Linking,
@@ -32,7 +32,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { coachApi } from '../../../services/api';
+import { rememberUnreadCounts } from '../../../store/closedClientsStore';
 import { useTheme, ThemeColors } from '../../../theme/ThemeProvider';
 import { Typography } from '../../../theme';
 
@@ -44,6 +46,9 @@ export default function CrossPillarMessagesScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation();
+  // LS-952R3 B3: the answer is Roman's drafts count's too, kept under the coach it was asked for.
+  const coachId = useRef<string | undefined>(undefined);
+  coachId.current = useCurrentUser()?.id;
 
   const [bodyUnread, setBodyUnread] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -55,7 +60,10 @@ export default function CrossPillarMessagesScreen() {
     else setRefreshing(true);
     setError(null);
     try {
-      const { data } = await coachApi.getUnreadCounts();
+      const asked = coachId.current;
+      const res = await coachApi.getUnreadCounts();
+      rememberUnreadCounts(asked ?? coachId.current, res);
+      const { data } = res;
       const total =
         typeof (data as UnreadShape)?.total === 'number'
           ? (data as UnreadShape).total!

@@ -5,8 +5,9 @@
 
 import { authEvents } from '../../utils/authEvents';
 
-/** Backend answers that mean "closed to you" (messaging-errors.ts, community-safety, community.service, posts). */
-const CLOSED_CODES = new Set([
+/** Backend answers that mean "closed to you" (messaging-errors.ts, community-safety, community.service, posts). The
+ * query cache saves an error's own `code` only when it is one of these or another value a reader compares it with. */
+export const CLOSED_CODES: ReadonlySet<string> = new Set([
   'messaging.blocked', // edit / pin / react with a block on either side
   'community.dm.blocked_by_you', // a DM to someone I blocked
   'community.dm.blocked_by_them', // a DM with someone who blocked me (#169-5, b#1145)
@@ -17,7 +18,7 @@ const CLOSED_CODES = new Set([
   'community.challenge.not_found', // a challenge's notes after a ban or a block
 ]);
 /** The coaching send refusal carries no code, only this text (backend messaging.service sendAsCoach / sendAsClient). */
-const COACHING_BLOCKED = 'Messages cannot be sent to blocked users';
+export const COACHING_BLOCKED = 'Messages cannot be sent to blocked users';
 
 type ErrLike = {
   status?: number;

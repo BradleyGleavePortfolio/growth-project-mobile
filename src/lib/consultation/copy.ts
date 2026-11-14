@@ -337,7 +337,7 @@ export const P8_COPY = {
   physician:
     'Based on your answers, check with your physician before starting a new exercise program. This is a standard precaution, not a diagnosis.',
   emergency:
-    'If you ever have chest pain, trouble breathing or feel faint, call 911. If you are struggling emotionally, call or text 988.',
+    `If you ever have chest pain, trouble breathing or feel faint, call 911. ${(require('../../constants/crisisLines') as typeof import('../../constants/crisisLines')).CRISIS_LINE_STRUGGLING_988}`, // eslint-disable-line @typescript-eslint/no-var-requires -- #202-S5: the 988 sentence's one home, on this line only
   disclaimer:
     'This app provides workout and dietary guidance only. It does not diagnose or treat any medical condition, and it is not a substitute for professional medical advice.',
 };

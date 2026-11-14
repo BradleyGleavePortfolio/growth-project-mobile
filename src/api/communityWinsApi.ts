@@ -20,6 +20,7 @@ import { z } from 'zod';
 import api from '../services/api';
 import { generateIdempotencyKey } from '../utils/idempotency';
 import { call } from './apiCall';
+import { crisisLineOwner, showCrisisLineFor } from '../lib/communityCrisisLine';
 
 const RawWinSchema = z
   .object({
@@ -86,6 +87,7 @@ export const communityWinsApi = {
   },
 
   async postWin(input: { title: string; description: string }): Promise<CommunityWin> {
+    const owner = crisisLineOwner(); // CRISIS-TEXT-M: the answer's line reaches only the account that sent it
     const row = await call(
       RawWinSchema,
       () =>
@@ -94,6 +96,7 @@ export const communityWinsApi = {
         }),
       'community post win',
     );
+    showCrisisLineFor(row, owner); // the flat win plus b#1232's crisis_flag; normalizeWin keeps the win only
     return normalizeWin(row);
   },
 

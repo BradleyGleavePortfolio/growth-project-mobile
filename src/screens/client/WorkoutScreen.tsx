@@ -48,6 +48,7 @@ import { EmptyStateNoWorkouts, EmptyStateNoData } from '../../ui/empty-states';
 import { useMyWorkoutAssignments } from '../../hooks/useWorkoutBuilder';
 import { assignmentPlanName } from '../../utils/workout/assignmentPrescription';
 import { dayStart, instantDay, workoutDay } from '../../utils/workout/workoutDay';
+import { setVolume } from '../../utils/workout/exerciseUnit';
 // Client tutorial (C08): pinned plan explanation card; flag-gated, renders
 // nothing unless featureFlags.clientTutorial and a program exists.
 import PlanExplanationCard from '../../components/tutorial/PlanExplanationCard';
@@ -186,7 +187,7 @@ interface ApiSession {
   workout_name?: string;
   duration_minutes: number;
   notes: string;
-  exercises: Array<{ muscle_group: string; exercise_name: string; sets_completed: number; weight_per_set: number[]; reps_per_set: number[]; notes?: string | null }>;
+  exercises: Array<{ muscle_group: string; exercise_name: string; sets_completed: number; weight_per_set: number[]; reps_per_set: number[]; notes?: string | null; asked_unit?: string | null }>;
 }
 
 /**
@@ -406,18 +407,6 @@ export default function WorkoutScreen() {
   const loadVolumeData = useCallback(async () => {
     if (!currentUser) return;
     try {
-      // Use the volume API endpoint for the muscle-breakdown card.
-      // 'week' reflects the current 7-day window — appropriate for the
-      // per-muscle breakdown displayed below the bar chart.
-      const volRes = await workoutApi.getVolume('week');
-      const volumeData: Array<{ muscle_group: string; total_volume: number; period: string }> = volRes.data || [];
-
-      // Build muscle breakdown from API data
-      setMuscleVolume(
-        volumeData.map((v) => ({ muscle: v.muscle_group, volume: Math.round(v.total_volume) }))
-          .sort((a, b) => b.volume - a.volume)
-      );
-
       // Build weekly volume chart from sessions.
       // Limit: CHART_WEEKS * 7 sessions is a safe upper bound for 8 weeks of
       // daily training (56 sessions). Using 50 instead of 200 avoids pulling
@@ -433,6 +422,9 @@ export default function WorkoutScreen() {
       const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       setWeekSessionCount(allSessions.filter((s) => workoutDay(s) > instantDay(weekAgo)).length);
       const weeks: WeeklyVolume[] = [];
+      // LS-928R2 B2: the muscle breakdown is this week's bar of the chart, by
+      // muscle group, from the same sets and setVolume (seconds add 0 lb).
+      const byMuscle: Record<string, number> = {};
       for (let w = CHART_WEEKS - 1; w >= 0; w--) {
         const weekEnd = new Date(now.getTime() - w * 7 * 24 * 60 * 60 * 1000);
         const weekStart = new Date(weekEnd.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -444,15 +436,22 @@ export default function WorkoutScreen() {
             for (const ex of (s.exercises || [])) {
               const weights = ex.weight_per_set || [];
               const reps = ex.reps_per_set || [];
+              let exVol = 0;
               for (let i = 0; i < Math.min(weights.length, reps.length); i++) {
-                vol += (weights[i] || 0) * (reps[i] || 0);
+                exVol += setVolume(weights[i], reps[i], ex.asked_unit);
               }
+              vol += exVol;
+              if (w === 0 && ex.muscle_group) byMuscle[ex.muscle_group] = (byMuscle[ex.muscle_group] || 0) + exVol;
             }
           }
         }
         weeks.push({ week: label, volume: Math.round(vol) });
       }
       setWeeklyVolume(weeks);
+      setMuscleVolume(
+        Object.entries(byMuscle).map(([muscle, volume]) => ({ muscle, volume: Math.round(volume) }))
+          .sort((a, b) => b.volume - a.volume)
+      );
     } catch (err) {
       // Chart read-only: a failed volume aggregation just shows an empty chart.
       logger.error('WorkoutScreen', 'loadVolumeData failed', err);
