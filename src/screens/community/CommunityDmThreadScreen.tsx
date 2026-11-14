@@ -126,7 +126,6 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
             info button (no chip). */}
         <ThreadHeader
           tone="deep"
-          voiceB
           title={participantLabel}
           subtitle={coachLine ? 'Your coach' : undefined}
           initials={coachLine ? initialsOf(coachLine) : null}
