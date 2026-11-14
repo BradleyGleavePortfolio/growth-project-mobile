@@ -107,7 +107,7 @@ export default function SafetyMenu({
   context,
   contentNoun = 'post',
   triggerColor,
-  triggerSize = 18,
+  triggerSize = 20,
   testID = 'safety-menu',
 }: SafetyMenuProps): React.ReactElement | null {
   const { semanticColors, colorScheme } = useTheme();
