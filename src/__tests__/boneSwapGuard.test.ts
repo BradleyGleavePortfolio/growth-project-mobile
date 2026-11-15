@@ -1,19 +1,22 @@
 /**
- * Bone guard (owner ruling #203-E83, which undoes #166-2).
+ * Page colour guard (owner ruling #203-E84, which replaces #203-E83 and #166-2).
  *
- * #166-2 moved the app background from the warm bone to a near-white value
- * "everywhere" in one atomic swap. The owner has now ordered the same swap in
- * reverse: "we atomic swap to the old tan we used to have". The page is bone
- * #F5EFE4 again. This guard fails if the near-white value comes back anywhere
- * under src/, docs/, the root App test files or app.json, in any form:
+ * The owner chose the page colour: "a soft, warm cream / off-white", #F9F4EC,
+ * swapped in everywhere at once (#203-E85). The token keeps its name, bone.
+ * This guard fails if either earlier page colour comes back: the near-white
+ * of #166-2 or the old tan of #203-E83, anywhere under src/, docs/, the root
+ * App test files or app.json, in any form:
  *   - hex, any case, with or without '#', 6-digit or 8-digit (alpha suffix)
  *   - rgb(r, g, b) / rgba(r, g, b, a), comma or space separated
- * It also pins every place that paints the page, the status-bar band, the
- * tab bar, text on forest fills, the splash and the Android icon fill to
- * bone, so the page tokens can never drift apart, and it holds the theme's
- * body text colours to WCAG AA on bone.
+ * Five files under docs/ held the old tan on main before this swap, as
+ * records of what earlier renders measured (one of them as a text colour,
+ * not the page). They are named below and keep it; nothing else may.
+ * The guard also pins every place that paints the page, the status-bar band,
+ * the tab bar, text on forest fills, the splash and the Android icon fill to
+ * the cream, so the page tokens can never drift apart, and it holds the
+ * theme's body text colours to WCAG AA on it.
  *
- * The banned value is assembled at runtime so this file never contains it.
+ * The banned values are assembled at runtime so this file never contains them.
  */
 
 import * as fs from 'fs';
@@ -23,14 +26,27 @@ import { Colors } from '../constants/colors';
 import { colors as tokenColors, lightTokens } from '../theme/tokens';
 import { STATUS_BAR_BONE } from '../components/StatusBarBand';
 
-const BONE = '#F5EFE4';
-const BANNED_HEX = ['f7', 'fa', 'f7'].join('');
-const BANNED_RGB = [247, 250, 247];
+const BONE = '#F9F4EC';
+// [name, hex, rgb] for each earlier page colour.
+const BANNED: ReadonlyArray<readonly [string, string, readonly number[]]> = [
+  ['near-white', ['f7', 'fa', 'f7'].join(''), [247, 250, 247]],
+  ['old tan', ['f5', 'ef', 'e4'].join(''), [245, 239, 228]],
+];
+const OLD_TAN = BANNED[1][0];
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const APP_JSON = path.join(REPO_ROOT, 'app.json');
 const SCAN_DIRS = ['src', 'docs', '__snapshots__'].map((dir) => path.join(REPO_ROOT, dir));
 const SCAN_FILES = ['app.json', 'App.tsx', 'App.test.tsx', 'README.md'].map((file) => path.join(REPO_ROOT, file));
+
+// Records on main before this swap (measurements of earlier renders); they keep the old tan as written.
+const OLD_TAN_RECORDS = new Set([
+  'docs/EXPO_56_LOCAL_VERIFICATION.md',
+  'docs/ui-evidence/C3B-S2/measurements.jsonl',
+  'docs/ui-evidence/C3B-THREAD/measurements.jsonl',
+  'docs/ui-evidence/C4LOCKM/README.md',
+  'docs/ui-evidence/K1-OVERVIEW/measurements.json',
+]);
 
 const TEXT_EXTENSIONS = new Set([
   '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json', '.md', '.snap',
@@ -38,18 +54,21 @@ const TEXT_EXTENSIONS = new Set([
 ]);
 
 // Hex: not preceded or followed by another hex digit, optional 2-digit alpha.
-const HEX_PATTERN = new RegExp(`(^|[^0-9a-f])${BANNED_HEX}([0-9a-f]{2})?(?![0-9a-f])`, 'i');
-// rgb()/rgba(), comma- or space-separated, optional alpha (comma or slash).
+// rgb()/rgba(): comma- or space-separated, optional alpha (comma or slash).
 const SEP = '\\s*[,\\s]\\s*';
-const RGB_PATTERN = new RegExp(
-  `rgba?\\(\\s*${BANNED_RGB.join(SEP)}\\s*([,/]\\s*[\\d.]+%?\\s*)?\\)`,
-  'i',
-);
+const PATTERNS = BANNED.map(([name, hex, rgb]) => ({
+  name,
+  hex: new RegExp(`(^|[^0-9a-f])${hex}([0-9a-f]{2})?(?![0-9a-f])`, 'i'),
+  rgb: new RegExp(`rgba?\\(\\s*${rgb.join(SEP)}\\s*([,/]\\s*[\\d.]+%?\\s*)?\\)`, 'i'),
+}));
 
-function findBanned(text: string): string[] {
+function findBanned(text: string, skip: readonly string[] = []): string[] {
   const hits: string[] = [];
   text.split(/\r?\n/).forEach((line, index) => {
-    if (HEX_PATTERN.test(line) || RGB_PATTERN.test(line)) hits.push(`line ${index + 1}`);
+    for (const pattern of PATTERNS) {
+      if (skip.includes(pattern.name)) continue;
+      if (pattern.hex.test(line) || pattern.rgb.test(line)) hits.push(`line ${index + 1} (${pattern.name})`);
+    }
   });
   return hits;
 }
@@ -79,51 +98,58 @@ function contrast(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-describe('bone guard (#203-E83)', () => {
-  it('the matcher catches every form of the banned near-white', () => {
-    const upper = BANNED_HEX.toUpperCase();
+describe('page colour guard (#203-E84)', () => {
+  it.each(BANNED)('the matcher catches every form of the banned %s', (name, hex, rgb) => {
+    const upper = hex.toUpperCase();
     const samples = [
       `'#${upper}'`,
-      `"#${BANNED_HEX}"`,
+      `"#${hex}"`,
       `'#${upper}CC'`,
       `0x${upper}`,
-      `rgb(${BANNED_RGB.join(', ')})`,
-      `rgb(${BANNED_RGB.join(',')})`,
-      `rgb(${BANNED_RGB.join(' ')})`,
-      `rgba(${BANNED_RGB.join(', ')}, 0.5)`,
-      `RGBA(${BANNED_RGB.join(',')},1)`,
-      `rgb(${BANNED_RGB.join(' ')} / 50%)`,
+      `rgb(${rgb.join(', ')})`,
+      `rgb(${rgb.join(',')})`,
+      `rgb(${rgb.join(' ')})`,
+      `rgba(${rgb.join(', ')}, 0.5)`,
+      `RGBA(${rgb.join(',')},1)`,
+      `rgb(${rgb.join(' ')} / 50%)`,
     ];
     for (const sample of samples) {
-      expect(findBanned(sample)).toEqual(['line 1']);
+      expect(findBanned(sample)).toEqual([`line 1 (${name})`]);
     }
     // Neighbouring values must not trip it.
-    expect(findBanned(`'#${BANNED_HEX}1'`)).toEqual([]);
-    expect(findBanned(`'#A${BANNED_HEX}'`)).toEqual([]);
-    expect(findBanned(`rgb(247, 250, 248)`)).toEqual([]);
+    expect(findBanned(`'#${hex}1'`)).toEqual([]);
+    expect(findBanned(`'#A${hex}'`)).toEqual([]);
+    expect(findBanned(`rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2] + 1})`)).toEqual([]);
     expect(findBanned(`'${BONE}'`)).toEqual([]);
   });
 
-  it('no file under src/, docs/ or the root App files uses the banned near-white', () => {
+  it('no file under src/, docs/ or the root App files uses an earlier page colour', () => {
     const files = SCAN_DIRS.reduce<string[]>((all, dir) => walk(dir, all), []);
     for (const file of SCAN_FILES) {
       if (file !== APP_JSON && fs.existsSync(file)) files.push(file);
     }
     const offenders: string[] = [];
     for (const file of files) {
-      const hits = findBanned(fs.readFileSync(file, 'utf8'));
+      const relative = path.relative(REPO_ROOT, file).split(path.sep).join('/');
+      const hits = findBanned(fs.readFileSync(file, 'utf8'), OLD_TAN_RECORDS.has(relative) ? [OLD_TAN] : []);
       if (hits.length > 0) {
-        offenders.push(`${path.relative(REPO_ROOT, file)} (${hits.join(', ')})`);
+        offenders.push(`${relative} (${hits.join(', ')})`);
       }
     }
     expect(offenders).toEqual([]);
   });
 
-  it('app.json does not use the banned near-white', () => {
+  it('every named record of the old tan still exists', () => {
+    for (const relative of OLD_TAN_RECORDS) {
+      expect(fs.existsSync(path.join(REPO_ROOT, relative))).toBe(true);
+    }
+  });
+
+  it('app.json does not use an earlier page colour', () => {
     expect(findBanned(fs.readFileSync(APP_JSON, 'utf8'))).toEqual([]);
   });
 
-  it('splash and Android icon fill are bone', () => {
+  it('splash and Android icon fill are the cream', () => {
     const expo = JSON.parse(fs.readFileSync(APP_JSON, 'utf8')).expo;
     expect(expo.android.adaptiveIcon.backgroundColor).toBe(BONE);
     const splash = (expo.plugins as unknown[]).find(
@@ -141,20 +167,21 @@ describe('bone guard (#203-E83)', () => {
     ['colors.bone', () => tokenColors.bone],
     ['lightTokens.bgPrimary', () => lightTokens.bgPrimary],
     ['STATUS_BAR_BONE', () => STATUS_BAR_BONE],
-  ])('%s is bone', (_name, read) => {
+  ])('%s is the cream', (_name, read) => {
     expect(read()).toBe(BONE);
   });
 
-  // WCAG AA body text (4.5:1) on bone, for the theme's own text colours.
+  // WCAG AA body text (4.5:1) on the cream, for the theme's own text colours.
   it.each([
-    ['ink', () => tokenColors.ink, 15.2],
-    ['charcoal', () => tokenColors.charcoal, 9.5],
-    ['forest', () => tokenColors.forest, 8.5],
-    ['graphite', () => tokenColors.graphite, 12.2],
-    ['textPrimary', () => lightTokens.textPrimary, 15.2],
-    ['textMuted', () => lightTokens.textMuted, 4.9],
-    ['accentText', () => lightTokens.accentText, 8.5],
-  ])('%s reads on bone', (_name, read, floor) => {
+    ['ink', () => tokenColors.ink, 15.9],
+    ['charcoal', () => tokenColors.charcoal, 9.9],
+    ['forest', () => tokenColors.forest, 8.9],
+    ['graphite', () => tokenColors.graphite, 12.7],
+    ['warningInk', () => tokenColors.warningInk, 4.59],
+    ['textPrimary', () => lightTokens.textPrimary, 15.9],
+    ['textMuted', () => lightTokens.textMuted, 5.1],
+    ['accentText', () => lightTokens.accentText, 8.9],
+  ])('%s reads on the cream', (_name, read, floor) => {
     const ratio = contrast(read(), BONE);
     expect(ratio).toBeGreaterThanOrEqual(4.5);
     expect(ratio).toBeGreaterThanOrEqual(floor);
