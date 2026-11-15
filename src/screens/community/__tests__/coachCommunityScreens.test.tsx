@@ -1476,7 +1476,7 @@ describe('FX4-868 round 4 — offline from the phone, the caught-up page, whole 
     // The bar above the dark page turns forest with a bone back arrow.
     expect(nav.setOptions).toHaveBeenLastCalledWith({
       headerStyle: { backgroundColor: '#2C4A36' },
-      headerTintColor: '#F7FAF7',
+      headerTintColor: '#F5EFE4',
     });
     const back = getByTestId('coach-community-inbox-empty-back');
     expect(back.props.accessibilityLabel).toBe('Back to Community');
@@ -1502,7 +1502,7 @@ describe('FX4-868 round 4 — offline from the phone, the caught-up page, whole 
     expect(queryByTestId('coach-community-inbox-empty-back')).toBeNull();
     expect(queryByText('TEST_EMPTY_INBOX_COPY')).toBeNull();
     expect(nav.setOptions).toHaveBeenLastCalledWith({
-      headerStyle: { backgroundColor: '#F7FAF7' },
+      headerStyle: { backgroundColor: '#F5EFE4' },
       headerTintColor: '#1A1A18',
     });
   });
@@ -1512,7 +1512,7 @@ describe('FX4-868 round 4 — offline from the phone, the caught-up page, whole 
     const nav = caughtUpNav();
     await render(<CoachCommunityInboxScreen navigation={nav} />);
     expect(nav.setOptions).toHaveBeenLastCalledWith({
-      headerStyle: { backgroundColor: '#F7FAF7' },
+      headerStyle: { backgroundColor: '#F5EFE4' },
       headerTintColor: '#1A1A18',
     });
   });

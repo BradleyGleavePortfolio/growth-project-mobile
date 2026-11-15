@@ -55,13 +55,13 @@ jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({
     semanticColors: jest.requireActual('../../../theme/tokens').lightTokens,
     colors: {
-      background: '#F7FAF7',
+      background: '#F5EFE4',
       surface: '#F1E8D5',
       surfaceElevated: '#E8DCC8',
       textPrimary: '#1A1A18',
       textSecondary: '#5C5C5A',
       textMuted: '#6B675F',
-      textOnPrimary: '#F7FAF7',
+      textOnPrimary: '#F5EFE4',
       primary: '#2C4A36',
       primaryDark: '#1E3326',
       border: '#D9CEBC',
