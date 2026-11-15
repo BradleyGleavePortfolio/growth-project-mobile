@@ -63,7 +63,7 @@ describe('VoiceRemovedPlaceholder', () => {
   });
 
   // FR-881R6 (brief: the placeholder line's colour): the line sits straight on the page (bgPrimary,
-  // bone #F7FAF7; the app is light-only, ThemeProvider.tsx). WCAG AA body text needs 4.5:1.
+  // bone #F9F4EC; the app is light-only, ThemeProvider.tsx). WCAG AA body text needs 4.5:1.
   it('the line and its link read at least 4.5:1 on the page they sit on', async () => {
     const lum = (hex: string) => {
       const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);

@@ -41,7 +41,7 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { brand, colors, gold, lightTokens, spacing, typography, radius, shadows } from '../../theme/tokens';
 
 // #168-13 GREY-TEXT (owner: "use a nice dark grey like #2c2c2c"): small grey text on
-// light grounds is the theme token colors.graphite (11.47:1 on cream, 13.28:1 on bone).
+// light grounds is the theme token colors.graphite (11.47:1 on cream, 12.75:1 on bone).
 const GREY_TEXT = colors.graphite;
 
 // Shiny jewelry gold (OWNER DECISION 6353457652 on tgp-agent-context#185: "op 2 - but with gold
@@ -155,7 +155,7 @@ const TREND_ARROW: Record<'up' | 'flat' | 'down', string> = {
 
 const TREND_COLOR: Record<'up' | 'flat' | 'down', string> = {
   up: colors.forest,    // #2C4A36
-  flat: gold[800],      // #6B4F1A, 7.24:1 on bone (owner "Darker gold"; was warningInk 4.78:1)
+  flat: gold[800],      // #6B4F1A, 6.95:1 on bone (owner "Darker gold"; was warningInk 4.59:1)
   down: colors.error,   // #B91C1C
 };
 

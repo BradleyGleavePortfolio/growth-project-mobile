@@ -28,7 +28,7 @@ import { brand, colors, forestPop as fp, neutral, radius, spacing, typography, v
 import type { SpaceMessage } from './spaceChatApi';
 import { REJECTED_WORDS, type PendingState } from './spaceChatOutbox';
 
-/** Owner #168-13 GREY-TEXT op 1: every small grey text on this page is #2C2C2C (13.4:1 on bone #F7FAF7). */
+/** Owner #168-13 GREY-TEXT op 1: every small grey text on this page is #2C2C2C (12.8:1 on bone #F9F4EC). */
 export const SMALL_GREY = colors.graphite;
 /** Member tiles on the Studio greens (mockup 05b), picked per person; light initials, except ink on leaf with a moss edge. */
 type Tile = { bg: string; fg: string; edge?: string };

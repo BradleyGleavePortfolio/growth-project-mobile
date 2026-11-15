@@ -2,7 +2,7 @@
 // frames @ 119dbbef; C2 style-c C_recipe @ a9434a53 where ctx#457 draws no recipe page) on what the earlier rounds left
 // as notes. Each case mounts the real screen (KitchenTitle954's mocks) at iPhone 390 / 100% and 320 x 568 / 130% and
 // checks the drawing's own number, quoted from the frame's CSS beside it. Colours the theme cannot hit exactly are an
-// alpha of an existing token over the paper (#F7FAF7, owner #197-E6); each case says how close the drawing allows.
+// alpha of an existing token over the paper (bone #F9F4EC, owner #203-E84); each case says how close the drawing allows.
 import React from 'react';
 import { Dimensions, StyleSheet } from 'react-native';
 import { render, waitFor } from '@testing-library/react-native';
@@ -112,8 +112,10 @@ async function mount(Screen: React.ComponentType, state: State, size: Size) {
   return ui;
 }
 
-// A colour as drawn on the paper: hex, or an rgba() laid over #F7FAF7.
-const PAPER = [0xf7, 0xfa, 0xf7];
+// A colour as drawn on the paper: hex, or an rgba() laid over #F9F4EC. The frames were drawn on the near-white paper the
+// app had before owner #203-E84; over the soft warm cream two token recipes land a little further from the frames' hexes,
+// and those cases state their measured distance.
+const PAPER = [0xf9, 0xf4, 0xec];
 function onPaper(colour: unknown): number[] {
   const text = String(colour);
   const hex = /^#([0-9a-f]{6})$/i.exec(text);
@@ -156,9 +158,9 @@ describe.each([['Grocery', GroceryListScreen], ['Shopping', ShoppingListScreen]]
   });
 
   it.each(EACH)('D3: the Qty and Unit underlines are the drawn #B9B2A7 (%s)', async (_s, size) => {
-    // shopping-partly: .fld.sm{border-bottom-color:#B9B2A7;...}; stone at 0.9 over the paper is within 2 of it per channel.
+    // shopping-partly: .fld.sm{border-bottom-color:#B9B2A7;...}; stone at 0.9 over the paper is within 2.5 of it per channel (2.4).
     const ui = await mount(Screen, 'loaded', size);
-    for (const field of ['Qty', 'Unit']) expect(furthest(flat(ui.getByPlaceholderText(field) as unknown as Host).borderColor, '#B9B2A7')).toBeLessThanOrEqual(2);
+    for (const field of ['Qty', 'Unit']) expect(furthest(flat(ui.getByPlaceholderText(field) as unknown as Host).borderColor, '#B9B2A7')).toBeLessThanOrEqual(2.5);
   });
 
   it.each(EACH)('D5-D6: the loading rows draw the frame\'s lighter line and ring (%s)', async (_s, size) => {
@@ -179,8 +181,9 @@ it.each(FIVE.flatMap(([name, Screen]) => SIZES.map((size) => [name, size.size, S
   'D4: the warm notice on %s is the drawn #F2EEE6 (%s)', async (_name, _s, Screen, size) => {
     // shopping-error / prep-error: .notice{background:#F2EEE6;border-left:3px solid #B08D57;...}. Over the paper, trackLight
     // (#E6DFD3) needs 0.29, 0.44 and 0.47 for red, green and blue: no one alpha is exact, the closest is 2.1 levels off.
+    // Over the soft warm cream (owner #203-E84) the same 0.42 recipe is 4.5 levels off at most, a shade warmer than the frame.
     const ui = await mount(Screen, 'error', size);
-    expect(furthest(flat(ui.getAllByRole('alert')[0] as unknown as Host).backgroundColor, '#F2EEE6')).toBeLessThanOrEqual(2.2);
+    expect(furthest(flat(ui.getAllByRole('alert')[0] as unknown as Host).backgroundColor, '#F2EEE6')).toBeLessThanOrEqual(4.6);
   });
 
 it('D7: the Add all sheet dims the whole page, its rounded top included, in the drawn ink', async () => {
@@ -216,7 +219,7 @@ it.each(EACH)('D11: the method numerals are gold, at 4.5:1 or better on the pape
   const ui = await mount(RecipeDetailScreen, 'loaded', size);
   const colour = flat(await waitFor(() => ui.getByText('1') as unknown as Host)).color as string;
   expect(colour).toBe(gold[700]);
-  expect(contrast(colour, '#F7FAF7')).toBeGreaterThanOrEqual(4.5);
+  expect(contrast(colour, '#F9F4EC')).toBeGreaterThanOrEqual(4.5);
 });
 
 it.each(EACH)('D12: a Recipes row follows the drawn kitchen row (%s)', async (_s, size) => {
@@ -246,5 +249,6 @@ it.each(EACH)('D14: the ingredient leader is the drawn #B9B2A7 dotted line (%s)'
   await waitFor(() => expect(ui.getByText('Red lentils')).toBeTruthy());
   const leaders = hosts(ui.root as unknown as Host).map(flat).filter((st) => st.borderStyle === 'dotted');
   expect(leaders).toHaveLength(1);
-  expect(furthest(leaders[0].borderColor, '#B9B2A7')).toBeLessThanOrEqual(2);
+  // Over the paper stone at 0.9 is 2.4 levels from the frame's hex at most.
+  expect(furthest(leaders[0].borderColor, '#B9B2A7')).toBeLessThanOrEqual(2.5);
 });

@@ -47,14 +47,14 @@ function contrast(a: string, b: string): number {
 }
 const WORDS = 4.5;
 const MARK = 3;
-const PAGE = lightTokens.bgPrimary; // #F7FAF7, the page under all three surfaces
+const PAGE = lightTokens.bgPrimary; // #F9F4EC, the page under all three surfaces
 
 describe('safety gold: the shared file', () => {
   it('is the owner-approved deep gold, byte for byte the file NEEDS-YOU-M ships (m#934)', () => {
     expect(safetyGold).toEqual({ edge: gold[800], chipFill: gold[800], chipText: '#FFF8EC', card: '#FFF8EC', text: gold[800] });
     expect(gold[800]).toBe('#6B4F1A');
     const bytes = readFileSync(join(__dirname, '..', 'safetyGold.ts'));
-    expect(createHash('sha256').update(bytes).digest('hex')).toBe('581e429a94fd730057cd8795fb6d2dfd4eee2a8b3211be9b47ea0a149a070acf');
+    expect(createHash('sha256').update(bytes).digest('hex')).toBe('9b751e1752be6f5576a94785d1600d93b6bd6a976d234ebd5d17436d5dbb9fe3');
   });
 });
 
