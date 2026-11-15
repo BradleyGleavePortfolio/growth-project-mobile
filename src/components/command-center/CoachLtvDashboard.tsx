@@ -155,7 +155,7 @@ const TREND_ARROW: Record<'up' | 'flat' | 'down', string> = {
 
 const TREND_COLOR: Record<'up' | 'flat' | 'down', string> = {
   up: colors.forest,    // #2C4A36
-  flat: gold[800],      // #6B4F1A, 7.24:1 on bone (owner "Darker gold"; was warningInk 4.78:1)
+  flat: gold[800],      // #6B4F1A, 4.69:1 on the tan page (owner "Darker gold"; gold[700] is 3.10:1)
   down: colors.error,   // the alarm red
 };
 

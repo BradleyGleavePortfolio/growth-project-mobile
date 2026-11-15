@@ -280,11 +280,12 @@ const s = StyleSheet.create({
   reason: { ...typography.bodySmall, color: SMALL_GREY, marginTop: spacing.xs },
   // A small sans day mark ("Thu, Oct 22"), 05b .day: 600 12 pt, 10 pt above, 4 below.
   day: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 12, lineHeight: 15, color: SMALL_GREY, textAlign: 'center', paddingTop: GAP, paddingBottom: spacing.xs },
-  // 05b .newline: an 8 pt lead dash, 10 pt gaps, 600 12 pt brand 400 (#4D7059) words, a leaf rule.
+  // 05b .newline: an 8 pt lead dash, 10 pt gaps, 600 12 pt words, a leaf rule. The words are forest and the
+  // dash and rule moss: on the tan page the drawn brand 400 is 3.43:1 and leaf 1.21:1; forest is 6.05:1, moss 3.10:1.
   newLine: { flexDirection: 'row', alignItems: 'center', gap: GAP, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
-  newDash: { width: 8, height: 2, borderRadius: 1, backgroundColor: fp.leaf },
-  newText: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 12, lineHeight: 15, color: fp.brand400 },
-  newRule: { flex: 1, height: 2, borderRadius: 1, backgroundColor: fp.leaf },
+  newDash: { width: 8, height: 2, borderRadius: 1, backgroundColor: fp.moss },
+  newText: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 12, lineHeight: 15, color: fp.forest },
+  newRule: { flex: 1, height: 2, borderRadius: 1, backgroundColor: fp.moss },
   glyph: { width: 24, height: 24, justifyContent: 'center', gap: 3, paddingLeft: 3 }, bar: { height: 2, borderRadius: 1 },
   hash: { width: 18, height: 18, marginRight: 6 },
   hashH: { position: 'absolute', left: 3, width: 12, height: 1.7, borderRadius: 1 },
