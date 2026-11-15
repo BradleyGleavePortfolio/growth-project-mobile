@@ -156,7 +156,7 @@ const TREND_ARROW: Record<'up' | 'flat' | 'down', string> = {
 const TREND_COLOR: Record<'up' | 'flat' | 'down', string> = {
   up: colors.forest,    // #2C4A36
   flat: gold[800],      // #6B4F1A, 7.24:1 on bone (owner "Darker gold"; was warningInk 4.78:1)
-  down: colors.error,   // #B91C1C
+  down: colors.error,   // the alarm red
 };
 
 const TREND_LABEL: Record<'up' | 'flat' | 'down', string> = {
@@ -837,18 +837,18 @@ const styles = StyleSheet.create({
   },
   milestoneHeading: {
     ...typography.eyebrow,
-    color: colors.bone,
+    color: lightTokens.textOnAccent,
     opacity: 0.75,
     marginBottom: spacing.xs,
   },
   milestoneBody: {
     fontSize: 15,
-    color: colors.bone,
+    color: lightTokens.textOnAccent,
     lineHeight: 22,
   },
   milestoneHighlight: {
     fontWeight: '600',
-    color: colors.bone,
+    color: lightTokens.textOnAccent,
   },
 
   // Estimate disclaimer banner — shown when any metric is approximate.
@@ -889,7 +889,7 @@ const errorStyles = StyleSheet.create({
   },
   retryText: {
     ...typography.caption,
-    color: colors.bone,
+    color: lightTokens.textOnAccent,
   },
 });
 

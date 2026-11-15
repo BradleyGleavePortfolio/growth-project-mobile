@@ -18,7 +18,7 @@ describe('lightTokens shape', () => {
   });
 
   it('bgPrimary is the bone value', () => {
-    expect(lightTokens.bgPrimary).toBe('#F7FAF7');
+    expect(lightTokens.bgPrimary).toBe('#E6C6A0');
   });
 
   it('textPrimary is the ink value', () => {

@@ -52,7 +52,7 @@ import {
   radius,
   spacing,
   typography,
-  withAlpha,
+  withAlpha, lightTokens,
 } from '../../../theme/tokens';
 import { SkeletonLine } from '../../../components/SkeletonLoader';
 import { useReduceMotion } from '../../client/wearables/components/useReduceMotion';
@@ -345,7 +345,7 @@ export function WearableInsightPanel({
               accessibilityLabel="Review message before sending"
               testID="coach-insight-review-cta"
             >
-              <Ionicons name="create-outline" size={16} color={colors.bone} />
+              <Ionicons name="create-outline" size={16} color={lightTokens.textOnAccent} />
               <Text style={styles.reviewCtaText}>Review message</Text>
             </Pressable>
           </Animated.View>
@@ -579,7 +579,7 @@ function MessageDraftReviewSheet({
             testID="coach-insight-approve"
           >
             {busy ? (
-              <ActivityIndicator color={colors.bone} />
+              <ActivityIndicator color={lightTokens.textOnAccent} />
             ) : (
               <Text style={styles.primaryBtnText}>Approve &amp; send</Text>
             )}
@@ -705,7 +705,7 @@ const styles = StyleSheet.create({
   },
   reviewCtaText: {
     ...typography.bodyMd,
-    color: colors.bone,
+    color: lightTokens.textOnAccent,
   },
   chip: {
     borderWidth: 1,
@@ -802,7 +802,7 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: {
     ...typography.bodyMd,
-    color: colors.bone,
+    color: lightTokens.textOnAccent,
   },
   secondaryBtn: {
     alignItems: 'center',

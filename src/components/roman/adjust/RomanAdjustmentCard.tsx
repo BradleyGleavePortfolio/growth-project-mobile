@@ -16,7 +16,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import RomanAvatar from '../RomanAvatar';
-import { colors, radius, spacing, typography } from '../../../theme/tokens';
+import { colors, radius, spacing, typography, lightTokens } from '../../../theme/tokens';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import {
   approveAdjustment,
@@ -371,7 +371,7 @@ const styles = StyleSheet.create({
   choice: { borderWidth: 0.5, borderColor: colors.charcoal, borderRadius: radius.chip, paddingHorizontal: spacing.md, minHeight: 36, justifyContent: 'center' },
   choiceOn: { backgroundColor: colors.forest, borderColor: colors.forest },
   choiceText: { ...typography.bodySmall, color: colors.ink },
-  choiceTextOn: { color: colors.bone },
+  choiceTextOn: { color: lightTokens.textOnAccent },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   stepBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   stepText: { ...typography.body, color: colors.forest },
@@ -382,7 +382,7 @@ const styles = StyleSheet.create({
   btn: { minHeight: 44, paddingHorizontal: spacing.lg, justifyContent: 'center', borderWidth: 0.5, borderColor: colors.charcoal, borderRadius: radius.button },
   btnPrimary: { backgroundColor: colors.forest, borderColor: colors.forest },
   btnText: { ...typography.bodySmall, color: colors.ink },
-  btnPrimaryText: { ...typography.bodySmall, color: colors.bone },
+  btnPrimaryText: { ...typography.bodySmall, color: lightTokens.textOnAccent },
   spinner: { alignSelf: 'flex-start' },
   error: { ...typography.bodySmall, color: colors.charcoal },
 });

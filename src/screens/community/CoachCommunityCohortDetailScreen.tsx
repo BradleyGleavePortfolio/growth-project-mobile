@@ -42,7 +42,7 @@ import {
 import { useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme/useTheme';
-import { spacing, radius, withAlpha, semantic, colors, layout } from '../../theme/tokens';
+import { spacing, radius, withAlpha, semantic, colors, layout, lightTokens } from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
 import {
   CoachRomanEmptyState,
@@ -355,7 +355,7 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
                     styles.modalSubmitLabel,
                     {
                       color: canInvite
-                        ? colors.bone
+                        ? lightTokens.textOnAccent
                         : semanticColors.textOnDisabled,
                     },
                   ]}
@@ -546,7 +546,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     fontSize: 16,
     lineHeight: 21,
-    color: colors.bone,
+    color: lightTokens.textOnAccent,
   },
   scrim: {
     flex: 1,

@@ -41,7 +41,7 @@ import ParticleBurst from '../../../components/roman/ParticleBurst';
 import HapticPressable from '../../../components/HapticPressable';
 import { romanFirstPayment } from '../../../lib/roman/copy';
 import { useReduceMotion } from '../../client/wearables/components/useReduceMotion';
-import { colors, spacing, typography, radius } from '../../../theme/tokens';
+import { colors, spacing, typography, radius, lightTokens } from '../../../theme/tokens';
 
 /** Roman-tone dismiss label (brief permits "I understand" / "Thank you, Roman"). */
 export const FIRST_PAYMENT_DISMISS_LABEL = 'Thank you, Roman';
@@ -165,7 +165,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   buttonLabel: {
-    color: colors.bone,
+    color: lightTokens.textOnAccent,
     fontSize: 16,
     fontWeight: '600',
   },

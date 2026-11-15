@@ -23,7 +23,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, type NavigationProp } from '@react-navigation/native';
-import { colors as tokens, typography, spacing } from '../../theme/tokens';
+import { colors as tokens, typography, spacing, lightTokens } from '../../theme/tokens';
 import type { CoachBriefClientCard } from '../../types/wave11';
 import EmptyState from '../../components/EmptyState';
 import { featureFlags } from '../../config/featureFlags';
@@ -443,7 +443,7 @@ function StatusCard({
           accessibilityState={{ busy: !!busy, disabled: !!busy }}
         >
           {busy ? (
-            <ActivityIndicator color={tokens.bone} />
+            <ActivityIndicator color={lightTokens.textOnAccent} />
           ) : (
             <Text style={styles.statusBtnLabel}>{ctaLabel}</Text>
           )}
@@ -510,5 +510,5 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.forest,
     marginTop: spacing.xs,
   },
-  statusBtnLabel: { ...typography.bodyMd, fontSize: 15, fontWeight: '600', color: tokens.bone },
+  statusBtnLabel: { ...typography.bodyMd, fontSize: 15, fontWeight: '600', color: lightTokens.textOnAccent },
 });

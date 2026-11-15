@@ -41,7 +41,7 @@ jest.mock('../hooks/useMealTemplates', () => ({
 jest.mock('../theme/ThemeProvider', () => ({
   useTheme: () => ({
     semanticColors: {
-      bgPrimary: '#F7FAF7',
+      bgPrimary: '#E6C6A0',
       bgSurface: '#F1E8D5',
       accent: '#2C4A36',
       textPrimary: '#1A1A18',

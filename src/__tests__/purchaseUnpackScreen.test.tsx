@@ -352,7 +352,7 @@ jest.mock('../theme/ThemeProvider', () => {
   return {
     useTheme: () => ({
       colors: {
-        background: '#F7FAF7',
+        background: '#E6C6A0',
         surface: '#F1E8D5',
         surfaceElevated: '#F1E8D5',
         primary: '#2C4A36',
@@ -363,7 +363,7 @@ jest.mock('../theme/ThemeProvider', () => {
         textPrimary: '#1A1A18',
         textSecondary: '#3D3D3A',
         textMuted: '#6B675F',
-        textOnPrimary: '#F7FAF7',
+        textOnPrimary: '#FBF7F0',
         border: 'rgba(176,141,87,0.2)',
         divider: 'rgba(176,141,87,0.15)',
         success: '#2C4A36',

@@ -63,9 +63,9 @@ export default function CreditPackSelection({
   return (
     <View style={styles.stack}>
       <View style={[styles.card, { backgroundColor: sc.textPrimary }]} testID="credit-pack-suggested">
-        <Text style={[styles.caption, { color: sc.bgPrimary }]}>Suggested</Text>
-        <Text style={[styles.amount, { color: sc.bgPrimary }]}>{formatCents(suggestion)}</Text>
-        <Text style={[styles.roman, { color: sc.bgPrimary }]}>{roman}</Text>
+        <Text style={[styles.caption, { color: sc.textOnAccent }]}>Suggested</Text>
+        <Text style={[styles.amount, { color: sc.textOnAccent }]}>{formatCents(suggestion)}</Text>
+        <Text style={[styles.roman, { color: sc.textOnAccent }]}>{roman}</Text>
         <View style={styles.tiles}>
           <CreditPackTiles packs={packs} selected={custom ? null : pack} onSelect={(cents) => onChoice({ cents, custom: false })} onInk />
         </View>

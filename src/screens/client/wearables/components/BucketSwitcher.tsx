@@ -13,6 +13,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   colors,
+  lightTokens,
   radius,
   spacing,
   typography,
@@ -101,10 +102,10 @@ export default function BucketSwitcher({ active, onChange, onDark = false }: Pro
   );
 }
 
-// `colors` has no dedicated "switch surface" token; the raised pill reads as a
-// solid neutral on the bone/cream track (matches the app's chip treatment)
-// without inventing an off-palette hex. (R1 P3: drop the withAlpha(_, 1) no-op.)
-const SWITCH_SURFACE = colors.bone;
+// The raised pill is the card surface: a solid near-white on the tinted track,
+// so the selected bucket stands off a tan page (the page colour itself would
+// sink into the track). No off-palette hex.
+const SWITCH_SURFACE = lightTokens.bgSurface;
 
 const styles = StyleSheet.create({
   container: {

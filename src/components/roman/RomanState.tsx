@@ -28,7 +28,7 @@ import {
   ROMAN_UNAVAILABLE_BODY,
   ROMAN_UNAVAILABLE_TITLE,
 } from './romanVoice';
-import { colors, radius, spacing, typography } from '../../theme/tokens';
+import { colors, radius, spacing, typography, lightTokens } from '../../theme/tokens';
 
 export type RomanStateKind = 'unavailable' | 'offline' | 'error';
 
@@ -134,6 +134,6 @@ const styles = StyleSheet.create({
   },
   retryLabel: {
     ...typography.bodyMd,
-    color: colors.bone,
+    color: lightTokens.textOnAccent,
   },
 });

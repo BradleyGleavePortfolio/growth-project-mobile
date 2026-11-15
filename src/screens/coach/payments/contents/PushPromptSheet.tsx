@@ -46,7 +46,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '../../../../theme/useTheme';
 import type { SemanticTokens } from '../../../../theme/tokens';
-import { colors as palette, typography, radius, spacing } from '../../../../theme/tokens';
+import { colors as palette, typography, radius, spacing, lightTokens } from '../../../../theme/tokens';
 
 /**
  * The mode that triggered the prompt — matches PR-17 decision #4 coverage.
@@ -266,7 +266,7 @@ function makeStyles(colors: SemanticTokens) {
     primaryBtnText: {
       ...typography.bodyMd,
       // Bone reads as the on-forest foreground (no hand-typed hex).
-      color: palette.bone,
+      color: lightTokens.textOnAccent,
     },
     secondaryBtn: {
       minHeight: 44,

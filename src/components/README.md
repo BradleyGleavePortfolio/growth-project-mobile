@@ -48,7 +48,7 @@ Client screens build from the shared primitives in `src/ui` (DS-PRIMITIVES-133):
 | `OfflineBanner.tsx` | Hairline banner shown when `useNetworkStatus` reports offline. Mounted by `RootNavigator`. |
 | `OptionCard.tsx`, `MultiSelectChip.tsx` | Onboarding selection primitives. |
 | `OnboardingLayout.tsx` | Header + progress + continue button frame for the legacy 10-step flow. |
-| `AppSplash.tsx` | Branded splash, keyed to bone (`#F7FAF7`). Single mark + serif title fade — the duplicate `SplashScreen.tsx` was removed in #63. |
+| `AppSplash.tsx` | Branded splash, keyed to bone (`#E6C6A0`). Single mark + serif title fade — the duplicate `SplashScreen.tsx` was removed in #63. |
 
 ### Anticipation, community, trust
 
@@ -137,7 +137,7 @@ Components are mostly presentational. The one component that owns data is `Offli
 
 ## App-store / deep-link dependencies
 
-- The splash background colour (`#F7FAF7`) declared in `app.json → expo.splash.backgroundColor` and `expo.android.adaptiveIcon.backgroundColor` must match `bone` from the theme. `AppSplash` uses the same value.
+- The splash background colour declared in `app.json → expo.splash.backgroundColor` and `expo.android.adaptiveIcon.backgroundColor` must match `bone` from the theme (`#E6C6A0` since owner #203-E74; app.json still holds the earlier near-white until the next store build). `AppSplash` uses the theme value.
 - `TrustCueRow` and `TrustExplainerSheet` provide the in-app surface that mirrors the privacy policy. Whatever copy lives in the explainer must match what the policy says — they are a sync pair.
 
 ## Security and tenancy
@@ -219,7 +219,7 @@ Components are mostly presentational. The one component that owns data is `Offli
 
 ## App-store / deep-link dependencies
 
-- The splash background colour (`#F7FAF7`) declared in `app.json → expo.splash.backgroundColor` and `expo.android.adaptiveIcon.backgroundColor` must match `bone` from the theme. `AppSplash` uses the same value.
+- The splash background colour declared in `app.json → expo.splash.backgroundColor` and `expo.android.adaptiveIcon.backgroundColor` must match `bone` from the theme (`#E6C6A0` since owner #203-E74; app.json still holds the earlier near-white until the next store build). `AppSplash` uses the theme value.
 - `TrustCueRow` and `TrustExplainerSheet` provide the in-app surface that mirrors the privacy policy. Whatever copy lives in the explainer must match what the policy says — they are a sync pair.
 
 ## Security and tenancy

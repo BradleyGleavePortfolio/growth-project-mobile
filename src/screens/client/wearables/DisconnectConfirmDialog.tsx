@@ -11,7 +11,7 @@
 import React from 'react';
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { WearableProvider } from '../../../api/wearablesConnectionsApi';
-import { colors, radius, semantic, spacing, typography, withAlpha } from '../../../theme/tokens';
+import { colors, radius, semantic, spacing, typography, withAlpha, lightTokens } from '../../../theme/tokens';
 import { disconnectConfirmCopy } from './disconnectCopy';
 
 export interface DisconnectConfirmDialogProps {
@@ -143,7 +143,7 @@ const styles = StyleSheet.create({
   },
   cancelText: {
     ...typography.bodySmall,
-    color: colors.bone,
+    color: lightTokens.textOnAccent,
     fontWeight: '500',
   },
   destructive: {

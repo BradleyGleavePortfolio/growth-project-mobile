@@ -13,7 +13,7 @@ import {
   TouchableOpacity,
   ViewStyle,
 } from 'react-native';
-import { colors, spacing, typography, radius } from '../../theme/tokens';
+import { colors, spacing, typography, radius, lightTokens } from '../../theme/tokens';
 
 function formatRelativeTime(isoString: string): string {
   const diff = Date.now() - new Date(isoString).getTime();
@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     ...typography.micro,
-    color: colors.bone,
+    color: lightTokens.textOnAccent,
     lineHeight: 14,
   },
 });

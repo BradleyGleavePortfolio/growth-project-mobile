@@ -60,7 +60,7 @@ jest.mock('../../../theme/ThemeProvider', () => ({
   __esModule: true,
   useTheme: () => ({
     semanticColors: {
-      bgPrimary: '#F7FAF7',
+      bgPrimary: '#E6C6A0',
       bgSurface: '#FFFDF8',
       textPrimary: '#1A1A18',
       textMuted: '#6B675F',

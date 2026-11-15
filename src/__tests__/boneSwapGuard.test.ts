@@ -1,26 +1,25 @@
 /**
  * Bone swap guard (owner ruling #166-2).
  *
- * The owner moved the app background from the old warm bone to #F7FAF7
- * "everywhere" in one atomic swap. This guard fails if the old bone value
- * comes back anywhere under src/ or in app.json, in any form:
+ * The owner moved the app background off the old warm bone "everywhere" in
+ * one atomic swap. This guard fails if the old bone value comes back anywhere
+ * under src/ or in app.json, in any form:
  *   - hex, any case, with or without '#', 6-digit or 8-digit (alpha suffix)
  *   - rgb(r, g, b) / rgba(r, g, b, a), comma or space separated
- * It also pins every place that paints the page, the status-bar band, the
- * tab bar, text on forest fills, the splash and the Android icon fill to the
- * new value, so the four background tokens can never drift apart again.
  *
- * The old value is assembled at runtime so this file never contains it.
+ * The page has since moved again, to tan (owner #203-E74, #203-E76): the page
+ * tokens are pinned by tanSwapGuard.test.ts. app.json is native config and
+ * changes only with a store build, so the splash and the Android icon fill
+ * still hold the #166-2 value; this file pins that until that build.
+ *
+ * Both earlier values are assembled at runtime so this file never contains them.
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { Colors } from '../constants/colors';
-import { colors as tokenColors, lightTokens } from '../theme/tokens';
-import { STATUS_BAR_BONE } from '../components/StatusBarBand';
-
-const NEW_BONE = '#F7FAF7';
+// The #166-2 value app.json still holds (splash, Android icon fill).
+const SPLASH_FILL = `#${['F7', 'FA', 'F7'].join('')}`;
 const OLD_HEX = ['f5', 'ef', 'e4'].join('');
 const OLD_RGB = [245, 239, 228];
 
@@ -85,7 +84,7 @@ describe('bone swap guard (#166-2)', () => {
     expect(findOldBone(`'#${OLD_HEX}1'`)).toEqual([]);
     expect(findOldBone(`'#A${OLD_HEX}'`)).toEqual([]);
     expect(findOldBone(`rgb(245, 239, 229)`)).toEqual([]);
-    expect(findOldBone(`'${NEW_BONE}'`)).toEqual([]);
+    expect(findOldBone(`'${SPLASH_FILL}'`)).toEqual([]);
   });
 
   it('no file under src/ uses the old bone', () => {
@@ -103,23 +102,14 @@ describe('bone swap guard (#166-2)', () => {
     expect(findOldBone(fs.readFileSync(APP_JSON, 'utf8'))).toEqual([]);
   });
 
-  it('splash and Android icon fill use the new bone', () => {
+  it('splash and Android icon fill hold the #166-2 value until a store build', () => {
     const expo = JSON.parse(fs.readFileSync(APP_JSON, 'utf8')).expo;
-    expect(expo.android.adaptiveIcon.backgroundColor).toBe(NEW_BONE);
+    expect(expo.android.adaptiveIcon.backgroundColor).toBe(SPLASH_FILL);
     const splash = (expo.plugins as unknown[]).find(
       (plugin): plugin is [string, { backgroundColor?: string }] =>
         Array.isArray(plugin) && plugin[0] === 'expo-splash-screen',
     );
     expect(splash).toBeDefined();
-    expect(splash?.[1].backgroundColor).toBe(NEW_BONE);
-  });
-
-  it('every bone token holds the new value', () => {
-    expect(Colors.background).toBe(NEW_BONE);
-    expect(Colors.tabBackground).toBe(NEW_BONE);
-    expect(Colors.textOnPrimary).toBe(NEW_BONE);
-    expect(tokenColors.bone).toBe(NEW_BONE);
-    expect(lightTokens.bgPrimary).toBe(NEW_BONE);
-    expect(STATUS_BAR_BONE).toBe(NEW_BONE);
+    expect(splash?.[1].backgroundColor).toBe(SPLASH_FILL);
   });
 });

@@ -40,7 +40,7 @@ export default function CreditStatementCard({ budget, testID = 'credit-card' }: 
   const amount = usageAmount(budget);
   const renews = renewsLine(budget.period_end);
   const ink = sc.textPrimary;
-  const paper = sc.bgPrimary;
+  const paper = sc.textOnAccent;
   const quiet = withAlpha(paper, 0.72);
   const spoken = `${CREDIT_USAGE_LABEL} ${amount}.${renews ? ` ${renews}` : ''}`;
   return (

@@ -2,14 +2,14 @@
 // frames @ 119dbbef; C2 style-c C_recipe @ a9434a53 where ctx#457 draws no recipe page) on what the earlier rounds left
 // as notes. Each case mounts the real screen (KitchenTitle954's mocks) at iPhone 390 / 100% and 320 x 568 / 130% and
 // checks the drawing's own number, quoted from the frame's CSS beside it. Colours the theme cannot hit exactly are an
-// alpha of an existing token over the paper (#F7FAF7, owner #197-E6); each case says how close the drawing allows.
+// alpha of an existing token over the paper (the page token, #E6C6A0 since owner #203-E74); each case says how close the drawing allows.
 import React from 'react';
 import { Dimensions, StyleSheet } from 'react-native';
 import { render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { listsApi, prepGuideApi, recipesApi } from '../../../services/api';
-import { gold } from '../../../theme/tokens';
+import { gold, lightTokens, withAlpha } from '../../../theme/tokens';
 import { StyleCSheet } from '../../../ui/layout/StyleCPage';
 import GroceryListScreen from '../GroceryListScreen';
 import ShoppingListScreen from '../ShoppingListScreen';
@@ -112,8 +112,10 @@ async function mount(Screen: React.ComponentType, state: State, size: Size) {
   return ui;
 }
 
-// A colour as drawn on the paper: hex, or an rgba() laid over #F7FAF7.
-const PAPER = [0xf7, 0xfa, 0xf7];
+// A colour as drawn on the frames' own paper: hex, or an rgba() laid over the near-white the frames were drawn on
+// (the app's page before owner #203-E74). These cases pin each token recipe against its frame; on the tan page the
+// same recipe lays over tan.
+const PAPER = [247, 250, 247];
 function onPaper(colour: unknown): number[] {
   const text = String(colour);
   const hex = /^#([0-9a-f]{6})$/i.exec(text);
@@ -167,7 +169,9 @@ describe.each([['Grocery', GroceryListScreen], ['Shopping', ShoppingListScreen]]
     const nodes = hosts(ui.root as unknown as Host).map(flat);
     const lines = nodes.filter((st) => st.flexDirection === 'row' && num(st.borderBottomWidth) > 0 && st.paddingVertical === 14);
     expect(lines).toHaveLength(5);
-    lines.forEach((st) => expect(furthest(st.borderColor, '#ECE7DF')).toBeLessThanOrEqual(3));
+    // The frame's line is the app hairline at half strength. The hairline is the tan line since #203-E74, so the
+    // recipe is pinned, not the frame's hex.
+    lines.forEach((st) => expect(st.borderColor).toBe(withAlpha(lightTokens.border, 0.5)));
     const rings = nodes.filter((st) => st.width === 28 && st.height === 28 && st.borderWidth === 1.5);
     expect(rings).toHaveLength(5);
     rings.forEach((st) => expect(furthest(st.borderColor, '#CFC8BD')).toBeLessThanOrEqual(4));
@@ -212,11 +216,11 @@ it.each(EACH)('D10: the prep-day chips draw the plain calendar (%s)', async (_s,
 });
 
 it.each(EACH)('D11: the method numerals are gold, at 4.5:1 or better on the paper (%s)', async (_s, size) => {
-  // C_recipe (ios390, 100%): the step numerals are drawn in gold on the paper; gold 700 keeps body-text contrast.
+  // C_recipe (ios390, 100%): the step numerals are drawn in gold on the paper; gold 800 keeps body-text contrast on tan.
   const ui = await mount(RecipeDetailScreen, 'loaded', size);
   const colour = flat(await waitFor(() => ui.getByText('1') as unknown as Host)).color as string;
-  expect(colour).toBe(gold[700]);
-  expect(contrast(colour, '#F7FAF7')).toBeGreaterThanOrEqual(4.5);
+  expect(colour).toBe(gold[800]);
+  expect(contrast(colour, lightTokens.bgPrimary)).toBeGreaterThanOrEqual(4.5);
 });
 
 it.each(EACH)('D12: a Recipes row follows the drawn kitchen row (%s)', async (_s, size) => {
