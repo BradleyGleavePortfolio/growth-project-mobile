@@ -44,7 +44,7 @@ import {
   forestPop,
   neutral,
   voiceFaces,
-  voiceShades, lightTokens,
+  voiceShades,
 } from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
 import RomanAvatar from '../../components/roman/RomanAvatar';
@@ -241,7 +241,7 @@ export default function CoachCommunityInboxScreen({
   useLayoutEffect(() => {
     setOptions?.({
       headerStyle: { backgroundColor: caughtUp ? colors.forest : colors.bone },
-      headerTintColor: caughtUp ? lightTokens.textOnAccent : colors.ink,
+      headerTintColor: caughtUp ? colors.bone : colors.ink,
     });
   }, [caughtUp, setOptions]);
 
@@ -502,7 +502,7 @@ function InboxCaughtUp({
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={lightTokens.textOnAccent}
+            tintColor={colors.bone}
           />
         }
       >
@@ -928,7 +928,7 @@ const styles = StyleSheet.create({
     lineHeight: 46,
     color: colors.ink,
   },
-  titleOnDark: { color: lightTokens.textOnAccent },
+  titleOnDark: { color: colors.bone },
   dateLine: {
     fontFamily: 'Inter_400Regular',
     fontSize: 15,
@@ -1005,7 +1005,7 @@ const styles = StyleSheet.create({
     fontFamily: 'CormorantGaramond_500Medium',
     fontSize: 18,
     lineHeight: 23,
-    color: lightTokens.textOnAccent,
+    color: colors.bone,
   },
   rowBody: {
     flex: 1,
@@ -1132,7 +1132,7 @@ const styles = StyleSheet.create({
     fontFamily: 'CormorantGaramond_400Regular',
     fontSize: 32,
     lineHeight: 40,
-    color: lightTokens.textOnAccent,
+    color: colors.bone,
   },
   caughtUpButton: {
     marginHorizontal: layout.gutter,

@@ -245,7 +245,7 @@ describe('the direct-message sheets keep main\'s look (no look prop)', () => {
     });
     expect(r.queryByTestId('message-sheet-grab')).toBeNull();
     expect(flat(r.getByText('See you Thursday') as unknown as Node)).toEqual({
-      fontSize: 12, color: '#524E47', paddingVertical: 10, paddingHorizontal: 12, textAlign: 'center',
+      fontSize: 12, color: '#6B675F', paddingVertical: 10, paddingHorizontal: 12, textAlign: 'center',
     });
     const rowStyle = { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12 };
     const copy = r.getByLabelText('Copy') as unknown as Node;
@@ -253,13 +253,13 @@ describe('the direct-message sheets keep main\'s look (no look prop)', () => {
     expect(flat(copy)).toEqual(rowStyle);
     expect(flat(report)).toEqual(rowStyle);
     expect(icon(copy)).toMatchObject({ name: 'copy-outline', size: 20, color: '#1A1A18' });
-    expect(icon(report)).toMatchObject({ name: 'flag-outline', size: 20, color: '#9A3030' });
+    expect(icon(report)).toMatchObject({ name: 'flag-outline', size: 20, color: '#B91C1C' });
     expect(flat(words(copy))).toEqual({ fontSize: 16, color: '#1A1A18' });
-    expect(flat(words(report))).toEqual({ fontSize: 16, color: '#9A3030' });
+    expect(flat(words(report))).toEqual({ fontSize: 16, color: '#B91C1C' });
     const cancel = r.getByText('Cancel') as unknown as Node;
     expect(flat(cancel)).toEqual({ fontSize: 16, color: '#1A1A18', fontWeight: '600' });
     expect(flat(cancel.parent as Node)).toEqual({
-      marginTop: 8, paddingVertical: 14, paddingHorizontal: 16, alignItems: 'center', borderRadius: 12, backgroundColor: '#E6C6A0',
+      marginTop: 8, paddingVertical: 14, paddingHorizontal: 16, alignItems: 'center', borderRadius: 12, backgroundColor: '#F7FAF7',
     });
     expect(r.queryByLabelText('Reply')).toBeNull();
   });
@@ -270,10 +270,10 @@ describe('the direct-message sheets keep main\'s look (no look prop)', () => {
     const close = r.getByLabelText('Close report sheet') as unknown as Node;
     const header = close.parent as Node;
     const body = header.parent as Node;
-    expect(flat(body)).toEqual({ flex: 1, backgroundColor: '#E6C6A0' });
+    expect(flat(body)).toEqual({ flex: 1, backgroundColor: '#F7FAF7' });
     expect(flat(header)).toEqual({
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16,
-      paddingTop: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#C4A988',
+      paddingTop: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#DCD5CC',
     });
     expect(flat(r.getByText('Report Message') as unknown as Node)).toEqual({ fontSize: 16, fontWeight: '600', color: '#1A1A18' });
     const scroll = body.queryAll((n) => n.type === 'RCTScrollView')[0];
@@ -282,32 +282,32 @@ describe('the direct-message sheets keep main\'s look (no look prop)', () => {
     expect(flat(r.getByText(/^Reports are reviewed/) as unknown as Node)).toEqual({ fontSize: 13, color: '#3D3D3A', lineHeight: 18 });
     const label = r.getByText('Message') as unknown as Node;
     expect(flat(label.parent as Node)).toEqual({
-      backgroundColor: '#F1E8D5', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#C4A988', gap: 4,
+      backgroundColor: '#F1E8D5', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#DCD5CC', gap: 4,
     });
-    expect(flat(label)).toEqual({ fontSize: 11, color: '#524E47', fontWeight: '600' });
+    expect(flat(label)).toEqual({ fontSize: 11, color: '#6B675F', fontWeight: '600' });
     expect(flat(r.getByText('See you Thursday') as unknown as Node)).toEqual({ fontSize: 14, color: '#1A1A18', lineHeight: 20 });
     const section = { fontSize: 13, color: '#3D3D3A', fontWeight: '600', marginTop: 8 };
     expect(flat(r.getByText('Why are you reporting this?') as unknown as Node)).toEqual(section);
     expect(flat(r.getByText('More details (optional)') as unknown as Node)).toEqual(section);
     const option = {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, paddingHorizontal: 14,
-      borderRadius: 10, backgroundColor: '#F1E8D5', borderWidth: 1, borderColor: '#C4A988',
+      borderRadius: 10, backgroundColor: '#F1E8D5', borderWidth: 1, borderColor: '#DCD5CC',
     };
     const spam = r.getByLabelText('Spam') as unknown as Node;
     expect(flat(spam)).toEqual(option);
     expect(flat(words(spam))).toEqual({ fontSize: 14, color: '#1A1A18' });
     const stub = spam.queryAll((n) => n.type === 'View' && n !== spam)[0];
-    expect(flat(stub)).toEqual({ width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: '#C4A988' });
+    expect(flat(stub)).toEqual({ width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: '#DCD5CC' });
     expect(flat(r.getByLabelText('Additional details') as unknown as Node)).toEqual({
-      minHeight: 100, borderWidth: 1, borderColor: '#C4A988', borderRadius: 10, padding: 12, fontSize: 14,
+      minHeight: 100, borderWidth: 1, borderColor: '#DCD5CC', borderRadius: 10, padding: 12, fontSize: 14,
       color: '#1A1A18', backgroundColor: '#F1E8D5', textAlignVertical: 'top',
     });
-    expect(flat(r.getByText('0/1000') as unknown as Node)).toEqual({ fontSize: 11, color: '#524E47', alignSelf: 'flex-end' });
+    expect(flat(r.getByText('0/1000') as unknown as Node)).toEqual({ fontSize: 11, color: '#6B675F', alignSelf: 'flex-end' });
     const submit = r.getByLabelText('Submit report') as unknown as Node;
     const button = { paddingVertical: 14, borderRadius: 10, alignItems: 'center' };
-    expect(flat(submit)).toEqual({ ...button, backgroundColor: '#C4A988' });
-    expect(flat(submit.parent as Node)).toEqual({ padding: 16, borderTopWidth: 1, borderTopColor: '#C4A988', backgroundColor: '#F1E8D5' });
-    expect(flat(r.getByText('Submit Report') as unknown as Node)).toEqual({ color: '#FBF7F0', fontSize: 15, fontWeight: '600' });
+    expect(flat(submit)).toEqual({ ...button, backgroundColor: '#DCD5CC' });
+    expect(flat(submit.parent as Node)).toEqual({ padding: 16, borderTopWidth: 1, borderTopColor: '#DCD5CC', backgroundColor: '#F1E8D5' });
+    expect(flat(r.getByText('Submit Report') as unknown as Node)).toEqual({ color: '#F7FAF7', fontSize: 15, fontWeight: '600' });
     await act(async () => { fireEvent.press(r.getByLabelText('Violence or threats')); });
     const picked = r.getByLabelText('Violence or threats') as unknown as Node;
     expect(flat(picked)).toEqual({ ...option, borderColor: '#2C4A36' });
@@ -317,6 +317,6 @@ describe('the direct-message sheets keep main\'s look (no look prop)', () => {
     });
     expect(flat(r.getByLabelText('Submit report') as unknown as Node)).toEqual({ ...button, backgroundColor: '#2C4A36' });
     await act(async () => { fireEvent.press(r.getByLabelText('Submit report')); });
-    expect(flat(r.getByTestId('report-sheet-error') as unknown as Node)).toEqual({ color: '#9A3030', fontSize: 13, marginTop: 8 });
+    expect(flat(r.getByTestId('report-sheet-error') as unknown as Node)).toEqual({ color: '#B91C1C', fontSize: 13, marginTop: 8 });
   });
 });

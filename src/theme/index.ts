@@ -39,7 +39,7 @@ export const Colors = {
   gold:            CanonicalColors.warning,           // #C5A253 mutedGold
   orange:          CanonicalColors.error,             // #4A0404 oxblood
   dark:            CanonicalColors.textPrimary,       // #1A1A18 ink
-  background:      CanonicalColors.background,        // #E6C6A0 the page tan
+  background:      CanonicalColors.background,        // #F7FAF7 bone
   surface:         CanonicalColors.surface,           // #F1E8D5 cream
   surfaceElevated: CanonicalColors.surfaceElevated,
   textMuted:       CanonicalColors.textMuted,         // readable warm grey
@@ -50,7 +50,7 @@ export const Colors = {
   warning:         CanonicalColors.warning,
   error:           CanonicalColors.error,
   info:            CanonicalColors.info,
-  white:           CanonicalColors.textOnPrimary,     // near-white (was #FFFFFF)
+  white:           CanonicalColors.textOnPrimary,     // bone (was #FFFFFF)
   border:          CanonicalColors.border,
   divider:         CanonicalColors.divider,
   cardShadow:      CanonicalColors.cardShadow,

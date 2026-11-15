@@ -14,17 +14,14 @@
  *
  * Pair                                          Hex pair              Ratio    AA body  AA large
  * ─────────────────────────────────────────────────────────────────────────────────────────────
- * The page ("bone") is tan #E6C6A0 (owner #203-E74, #203-E76); pairs locked by
- * src/__tests__/tanSwapGuard.test.ts.
- * ink (#1A1A18) on bone (#E6C6A0)               ~10.8:1              PASS     PASS
- * ink (#1A1A18) on cream (#F1E8D5)              ~14.3:1              PASS     PASS
- * charcoal (#3D3D3A) on bone (#E6C6A0)          ~ 6.7:1              PASS     PASS
- * forest (#2C4A36) on bone (#E6C6A0)            ~ 6.1:1              PASS     PASS
- * graphite (#2C2C2C) on bone (#E6C6A0)          ~ 8.6:1              PASS     PASS
+ * ink (#1A1A18) on bone (#F7FAF7)               ~16.6:1              PASS     PASS
+ * ink (#1A1A18) on cream (#F1E8D5)              ~15.2:1              PASS     PASS
+ * charcoal (#3D3D3A) on bone (#F7FAF7)          ~10.4:1              PASS     PASS
+ * forest (#2C4A36) on bone (#F7FAF7)            ~ 9.3:1              PASS     PASS
+ * graphite (#2C2C2C) on bone (#F7FAF7)          ~13.3:1              PASS     PASS
  * graphite (#2C2C2C) on cream (#F1E8D5)         ~11.5:1              PASS     PASS
- * textMuted (#524E47) on bone (#E6C6A0)         ~ 5.1:1              PASS     PASS
- * stone (#B1A89F) on bone (#E6C6A0)             ~ 1.4:1              FAIL     FAIL (decorative/disabled only)
- * mutedGold (#C5A253) on bone (#E6C6A0)         ~ 1.5:1              FAIL     FAIL (fills/borders only)
+ * stone (#B1A89F) on bone (#F7FAF7)             ~ 2.2:1              FAIL     FAIL (decorative/disabled only)
+ * mutedGold (#C5A253) on bone (#F7FAF7)         ~ 2.3:1              FAIL     FAIL (fills/borders only)
  *
  * Dark mode additions:
  * textPrimary (#EBE6DE) on bgPrimary (#121110)  ~14.2:1              PASS     PASS
@@ -37,7 +34,7 @@
 
 // ─── Universal old-money palette ──────────────────────────────────────────────
 export const colors = {
-  bone:        '#E6C6A0',  // primary background: tan (owner #203-E74, #203-E76); a ground, never a text colour
+  bone:        '#F7FAF7',  // primary background (owner #166-2)
   cream:       '#F1E8D5',  // card surface, warm
   ink:         '#1A1A18',  // primary text, dark sections (NEVER #000)
   charcoal:    '#3D3D3A',  // secondary text on light
@@ -62,13 +59,12 @@ export const colors = {
   // hardcoded the Tailwind amber-100/500/700 hex equivalents.
   warningBg:     '#F8F2E5',
   warningBorder: '#C5A253',
-  warningInk:    '#6B4F1A',  // gold[800]: 4.69:1 on the tan page
+  warningInk:    '#8A6A2A',
   // Cross-pillar brand cohesion (Wave 5): oxblood (#4A0404) is reserved
   // as the Earnings/Wealth pillar primary brand color. The Body pillar
-  // uses #9A3030, the theme's dark alarm red (semantic.danger.border): it
-  // passes WCAG AA as text on the tan page (4.56:1), on cards and on cream,
-  // and reads as "warning" rather than "blood".
-  error:       '#9A3030',
+  // uses #B91C1C — a clearer alarm red that pairs with bone, passes WCAG
+  // AA on bone background, and reads as "warning" rather than "blood".
+  error:       '#B91C1C',
 
   // Roman (AI persona) brand-character avatar tokens. The Roman mascot uses a
   // deep-gold accent that is intentionally distinct from `mutedGold`
@@ -117,7 +113,7 @@ export const semantic = {
   },
   warning: {
     bg:     '#F8F2E5',
-    fg:     '#6B4F1A',
+    fg:     '#8A6A2A',
     border: '#C5A253',
     icon:   '#C5A253',
   },
@@ -413,7 +409,7 @@ export interface SemanticTokens {
    * dark backgrounds (WCAG 2.1, verified in theme/__tests__/contrastTokens.test):
    *   dark:  #E07373 on #121110 ~ 6.17:1  PASS  |  on #1C1A18 ~ 5.68:1  PASS
    * Light mode uses the existing forest #2C4A36, which clears AA as text on
-   * the tan page #E6C6A0 (~6.05:1) and surface #FFFDF8 (~9.65:1).
+   * bone #F7FAF7 (~9.33:1) and surface #FFFDF8 (~9.65:1).
    * Use `accent` for FILLS (CTA backgrounds, progress fills, borders) and
    * `accentText` for accent-colored FOREGROUND text/icons on a bg/surface.
    */
@@ -481,33 +477,31 @@ const chartLeaf = '#A3C46A';
 
 /** Light-mode semantic tokens (default — matches existing bone/ink palette). */
 export const lightTokens: SemanticTokens = {
-  bgPrimary:   '#E6C6A0',  // the page: tan (owner #203-E74, #203-E76)
+  bgPrimary:   '#F7FAF7',  // bone (owner #166-2)
   bgSurface:   '#FFFDF8',
   textPrimary: '#1A1A18',  // ink (~15.23:1 on cream)
-  // Warm taupe muted, the value textOnDisabled holds. It clears AA on every
-  // light ground: ~5.10:1 on the tan page #E6C6A0, ~8.13:1 on surface
-  // #FFFDF8, ~6.79:1 on cream.
-  textMuted:   '#524E47',
+  // Warm taupe muted. Darkened from #78736E (only 4.10:1 on cream, AA FAIL
+  // for body-sized 12-13px meta text) to #6B675F so it clears AA on BOTH
+  // light backgrounds: ~5.35:1 on bone #F7FAF7, ~5.54:1 on surface #FFFDF8.
+  textMuted:   '#6B675F',
   accent:      colors.forest,
   // One forest accent for both CTA fills and foreground text/icons. Clears
-  // AA on page (~6.05:1) and surface (~9.65:1); see contrastTokens test.
+  // AA on page (~8.57:1) and surface (~9.65:1); see contrastTokens test.
   accentText:  colors.forest,
   textOnAccent:'#FBF7F0',  // warm near-white on forest (~9.19:1)
   // Disabled CTA: warm taupe fill + dark warm ink. ~5.90:1 (AA PASS) so a
   // disabled/current-plan button label stays legible without parent opacity.
   disabledBg:     '#E0D9CE',
   textOnDisabled: '#524E47',
-  // One tan-family hairline: 1.38:1 on the page (what the earlier hairline
-  // was on the earlier page), 2.20:1 on a card.
-  border:      '#C4A988',
+  border:      '#DCD5CC',
   // Ink (#1A1A18) at 0.40 — a calm dim that keeps the underlying screen legible.
   overlay:     'rgba(26, 26, 24, 0.40)',
   surface: { masthead: brand[800], forestBand: brand[600], forestBandLine: '#A8B2A6', sage: semantic.success.bg, sageLine: '#C9D8CD' },
   textOnMastheadMuted: brand[100],
   data: {
     leaf: chartLeaf, fern: '#7FA653', moss: '#4E7A3F', forest: brand[600], deep: brand[800],
-    peak: gold[300], peakInk: gold[800], planned: '#6B675F', plannedOnDark: brand[300],
-    missed: '#524E47', missedOnDark: colors.stone, trackLight: '#E6DFD3', // missed = textMuted
+    peak: gold[300], peakInk: gold[800], planned: '#857F75', plannedOnDark: brand[300],
+    missed: '#6B675F', missedOnDark: colors.stone, trackLight: '#E6DFD3', // missed = textMuted
     trend: chartLeaf, range: brand[500], weighIn: brand[100], goal: gold[300],
     frameOnDark: brand[300], pending: chartLeaf,
   },
@@ -534,7 +528,7 @@ export const forestPop = {
   sageLine: lightTokens.surface.sageLine,
   surface: lightTokens.bgSurface,
   ink: colors.ink,
-  n700: lightTokens.textMuted, // meta grey: the muted ink, 5.10:1 on the tan page (neutral[700] was 4.27:1)
+  n700: neutral[700],
   brand400: brand[400],
   onDeep: lightTokens.textOnAccent,
   onDeepMuted: brand[100],
@@ -544,8 +538,8 @@ export type ForestPopRole = keyof typeof forestPop;
 
 /**
  * Coach inbox and Roman's drafts, K2 Style B (planning/MOCKUP3/K2/style-b, owner #196-D10: "BUILD THE PICKED
- * STYLES AND SCREENS"). Exact drawing shades for the tiles, cards and monograms; the page is the app page token
- * (owner #197-E6; tan since #203-E74). Contrast pairs in
+ * STYLES AND SCREENS"). Exact drawing shades for the tiles, cards and monograms; the page is the app page, not the
+ * drawn cream (owner #197-E6: "#196-D13 - we keep the toothpaste color for v1"). Contrast pairs in
  * theme/__tests__/coachInboxB.test.ts.
  */
 export const coachInboxB = {
@@ -618,8 +612,7 @@ export const darkTokens: SemanticTokens = {
   // that pass on #121110 and #1C1A18 (missed = textMuted again).
   surface: { ...lightTokens.surface, sage: '#17211A', sageLine: '#2A3A2F' },
   textOnMastheadMuted: brand[100],
-  // planned keeps its own dark value: the light one moved for the tan page.
-  data: { ...lightTokens.data, forest: '#527A5E', peakInk: gold[300], planned: '#857F75', missed: '#A09B94', trackLight: '#24221F' },
+  data: { ...lightTokens.data, forest: '#527A5E', peakInk: gold[300], missed: '#A09B94', trackLight: '#24221F' },
 };
 
 // ─── Color utilities ────────────────────────────────────────────────────────

@@ -71,7 +71,7 @@ Serif roles keep lineHeight at least `SERIF_MIN_LINE_RATIO` (1.25) x fontSize: C
 | `layout` | gutter 24, statusBarGap 12, footer gaps, buttonHeight 54, touchMin 44, rowMinHeight 56, section 18 + 24 | `ui/layout/Screen`, buttons, rows, sections |
 | `wheel` | 44 pt rows x 5, hairline band, serif 28 / 21 / 18 | consultation wheels (`ui/wheel/WheelBand`) |
 
-Hairlines: `useTheme().colors.border` and `colors.divider` now equal `semanticColors.border` (#C4A988 light, the tan-family hairline), so there is one hairline colour; camel stays for the founding-tier cue and `AccentRule` only.
+Hairlines: `useTheme().colors.border` and `colors.divider` now equal `semanticColors.border` (#DCD5CC light), so there is one hairline colour; camel stays for the founding-tier cue and `AccentRule` only.
 
 Spacing: `tokens.spacing` (lg 16, xl 24) is canonical; the legacy `Spacing` in `index.ts` (md 16, lg 24, xl 32) shares key names with different values and is deprecated for new code. The primitives use `layout`.
 
@@ -138,15 +138,15 @@ WCAG 2.x pairs, locked by `__tests__/contrastStyleC.test.ts` in both schemes (te
 | Effort 9-10 | `textOnAccent` on `data.deep` | 13.14 | 13.14 | text 4.5 |
 | Progress bar fill | `data.forest` on `data.trackLight` | 7.41 | 3.25 | mark 3 |
 | Loading, disabled Start | `textOnDisabled` on `disabledBg` | 5.90 | 4.99 | text 4.5 |
-| Missed number on the page | `data.missed` on `bgPrimary` / `bgSurface` | 5.10 / 8.13 | 6.84 / 6.29 | text 4.5 |
-| Done arcs, selected ring | `data.forest` on `bgPrimary` / `bgSurface` | 6.05 / 9.65 | 3.87 / 3.56 | mark 3 |
-| Moss lines, dots, chip edges | `data.moss` on `bgPrimary` / `bgSurface` | 3.10 / 4.94 | 3.75 / 3.45 | mark 3 |
-| Planned arcs, unfilled chips | `data.planned` on `bgPrimary` / `bgSurface` | 3.47 / 5.54 | 4.75 / 4.37 | mark 3 |
-| Star outline | `data.peakInk` on `bgPrimary` / `bgSurface` | 4.69 / 7.49 | 9.84 / 9.05 | mark 3 |
-| 2/4 label, next set row, today and planned number | `textPrimary` on `bgPrimary` / `bgSurface` | 10.75 / 17.15 | 15.18 / 13.97 | text 4.5 |
-| Skip placeholder, rest number | `textMuted` on `bgPrimary` / `bgSurface` | 5.10 / 8.13 | 6.84 / 6.29 | text 4.5 |
-| Legend and history labels | `colors.charcoal` on `bgPrimary` | 6.72 | light only | text 4.5 |
-| Effort 9-10 fill on the page | `data.deep` on `bgPrimary` | 8.65 | light only | mark 3 |
+| Missed number on the page | `data.missed` on `bgPrimary` / `bgSurface` | 4.92 / 5.54 | 6.84 / 6.29 | text 4.5 |
+| Done arcs, selected ring | `data.forest` on `bgPrimary` / `bgSurface` | 8.57 / 9.65 | 3.87 / 3.56 | mark 3 |
+| Moss lines, dots, chip edges | `data.moss` on `bgPrimary` / `bgSurface` | 4.39 / 4.94 | 3.75 / 3.45 | mark 3 |
+| Planned arcs, unfilled chips | `data.planned` on `bgPrimary` / `bgSurface` | 3.47 / 3.91 | 4.75 / 4.37 | mark 3 |
+| Star outline | `data.peakInk` on `bgPrimary` / `bgSurface` | 6.65 / 7.49 | 9.84 / 9.05 | mark 3 |
+| 2/4 label, next set row, today and planned number | `textPrimary` on `bgPrimary` / `bgSurface` | 15.23 / 17.15 | 15.18 / 13.97 | text 4.5 |
+| Skip placeholder, rest number | `textMuted` on `bgPrimary` / `bgSurface` | 4.92 / 5.54 | 6.84 / 6.29 | text 4.5 |
+| Legend and history labels | `colors.charcoal` on `bgPrimary` | 9.52 | light only | text 4.5 |
+| Effort 9-10 fill on the page | `data.deep` on `bgPrimary` | 12.26 | light only | mark 3 |
 
 Decorative, no ratio needed: `surface.sageLine`, `data.trackLight`, and the gold star fill on bone (1.68; the outline carries it).
 
@@ -176,7 +176,7 @@ and frame marks, in both schemes. The range band is decorative and repeated in w
 
 ## App-store / deep-link dependencies
 
-- Splash background and android adaptive icon background must match `bone` (`#E6C6A0` since owner #203-E74). Both are declared in `app.json` (`expo.splash.backgroundColor` and `expo.android.adaptiveIcon.backgroundColor`); app.json still holds the earlier near-white until the next store build (`boneSwapGuard.test.ts` pins it).
+- Splash background and android adaptive icon background must match `bone` (`#F7FAF7`). Both are declared in `app.json` (`expo.splash.backgroundColor` and `expo.android.adaptiveIcon.backgroundColor`).
 - Listing screenshots are taken on the active palette; if the palette changes, the screenshots in the Play / App Store listing have to be regenerated.
 
 ## Security and tenancy

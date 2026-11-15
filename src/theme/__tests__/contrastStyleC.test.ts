@@ -113,7 +113,7 @@ it('keeps the index-v2 section 4 light values', () => {
   expect(lightTokens.textOnMastheadMuted).toBe('#B8CCBF');
   expect(lightTokens.data).toEqual({
     leaf: '#A3C46A', fern: '#7FA653', moss: '#4E7A3F', forest: '#2C4A36', deep: '#1C3023', peak: '#D4B96B',
-    peakInk: '#6B4F1A', planned: '#6B675F', plannedOnDark: '#6E9479', missed: '#524E47', missedOnDark: '#B1A89F',
+    peakInk: '#6B4F1A', planned: '#857F75', plannedOnDark: '#6E9479', missed: '#6B675F', missedOnDark: '#B1A89F',
     trackLight: '#E6DFD3',
     trend: '#A3C46A', range: '#3A5C46', weighIn: '#B8CCBF', goal: '#D4B96B',
     frameOnDark: '#6E9479', pending: '#A3C46A',

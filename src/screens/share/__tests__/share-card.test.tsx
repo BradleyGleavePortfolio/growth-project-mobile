@@ -48,7 +48,7 @@ const haptic = () => jest.requireMock('../../../ui/haptics/haptics.service').Hap
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({
     colors: {
-      background: '#E6C6A0',
+      background: '#F7FAF7',
       surface: '#FFFFFF',
       primary: '#2D4B3A',
       primaryLight: '#E8F0EB',

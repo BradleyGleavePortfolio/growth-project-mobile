@@ -28,7 +28,7 @@ import { brand, colors, forestPop as fp, neutral, radius, spacing, typography, v
 import type { SpaceMessage } from './spaceChatApi';
 import { REJECTED_WORDS, type PendingState } from './spaceChatOutbox';
 
-/** Owner #168-13 GREY-TEXT op 1: every small grey text on this page is #2C2C2C (8.6:1 on the tan page #E6C6A0, 13.7:1 on a card). */
+/** Owner #168-13 GREY-TEXT op 1: every small grey text on this page is #2C2C2C (13.4:1 on bone #F7FAF7). */
 export const SMALL_GREY = colors.graphite;
 /** Member tiles on the Studio greens (mockup 05b), picked per person; light initials, except ink on leaf with a moss edge. */
 type Tile = { bg: string; fg: string; edge?: string };
@@ -280,12 +280,11 @@ const s = StyleSheet.create({
   reason: { ...typography.bodySmall, color: SMALL_GREY, marginTop: spacing.xs },
   // A small sans day mark ("Thu, Oct 22"), 05b .day: 600 12 pt, 10 pt above, 4 below.
   day: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 12, lineHeight: 15, color: SMALL_GREY, textAlign: 'center', paddingTop: GAP, paddingBottom: spacing.xs },
-  // 05b .newline: an 8 pt lead dash, 10 pt gaps, 600 12 pt words, a leaf rule. The words are forest and the
-  // dash and rule moss: on the tan page the drawn brand 400 is 3.43:1 and leaf 1.21:1; forest is 6.05:1, moss 3.10:1.
+  // 05b .newline: an 8 pt lead dash, 10 pt gaps, 600 12 pt brand 400 (#4D7059) words, a leaf rule.
   newLine: { flexDirection: 'row', alignItems: 'center', gap: GAP, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
-  newDash: { width: 8, height: 2, borderRadius: 1, backgroundColor: fp.moss },
-  newText: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 12, lineHeight: 15, color: fp.forest },
-  newRule: { flex: 1, height: 2, borderRadius: 1, backgroundColor: fp.moss },
+  newDash: { width: 8, height: 2, borderRadius: 1, backgroundColor: fp.leaf },
+  newText: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 12, lineHeight: 15, color: fp.brand400 },
+  newRule: { flex: 1, height: 2, borderRadius: 1, backgroundColor: fp.leaf },
   glyph: { width: 24, height: 24, justifyContent: 'center', gap: 3, paddingLeft: 3 }, bar: { height: 2, borderRadius: 1 },
   hash: { width: 18, height: 18, marginRight: 6 },
   hashH: { position: 'absolute', left: 3, width: 12, height: 1.7, borderRadius: 1 },

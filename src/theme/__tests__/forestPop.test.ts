@@ -20,8 +20,8 @@ describe('Forest Pop community colours', () => {
     expect(p).toEqual({
       deep: '#1C3023', forest: '#2C4A36', leaf: '#A3C46A', moss: '#4E7A3F',
       gold: '#D4B96B', goldInk: '#6B4F1A', sage: '#E0EBE4', sageLine: '#C9D8CD',
-      surface: '#FFFDF8', ink: '#1A1A18', n700: '#524E47', brand400: '#4D7059',
-      onDeep: '#FBF7F0', onDeepMuted: '#B8CCBF', error: '#9A3030',
+      surface: '#FFFDF8', ink: '#1A1A18', n700: '#5A5A56', brand400: '#4D7059',
+      onDeep: '#FBF7F0', onDeepMuted: '#B8CCBF', error: '#B91C1C',
     });
   });
 
@@ -34,13 +34,13 @@ describe('Forest Pop community colours', () => {
 
   it.each<[string, string, string, number]>([
     ['ink on surface', p.ink, p.surface, 17.15],
-    ['n700 on surface', p.n700, p.surface, 8.13],
+    ['n700 on surface', p.n700, p.surface, 6.81],
     ['brand400 on surface', p.brand400, p.surface, 5.47],
     ['forest on surface', p.forest, p.surface, 9.65],
     ['moss on surface', p.moss, p.surface, 4.94],
     ['goldInk on surface', p.goldInk, p.surface, 7.49],
     ['ink on sage', p.ink, p.sage, 14.25],
-    ['n700 on sage', p.n700, p.sage, 6.76],
+    ['n700 on sage', p.n700, p.sage, 5.66],
     ['forest on sage', p.forest, p.sage, 8.03],
     ['onDeep on deep', p.onDeep, p.deep, 13.14],
     ['onDeepMuted on deep', p.onDeepMuted, p.deep, 8.3],
@@ -51,7 +51,7 @@ describe('Forest Pop community colours', () => {
     ['leaf on forest', p.leaf, p.forest, 4.98],
     ['ink on leaf', p.ink, p.leaf, 8.85],
     ['ink on gold', p.ink, p.gold, 9.09],
-    ['error on surface', p.error, p.surface, 7.28],
+    ['error on surface', p.error, p.surface, 6.36],
   ])('%s clears 4.5:1 at the plan ratio', (_use, fg, bg, plan) => {
     const r = ratio(fg, bg);
     expect(r).toBeGreaterThanOrEqual(4.5);

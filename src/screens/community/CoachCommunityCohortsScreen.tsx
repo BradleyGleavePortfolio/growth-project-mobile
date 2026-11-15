@@ -31,7 +31,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/useTheme';
-import { spacing, radius, withAlpha, colors, layout, lightTokens } from '../../theme/tokens';
+import { spacing, radius, withAlpha, colors, layout } from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
 import { CoachRomanEmptyState } from '../../components/community/coach';
 import CompletionToast, {
@@ -291,7 +291,7 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
                     styles.modalSubmitLabel,
                     {
                       color: canSubmit
-                        ? lightTokens.textOnAccent
+                        ? colors.bone
                         : semanticColors.textOnDisabled,
                     },
                   ]}
@@ -361,7 +361,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     fontSize: 16,
     lineHeight: 21,
-    color: lightTokens.textOnAccent,
+    color: colors.bone,
   },
   scrim: {
     flex: 1,

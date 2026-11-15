@@ -181,7 +181,7 @@ export default function PushPermissionCard({
           testID="push-permission-enable"
           style={[styles.primary, { backgroundColor: sc.textPrimary, opacity: busy ? 0.6 : 1 }]}
         >
-          <Text style={{ ...typography.bodySmall, color: sc.textOnAccent }}>Turn on</Text>
+          <Text style={{ ...typography.bodySmall, color: sc.bgPrimary }}>Turn on</Text>
         </Pressable>
         <Pressable
           onPress={dismiss}

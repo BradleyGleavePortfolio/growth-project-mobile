@@ -269,7 +269,7 @@ export default function PushConfirmModal({
             testID="push-confirm-submit"
           >
             {submitting ? (
-              <ActivityIndicator color={colors.textOnAccent} />
+              <ActivityIndicator color={colors.bgPrimary} />
             ) : (
               <Text style={styles.primaryBtnText}>Confirm &amp; schedule</Text>
             )}
@@ -360,7 +360,7 @@ const makeStyles = (colors: SemanticTokens) =>
     },
     primaryBtnDisabled: { opacity: 0.5 },
     primaryBtnText: {
-      color: colors.textOnAccent,
+      color: colors.bgPrimary,
       fontSize: 15,
       fontWeight: '500',
     },

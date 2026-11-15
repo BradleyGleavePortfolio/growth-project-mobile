@@ -72,6 +72,6 @@ describe('VoicePrivacyCopy — render', () => {
   it('is a plain line in the sheet grey, no box (LO-848 B1, #VOICE-SHADES)', async () => {
     const { getByTestId } = await render(<VoicePrivacyCopy target={{ kind: 'cohort', cohortName: 'Spring Block' }} />);
     expect(StyleSheet.flatten(getByTestId('voice-privacy-copy').props.style)).toEqual({ flexDirection: 'row', alignItems: 'flex-start', gap: 8 });
-    expect(StyleSheet.flatten(getByTestId('voice-privacy-text').props.style).color).toBe('#524E47');
+    expect(StyleSheet.flatten(getByTestId('voice-privacy-text').props.style).color).toBe('#5A5A56');
   });
 });

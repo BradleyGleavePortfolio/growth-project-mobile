@@ -2,7 +2,7 @@
  * HeroAction — Wave 3: luxury button spec.
  *
  * - ink-fill rectangle (backgroundColor: colors.ink)
- * - near-white text (lightTokens.textOnAccent)
+ * - bone text (color: colors.bone)
  * - radius: 0 (no border radius)
  * - no shadow, no glow
  * - pressed state: opacity 0.85 over ~200ms
@@ -18,7 +18,7 @@ import { Pressable, Text } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { track } from '../lib/analytics';
-import { colors, typography, lightTokens } from '../theme/tokens';
+import { colors, typography } from '../theme/tokens';
 import type { MotivationalTone } from '../hooks/usePreferences';
 
 interface HeroActionProps {
@@ -49,7 +49,7 @@ export default function HeroAction({ motivationalTone: _tone }: HeroActionProps 
       accessibilityLabel="Continue"
       accessibilityHint="Opens your workout tracker"
     >
-      <Text style={{ ...typography.eyebrow, color: lightTokens.textOnAccent }}>CONTINUE</Text>
+      <Text style={{ ...typography.eyebrow, color: colors.bone }}>CONTINUE</Text>
     </Pressable>
   );
 }

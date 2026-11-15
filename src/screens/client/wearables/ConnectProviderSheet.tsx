@@ -94,7 +94,7 @@ import {
   HEALTH_CONNECT_DISABLED_MESSAGE,
   isHealthConnectProviderDisabled,
 } from '../../../config/healthConnect';
-import { colors, radius, spacing, typography, withAlpha, lightTokens } from '../../../theme/tokens';
+import { colors, radius, spacing, typography, withAlpha } from '../../../theme/tokens';
 import { emitTutorialSignal } from '../../../tutorial/tutorialEvents';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 
@@ -706,7 +706,7 @@ export default function ConnectProviderSheet({
                   }
                 >
                   {continuing ? (
-                    <ActivityIndicator color={lightTokens.textOnAccent} />
+                    <ActivityIndicator color={colors.bone} />
                   ) : (
                     <Text style={styles.ctaText}>{ctaLabel}</Text>
                   )}
@@ -837,7 +837,7 @@ const styles = StyleSheet.create({
   },
   ctaText: {
     ...typography.bodyMd,
-    color: lightTokens.textOnAccent,
+    color: colors.bone,
   },
   cancel: {
     paddingVertical: spacing.lg,

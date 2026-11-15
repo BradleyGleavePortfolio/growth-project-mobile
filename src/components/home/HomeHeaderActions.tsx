@@ -56,7 +56,7 @@ export function LockedRomanAvatar({ size = 28 }: { size?: number }) {
     <View style={{ width: size, height: size }} testID="roman-locked-avatar">
       <View style={styles.dimmed}><RomanAvatar size={size} /></View>
       <View style={[styles.lock, { backgroundColor: sc.textPrimary, borderColor: sc.bgPrimary }]}>
-        <Ionicons name="lock-closed" size={10} color={sc.textOnAccent} />
+        <Ionicons name="lock-closed" size={10} color={sc.bgPrimary} />
       </View>
     </View>
   );

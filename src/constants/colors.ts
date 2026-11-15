@@ -13,15 +13,15 @@ export const Colors = {
   accent:        '#3A5C46',  // forest mid (was #40916C)
 
   // Backgrounds → bone/cream
-  background:        '#E6C6A0',  // the page: tan (owner #203-E74, #203-E76)
+  background:        '#F7FAF7',  // bone (owner #166-2: near-white)
   surface:           '#F1E8D5',  // cream (was #FFFFFF)
   surfaceElevated:   '#F1E8D5',  // cream (was #F5F0E8)
 
   // Text → ink/charcoal/readable warm grey
   textPrimary:    '#1A1A18',  // ink (was #1B2B1E)
   textSecondary:  '#3D3D3A',  // charcoal (was #4A6358)
-  textMuted:      '#524E47',  // AA-readable on the tan page, cards and cream
-  textOnPrimary:  '#FBF7F0',  // near-white on dark fills (lightTokens.textOnAccent); never the page colour
+  textMuted:      '#6B675F',  // AA-readable on bone and cream
+  textOnPrimary:  '#F7FAF7',  // bone on dark bg (was #FFFFFF)
 
   // Borders & dividers → stone/camel
   border:   '#B08D57',  // camel hairlines (was #E2EDE6)
@@ -32,8 +32,8 @@ export const Colors = {
   warning: '#C5A253',  // mutedGold (was #E9C46A)
   // Wave 5: cross-pillar cohesion — oxblood (#4A0404) is reserved as
   // the Earnings/Wealth pillar primary brand color. Body pillar uses
-  // #9A3030 as alarm red. Passes WCAG AA as text on the tan page (4.56:1).
-  error:   '#9A3030',
+  // #B91C1C as alarm red. Passes WCAG AA on bone bg.
+  error:   '#B91C1C',
   info:    '#457B9D',  // unchanged
 
   // Earnings/Wealth pillar — oxblood is reserved for finance/earnings brand color
@@ -62,7 +62,7 @@ export const Colors = {
   // Tab bar
   tabActive:      '#2C4A36',  // forest
   tabInactive:    '#B1A89F',  // stone
-  tabBackground:  '#E6C6A0',  // the page tan
+  tabBackground:  '#F7FAF7',  // bone
   tabBorder:      'rgba(176,141,87,0.3)',  // camel
 
   // Cards
@@ -78,7 +78,7 @@ export const Colors = {
   // accent (#9A3030) is a desaturated dark red that works on bone.
   noticeWarningBg:       '#F8F2E5',
   noticeWarningIconBg:   '#F3EBD8',
-  noticeWarningText:     '#6B4F1A',
+  noticeWarningText:     '#8A6A2A',
   noticeCriticalBg:      '#F2E0E0',
   noticeCriticalAccent:  '#9A3030',
   noticeCriticalText:    '#7A1F1F',

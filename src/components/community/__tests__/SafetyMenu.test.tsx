@@ -477,7 +477,7 @@ describe('SafetyMenu — Reported and Remove for everyone (REMOVED-BY-M)', () =>
     expect(done.props.accessibilityState).toEqual({ disabled: true });
     expect(done.props.accessibilityLabel).toBe('Reported');
     expect(getByText('Reported')).toBeTruthy();
-    expect(flat(getByText('Reported'))).toMatchObject({ color: '#524E47' });
+    expect(flat(getByText('Reported'))).toMatchObject({ color: '#5A5A56' });
     expect(queryByTestId('sm-report')).toBeNull();
     expect(getByTestId('sm-block')).toBeTruthy();
   });

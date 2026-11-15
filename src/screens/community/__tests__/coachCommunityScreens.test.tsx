@@ -34,7 +34,7 @@
 import React from 'react';
 import { render, fireEvent, configure, act } from '@testing-library/react-native';
 import { Alert, RefreshControl, StyleSheet } from 'react-native';
-import { colors, lightTokens } from '../../../theme/tokens';
+import { colors } from '../../../theme/tokens';
 import {
   CoachCommunityApiError,
   ACK_ILLEGAL_TRANSITION_CODE,
@@ -1476,7 +1476,7 @@ describe('FX4-868 round 4 — offline from the phone, the caught-up page, whole 
     // The bar above the dark page turns forest with a bone back arrow.
     expect(nav.setOptions).toHaveBeenLastCalledWith({
       headerStyle: { backgroundColor: '#2C4A36' },
-      headerTintColor: '#FBF7F0',
+      headerTintColor: '#F7FAF7',
     });
     const back = getByTestId('coach-community-inbox-empty-back');
     expect(back.props.accessibilityLabel).toBe('Back to Community');
@@ -1502,7 +1502,7 @@ describe('FX4-868 round 4 — offline from the phone, the caught-up page, whole 
     expect(queryByTestId('coach-community-inbox-empty-back')).toBeNull();
     expect(queryByText('TEST_EMPTY_INBOX_COPY')).toBeNull();
     expect(nav.setOptions).toHaveBeenLastCalledWith({
-      headerStyle: { backgroundColor: '#E6C6A0' },
+      headerStyle: { backgroundColor: '#F7FAF7' },
       headerTintColor: '#1A1A18',
     });
   });
@@ -1512,7 +1512,7 @@ describe('FX4-868 round 4 — offline from the phone, the caught-up page, whole 
     const nav = caughtUpNav();
     await render(<CoachCommunityInboxScreen navigation={nav} />);
     expect(nav.setOptions).toHaveBeenLastCalledWith({
-      headerStyle: { backgroundColor: '#E6C6A0' },
+      headerStyle: { backgroundColor: '#F7FAF7' },
       headerTintColor: '#1A1A18',
     });
   });
@@ -1652,13 +1652,13 @@ describe('FX4-868 round 4 — pull to retry on the empty pages, the member sheet
     expect(retry).toHaveBeenCalledTimes(1);
   });
 
-  it('the dark caught-up page pulls to refresh the inbox, with a near-white spinner', async () => {
+  it('the dark caught-up page pulls to refresh the inbox, with a bone spinner', async () => {
     const refetch = jest.fn();
     mockState.inbox = { data: { items: [], next_cursor: null }, isLoading: false, isError: false, isRefetching: false, refetch };
     const { getByTestId } = await render(<CoachCommunityInboxScreen />);
     expect(getByTestId('coach-community-inbox-empty-avatar')).toBeTruthy();
     const control = getByTestId('coach-community-inbox-empty-scroll').props.refreshControl;
-    expect(control.props.tintColor).toBe(lightTokens.textOnAccent);
+    expect(control.props.tintColor).toBe(colors.bone);
     await control.props.onRefresh();
     expect(refetch).toHaveBeenCalledTimes(1);
   });

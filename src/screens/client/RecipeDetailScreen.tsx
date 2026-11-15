@@ -341,7 +341,7 @@ const makeStyles = (colors: SemanticTokens) =>
     marginTop: 1,
   },
   // Serif numerals in gold, as C_recipe draws them: gold 700 is 4.78:1 on the paper, past 4.5:1 (gold 500 would be 2.94:1).
-  stepNumberText: { ...typography.h3, color: gold[800] }, // 4.69:1 on the tan page (gold[700] is 3.10:1)
+  stepNumberText: { ...typography.h3, color: gold[700] },
   stepText: { ...typography.body, flex: 1, color: colors.textPrimary },
 
   // Try again 16 pt under the notice, as drawn (ctx#457 shopping-error) and as the other four kitchen screens.

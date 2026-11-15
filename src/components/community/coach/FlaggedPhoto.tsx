@@ -34,7 +34,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { z } from 'zod';
 import HapticPressable from '../../HapticPressable';
 import { useTheme } from '../../../theme/useTheme';
-import { colors, radius, spacing, withAlpha, lightTokens } from '../../../theme/tokens';
+import { colors, radius, spacing, withAlpha } from '../../../theme/tokens';
 
 /** The `image` a photo item carries (same shape as the chat row's photo). */
 export const FlaggedPhotoImageSchema = z
@@ -166,7 +166,7 @@ export default function FlaggedPhoto({
           testID={`${testID}-image`}
         />
         <View style={styles.expand} pointerEvents="none">
-          <Ionicons name="expand-outline" size={16} color={lightTokens.textOnAccent} />
+          <Ionicons name="expand-outline" size={16} color={colors.bone} />
         </View>
       </HapticPressable>
       <Text style={[styles.help, { color: semanticColors.textMuted }]}>{PHOTO_HELP}</Text>
@@ -214,7 +214,7 @@ export default function FlaggedPhoto({
               testID={`${testID}-close`}
               style={[styles.close, { backgroundColor: withAlpha(colors.bone, 0.16) }]}
             >
-              <Ionicons name="close" size={24} color={lightTokens.textOnAccent} />
+              <Ionicons name="close" size={24} color={colors.bone} />
             </HapticPressable>
           </View>
         </View>

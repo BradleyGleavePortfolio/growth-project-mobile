@@ -29,7 +29,7 @@
  */
 import React from 'react';
 import { Modal, View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
-import { colors, typography, spacing, radius, lightTokens } from '../theme/tokens';
+import { colors, typography, spacing, radius } from '../theme/tokens';
 import type { RecipeAllergenRule } from '../lib/recipeAllergens';
 
 const LEDE: Record<RecipeAllergenRule, string> = {
@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: {
     ...typography.eyebrow,
-    color: lightTokens.textOnAccent,
+    color: colors.bone,
   },
   laterBtn: {
     paddingVertical: 14,
