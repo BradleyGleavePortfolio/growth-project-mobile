@@ -112,7 +112,9 @@ async function mount(Screen: React.ComponentType, state: State, size: Size) {
   return ui;
 }
 
-// A colour as drawn on the paper: hex, or an rgba() laid over #F5EFE4.
+// A colour as drawn on the paper: hex, or an rgba() laid over #F5EFE4. The frames were drawn on the near-white paper the
+// app had before owner #203-E83; over bone the same token recipes land a few levels further from the frames' hexes, and each
+// case below states its measured distance.
 const PAPER = [0xf5, 0xef, 0xe4];
 function onPaper(colour: unknown): number[] {
   const text = String(colour);
@@ -156,9 +158,9 @@ describe.each([['Grocery', GroceryListScreen], ['Shopping', ShoppingListScreen]]
   });
 
   it.each(EACH)('D3: the Qty and Unit underlines are the drawn #B9B2A7 (%s)', async (_s, size) => {
-    // shopping-partly: .fld.sm{border-bottom-color:#B9B2A7;...}; stone at 0.9 over the paper is within 2 of it per channel.
+    // shopping-partly: .fld.sm{border-bottom-color:#B9B2A7;...}; stone at 0.9 over the bone paper is within 3 of it per channel (2.9).
     const ui = await mount(Screen, 'loaded', size);
-    for (const field of ['Qty', 'Unit']) expect(furthest(flat(ui.getByPlaceholderText(field) as unknown as Host).borderColor, '#B9B2A7')).toBeLessThanOrEqual(2);
+    for (const field of ['Qty', 'Unit']) expect(furthest(flat(ui.getByPlaceholderText(field) as unknown as Host).borderColor, '#B9B2A7')).toBeLessThanOrEqual(3);
   });
 
   it.each(EACH)('D5-D6: the loading rows draw the frame\'s lighter line and ring (%s)', async (_s, size) => {
@@ -167,10 +169,11 @@ describe.each([['Grocery', GroceryListScreen], ['Shopping', ShoppingListScreen]]
     const nodes = hosts(ui.root as unknown as Host).map(flat);
     const lines = nodes.filter((st) => st.flexDirection === 'row' && num(st.borderBottomWidth) > 0 && st.paddingVertical === 14);
     expect(lines).toHaveLength(5);
-    lines.forEach((st) => expect(furthest(st.borderColor, '#ECE7DF')).toBeLessThanOrEqual(3));
+    // Over bone: the line (border at 0.5) is 7 levels from the frame's hex at most, the ring (stone at 0.62) 5.1.
+    lines.forEach((st) => expect(furthest(st.borderColor, '#ECE7DF')).toBeLessThanOrEqual(7));
     const rings = nodes.filter((st) => st.width === 28 && st.height === 28 && st.borderWidth === 1.5);
     expect(rings).toHaveLength(5);
-    rings.forEach((st) => expect(furthest(st.borderColor, '#CFC8BD')).toBeLessThanOrEqual(4));
+    rings.forEach((st) => expect(furthest(st.borderColor, '#CFC8BD')).toBeLessThanOrEqual(5.1));
   });
 });
 
@@ -179,8 +182,9 @@ it.each(FIVE.flatMap(([name, Screen]) => SIZES.map((size) => [name, size.size, S
   'D4: the warm notice on %s is the drawn #F2EEE6 (%s)', async (_name, _s, Screen, size) => {
     // shopping-error / prep-error: .notice{background:#F2EEE6;border-left:3px solid #B08D57;...}. Over the paper, trackLight
     // (#E6DFD3) needs 0.29, 0.44 and 0.47 for red, green and blue: no one alpha is exact, the closest is 2.1 levels off.
+    // Over the bone paper (owner #203-E83) the same 0.42 recipe is 9.2 levels off at most, a shade warmer than the frame.
     const ui = await mount(Screen, 'error', size);
-    expect(furthest(flat(ui.getAllByRole('alert')[0] as unknown as Host).backgroundColor, '#F2EEE6')).toBeLessThanOrEqual(2.2);
+    expect(furthest(flat(ui.getAllByRole('alert')[0] as unknown as Host).backgroundColor, '#F2EEE6')).toBeLessThanOrEqual(9.2);
   });
 
 it('D7: the Add all sheet dims the whole page, its rounded top included, in the drawn ink', async () => {
@@ -212,10 +216,11 @@ it.each(EACH)('D10: the prep-day chips draw the plain calendar (%s)', async (_s,
 });
 
 it.each(EACH)('D11: the method numerals are gold, at 4.5:1 or better on the paper (%s)', async (_s, size) => {
-  // C_recipe (ios390, 100%): the step numerals are drawn in gold on the paper; gold 700 keeps body-text contrast.
+  // C_recipe (ios390, 100%): the step numerals are drawn in gold on the paper; gold 800 keeps body-text contrast on bone
+  // (6.65:1; gold 700 is 4.39:1 there).
   const ui = await mount(RecipeDetailScreen, 'loaded', size);
   const colour = flat(await waitFor(() => ui.getByText('1') as unknown as Host)).color as string;
-  expect(colour).toBe(gold[700]);
+  expect(colour).toBe(gold[800]);
   expect(contrast(colour, '#F5EFE4')).toBeGreaterThanOrEqual(4.5);
 });
 
@@ -246,5 +251,6 @@ it.each(EACH)('D14: the ingredient leader is the drawn #B9B2A7 dotted line (%s)'
   await waitFor(() => expect(ui.getByText('Red lentils')).toBeTruthy());
   const leaders = hosts(ui.root as unknown as Host).map(flat).filter((st) => st.borderStyle === 'dotted');
   expect(leaders).toHaveLength(1);
-  expect(furthest(leaders[0].borderColor, '#B9B2A7')).toBeLessThanOrEqual(2);
+  // Over the bone paper stone at 0.9 is 2.9 levels from the frame's hex at most.
+  expect(furthest(leaders[0].borderColor, '#B9B2A7')).toBeLessThanOrEqual(3);
 });
