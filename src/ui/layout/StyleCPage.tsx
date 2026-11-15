@@ -5,7 +5,7 @@
  * forest and lifts its column 8 pt, so the column starts at insets.top + 4 (KITCHEN-TITLE-954). That assumes a Screen
  * with edges including 'top' and a statusBarGap of at least 8 (tokens layout.statusBarGap is 12). Also the round check,
  * the warm notice and the static loading lines those frames draw. Gold is only ever the rule here, never text on light.
- * BEAUTY-929: the paper is the app's page colour (bgPrimary, bone #F5EFE4, owner #203-E83: the old tan is back),
+ * BEAUTY-929: the paper is the app's page colour (bgPrimary, bone #F9F4EC, owner #203-E84: the soft warm cream),
  * not the frames' cream; the row picture tile (C_kitchen) and the empty state with its line drawing live here too.
  * REFINE-929 (ctx#457 GOAL): the masthead carries the screen's summary under a 40 pt title, plus the list dashes and the
  * confirmation sheet those frames draw.

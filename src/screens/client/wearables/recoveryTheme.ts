@@ -54,8 +54,8 @@ export interface RecoveryStateView {
   /** Cool ring/fill colour for this state. */
   color: (palette: RecoveryPalette) => string;
   /**
-   * Text colour for the label. Neither ring colour reads at AA as text on bone (indigo 4.29:1, slate 3.14:1;
-   * owner #203-E83 brought the old tan back), so every state labels in graphite (#168-13) while its ring keeps its colour.
+   * Text colour for the label. Neither ring colour reads at AA as text on bone (indigo 4.48:1, slate 3.28:1 on
+   * the soft warm cream of owner #203-E84), so every state labels in graphite (#168-13) while its ring keeps its colour.
    */
   labelColor: (palette: RecoveryPalette) => string;
 }
