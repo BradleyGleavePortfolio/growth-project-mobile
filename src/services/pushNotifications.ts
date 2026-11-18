@@ -21,6 +21,7 @@ import { Colors } from '../constants/colors';
 import { decodePushParams } from './pushTapRouter';
 import { incomingLinkPath, resolveAppLink } from '../navigation/incomingLinks';
 import { refreshMealPlanToday } from './mealPlanRefresh';
+import { isDmPush, refreshDmReads } from './dmRefresh';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -120,6 +121,7 @@ export function installForegroundHandler(): () => void {
   // (FOREGROUND-BANNER-M: pushTapOf, the one mapping). No words, no banner.
   const subscription = Notifications.addNotificationReceivedListener((notification) => {
     if (opensMealPlan(notification.request.content.data)) refreshMealPlanToday(); // MEAL-PLAN-REFRESH-M
+    if (isDmPush(notification.request.content.data)) refreshDmReads(); // REFINE-985 B1: the open thread draws it
     const { title, body } = notification.request.content;
     if (!title && !body) return;
     const kind = bannerKindOf(notification.request.content.data);
