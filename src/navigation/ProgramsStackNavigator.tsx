@@ -21,6 +21,7 @@ import MealPickerScreen from "../screens/coach/meals/MealPickerScreen";
 import MealPlanAssignScreen from "../screens/coach/meals/MealPlanAssignScreen";
 import { featureFlags } from "../config/featureFlags";
 import type { ProgramsStackParamList } from "../screens/coach/programs/types";
+import { mast } from "../screens/client/workouts/workoutStyleC";
 
 const Stack = createNativeStackNavigator<ProgramsStackParamList>();
 
@@ -50,7 +51,14 @@ export default function ProgramsStackNavigator() {
       <Stack.Screen
         name="ProgramAssign"
         component={ProgramAssignScreen}
-        options={{ title: "Assign program" }}
+        // STYLE-LOGGING-M: the screen starts on K3 C_assign's forest masthead, so its bar takes the masthead's
+        // ground and ink with no rule (LO-927 B1). Title and back label as before.
+        options={{
+          title: "Assign program",
+          headerShadowVisible: false,
+          headerStyle: { backgroundColor: mast.ground },
+          headerTintColor: mast.ink,
+        }}
       />
       <Stack.Screen
         name="ProgramPackages"

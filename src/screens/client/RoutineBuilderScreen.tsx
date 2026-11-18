@@ -1,3 +1,12 @@
+/**
+ * RoutineBuilderScreen: the client builds or edits a routine of their own.
+ *
+ * STYLE-LOGGING-M: Style C by its nearest picked drawings, K3 Style C (the owner's builder pick, drawn on C1 v2
+ * tokens): C_day for the page (the deep forest masthead holding the bar and the routine's serif name, lettered rows
+ * with their grip, the one forest action at the foot), C_row for the fields (the sage panel the numbers sit on; the
+ * typed fields stay, no steppers) and C_picker for the Add exercise sheet. Words, saves and controls are main's; the
+ * row's numeral becomes its letter (blockLetter).
+ */
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
@@ -16,9 +25,12 @@ import { useNavigation, useRoute, RouteProp, NavigationProp, ParamListBase } fro
 
 import { getAllExercises } from '../../db/workoutDb';
 import { exerciseCatalogApi } from '../../api/exerciseCatalog';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import { typography, radius } from '../../theme/tokens';
-import { Screen } from '../../ui';
+import { useTheme } from '../../theme/ThemeProvider';
+import { layout, radius, spacing, typography, type SemanticTokens } from '../../theme/tokens';
+import { Screen, useScreenInsets } from '../../ui';
+import { blockLetter } from './active-workout/blockLetter';
+import { MastheadBand, mast, sectionHead, wsc } from './workouts/workoutStyleC';
+import { TRAIN_COPY } from './train/TrainToday';
 import HapticPressable from '../../components/HapticPressable';
 import { errorMessage } from '../../types/common';
 import { toServerMuscleGroup } from '../../utils/workout/muscleGroup';
@@ -72,8 +84,9 @@ type RouteParams = {
 const MUSCLES = ['All', 'chest', 'back', 'shoulders', 'legs', 'biceps', 'triceps', 'core', 'full body', 'cardio'];
 
 export default function RoutineBuilderScreen() {
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { semanticColors: sc } = useTheme();
+  const styles = useMemo(() => makeStyles(sc), [sc]);
+  const insets = useScreenInsets();
   const route = useRoute<RouteProp<RouteParams, 'RoutineBuilder'>>();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const routineId = route.params?.routineId;
@@ -290,20 +303,33 @@ export default function RoutineBuilderScreen() {
 
   return (
     <Screen
-      edges={['top']}
+      edges={[]}
       contentStyle={styles.content}
-      header={<View style={styles.topBar}>
-        <TouchableOpacity style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Cancel routine" onPress={() => navigation.goBack()}>
-          <Ionicons name="chevron-back-outline" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.topTitle}>{routineId ? 'Edit routine' : 'New routine'}</Text>
-        {routineId ? (
-          <TouchableOpacity style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Delete routine" onPress={handleDelete}>
-            <Ionicons name="trash-outline" size={22} color={colors.textMuted} />
+      header={<View style={[styles.masthead, { paddingTop: insets.top + spacing.xs }]}>
+        <MastheadBand color={mast.ground} />
+        <View style={styles.topBar}>
+          <TouchableOpacity style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Cancel routine" onPress={() => navigation.goBack()}>
+            <Ionicons name="chevron-back-outline" size={24} color={mast.ink} />
           </TouchableOpacity>
-        ) : (
-          <View style={styles.iconButton} />
-        )}
+          <Text style={styles.topTitle}>{routineId ? 'Edit routine' : 'New routine'}</Text>
+          {routineId ? (
+            <TouchableOpacity style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Delete routine" onPress={handleDelete}>
+              <Ionicons name="trash-outline" size={22} color={mast.muted} />
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.iconButton} />
+          )}
+        </View>
+        {/* C_day draws the day's serif name on the masthead (rows 214-253): the routine's name field sits there. */}
+        <Text style={styles.overline}>Routine name</Text>
+        <TextInput
+          accessibilityLabel="Routine name"
+          style={styles.nameInput}
+          placeholder="Routine name (e.g. Push Day)"
+          placeholderTextColor={mast.muted}
+          value={name}
+          onChangeText={setName}
+        />
       </View>}
       footer={
         <HapticPressable style={styles.saveBtn} disableAnimation accessibilityLabel="Save routine" accessibilityState={{ busy }} disabled={busy} onPress={() => { void handleSave(); }}>
@@ -311,43 +337,40 @@ export default function RoutineBuilderScreen() {
         </HapticPressable>
       }
     >
-        <Text style={styles.overline}>Routine name</Text>
-        <TextInput
-          accessibilityLabel="Routine name"
-          style={styles.nameInput}
-          placeholder="Routine name (e.g. Push Day)"
-          placeholderTextColor={colors.textMuted}
-          value={name}
-          onChangeText={setName}
-        />
-        <Text style={styles.overline}>Exercises</Text>
+        {/* C_day "5 EXERCISES" (rows 860-879): the count of the rows; none keeps main's "Exercises". */}
+        <Text style={styles.sectionHead}>{exercises.length > 0 ? TRAIN_COPY.exercises(exercises.length) : 'Exercises'}</Text>
 
         {exercises.map((ex, idx) => (
           <View key={`${ex.exerciseId}-${idx}`} testID={`exercise-row-${idx}`} style={styles.exerciseCard} onLayout={({ nativeEvent }) => { rowBounds.current[idx] = nativeEvent.layout; }}>
             <View style={styles.exerciseTop}>
               <View style={styles.exerciseTopLeft}>
-                <View style={styles.iconButton} accessibilityLabel={`Drag ${ex.exerciseName} to reorder`} {...dragExercise(idx)}>
-                  <Ionicons name="reorder-two-outline" size={18} color={colors.textMuted} />
+                {/* C_day's letter chip (cols 48-103): the row's letter where its numeral was, read as it was. */}
+                <View style={styles.letterChip}>
+                  <Text style={styles.exerciseNum} maxFontSizeMultiplier={1.15}>{blockLetter(idx)}</Text>
                 </View>
-                <Text style={styles.exerciseNum}>{idx + 1}</Text>
                 <Text style={styles.exerciseName}>{ex.exerciseName}</Text>
+                {/* C_day's grip at the row's right end (cols 690-725). */}
+                <View style={styles.iconButton} accessibilityLabel={`Drag ${ex.exerciseName} to reorder`} {...dragExercise(idx)}>
+                  <Ionicons name="reorder-two-outline" size={18} color={sc.textMuted} />
+                </View>
               </View>
               <View style={styles.exerciseActions}>
                 <TouchableOpacity style={styles.iconButton} accessibilityRole="button" accessibilityLabel={`Move ${ex.exerciseName} up`} onPress={() => moveExercise(idx, 'up')} disabled={idx === 0}>
-                  <Ionicons name="chevron-up" size={18} color={idx === 0 ? colors.border : colors.textMuted} />
+                  <Ionicons name="chevron-up" size={18} color={idx === 0 ? sc.border : sc.textMuted} />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.iconButton} accessibilityRole="button" accessibilityLabel={`Move ${ex.exerciseName} down`} onPress={() => moveExercise(idx, 'down')} disabled={idx === exercises.length - 1}>
-                  <Ionicons name="chevron-down" size={18} color={idx === exercises.length - 1 ? colors.border : colors.textMuted} />
+                  <Ionicons name="chevron-down" size={18} color={idx === exercises.length - 1 ? sc.border : sc.textMuted} />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.iconButton} accessibilityRole="button" accessibilityLabel={`Edit ${ex.exerciseName}, exercise ${idx + 1}`} onPress={() => setInputs.current[idx]?.focus()}>
-                  <Ionicons name="create-outline" size={20} color={colors.textMuted} />
+                  <Ionicons name="create-outline" size={20} color={sc.textMuted} />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.iconButton} accessibilityRole="button" accessibilityLabel={`Remove ${ex.exerciseName}, exercise ${idx + 1}`} onPress={() => removeExercise(idx)}>
-                  <Ionicons name="trash-outline" size={20} color={colors.textMuted} />
+                  <Ionicons name="trash-outline" size={20} color={sc.textMuted} />
                 </TouchableOpacity>
               </View>
             </View>
-            <View style={styles.fieldRow}>
+            {/* C_row's sage panel: one row per number, the label at the left and the typed value at the right. */}
+            <View style={styles.fieldPanel}>
               <View style={styles.field}>
                 <Text style={styles.fieldLabel}>Sets</Text>
                 <TextInput
@@ -359,7 +382,7 @@ export default function RoutineBuilderScreen() {
                   keyboardType="numeric"
                 />
               </View>
-              <View style={styles.field}>
+              <View style={[styles.field, styles.fieldRule]}>
                 <Text style={styles.fieldLabel}>Reps</Text>
                 <TextInput
                   accessibilityLabel={`Reps for ${ex.exerciseName}, exercise ${idx + 1}`}
@@ -369,7 +392,7 @@ export default function RoutineBuilderScreen() {
                   keyboardType="numeric"
                 />
               </View>
-              <View style={styles.field}>
+              <View style={[styles.field, styles.fieldRule]}>
                 <Text style={styles.fieldLabel}>Rest (s)</Text>
                 <TextInput
                   accessibilityLabel={`Rest seconds for ${ex.exerciseName}, exercise ${idx + 1}`}
@@ -384,55 +407,63 @@ export default function RoutineBuilderScreen() {
         ))}
 
         <TouchableOpacity style={styles.addBtn} accessibilityRole="button" accessibilityLabel="Add exercise" onPress={() => { void openAddExercise(); }}>
-          <Ionicons name="add-outline" size={22} color={colors.textPrimary} />
+          <Ionicons name="add-outline" size={22} color={sc.accentText} />
           <Text style={styles.addBtnText}>Add exercise</Text>
         </TouchableOpacity>
 
-      {/* Exercise Picker Modal */}
+      {/* Exercise Picker Modal: C_picker's masthead (rows 0-433) holds the close, the title, the search and the chips. */}
       <Modal visible={showAddModal} animationType="none" presentationStyle="pageSheet" onRequestClose={() => setShowAddModal(false)}>
         <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Close exercise picker" onPress={() => setShowAddModal(false)}>
-              <Ionicons name="close" size={24} color={colors.textPrimary} />
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>Add exercise</Text>
-            <View style={styles.iconButton} />
-          </View>
-
-          <View style={styles.searchBar}>
-            <Ionicons name="search" size={18} color={colors.textMuted} />
-            <TextInput
-              accessibilityLabel="Search exercises"
-              style={styles.searchInput}
-              placeholder="Search exercises..."
-              placeholderTextColor={colors.textMuted}
-              value={searchQuery}
-              onChangeText={handleSearchChange}
-            />
-          </View>
-
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.muscleFilter} contentContainerStyle={styles.muscleFilterContent}>
-            {MUSCLES.map((m) => (
-              <TouchableOpacity
-                key={m}
-                accessibilityRole="button"
-                accessibilityLabel={`Filter ${m}`}
-                accessibilityState={{ selected: selectedMuscle === m }}
-                style={[styles.muscleChip, selectedMuscle === m && styles.muscleChipActive]}
-                onPress={() => handleMuscleFilter(m)}
-              >
-                <Text style={[styles.muscleChipText, selectedMuscle === m && styles.muscleChipTextActive]}>
-                  {m === 'All' ? 'All' : m.charAt(0).toUpperCase() + m.slice(1)}
-                </Text>
+          <View style={styles.sheetMast}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Close exercise picker" onPress={() => setShowAddModal(false)}>
+                <Ionicons name="close" size={24} color={mast.ink} />
               </TouchableOpacity>
-            ))}
-          </ScrollView>
+              {/* C_picker "Add to Full body A" (rows 118-141): the routine's own name; unnamed keeps "Add exercise". */}
+              <Text style={styles.modalTitle}>{name.trim() ? `Add to ${name.trim()}` : 'Add exercise'}</Text>
+              <View style={styles.iconButton} />
+            </View>
+
+            <View style={styles.searchBar}>
+              <Ionicons name="search" size={18} color={mast.muted} />
+              <TextInput
+                accessibilityLabel="Search exercises"
+                style={styles.searchInput}
+                placeholder="Search exercises..."
+                placeholderTextColor={mast.muted}
+                value={searchQuery}
+                onChangeText={handleSearchChange}
+              />
+            </View>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.muscleFilter} contentContainerStyle={styles.muscleFilterContent}>
+              {MUSCLES.map((m) => (
+                <TouchableOpacity
+                  key={m}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Filter ${m}`}
+                  accessibilityState={{ selected: selectedMuscle === m }}
+                  style={styles.muscleChip}
+                  onPress={() => handleMuscleFilter(m)}
+                >
+                  <View style={[styles.musclePill, selectedMuscle === m && styles.musclePillActive]}>
+                    <Text style={[styles.muscleChipText, selectedMuscle === m && styles.muscleChipTextActive]}>
+                      {m === 'All' ? 'All' : m.charAt(0).toUpperCase() + m.slice(1)}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
 
           <FlatList
             keyboardShouldPersistTaps="handled"
             data={filteredExercises}
-            ListEmptyComponent={<Text style={styles.exerciseListMeta}>{pickerStatus === 'loading' ? 'Loading exercises.' : pickerStatus === 'error' ? 'Exercises did not load. Check your connection and try again.' : 'No exercises match. Try another search or muscle group.'}</Text>}
-            ListFooterComponent={pickerStatus === 'error' ? <TouchableOpacity style={styles.addBtn} accessibilityRole="button" accessibilityLabel="Try loading exercises again" onPress={openAddExercise}><Text style={styles.addBtnText}>Try again</Text></TouchableOpacity> : null}
+            ListHeaderComponent={filteredExercises.length > 0 ? (
+              <Text style={styles.results}>{`${filteredExercises.length} ${filteredExercises.length === 1 ? 'result' : 'results'}`}</Text>
+            ) : null}
+            ListEmptyComponent={<Text style={styles.listState}>{pickerStatus === 'loading' ? 'Loading exercises.' : pickerStatus === 'error' ? 'Exercises did not load. Check your connection and try again.' : 'No exercises match. Try another search or muscle group.'}</Text>}
+            ListFooterComponent={pickerStatus === 'error' ? <TouchableOpacity style={styles.retryBtn} accessibilityRole="button" accessibilityLabel="Try loading exercises again" onPress={openAddExercise}><Text style={styles.addBtnText}>Try again</Text></TouchableOpacity> : null}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.exerciseList}
             renderItem={({ item }) => (
@@ -443,7 +474,7 @@ export default function RoutineBuilderScreen() {
                     {item.muscle.charAt(0).toUpperCase() + item.muscle.slice(1)} · {item.equipment}
                   </Text>
                 </View>
-                <Ionicons name="add-circle-outline" size={22} color={colors.primary} />
+                <Ionicons name="add-circle-outline" size={22} color={sc.accentText} />
               </TouchableOpacity>
             )}
           />
@@ -453,134 +484,190 @@ export default function RoutineBuilderScreen() {
   );
 }
 
-const makeStyles = (colors: ThemeColors) =>
+// The bar's title face: Inter semibold, as the K3 frames draw it (typography.micro's face; no 17 pt semibold role).
+const semibold = typography.micro.fontFamily;
+
+const makeStyles = (sc: SemanticTokens) =>
   StyleSheet.create({
   iconButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  overline: { ...typography.eyebrow, color: colors.textMuted, marginBottom: 12 },
+  // C_day rows 0-465: the deep forest masthead from the top edge, 24 pt bottom corners, the 24 pt gutter; it holds the
+  // bar (its 44 pt row 4 pt under the inset: the back glyph's rows 129-162 centre at 73 pt) and the routine's name
+  // (the status bar inset in its ground: MastheadBand).
+  masthead: {
+    backgroundColor: mast.ground,
+    borderBottomLeftRadius: radius.sheet,
+    borderBottomRightRadius: radius.sheet,
+    paddingHorizontal: layout.gutter,
+    paddingBottom: 14,
+  },
+  // The icon boxes reach 16 pt past the gutter so the back glyph lands at C_day cols 53-71 (26 pt).
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 12,
-    backgroundColor: colors.background,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    marginHorizontal: -spacing.lg,
   },
-  topTitle: { ...typography.h2, color: colors.textPrimary },
+  // C_day "Strength foundations" (S cap rows 134-157, from col 117): Inter semibold 17 in the masthead ink, after the back.
+  topTitle: { ...typography.h4, fontFamily: semibold, fontWeight: '600', color: mast.ink, flex: 1, marginLeft: spacing.sm },
+  overline: { ...typography.eyebrow, color: mast.muted, marginTop: spacing.sm },
   // Screen pins the save button above the tab bar, so no 120 pt clearance.
-  content: { paddingTop: 24, paddingBottom: 24 },
+  content: { paddingTop: spacing.sm, paddingBottom: 24 },
+  // C_day "Full body A" (rows 214-253): the serif name on forest, its hairline in the frame line.
   nameInput: {
     ...typography.h1,
-    paddingVertical: 14,
-    color: colors.textPrimary,
+    paddingVertical: spacing.sm,
+    color: mast.ink,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    marginBottom: 32,
+    borderBottomColor: mast.line,
   },
+  // C_day "5 EXERCISES" (rows 862-877, rule 928-929): the eyebrow over its own hairline; the first row follows it.
+  sectionHead: { ...sectionHead(sc), marginBottom: 0 },
   exerciseCard: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-    paddingVertical: 20,
-    marginBottom: 12,
+    borderBottomColor: sc.border,
+    paddingVertical: spacing.md,
   },
   exerciseTop: {
     flexDirection: 'column',
     justifyContent: 'space-between',
     alignItems: 'stretch',
-    marginBottom: 10,
+    marginBottom: spacing.sm,
   },
-  exerciseTopLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  exerciseNum: {
-    width: 24,
-    ...typography.bodySmall,
-    color: colors.textMuted,
-    fontSize: 13,
-    fontVariant: ['tabular-nums'],
-    textAlign: 'center',
-    lineHeight: 24,
+  // C_day rows 954-1009: chip and name side by side, 14 pt apart (wsc.letterGap); the grip at the right end.
+  exerciseTopLeft: { flexDirection: 'row', alignItems: 'center', gap: wsc.letterGap },
+  letterChip: {
+    width: wsc.letterChip,
+    height: wsc.letterChip,
+    borderRadius: radius.control,
+    borderWidth: wsc.letterLine,
+    borderColor: sc.data.moss,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  exerciseName: { ...typography.bodyMd, color: colors.textPrimary, flex: 1 },
+  exerciseNum: { ...typography.h3, color: sc.textPrimary, textAlign: 'center' },
+  // C_day "Back squat" (cap rows 966-989): Inter 17.
+  exerciseName: { ...typography.h4, color: sc.textPrimary, flex: 1 },
   exerciseActions: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end' },
-  fieldRow: { flexDirection: 'row', gap: 10 },
-  field: { flex: 1 },
-  fieldLabel: { ...typography.bodySmall, fontSize: 13, color: colors.textMuted, marginBottom: 4 },
+  // C_row rows 478-993: sage, a 1 pt sage line, 16 pt corners, 16 pt in from its edge.
+  fieldPanel: {
+    backgroundColor: sc.surface.sage,
+    borderWidth: 1,
+    borderColor: sc.surface.sageLine,
+    borderRadius: radius.card,
+    paddingHorizontal: spacing.lg,
+  },
+  // C_row: one row per number (60 pt pitch, rules 612-613, 732-733), the label at the left.
+  field: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 60, paddingVertical: spacing.sm },
+  fieldRule: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: sc.surface.sageLine },
+  // C_row "Sets" (cap rows 538-561): body text on the panel.
+  fieldLabel: { ...typography.body, color: sc.textPrimary, flex: 1 },
+  // The typed value in the drawn field ground (C_row rows 1066-1169: surface, 1 pt line, 12 pt corners); C_row's
+  // value (cap rows 536-567) is Inter semibold 22, a size no scale role has (H2: screen-private).
   fieldInput: {
-    ...typography.body,
+    fontFamily: semibold,
+    fontWeight: '600',
+    fontSize: 22,
+    lineHeight: 28,
     minHeight: 44,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    // C_row's value sits between its steppers, cols 422-610 (94 pt): the typed field takes that width.
+    width: 96,
+    backgroundColor: sc.bgSurface,
+    borderWidth: 1,
+    borderColor: sc.border,
+    borderRadius: radius.input,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
     fontVariant: ['tabular-nums'],
-    color: colors.textPrimary,
+    color: sc.textPrimary,
     textAlign: 'center',
   },
+  // C_day's forest link ("Reorder", rows 860-879), in a 44 pt target.
   addBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-start',
-    gap: 8,
-    paddingVertical: 16,
-    marginTop: 4,
+    gap: spacing.sm,
+    minHeight: layout.touchMin,
+    marginTop: spacing.sm,
   },
-  addBtnText: { ...typography.bodyMd, color: colors.textPrimary, textDecorationLine: 'underline' },
+  addBtnText: { ...typography.h4, color: sc.accentText },
+  // C_day rows 1392-1499: the one forest action, 54 pt, 12 pt corners; the app's primary label.
   saveBtn: {
-    backgroundColor: colors.primary,
+    backgroundColor: sc.accent,
     borderRadius: radius.button,
-    minHeight: 54,
+    minHeight: layout.buttonHeight,
     paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  saveBtnText: { ...typography.bodyMd, color: colors.textOnPrimary },
-  // Modal
-  modalContainer: { flex: 1, backgroundColor: colors.background },
+  saveBtnText: { ...typography.bodyMd, color: sc.textOnAccent },
+  // Modal: C_picker
+  modalContainer: { flex: 1, backgroundColor: sc.bgPrimary },
+  sheetMast: {
+    backgroundColor: mast.ground,
+    borderBottomLeftRadius: radius.sheet,
+    borderBottomRightRadius: radius.sheet,
+    paddingHorizontal: layout.gutter,
+    paddingTop: spacing.lg,
+    // rows 392-433: 20 pt under the pill, 6 of them inside its 44 pt target.
+    paddingBottom: 14,
+  },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    marginHorizontal: -spacing.lg,
   },
-  modalTitle: { ...typography.h2, color: colors.textPrimary },
+  // C_picker "Add to Full body A" (A cap rows 118-141, from col 117): Inter semibold 17 in the masthead ink.
+  modalTitle: { ...typography.h4, fontFamily: semibold, fontWeight: '600', color: mast.ink, flex: 1, marginLeft: spacing.sm },
+  // C_picker rows 204-295: the forest field, frame line, 12 pt corners, 46 pt.
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 20,
-    marginTop: 16,
-    marginBottom: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    gap: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    marginTop: spacing.md,
+    minHeight: wsc.searchHeight,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: mast.line,
+    borderRadius: radius.input,
+    backgroundColor: mast.field,
   },
-  searchInput: { ...typography.body, flex: 1, minHeight: 44, color: colors.textPrimary },
-  muscleFilter: { maxHeight: 48, marginBottom: 16 },
-  muscleFilterContent: { paddingHorizontal: 20, gap: 8 },
-  muscleChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    minHeight: 44,
+  searchInput: { ...typography.body, flex: 1, minHeight: 44, color: mast.ink },
+  // The chips scroll to the masthead's edges; the first starts on the gutter.
+  muscleFilter: { marginTop: spacing.xs, marginHorizontal: -layout.gutter },
+  muscleFilterContent: { paddingHorizontal: layout.gutter, gap: spacing.sm },
+  // A 44 pt target holding C_picker's 32 pt pill (rows 331-392).
+  muscleChip: { minHeight: layout.touchMin, minWidth: layout.touchMin, justifyContent: 'center' },
+  musclePill: {
+    minHeight: wsc.pillHeight,
     justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.chip,
+    borderWidth: 1,
+    borderColor: mast.line,
   },
-  muscleChipActive: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.textPrimary },
-  muscleChipText: { ...typography.bodySmall, color: colors.textSecondary },
-  muscleChipTextActive: { color: colors.textPrimary },
-  exerciseList: { paddingHorizontal: 20, paddingBottom: 40 },
+  // The chosen chip is filled leaf with deep text (C_picker rows 332-391).
+  musclePillActive: { backgroundColor: mast.chosen, borderColor: mast.chosen },
+  muscleChipText: { ...typography.bodySmall, color: mast.ink },
+  muscleChipTextActive: { color: mast.ground },
+  exerciseList: { paddingTop: spacing.sm, paddingBottom: 40 },
+  // C_picker rows 766-879: 56 pt rows on the gutter, name over meta, the hairline from col 48 to 732.
   exerciseListItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 14,
+    gap: spacing.md,
+    minHeight: layout.rowMinHeight,
+    marginHorizontal: layout.gutter,
+    paddingVertical: spacing.xs,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    borderBottomColor: sc.border,
   },
-  exerciseListName: { ...typography.bodyMd, color: colors.textPrimary },
-  exerciseListMeta: { ...typography.bodySmall, color: colors.textMuted, marginTop: 2 },
-
+  exerciseListName: { ...typography.h4, color: sc.textPrimary },
+  exerciseListMeta: { ...typography.bodySmall, color: sc.textMuted, marginTop: 2 },
+  listState: { ...typography.bodySmall, color: sc.textMuted, paddingHorizontal: layout.gutter, paddingVertical: spacing.lg },
+  // C_picker "6 RESULTS": the eyebrow on the gutter over the rows.
+  results: { ...typography.eyebrow, color: sc.textMuted, paddingHorizontal: layout.gutter, paddingBottom: spacing.sm },
+  retryBtn: { minHeight: layout.touchMin, justifyContent: 'center', paddingHorizontal: layout.gutter },
   });
