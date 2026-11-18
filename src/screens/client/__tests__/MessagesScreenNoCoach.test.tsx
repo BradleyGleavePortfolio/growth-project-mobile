@@ -97,7 +97,7 @@ describe('client MessagesScreen with no coach', () => {
     expect(utils.queryByText(/when you sign up/)).toBeNull();
     expect(utils.queryByText(/No coach yet/)).toBeNull();
     await fireEvent.press(utils.getByTestId('messages-no-coach-support'));
-    expect(mockParentNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'SupportInbox' });
+    expect(mockParentNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'SupportInbox', initial: false });
   });
 
   it('the logging-gate route opens the existing sheet without a second tap', async () => {
@@ -142,6 +142,6 @@ describe('client MessagesScreen with no coach', () => {
     await utils.findByText('No coach connected');
     await fireEvent.press(utils.getByTestId('messages-no-coach-code'));
     await act(async () => mockSheetProps.onChoosePlan(null));
-    expect(mockParentNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'ClientPackages' });
+    expect(mockParentNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'ClientPackages', initial: false });
   });
 });

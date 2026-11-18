@@ -92,7 +92,7 @@ it('Finish your profile waits behind push, opens Edit profile, and Not now hides
     expect(track).toHaveBeenCalledWith('profile_nudge_shown', expect.objectContaining({ missing_count: expect.any(Number) }));
     await fireEvent.press(nudge);
     expect(track).toHaveBeenCalledWith('profile_edit_opened', { source: 'home_nudge' });
-    expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'EditProfile' });
+    expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'EditProfile', initial: false });
     const before = Date.now();
     await fireEvent.press(screen.getByLabelText('Not now'));
     const after = Date.now();

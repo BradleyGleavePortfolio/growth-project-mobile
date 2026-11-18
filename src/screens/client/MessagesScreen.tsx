@@ -588,7 +588,7 @@ export default function MessagesScreen() {
         setCoachId(result.coach.id);
         void load();
       }}
-      onChoosePlan={() => navigation.getParent()?.navigate('MoreTab', { screen: 'ClientPackages' })}
+      onChoosePlan={() => navigation.getParent()?.navigate('MoreTab', { screen: 'ClientPackages', initial: false })}
       onMessageCoach={() => void load()}
     />
   ) : null;
@@ -682,7 +682,7 @@ export default function MessagesScreen() {
             </TouchableOpacity>
           )}
           <TouchableOpacity
-            onPress={() => navigation.getParent()?.navigate('MoreTab', { screen: 'SupportInbox' })}
+            onPress={() => navigation.getParent()?.navigate('MoreTab', { screen: 'SupportInbox', initial: false })}
             accessibilityRole="button"
             accessibilityLabel="Contact support"
             testID="messages-no-coach-support"

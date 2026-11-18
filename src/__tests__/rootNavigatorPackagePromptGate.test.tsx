@@ -361,7 +361,7 @@ describe('RootNavigator Day 1 Win skip is remembered per user', () => {
   it.each([
     ['first_meal', 'Log', undefined],
     ['first_checkin', 'Home', { screen: 'Habits' }],
-    ['logged_first_weight', 'MoreTab', { screen: 'Progress' }],
+    ['logged_first_weight', 'MoreTab', { screen: 'Progress', initial: false }],
   ] as const)('%s opens the real destination and returns only for its matching save', async (winType, route, params) => {
     const r = await mount();
     await r.findByTestId('day1win');

@@ -47,7 +47,7 @@ export default function ProfileNudge({ hasCoachPlan, hasTargets }: { hasCoachPla
   if (!shown) return null;
   const open = (
     <Pressable
-      onPress={() => { track('profile_edit_opened', { source: 'home_nudge' }); navigation.navigate('MoreTab', { screen: 'EditProfile' }); }}
+      onPress={() => { track('profile_edit_opened', { source: 'home_nudge' }); navigation.navigate('MoreTab', { screen: 'EditProfile', initial: false }); }}
       accessibilityRole="button"
       accessibilityLabel={`Complete your profile. Missing ${summarizeMissing(completion.missing)}.`}
       style={({ pressed }) => [!key && [styles.section, { borderColor: sc.border }], { minHeight: 44, opacity: pressed ? 0.85 : 1 }]}
