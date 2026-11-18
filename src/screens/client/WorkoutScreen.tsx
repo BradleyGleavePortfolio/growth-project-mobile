@@ -95,7 +95,7 @@ function BarChart({ data }: { data: WeeklyVolume[] }) {
       <View style={chart.yAxis}>
         {[1, 0.5, 0].map((f, i) => (
           <Text key={i} style={chart.yLabel}>
-            {f === 0 ? '0' : `${Math.round((maxVol * f) / 1000)}k`}
+            {f === 0 ? '0' : Math.round(maxVol * f) < 1000 ? String(Math.round(maxVol * f)) : `${Math.round((maxVol * f) / 1000)}k`}
           </Text>
         ))}
       </View>
