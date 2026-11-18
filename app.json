@@ -28,8 +28,8 @@
         "NSFaceIDUsageDescription": "TGP Fitness uses Face ID only to unlock the app, when you turn on Biometric unlock in Settings.",
         "NSHealthShareUsageDescription": "TGP Fitness reads your Apple Health data for training, recovery, and check-ins. Your coach can use data you share, and Roman can use daily summaries when you allow AI access.",
         "NSHealthUpdateUsageDescription": "TGP Fitness does not write data to Apple Health.",
-        "NSCameraUsageDescription": "TGP Fitness uses the camera only when you choose to take a photo to send in a support chat.",
-        "NSPhotoLibraryUsageDescription": "TGP Fitness opens your photo library only when you choose a photo to send in a support chat.",
+        "NSCameraUsageDescription": "TGP Fitness uses the camera only when you choose to take a photo: a photo of a meal to keep with your food log, or a photo to send in a support chat.",
+        "NSPhotoLibraryUsageDescription": "TGP Fitness opens your photo library only when you choose a photo: a photo of a meal to keep with your food log, or a photo to send in a support chat.",
         "NSPhotoLibraryAddUsageDescription": "TGP Fitness saves an image to your photo library only when you choose Save Image, for example a progress card or an invite QR code."
       },
       "associatedDomains": [
@@ -384,6 +384,14 @@
         "expo-local-authentication",
         {
           "faceIDPermission": "TGP Fitness uses Face ID only to unlock the app, when you turn on Biometric unlock in Settings."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "TGP Fitness opens your photo library only when you choose a photo: a photo of a meal to keep with your food log, or a photo to send in a support chat.",
+          "cameraPermission": "TGP Fitness uses the camera only when you choose to take a photo: a photo of a meal to keep with your food log, or a photo to send in a support chat.",
+          "microphonePermission": false
         }
       ],
       [
