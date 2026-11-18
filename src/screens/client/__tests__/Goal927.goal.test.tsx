@@ -1,0 +1,225 @@
+/**
+ * GOAL-927-M (203-D20 op 1, #203-E50): the meal plan, Macro targets and Fasting a round toward their drawings.
+ * One case per CLOSE row a number or element can pin, each naming its frame and pixel rows, at 390 pt with the
+ * phone's text at 100 percent and at 320 x 568 at 130 percent. Part 1 of 2 (RULING 14): Macro targets and Fasting;
+ * the meal plan's cases come with the meal plan in part 2. Frames at context main a9434a53:
+ *   C2 C_day      planning/MOCKUP3/C2/style-c/C_day_ios390_100.png (2x) and MOCK-C2/html/C_day.html (the drawn CSS);
+ *   K5 C_macros   planning/MOCKUP3/K5/style-c/C_macros_ios390_100.png (2x; nearest drawing, the coach's K5 macros);
+ *   C8 C_fasting  planning/MOCKUP3/C8/style-c/C_fasting_ios390_100.png (1.5x: 1.5 px = 1 pt).
+ */
+import fs from 'fs';
+import path from 'path';
+import React from 'react';
+import { processColor, StyleSheet, type ViewStyle } from 'react-native';
+import { render, screen, waitFor, within } from '@testing-library/react-native';
+import { lightTokens } from '../../../theme/tokens';
+import { clockOf } from '../../../utils/log/foodTimeline';
+
+jest.mock('../../../theme/ThemeProvider', () => {
+  const sc = jest.requireActual('../../../theme/tokens').lightTokens;
+  return { useTheme: () => ({ semanticColors: sc, colors: { ...sc, background: sc.bgPrimary,
+    primary: sc.accent, surface: sc.bgSurface, textSecondary: sc.textMuted } }) };
+});
+let mockDims = { width: 390, height: 844, scale: 2, fontScale: 1 };
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({ __esModule: true, default: () => mockDims }));
+jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
+jest.mock('react-native/Libraries/Components/RefreshControl/RefreshControl', () => {
+  const React = require('react');
+  return { __esModule: true, default: (props: object) => React.createElement(require('react-native').View, props) };
+});
+jest.mock('../../../components/HapticPressable', () => require('react-native').Pressable);
+let mockParams: Record<string, string> | undefined;
+jest.mock('@react-navigation/native', () => ({ useRoute: () => ({ params: mockParams }) }));
+jest.mock('../../../api/mealTemplatesApi', () => ({
+  SLOT_LABELS: ['breakfast', 'lunch', 'dinner', 'snack', 'preworkout', 'postworkout'],
+}));
+jest.mock('../../../hooks/useMealTemplates', () => ({ useMealPlanToday: () => mockDaily() }));
+const mockButtons: Array<{ planSlotId?: string; planned?: boolean }> = [];
+jest.mock('../../../components/mealplan/LogPlannedMealButton', () => {
+  const React = require('react');
+  const { Pressable, Text } = require('react-native');
+  return {
+    __esModule: true,
+    plannedMealFromSlot: (s: { meal_template: { name: string } }) => ({ name: s.meal_template.name }),
+    default: (p: { meal: { name: string }; planSlotId?: string; planned?: boolean }) => {
+      mockButtons.push({ planSlotId: p.planSlotId, planned: p.planned });
+      return React.createElement(Pressable, { accessibilityRole: 'button', accessibilityLabel: `Log this meal: ${p.meal.name}`,
+        style: { minHeight: 44 } }, React.createElement(Text, null, p.planned ? 'Ate it as planned' : 'Log this meal'));
+    },
+  };
+});
+let mockFlag = true;
+jest.mock('../../../config/featureFlags', () => ({ featureFlags: { get foodPlanChecklist() { return mockFlag; } } }));
+jest.mock('@tanstack/react-query', () => ({ useQuery: () => ({ data: { id: 'c1', name: 'Sam Lee' } }) }));
+let mockLog: { data?: unknown; isError: boolean; isLoading: boolean } = { data: undefined, isError: false, isLoading: false };
+const mockLogDates: string[] = [];
+jest.mock('../../../hooks/useApi', () => ({
+  useTodayLog: (date: string) => { mockLogDates.push(date); return { ...mockLog, refetch: jest.fn(), isRefetching: false }; },
+}));
+let mockTarget: Record<string, unknown> | null = null;
+jest.mock('../../../hooks/useMacros', () => ({
+  useCurrentMacrosForSelf: () => ({ data: mockTarget, isLoading: false, isError: false, refetch: jest.fn(), isRefetching: false }),
+}));
+jest.mock('../../../macros/macroDisplayStore', () => ({ reportMacroDisplay: jest.fn(), useMacroDisplayMode: () => 'full' }));
+const mockUser = { id: 'u1' };
+jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
+jest.mock('../../../services/api', () => ({
+  __esModule: true,
+  default: { get: jest.fn() },
+  fastingApi: { getHistory: jest.fn(), start: jest.fn(), end: jest.fn(), deleteFast: jest.fn() },
+}));
+jest.mock('../../../utils/fastingAlert', () => ({ scheduleFastEndAlert: jest.fn(), cancelFastEndAlert: jest.fn() }));
+jest.mock('../../../utils/logger', () => ({ logger: { error: jest.fn() } }));
+jest.mock('../../../components/FadeInView', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return ({ children }: { children: React.ReactNode }) => React.createElement(View, null, children);
+});
+
+import ClientMacrosScreen from '../ClientMacrosScreen';
+import FastingScreen from '../FastingScreen';
+import { fastingApi } from '../../../services/api';
+
+const mockDaily = jest.fn();
+const sc = lightTokens;
+// Decorative parts (marks, gutter, tiles, the now line, bones, the gold rule) are hidden from readers, as on main.
+const HIDDEN = { includeHiddenElements: true } as const;
+const paint = (v: unknown) => (v && typeof v === 'object' && 'payload' in (v as object) ? (v as { payload: unknown }).payload : v);
+const flat = (el: { props: { style?: unknown } }) => (StyleSheet.flatten(el.props.style as ViewStyle) ?? {}) as Record<string, unknown>;
+type Host = { type: string; props: Record<string, unknown>; children: (Host | string)[] | null };
+function hosts(root: unknown): Host[] {
+  const out: Host[] = [];
+  const walk = (n: Host | Host[] | string | null) => {
+    if (!n || typeof n === 'string') return;
+    if (Array.isArray(n)) { n.forEach(walk); return; }
+    out.push(n);
+    (n.children ?? []).forEach(walk);
+  };
+  walk(root as Host | Host[] | null);
+  return out;
+}
+
+// ---------- fixtures (fictional: client Alex, coach Sam) ----------
+const TARGET = { id: 't1', client_id: 'u1', coach_id: 'c1', calories_kcal: 2200, protein_g: 160, carbs_g: 220, fats_g: 70,
+  fiber_g: 30, notes: 'Holding steady this block.', effective_from: '2026-10-01', macro_display_mode: 'full' };
+
+const SIZES: Array<[string, typeof mockDims]> = [
+  ['390 pt at 100%', { width: 390, height: 844, scale: 2, fontScale: 1 }],
+  ['320 x 568 at 130%', { width: 320, height: 568, scale: 2, fontScale: 1.3 }],
+];
+
+describe.each(SIZES)('Macro targets toward K5 C_macros (nearest drawing, the coach\'s K5 macros), %s', (_size, dims) => {
+  beforeEach(() => {
+    mockDims = dims; mockTarget = TARGET;
+    mockLog = { data: { total_calories: 2380, total_protein_g: 171, total_carbs_g: 196, total_fat_g: 74 }, isError: false, isLoading: false };
+  });
+
+  it('a: the deep forest masthead with its rounded foot (K5 #1C3023 y 0-603 px; foot radius 24 pt, x 20-39 px at y 595-603)', async () => {
+    await render(<ClientMacrosScreen />);
+    expect(screen.getByTestId('macros-masthead')).toHaveStyle({ backgroundColor: lightTokens.surface.masthead,
+      borderBottomLeftRadius: 24, borderBottomRightRadius: 24 });
+  });
+
+  it('a: the route\'s bar takes the same deep forest (ClientNavigator ClientMacros options)', () => {
+    const nav = fs.readFileSync(path.resolve(__dirname, '../../../navigation/ClientNavigator.tsx'), 'utf8');
+    const line = nav.split('\n').find((l) => l.includes('name="ClientMacros"')) ?? '';
+    expect(line).toContain("backOnlyHeader('Macro targets', lightTokens.surface.masthead)");
+  });
+
+  it('the day\'s grouped number in the serif at K5\'s 52 pt (K5 digit height 67 px at 2x, y 252-318)', async () => {
+    await render(<ClientMacrosScreen />);
+    expect(screen.getByText('2,200')).toHaveStyle({ fontSize: 52, lineHeight: 62 });
+  });
+
+  it('c: the cards sit on the page in the paper colour (K5 cards #FFFDF8 on the page, y 632+ px)', async () => {
+    await render(<ClientMacrosScreen />);
+    expect(screen.getByTestId('macros-cells')).toHaveStyle({ backgroundColor: sc.bgSurface });
+  });
+
+  it('the outlined tiles at K5\'s 56 pt (y 362-473 px)', async () => {
+    await render(<ClientMacrosScreen />);
+    expect(screen.getByTestId('macros-tile-protein')).toHaveStyle({ minHeight: 56 });
+  });
+});
+
+describe.each(SIZES)('Fasting toward C8 C_fasting, %s', (_size, dims) => {
+  const H = 3600000;
+  const at = (d: Date) => clockOf(d.getHours() * 60 + d.getMinutes());
+  let start: Date;
+  beforeEach(() => {
+    mockDims = dims;
+    start = new Date(Date.now() - (5 * 60 + 15) * 60000);
+    const day = (n: number) => { const d = new Date(); d.setDate(d.getDate() - n); d.setHours(8, 0, 0, 0); return d; };
+    (fastingApi.getHistory as jest.Mock).mockResolvedValue({ data: [
+      { id: 'run', protocol: '16:8', start_time: start.toISOString(), end_time: null },
+      { id: 'f1', protocol: '16:8', start_time: day(1).toISOString(), end_time: new Date(day(1).getTime() + 16.2 * H).toISOString() },
+      { id: 'f2', protocol: '16:8', start_time: day(2).toISOString(), end_time: new Date(day(2).getTime() + 16 * H).toISOString() },
+      { id: 'f3', protocol: '16:8', start_time: '2026-10-11T08:00:00', end_time: '2026-10-11T20:30:00' },
+    ] });
+  });
+  const ready = async () => {
+    await render(<FastingScreen />);
+    await waitFor(() => expect(screen.getByTestId('fasting-scroll')).toBeTruthy());
+  };
+
+  it('a: the gold ring, 150 pt across with a 9 pt stroke, on the paper (C8 x 36-260 px, stroke 273-285 px at x 148)', async () => {
+    await ready();
+    const ring = screen.getByTestId('fasting-ring');
+    expect(ring).toHaveStyle({ width: 150, height: 150 });
+    const circles = hosts(ring).filter((n) => n.props.strokeWidth != null);
+    expect(circles.map((c) => paint(c.props.stroke))).toEqual(expect.arrayContaining([processColor(sc.border), processColor(sc.data.goal)]));
+    expect(circles.every((c) => Number(c.props.strokeWidth) === 9)).toBe(true);
+    expect(within(screen.getByTestId('fasting-masthead')).queryByText('5h 15m')).toBeNull();
+  });
+
+  it('a: the elapsed time in the serif with "of 16 h" under it; the percent is the ring\'s value (C8 y 357-415 px)', async () => {
+    await ready();
+    expect(screen.getByText('5h 15m')).toHaveStyle({ fontFamily: 'CormorantGaramond_400Regular', fontSize: 24 });
+    expect(screen.getByText('of 16 h')).toHaveStyle({ fontSize: 13 });
+    expect(screen.getByLabelText('Fasting progress').props.accessibilityValue.text).toBe('33 percent');
+  });
+
+  it('b: the side column: Ends, Started and the run line (C8 x 285+ px, y 307-468 px)', async () => {
+    await ready();
+    const side = screen.getByTestId('fasting-side');
+    const end = new Date(start.getTime() + 16 * H);
+    expect(within(side).getByText(`Ends ${at(end)}`)).toHaveStyle({ fontFamily: 'Inter_600SemiBold', fontSize: 17 });
+    const weekday = start.toLocaleDateString('en-US', { weekday: 'long' });
+    expect(within(side).getByText(`Started ${weekday}, ${at(start)}`)).toHaveStyle({ fontSize: 16, color: sc.textMuted });
+    expect(within(side).getByText('Started')).toHaveStyle({ fontFamily: 'Inter_400Regular' });
+    expect(within(side).getByText('2 days in a row with a completed fast')).toBeTruthy();
+    expect(within(side).getByText('16h')).toBeTruthy();
+    expect(within(screen.getByTestId('fasting-masthead')).queryByText(/days in a row/)).toBeNull();
+  });
+
+  it('c: the gold hairline under the action (C8 y ~630 px); outlined End fast 54 pt, radius 12', async () => {
+    await ready();
+    expect(screen.getByLabelText('End fast')).toHaveStyle({ borderRadius: 12, minHeight: 54 });
+    expect(screen.getByTestId('fasting-gold-rule', HIDDEN)).toHaveStyle({ height: 1, backgroundColor: sc.data.goal });
+  });
+
+  it('d: recent fasts are plain rows with a hairline, short date left and hours with a space right (C8 y 653-850 px)', async () => {
+    await ready();
+    expect(screen.getByText('Sun, Oct 11')).toHaveStyle({ fontFamily: 'Inter_400Regular', fontSize: 16 });
+    expect(screen.getByText('12.5 h')).toHaveStyle({ fontFamily: 'Inter_500Medium', fontSize: 16 });
+    expect(screen.getByTestId('fasting-history-f3')).toHaveStyle({ borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: sc.border });
+    const gutters = hosts(screen.getByTestId('fasting-history-f3')).filter((n) => flat(n).width === 24 && n.props.accessibilityElementsHidden);
+    expect(gutters).toHaveLength(0);
+    expect(screen.getByTestId('remove-fast-f3')).toBeTruthy();
+    expect(screen.getByTestId('remove-fast-run')).toBeTruthy();
+  });
+
+  it('f: with no fast running, main\'s window and Start fast on the paper, no empty ring', async () => {
+    (fastingApi.getHistory as jest.Mock).mockResolvedValue({ data: [] });
+    await ready();
+    expect(screen.getByLabelText('Start fast')).toHaveStyle({ minHeight: 54 });
+    expect(within(screen.getByTestId('fasting-masthead')).queryByText('Fasting window')).toBeNull();
+    expect(screen.getByText('Fasting window')).toBeTruthy();
+    expect(screen.queryByTestId('fasting-ring')).toBeNull();
+  });
+
+  it('title: Cormorant 500 at 32 on a short masthead with no gold rule (C8 "Fasting" cap 183-212 px at 1.5x)', async () => {
+    await ready();
+    expect(screen.getByTestId('fasting-title')).toHaveStyle({ fontFamily: 'CormorantGaramond_500Medium', fontSize: 32 });
+  });
+});
