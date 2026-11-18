@@ -17,7 +17,7 @@
  * Roman card keeps "Ask Roman anything." (FIX-935R1: the owner moved quoting Roman's latest answer to v1.1).
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
+import { Animated, Easing, PixelRatio, Pressable, StyleSheet, Text, View, useWindowDimensions, type ImageSourcePropType } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import api from '../../services/api';
@@ -47,6 +47,8 @@ import { useBlockedUsersStore } from '../../store/blockedUsersStore';
 import { readCoachChatClosed, useCoachChatClosed } from '../../hooks/useCoachChatClosed';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { colors as palette, gold, layout, motion, radius, typography } from '../../theme/tokens';
+
+const ROMAN_WEARABLE_BODY = 'Wearable insights come from Roman too, so they start when you join a coach.';
 
 interface CoachRow {
   id: string | null;
@@ -181,6 +183,8 @@ function Rise({ index, children }: { index: number; children: React.ReactNode })
 
 export default function MessagesInboxScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }): React.ReactElement {
   const { semanticColors: sc } = useTheme();
+  const { width } = useWindowDimensions();
+  const coachNameStyle = width / PixelRatio.getFontScale() >= 300 ? s.coachName : s.title;
   const needsCoach = useClientNeedsCoach();
   const { coach, left, closed } = useInbox(!needsCoach);
   const { messageCoach } = useEntitlement();
@@ -202,7 +206,7 @@ export default function MessagesInboxScreen({ navigation }: { navigation: Naviga
           <View style={[s.card, s.hero, { backgroundColor: sc.accent }]} testID="inbox-coach">
             <Text style={[s.over, { color: gold[200] }]}>Your coach</Text>
             <Text accessibilityRole="header" style={[s.heroTitle, { color: sc.textOnAccent }]}>No coach connected</Text>
-            <Text style={[s.body, { color: sc.textOnAccent }]}>Messages open once you join a coach. Need help finding one? Contact support.</Text>
+            <Text style={[s.coachlessBody, { color: sc.textOnAccent }]}>Messages open once you join a coach. Need help finding one? Contact support.</Text>
             <View style={s.actions}>
               <Pressable onPress={tap(messageCoach)} accessibilityRole="button" accessibilityLabel={JOIN_A_COACH} testID="inbox-join" style={({ pressed }) => [s.action, { backgroundColor: sc.textOnAccent }, pressed && s.pressed]}>
                 <Text style={[s.actionText, { color: sc.accent }]}>{JOIN_A_COACH}</Text>
@@ -225,7 +229,7 @@ export default function MessagesInboxScreen({ navigation }: { navigation: Naviga
                   <Text style={[s.lockTitle, { color: sc.textPrimary }]} testID="inbox-roman-lock-title">{ROMAN_LOCK_TITLE}</Text>
                 </View>
               </View>
-              <Text style={[s.body, { color: sc.textPrimary }]}>{ROMAN_LOCK_BODY}</Text>
+              <Text style={[s.lockBody, { color: palette.charcoal }]}>{ROMAN_LOCK_BODY} {ROMAN_WEARABLE_BODY}</Text>
               <Text style={[s.small, s.crisis, { color: sc.textMuted, borderLeftColor: sc.textPrimary }]} testID="inbox-crisis">{COMMUNITY_REPORT_CRISIS_LINE}</Text>
             </View>
           </Rise>
@@ -256,17 +260,19 @@ export default function MessagesInboxScreen({ navigation }: { navigation: Naviga
         {closed ? null : (
           <Rise index={0}>
             <Pressable onPress={tap(() => navigation.navigate('Messages'))} accessibilityRole="button" accessibilityLabel={coachLabel} testID="inbox-coach" style={({ pressed }) => [s.card, s.hero, { backgroundColor: sc.accent }, pressed && s.pressed]}>
-              <View style={s.top}>
-                <View style={[s.mono, { backgroundColor: sc.textOnAccent }]}>
-                  {first ? <Text style={[s.monoText, { color: sc.accent }]}>{first.charAt(0).toUpperCase()}</Text>
-                    : <Ionicons name="person-outline" size={24} color={sc.accent} />}
-                </View>
-                <View style={s.who}>
-                  <Text style={[s.over, { color: gold[200] }]}>Your coach</Text>
-                  <Text style={[s.title, { color: sc.textOnAccent }]}>{first ?? 'Message your coach'}</Text>
+              <View style={[s.top, s.wrapTop]}>
+                <View style={[s.top, s.coachWho]}>
+                  <View style={[s.mono, { backgroundColor: sc.textOnAccent }]}>
+                    {first ? <Text style={[s.monoText, { color: sc.accent }]}>{first.charAt(0).toUpperCase()}</Text>
+                      : <Ionicons name="person-outline" size={24} color={sc.accent} />}
+                  </View>
+                  <View style={s.who}>
+                    <Text style={[s.over, { color: gold[200] }]}>Your coach</Text>
+                    <Text style={[coachNameStyle, { color: sc.textOnAccent }]}>{first ?? 'Message your coach'}</Text>
+                  </View>
                 </View>
                 {coach.unread > 0 ? (
-                  <View style={[s.unread, { borderColor: gold[300] }]} testID="inbox-unread">
+                  <View style={[s.unread, { borderColor: palette.romanAccent }]} testID="inbox-unread">
                     <Text style={[s.unreadText, { color: sc.textOnAccent }]}>{unread}</Text>
                   </View>
                 ) : null}
@@ -320,14 +326,17 @@ const s = StyleSheet.create({
   list: { gap: 12 },
   // C3 Style B: 18 pt inside every card, as drawn (was 20), so the drawn lines keep their breaks at 390 pt.
   card: { borderRadius: radius.card, padding: 18, gap: 12 },
-  hero: { borderRadius: radius.sheet },
+  hero: { borderRadius: radius.sheet, paddingBottom: 16, gap: 0 },
   pressed: { opacity: 0.85 },
   top: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  who: { flex: 1, gap: 4 },
+  who: { flex: 1, gap: 0 },
+  coachWho: { flexGrow: 1, flexShrink: 1, flexBasis: 'auto' },
   shrink: { flexShrink: 1 },
-  over: { ...typography.eyebrow, lineHeight: 16 },
-  heroTitle: { ...typography.h1 },
-  title: { ...typography.h2 },
+  over: { ...typography.eyebrow, fontFamily: 'Inter_600SemiBold', fontWeight: '600', lineHeight: 14.3, letterSpacing: 1.6 },
+  heroTitle: { ...typography.h1, fontFamily: 'CormorantGaramond_500Medium', fontWeight: '500', letterSpacing: 0, marginTop: 4 },
+  title: { ...typography.h2, fontFamily: 'CormorantGaramond_500Medium', fontWeight: '500', letterSpacing: 0 },
+  coachName: { ...typography.h1, fontFamily: 'CormorantGaramond_500Medium', fontWeight: '500', letterSpacing: 0 },
+  coachlessBody: { ...typography.body, fontSize: 15, lineHeight: 22.5, letterSpacing: 0, marginTop: 10 },
   // B_coachless: "Roman works with a coach" in the drawn face (Cormorant Medium 22, tracking 0), one line at 390 pt.
   lockTitle: { ...typography.h3, fontSize: 22, lineHeight: 28, letterSpacing: 0 },
   mono: { width: 48, height: 48, borderRadius: radius.chip, alignItems: 'center', justifyContent: 'center' },
@@ -335,20 +344,21 @@ const s = StyleSheet.create({
   ringed: { borderWidth: 2, borderRadius: radius.chip, padding: 2 },
   // B_coachless: Roman waits for a coach, so his portrait is grey and faded (the drawing's grayscale at 75%).
   dim: { opacity: 0.75 },
-  // A badge, not a tap target (the whole card is): 40 pt as drawn, so a long first name keeps its line.
-  unread: { minWidth: 40, minHeight: 40, borderWidth: 2, borderRadius: radius.chip, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center' },
-  unreadText: { ...typography.h3, fontVariant: ['tabular-nums'] },
-  preview: { ...typography.body, fontSize: 17, lineHeight: 26 },
+  // A badge, not a tap target: the drawn 44 pt ring wraps below a long name when needed.
+  unread: { minWidth: 44, minHeight: 44, borderWidth: 2, borderRadius: radius.chip, paddingHorizontal: 6, marginLeft: 'auto', alignItems: 'center', justifyContent: 'center' },
+  unreadText: { ...typography.h3, fontSize: 24, lineHeight: 30, letterSpacing: 0, fontVariant: ['tabular-nums'] },
+  preview: { ...typography.body, fontSize: 17, lineHeight: 26, marginTop: 6 },
   left: { alignItems: 'flex-end', marginLeft: 'auto' },
   // Large text at 320 pt: "36 left today" moves under the name instead of splitting "Your assistant" mid-word.
   wrapTop: { flexWrap: 'wrap', rowGap: 4 },
   whoMin: { minWidth: 128 },
   count: { ...typography.h1, fontVariant: ['lining-nums', 'tabular-nums'] },
   body: { ...typography.body },
+  lockBody: { ...typography.bodySmall, lineHeight: 20 },
   small: { ...typography.bodySmall },
   crisis: { borderLeftWidth: 2, paddingLeft: 12 },
   // B_coachless: 10 pt apart and no side padding, as drawn, so "Contact support" keeps one line at 360 pt.
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 4 },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 14 },
   action: { flexGrow: 1, flexBasis: 128, minHeight: 48, borderRadius: radius.button, paddingHorizontal: 0, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
   outline: { borderWidth: 1 },
   // Semibold as drawn (B_coachless): "Join a coach" and "Contact support" on one line each at 390 pt.
