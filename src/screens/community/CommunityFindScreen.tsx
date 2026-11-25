@@ -37,6 +37,8 @@ import { featureFlags } from '../../config/featureFlags';
 import { useFeatureFlags } from '../../hooks/useFeatureFlags';
 import { useCommunityMe } from '../../hooks/useCommunity';
 import { useCommunitySearch } from '../../hooks/useCommunitySearch';
+import { useVoiceCatchUp } from '../../hooks/useVoiceFeed';
+import { isEffectivelyOnline, useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { track } from '../../analytics/posthog.service';
 import {
   AnalyticsEvents,
@@ -92,6 +94,14 @@ export default function CommunityFindScreen(): React.ReactElement {
     term,
     enabled: runtimeEnabled,
   });
+  // A removal ping missed while the phone was locked or offline heals on the way back to the app or to
+  // this screen (bounded as the Hall's). Never offline: a read that fails there would swap the list for
+  // the failed state.
+  const online = isEffectivelyOnline(useNetworkStatus());
+  useVoiceCatchUp(
+    search,
+    featureFlags.communitySearch && runtimeEnabled && !!workspaceId && trimmed.length > 0 && online,
+  );
 
   const data = useMemo(
     () => dedupeById(search.data?.pages.flatMap((p) => p.results) ?? []),
