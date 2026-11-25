@@ -59,7 +59,6 @@ export function weeksOf(rows: ReadonlyArray<Assignment>, today: string) {
   const other = new Map<string, Assignment[]>();
   for (const a of rows) {
     const day = dayOf(a);
-    if (!day) continue; // a day that cannot be read is on the list only
     const monday = mondayOf(day);
     if (monday === thisMonday) thisWeek.push(a);
     else other.set(monday, [...(other.get(monday) ?? []), a]);
