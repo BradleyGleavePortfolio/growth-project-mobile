@@ -13,6 +13,9 @@ const CAMERA =
 const LIBRARY =
   'TGP Fitness opens your photo library only when you choose a photo: a photo of a meal to keep with your food log, or a photo to send in a support chat.';
 const RECORD_AUDIO = 'android.permission.RECORD_AUDIO';
+// 203-D35 op 1: nothing on Android uses the camera in v1 (the Photo tile is iPhone only), so the build blocks it.
+const ANDROID_CAMERA = 'android.permission.CAMERA';
+const EARLIER_BLOCKS = ['android.permission.READ_CALENDAR', 'android.permission.WRITE_CALENDAR', RECORD_AUDIO];
 const originalSwitch = process.env.TGP_ANDROID_HEALTH_CONNECT;
 const named = (config, name) => config.plugins.filter((p) => (Array.isArray(p) ? p[0] : p) === name);
 const entry = (config) => named(config, 'expo-image-picker')[0];
@@ -28,6 +31,30 @@ const realPlugin = (name) => {
 const infoPlistOf = async (config, start) => {
   const { modResults } = await config.mods.ios.infoPlist({ ...config, modResults: { ...start }, modRequest: {} });
   return modResults;
+};
+
+/** The block is on the list exactly once, the three earlier blocks are still there, and nothing asks for the camera. */
+const expectCameraBlocked = (android) => {
+  expect((android.blockedPermissions ?? []).filter((name) => name === ANDROID_CAMERA)).toHaveLength(1);
+  expect(android.blockedPermissions).toEqual(expect.arrayContaining(EARLIER_BLOCKS));
+  expect(android.permissions ?? []).not.toContain(ANDROID_CAMERA);
+};
+const fromPackage = (name, file) => require(`${name}/${file}`);
+/**
+ * Runs the Android manifest mods as prebuild does, from a manifest already holding the given permission lines: after
+ * the app's plugin, Expo's two permission plugins in prebuild's own order (@expo/prebuild-config
+ * withAndroidExpoPlugins). Loaded by path, as realPlugin is: src/ must not import expo/config-plugins (the entry-point
+ * list in declaredDependencies.test.ts).
+ */
+const usesPermissionsOf = async (config, start) => {
+  const { withInternalBlockedPermissions, withPermissions } = fromPackage('expo', 'config-plugins').AndroidConfig.Permissions;
+  const built = withPermissions(withInternalBlockedPermissions(config));
+  const { modResults } = await built.mods.android.manifest({
+    ...built,
+    modResults: { manifest: { $: {}, 'uses-permission': start.map((name) => ({ $: { 'android:name': name } })) } },
+    modRequest: {},
+  });
+  return modResults.manifest['uses-permission'].map((line) => line.$);
 };
 
 afterEach(() => setSwitch(originalSwitch));
@@ -48,6 +75,17 @@ describe('the two iPhone lines (R9)', () => {
     // Mods run last-added first: placed after expo-audio, the picker's `false` runs before expo-audio writes its line.
     const at = (name) => app.plugins.findIndex((p) => (Array.isArray(p) ? p[0] : p) === name);
     expect(at('expo-image-picker')).toBeGreaterThan(at('expo-audio'));
+  });
+});
+
+describe('Android: the unused camera permission is blocked (203-D35 op 1)', () => {
+  test('app.json blocks android.permission.CAMERA once, keeps the three earlier blocks and never asks for it', () => {
+    expectCameraBlocked(app.android);
+  });
+
+  test.each([undefined, '1'])('app.config.js keeps that block (TGP_ANDROID_HEALTH_CONNECT=%s)', (value) => {
+    setSwitch(value);
+    expectCameraBlocked(configure().android);
   });
 });
 
@@ -85,4 +123,31 @@ describe.each([undefined, '1'])('the real plugin (TGP_ANDROID_HEALTH_CONNECT=%s)
     expect(generated.android.blockedPermissions).toContain(RECORD_AUDIO);
     expect(generated.android.blockedPermissions).toEqual(expect.arrayContaining(app.android.blockedPermissions));
   });
+
+  test('Android: after the picker runs the camera and RECORD_AUDIO are still blocked, and nothing is added', () => {
+    setSwitch(value);
+    const result = JSON.parse(JSON.stringify(configure()));
+    const before = [...(result.android.permissions ?? [])];
+    const generated = realPlugin('expo-image-picker')(result, entry(result)[1]);
+    expectCameraBlocked(generated.android);
+    expect(generated.android.blockedPermissions).toContain(RECORD_AUDIO);
+    expect(generated.android.permissions ?? []).toEqual(before);
+  });
+
+  // A library's manifest (expo-image-picker's own) declares the camera; the second start stands in for that line.
+  test.each([[[]], [[ANDROID_CAMERA]]])(
+    'Android: the generated manifest holds one camera line, marked tools:node="remove", and no plain one (start %j)',
+    async (start) => {
+      setSwitch(value);
+      const result = JSON.parse(JSON.stringify(configure()));
+      const generated = realPlugin('expo-image-picker')(result, entry(result)[1]);
+      const lines = await usesPermissionsOf(generated, start);
+      expect(lines.filter((line) => line['android:name'] === ANDROID_CAMERA)).toEqual([
+        { 'android:name': ANDROID_CAMERA, 'tools:node': 'remove' },
+      ]);
+      expect(lines.filter((line) => line['android:name'] === RECORD_AUDIO)).toEqual([
+        { 'android:name': RECORD_AUDIO, 'tools:node': 'remove' },
+      ]);
+    },
+  );
 });
