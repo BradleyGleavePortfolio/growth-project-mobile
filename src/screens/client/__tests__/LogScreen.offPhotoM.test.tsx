@@ -4,7 +4,7 @@
 // The harness is LogScreen.ls-food-online-retry.test.tsx's. Codes and names are made up.
 import React from 'react';
 import { Alert } from 'react-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import LogScreen from '../LogScreen';
 import { foodApi, logApi } from '../../../services/api';
@@ -114,10 +114,13 @@ describe('OFF-PHOTO-M: an Open Food Facts pick on the real Log screen', () => {
     mockAnswers.push(answer(404, 'Food not found'), answer(404, 'Food not found'));
     await pickFromSearch();
     await pressLog();
-    await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith("Couldn't log food", 'Food not found'));
-    expect(screen.getByRole('button', { name: 'Log food' })).toBeTruthy();
+    const card = await screen.findByTestId('portion-save-failure');
+    expect(within(card).getByText("Couldn't log food")).toBeTruthy();
+    expect(within(card).getByText('Food not found')).toBeTruthy();
+    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
     expect(foodApi.create).not.toHaveBeenCalled();
-    await pressLog();
+    await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
     await waitFor(() => expect(logApi.logFood).toHaveBeenCalledTimes(2));
     expect(foodApi.create).not.toHaveBeenCalled();
     expect(sent().map((b) => b.food_item_id)).toEqual(['off_0000000012345', 'off_0000000012345']);
@@ -129,11 +132,12 @@ describe('OFF-PHOTO-M: an Open Food Facts pick on the real Log screen', () => {
     mockAnswers.push(answer(500, 'Internal server error'));
     await pickFromSearch();
     await pressLog();
-    await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith(
-      "Couldn't log food", 'The service is temporarily unavailable. Try again in a moment.',
-    ));
-    expect(screen.getByRole('button', { name: 'Log food' })).toBeTruthy();
-    await pressLog();
+    const card = await screen.findByTestId('portion-save-failure');
+    expect(within(card).getByText("Couldn't log food")).toBeTruthy();
+    expect(within(card).getByText('The service is temporarily unavailable. Try again in a moment.')).toBeTruthy();
+    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
     await waitFor(() => expect(logApi.logFood).toHaveBeenCalledTimes(2));
     expect(sent()[1].client_uuid).toBe(sent()[0].client_uuid);
     expect(sent()[1].food_item_id).toBe('off_0000000012345');
