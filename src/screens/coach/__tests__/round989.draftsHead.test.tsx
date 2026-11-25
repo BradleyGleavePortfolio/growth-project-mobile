@@ -168,7 +168,7 @@ describe('ROUND-989: the B-list frame head on Roman\'s drafts list (B-list-390-1
     expect(band(view)).toBe(forestPop.deep);
     await view.rerender(app(null));
     expect(band(view)).toBe(STATUS_BAR_BONE);
-    view.unmount();
+    await view.unmount();
     mockUser.role = 'client';
     const restricted = await render(app(<PendingAiDraftsScreen />));
     expect(restricted.getByTestId('pending-ai-drafts-screen-restricted')).toBeTruthy();
@@ -187,7 +187,7 @@ describe('ROUND-989: the B-list frame head on Roman\'s drafts list (B-list-390-1
     expect(iconIn(back, 'chevron-back')?.props?.color).toBe(forestPop.onDeep);
     await fireEvent.press(back);
     expect(mockGoBack).toHaveBeenCalledTimes(1);
-    view.unmount();
+    await view.unmount();
     mockNav.canGoBack = false;
     const again = await draw();
     await again.findByText('Roman');
@@ -198,8 +198,9 @@ describe('ROUND-989: the B-list frame head on Roman\'s drafts list (B-list-390-1
   it('(c) Roman\'s mark sits in the head, hidden from spoken text and never a button', async () => {
     mockListPending.mockResolvedValue({ drafts: [bound('d-7', 'client-1', 'ci-7')] });
     const view = await draw();
-    const mark = await view.findByTestId('pending-ai-drafts-mark');
-    expect(within(view.getByTestId('pending-ai-drafts-head')).getByTestId('pending-ai-drafts-mark')).toBeTruthy();
+    // Hidden from spoken text, so the queries must be told to look at hidden elements.
+    const mark = await view.findByTestId('pending-ai-drafts-mark', { includeHiddenElements: true });
+    expect(within(view.getByTestId('pending-ai-drafts-head')).getByTestId('pending-ai-drafts-mark', { includeHiddenElements: true })).toBeTruthy();
     expect(mark.props.accessibilityElementsHidden).toBe(true);
     expect(mark.props.importantForAccessibility).toBe('no-hide-descendants');
     expect(mark.props.accessibilityRole).toBeUndefined();
@@ -244,7 +245,7 @@ describe('ROUND-989: the B-list frame head on Roman\'s drafts list (B-list-390-1
     expect(await empty.findByText('No pending drafts')).toBeTruthy();
     expect(empty.queryByTestId('pending-ai-drafts-queue')).toBeNull();
     expect(empty.queryByText(/to review/)).toBeNull();
-    empty.unmount();
+    await empty.unmount();
     qc.clear();
     mockListPending.mockImplementation(never);
     const loading = await draw();
@@ -257,7 +258,7 @@ describe('ROUND-989: the B-list frame head on Roman\'s drafts list (B-list-390-1
     mockListPending.mockResolvedValue({ drafts: [bound('d-7', 'client-1', 'ci-7'), stream2('w-1', 'client-2')] });
     const mixed = await draw();
     expect(await mixed.findByTestId('pending-ai-drafts-kinds')).toBeTruthy();
-    mixed.unmount();
+    await mixed.unmount();
     qc.clear();
     mockListPending.mockResolvedValue({ drafts: [bound('d-7', 'client-1', 'ci-7'), bound('d-8', 'client-1', 'ci-8')] });
     const only = await draw();
@@ -304,14 +305,15 @@ describe('ROUND-989: the B-list frame head on Roman\'s drafts list (B-list-390-1
     expect(empty.getByText('Ask the AI to draft something from a client\'s detail screen.')).toBeTruthy();
     expect(empty.getByText('Roman')).toBeTruthy();
     expect(empty.getByText('Your drafts, ready when you are.')).toBeTruthy();
-    empty.unmount();
+    await empty.unmount();
     qc.clear();
     mockListPending.mockRejectedValue(Object.assign(new Error('Network Error'), { isAxiosError: true, code: 'ERR_NETWORK' }));
     const failed = await draw();
-    expect(await failed.findByTestId('pending-ai-drafts-error')).toBeTruthy();
+    // usePendingAiDrafts retries once (retry: 1, about a second) before it says the read failed.
+    expect(await failed.findByTestId('pending-ai-drafts-error', {}, { timeout: 5000 })).toBeTruthy();
     expect(failed.getByText(/^Pending AI drafts could not load\./)).toBeTruthy();
     expect(failed.getByText('Roman')).toBeTruthy();
-    failed.unmount();
+    await failed.unmount();
     qc.clear();
     const reads = mockListPending.mock.calls.length;
     mockUser.role = 'client';
