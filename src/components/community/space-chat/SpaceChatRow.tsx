@@ -111,7 +111,6 @@ function MessageBody(p: SpaceChatRowProps & { folded: boolean }): React.ReactEle
     </>
   );
 }
-export { PHOTO_WORD };
 
 const STATE_WORD: Record<'sending' | 'waiting' | 'failed', string> = { sending: 'Sending…', waiting: 'Waiting to send', failed: 'Not sent' };
 

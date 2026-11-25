@@ -53,13 +53,13 @@ import SpaceChatComposer from '../../components/community/space-chat/SpaceChatCo
 import SpaceChatMic from '../../components/community/space-chat/SpaceChatMic';
 import SpaceInfoSheet from '../../components/community/space-chat/SpaceInfoSheet';
 import SpaceMessageSheet from '../../components/community/space-chat/SpaceMessageSheet';
-import { firstLine, quoteOf, quoteOfTarget, voiceLine } from '../../components/community/space-chat/SpaceReplyQuote';
+import { firstLine, photoLine, quoteOf, quoteOfTarget, voiceLine } from '../../components/community/space-chat/SpaceReplyQuote';
 import type { SpaceReplyTarget } from '../../components/community/space-chat/spaceChatOutbox';
 import * as Clipboard from 'expo-clipboard';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { useSpaceVoiceOutbox } from '../../components/community/space-chat/useSpaceVoiceOutbox';
 import type { VoiceOutboxItem } from '../../hooks/useVoiceOutbox';
-import SpaceChatRow, { DayLine, HashGlyph, MenuGlyph, NewMessagesLine, PHOTO_WORD, SMALL_GREY, spaceDay } from '../../components/community/space-chat/SpaceChatRow';
+import SpaceChatRow, { DayLine, HashGlyph, MenuGlyph, NewMessagesLine, SMALL_GREY, spaceDay } from '../../components/community/space-chat/SpaceChatRow';
 import { isCoachRemoved, spaceRemovedLine } from '../../components/community/space-chat/removed/SpaceRemovedPlaceholder';
 import { useSpaceChat, type PendingRow } from '../../components/community/space-chat/useSpaceChat';
 import { type SpaceMessage } from '../../components/community/space-chat/spaceChatApi';
@@ -230,7 +230,7 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
     }
     if (coachOnly && !isCoachViewer && !m.sender?.is_coach) return null;
     const body = m.kind === 'voice' ? voiceLine(m.voice_note?.duration_ms ?? 0)
-      : m.kind === 'image' ? firstLine(m.body) || PHOTO_WORD : firstLine(m.body);
+      : m.kind === 'image' ? photoLine(m.body) : firstLine(m.body);
     return { id: m.id, authorLabel: m.sender?.name ?? '', body, authorId: m.sender_user_id, at: m.created_at };
   }, [admitted, coachOnly, isCoachViewer, chat.messages]);
   const { readable } = chat;
