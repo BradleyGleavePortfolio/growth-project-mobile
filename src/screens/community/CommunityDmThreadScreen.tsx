@@ -225,7 +225,7 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
           <ConversationClosedLine by={by} name={shownName} testID="community-dmthread-closed" />
         ) : null) : !open ? null : <ComposerInput
           ref={composerRef}
-          placeholder="Message"
+          placeholder="Type a message..." // REFINE-985R3 WORDS-1: 05b's words, as the coaching chat's box reads
           maxLength={DM_MAX}
           sending={sendDm.isPending}
           onSubmit={onSend}
