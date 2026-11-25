@@ -320,19 +320,16 @@ describe('a note that will not play says so on that note (rule h)', () => {
     failOnce.add('vn-2');
     script(answered(503));
     const toggle = (id: string) => within(v.getByTestId(`vn-player-${id}`)).getByTestId('voice-player-toggle');
-    await act(async () => {
-      await toggle('vn-2').props.onPress();
-    });
+    await fireEvent.press(toggle('vn-2'));
     await v.findByTestId('vn-error');
+    await within(v.getByTestId('vn-player-vn-2')).findByText(PLAYER_LINE);
     expect(players(v)).toEqual(['vn-1', 'vn-2', 'vn-3']);
     expect(within(v.getByTestId('vn-player-vn-2')).getByText(PLAYER_LINE)).toBeTruthy();
     expect(within(v.getByTestId('vn-player-vn-1')).queryByText(PLAYER_LINE)).toBeNull();
     expect(within(v.getByTestId('vn-player-vn-3')).queryByText(PLAYER_LINE)).toBeNull();
     const before = loads.filter((id) => id === 'vn-2').length;
-    await act(async () => {
-      await toggle('vn-2').props.onPress();
-    });
-    expect(loads.filter((id) => id === 'vn-2').length).toBe(before + 1);
+    await fireEvent.press(toggle('vn-2'));
+    await waitFor(() => expect(loads.filter((id) => id === 'vn-2').length).toBe(before + 1));
   });
 });
 
