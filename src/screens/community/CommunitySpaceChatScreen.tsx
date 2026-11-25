@@ -42,7 +42,7 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AccessibilityInfo, ActivityIndicator, FlatList, Keyboard, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View,
+  AccessibilityInfo, ActivityIndicator, FlatList, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View,
   type ViewToken,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -404,7 +404,9 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
         ) : loading && items.length === 0 ? (
           <View style={s.center} testID="space-chat-loading"><ActivityIndicator color={fp.forest} /></View>
         ) : items.length === 0 ? (
-          <View style={s.flex} testID="space-chat-empty">
+          // FIX-945R4 (LS-945 B2, LO-945 C4): the start row scrolls, in the stream's own inset (GOAL .stream 8 pt), so a
+          // long purpose and the count can always be reached; the box, the chip and the band stay outside it.
+          <ScrollView style={s.flex} contentContainerStyle={s.stream} keyboardShouldPersistTaps="handled" testID="space-chat-empty">
             {cohort ? (
               <View style={s.start} accessible testID="space-chat-start">
                 <View style={s.startTile}>
@@ -416,7 +418,7 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
                 <Text style={s.startCount}>{members}</Text>
               </View>
             ) : null}
-          </View>
+          </ScrollView>
         ) : (
           <FlatList
             ref={listRef}
