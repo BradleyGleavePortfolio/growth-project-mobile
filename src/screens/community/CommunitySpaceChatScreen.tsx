@@ -87,8 +87,15 @@ const live = (m: SpaceMessage) =>
 const drawable = (m: SpaceMessage) => live(m) || (kindDrawn(m) && isCoachRemoved(m));
 
 export default function CommunitySpaceChatScreen(): React.ReactElement {
-  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const { cohortId, messageId } = useRoute<RouteProp<Params, 'CommunitySpaceChat'>>().params;
+  // FIX-945R4 (LS-945 B1): a push or a link into the chat already on screen keeps its stack key and changes only these
+  // params. Another space is a new mount of everything below, as a fresh open: its own place, read marks, pill, sheets,
+  // box, mic and stream. A new message asked for in the same space opens again at that row (the visit, below).
+  return <SpaceChat key={cohortId} cohortId={cohortId} messageId={messageId} />;
+}
+
+function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React.ReactElement {
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   // The coach's stack has the space's member page; the member stack has the space drawer.
   const coachStack = !!navigation.getState?.()?.routeNames?.includes('CoachCommunityCohortDetail');
   // A removed row's author gets a link to Community safety where that page is on the stack (the member side).
@@ -149,24 +156,25 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
     viewabilityConfig: VIEWABLE[i],
     onViewableItemsChanged: ({ viewableItems }: { viewableItems: ViewToken[] }) => set(new Set(viewableItems.map((v) => v.key))),
   }))).current;
-  // The row to open at, tried again (a few frames at most) while the rows around it have not measured yet.
-  const tries = useRef(0);
+  // The row to open at, tried again (a few frames at most) while the rows around it have not measured yet; SC-M3: the
+  // row a quote scrolls to, while that scroll is on its way. FIX-945R4 (LS-945 B1): both are this visit's, the link the
+  // page opened at; a new message asked for here starts the visit over, and a timer of the last one moves nothing.
+  const visit = useRef({ messageId, tries: 0, jumping: null as number | null });
   const placedRef = useRef(false);
   placedRef.current = placed;
   const toRow = useCallback((index: number) => listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: false }), []);
-  // SC-M3: the row a quote scrolls to, while that scroll is on its way.
-  const jumping = useRef<number | null>(null);
   const onPlaceFailed = useCallback((info: { index: number; averageItemLength: number }) => {
+    const v = visit.current;
     listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
     // SC-M3: a quote's message far off screen: once more, once the guess has brought its rows in.
-    if (jumping.current === info.index) {
-      jumping.current = null;
-      setTimeout(() => listRef.current?.scrollToIndex({ index: info.index, viewPosition: 0.5, animated: true }), 100);
+    if (v.jumping === info.index) {
+      v.jumping = null;
+      setTimeout(() => { if (visit.current === v) listRef.current?.scrollToIndex({ index: info.index, viewPosition: 0.5, animated: true }); }, 100);
       return;
     }
-    if (tries.current >= 5) return;
-    tries.current += 1;
-    setTimeout(() => { if (!placedRef.current) toRow(info.index); }, 50);
+    if (v.tries >= 5) return;
+    v.tries += 1;
+    setTimeout(() => { if (visit.current === v && !placedRef.current) toRow(info.index); }, 50);
   }, [toRow]);
   useEffect(() => {
     if (target !== undefined || !chat.readSettled || items.length === 0) return;
@@ -179,8 +187,9 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
       return;
     }
     const index = items.findIndex((i) => (messageId ? i.key === messageId : i.type === 'new'));
+    const v = visit.current;
     setTarget(index > 0 ? items[index].key : null);
-    if (index > 0) requestAnimationFrame(() => toRow(index));
+    if (index > 0) requestAnimationFrame(() => { if (visit.current === v) toRow(index); });
   }, [items, messageId, target, chat.readSettled, chat.readCursor, chat.messages, chat.list, toRow]);
   // In place once the row it opened at is on screen (or the person scrolls); only then do read marks count.
   useEffect(() => { if (!placed && (target === null || (!!target && seen.has(target)))) setPlaced(true); }, [placed, target, seen]);
@@ -216,6 +225,16 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
     const t = setTimeout(() => setLit(null), 1500);
     return () => clearTimeout(t);
   }, [lit]);
+  // FIX-945R4 (LS-945 B1): a new message asked for in this space opens the page again at it, as a fresh open: the place,
+  // its retries, a quote's scroll on its way and the row it lit start over. What the space holds (its rows on screen,
+  // read marks, pill, sheets, reply) stays: it is the same space.
+  useEffect(() => {
+    if (visit.current.messageId === messageId) return;
+    visit.current = { messageId, tries: 0, jumping: null };
+    setTarget(undefined);
+    setPlaced(false);
+    setLit(null);
+  }, [messageId]);
   // What Reply answers: the row, or on a reply the first message of its thread (the server keeps one level, as a Slack
   // thread does). None where the server would refuse it: a message gone, a space this person is not let into, and in a
   // space only the coach posts in, a member's own top-level row (members answer the coach's posts there).
@@ -242,7 +261,7 @@ export default function CommunitySpaceChatScreen(): React.ReactElement {
   const jump = useCallback((id: string) => {
     const index = items.findIndex((i) => i.key === id);
     if (index < 0) return;
-    jumping.current = index;
+    visit.current.jumping = index;
     listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true });
     setLit(id);
   }, [items]);
