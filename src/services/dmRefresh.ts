@@ -7,18 +7,17 @@
  * only the app's queryClient, for the reason mealPlanRefresh.ts gives. It never drops a saved answer, and a re-read that
  * fails takes nothing off the screen: the thread keeps drawing what it had (CommunityDmThreadScreen.tsx, EMPTY-1).
  */
-import type { QueryClient } from '@tanstack/react-query';
 import { queryClient } from './queryClient';
+import { refreshDmReadsIn } from './dmReads';
 
 /**
- * REFINE-985R3 (LO-985R2 B1): the one list of the DM reads, for every way a DM reaches the phone: the push received
- * (pushNotifications.ts), its tap (pushTapRouter.ts), the realtime ping alone (useCommunity.ts onCommunityPing, which
- * answers for the query client it was handed and so passes it) and the app coming back to the front
- * (pushNotifications.ts). With no argument it is the app's one client, which is also the one the hooks are given.
+ * REFINE-985R3 (LO-985R2 B1): every way a DM reaches the phone ends in the one list of the DM reads (dmReads.ts): the
+ * push received and the app coming back to the front (pushNotifications.ts) and the push's tap (pushTapRouter.ts)
+ * through here, with the app's one client; the realtime ping alone through useCommunity.ts onCommunityPing, with the
+ * client that hook was given (in the app, the same object).
  */
-export function refreshDmReads(client: QueryClient = queryClient): void {
-  void client.invalidateQueries({ queryKey: ['community', 'dm'] });
-  void client.invalidateQueries({ queryKey: ['community', 'dms'] });
+export function refreshDmReads(): void {
+  refreshDmReadsIn(queryClient);
 }
 
 /** The server's DM push (backend community-dms.service.ts, kind community_dm_received). */
