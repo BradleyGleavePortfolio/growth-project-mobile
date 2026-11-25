@@ -11,11 +11,13 @@
  * its title, section heads and each card's row with its chevron; C2_today for each card's exercise rows; C2_first for
  * the empty title. Words, data, taps and reads are main's.
  *
- * REFINE-987 (round 2, toward C2_history): the "Train" eyebrow; this week's sessions on the deep forest THIS WEEK card
- * (the ring, one row per session with its mark, day, name and done / planned / missed, each row opening its workout as
- * main's card does, main's exercise lines kept under it); every other workout under main's "To complete" and
- * "Completed"; EARLIER, one row per past week holding a session (its ring, span and "{n} of {total} done", not
- * pressable: there is no week page); the legend. One week rule: trainWeek / workoutWeek (TrainToday.tsx, thisWeek.ts).
+ * REFINE-987 (round 2): the "Train" eyebrow (C2_history).
+ *
+ * REFINE-987R3 (round 3, owner #203-E80 on 203-D38: two screens in one flow): main's cards for this week and the two
+ * after (WINDOW-1, workouts/workoutWeeks.tsx: this Monday to the Sunday two weeks after, Monday first, the phone's own
+ * today; a workout whose day cannot be read stays listed), "Full program" under the title opening Your weeks
+ * (workouts/YourWeeksScreen.tsx). Your weeks' week rows open this page for one week (the `week` parameter, a Monday):
+ * that week's workouts on main's cards under its span, no "Full program".
  */
 
 import React, { useCallback, useMemo } from 'react';
@@ -36,7 +38,7 @@ import type { AssignmentExercise, ClientWorkoutAssignmentWithPlan } from '../../
 import { useMyWorkoutAssignments } from '../../hooks/useWorkoutBuilder';
 import { useExerciseNames } from '../../hooks/useExerciseNames';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, layout, radius, spacing, typography } from '../../theme/tokens';
+import { layout, spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { SemanticTokens } from '../../theme/tokens';
 import { formatPlanType } from '../../utils/workout/formatPlanType';
@@ -46,14 +48,14 @@ import { readsBW } from '../../utils/workout/bodyWeight';
 import { assignmentDay, dayStart } from '../../utils/workout/workoutDay';
 import { getTodayString } from '../../utils/date';
 import { useScreenInsets } from '../../ui';
-import { SegmentedRing, type SegmentState } from '../../ui/charts/StyleCMarks';
-import { DAY_NAMES, doneLine, workoutWeek, type WorkoutWeek } from '../coach/client-detail/thisWeek';
-import { TRAIN_COPY, trainWeek, type TrainWorkout } from './train/TrainToday';
+import { QuietRow } from '../../ui/rows/QuietRow';
 import { sectionHead } from './workouts/workoutStyleC';
+import { ListState, listRows, weekParam, weekSpan } from './workouts/workoutWeeks';
 
 type Assignment = ClientWorkoutAssignmentWithPlan;
 
-export default function ClientWorkoutViewerScreen() {
+/** `week`: a Monday (YYYY-MM-DD) from a Your weeks row; anything else shows the default window. */
+export default function ClientWorkoutViewerScreen({ route }: { route?: { params?: { week?: string } } }) {
   const { semanticColors: sc } = useTheme();
   const styles = makeStyles(sc);
   const insets = useScreenInsets();
@@ -73,10 +75,11 @@ export default function ClientWorkoutViewerScreen() {
 
   // The phone's own today (WorkoutScreen.tsx passes the same to the Train tab's week).
   const today = getTodayString();
-  const weeks = useMemo(() => weeksOf(sorted, today), [sorted, today]);
-  // This week's sessions open from the card; every other workout stays on main's two lists.
-  const pending = sorted.filter((a) => !a.completed_at && !weeks.inThis.has(a.id));
-  const completed = sorted.filter((a) => !!a.completed_at && !weeks.inThis.has(a.id));
+  const week = weekParam(route?.params?.week);
+  // WINDOW-1, or the one week a Your weeks row opened; then main's two lists in main's order.
+  const shown = useMemo(() => listRows(sorted, today, week), [sorted, today, week]);
+  const pending = shown.filter((a) => !a.completed_at);
+  const completed = shown.filter((a) => !!a.completed_at);
 
   const handleOpenAssignment = useCallback(
     (a: ClientWorkoutAssignmentWithPlan) => {
@@ -98,51 +101,28 @@ export default function ClientWorkoutViewerScreen() {
         />
       }
     >
-      {/* C2_history "TRAIN" (cap rows 118-133) over the title. */}
-      <Text style={styles.eyebrow}>Train</Text>
+      {/* C2_history "TRAIN" (cap rows 118-133) over the title; one week's page names its span there. */}
+      <Text style={styles.eyebrow}>{week ? weekSpan(week) : 'Train'}</Text>
       <Text style={[typography.h1, { color: sc.textPrimary }]}>
         Your workouts
       </Text>
 
       {isLoading ? (
-        <Text style={[typography.body, styles.state, { color: sc.textMuted }]}>
-          Loading...
-        </Text>
+        <ListState state="loading" sc={sc} />
       ) : isError ? (
-        <Text style={[typography.body, styles.state, { color: sc.textMuted }]}>
-          Could not load your workouts. Pull to retry.
-        </Text>
+        <ListState state="failed" sc={sc} />
       ) : sorted.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={[typography.h1, { color: sc.textPrimary }]}>
-            No workouts assigned
-          </Text>
-          <Text style={[typography.body, { color: sc.textMuted }]}>
-            Assigned workouts appear here when available.
-          </Text>
-        </View>
+        <ListState state="empty" sc={sc} />
       ) : (
         <>
-          {weeks.rows.length > 0 ? (
-            <View testID="week-card" style={styles.weekCard}>
-              {/* C2_history rows 236-367: the eyebrow and the ring (cols 611-696) over the first rule. */}
-              <View style={styles.weekHead}>
-                <Text style={styles.weekEyebrow}>{TRAIN_COPY.week}</Text>
-                <SegmentedRing onDark size={RING} segments={weeks.week.segments} label={doneLine(weeks.week)} testID="week-ring">
-                  <Text maxFontSizeMultiplier={1.15} style={styles.weekCount}>{`${weeks.week.done}/${weeks.week.total}`}</Text>
-                </SegmentedRing>
-              </View>
-              {weeks.rows.map((a, i) => (
-                <WeekSession
-                  key={a.id}
-                  a={a}
-                  state={weeks.week.segments[i]}
-                  styles={styles}
-                  sc={sc}
-                  onPress={() => handleOpenAssignment(a)}
-                />
-              ))}
-            </View>
+          {/* FULL-1: the kit's row, the first thing under the title, whenever the read holds a workout. */}
+          {week ? null : (
+            <QuietRow label="Full program" onPress={() => navigation.navigate('YourWeeks')} testID="workout-full-program" style={styles.fullProgram} />
+          )}
+          {!week && shown.length === 0 ? (
+            <Text style={[typography.body, styles.state, { color: sc.textMuted }]}>
+              Nothing planned in the next three weeks.
+            </Text>
           ) : null}
 
           {pending.length > 0 ? (
@@ -178,94 +158,10 @@ export default function ClientWorkoutViewerScreen() {
               ))}
             </>
           ) : null}
-
-          {weeks.earlier.length > 0 ? (
-            <View testID="week-earlier">
-              <Text style={styles.sectionHead}>Earlier</Text>
-              {/* C2_history rows 900-1411: a 64 pt row per past week; no chevron, no tap (no week page). */}
-              {weeks.earlier.map(({ monday, week }) => (
-                <View key={monday} testID={`earlier-${monday}`} style={styles.earlierRow}>
-                  <SegmentedRing size={RING} segments={week.segments} label={doneLine(week)} testID={`earlier-ring-${monday}`}>
-                    <Text maxFontSizeMultiplier={1.15} style={styles.earlierCount}>{`${week.done}/${week.total}`}</Text>
-                  </SegmentedRing>
-                  <View style={styles.flex}>
-                    <Text style={[typography.h4, { color: sc.textPrimary }]}>{weekSpan(monday)}</Text>
-                    <Text style={[typography.body, { color: sc.textMuted }]}>{doneLine(week)}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-          ) : null}
-
-          {weeks.rows.length > 0 || weeks.earlier.length > 0 ? (
-            <View testID="week-legend" style={styles.legend}>
-              {LEGEND.map((s) => (
-                <View key={s} style={styles.legendItem}>
-                  <View
-                    accessibilityElementsHidden
-                    importantForAccessibility="no-hide-descendants"
-                    style={[styles.legendMark, s === 'done' ? styles.legendDone : s === 'missed' ? styles.legendMissed : styles.legendPlanned]}
-                  />
-                  <Text style={[typography.body, { color: sc.textPrimary }]}>{TRAIN_COPY.day[s]}</Text>
-                </View>
-              ))}
-            </View>
-          ) : null}
         </>
       )}
     </ScrollView>
   );
-}
-
-const RING = 44; // C2_history cols 611-696 (this week) and 52-140 (each earlier week): 44 pt.
-const LEGEND: SegmentState[] = ['done', 'planned', 'missed'];
-
-/** Monday (YYYY-MM-DD) of a day, by the Train tab's own week rule. */
-const mondayOf = (day: string) => trainWeek([], day).week;
-
-/**
- * This week's sessions in day order with their week (trainWeek: segment i is row i), and every earlier week holding a
- * session, newest first (workoutWeek with the real today, so an open session in a past week reads missed).
- */
-function weeksOf(rows: ReadonlyArray<Assignment>, today: string) {
-  const thisMonday = mondayOf(today);
-  const thisWeek: Assignment[] = [];
-  const before = new Map<string, Assignment[]>();
-  for (const a of rows) {
-    const day = assignmentDay(a);
-    if (!day) continue; // an unreadable day stays on main's lists only
-    const monday = mondayOf(day);
-    if (monday === thisMonday) thisWeek.push(a);
-    else if (monday < thisMonday) before.set(monday, [...(before.get(monday) ?? []), a]);
-  }
-  const earlier = Array.from(before.keys()).sort().reverse().map((monday) => ({
-    monday,
-    week: workoutWeek({
-      week_start: monday,
-      today,
-      assignments: (before.get(monday) ?? []).map((a) => ({
-        day: assignmentDay(a),
-        completed_at: a.completed_at,
-        skipped_at: (a as TrainWorkout).skipped_at,
-      })),
-    }),
-  }));
-  return { rows: thisWeek, week: trainWeek(thisWeek, today), inThis: new Set(thisWeek.map((a) => a.id)), earlier };
-}
-
-/** "Mon 12" (C2_history rows 413-433). */
-function sessionDay(a: Assignment): string {
-  const d = dayStart(assignmentDay(a));
-  return d ? `${DAY_NAMES[(d.getDay() + 6) % 7]} ${d.getDate()}` : '';
-}
-
-/** "Oct 12 to 18", "Sep 28 to Oct 4" (C2_history rows 930-953). */
-function weekSpan(monday: string): string {
-  const from = dayStart(monday);
-  if (!from) return '';
-  const to = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 6);
-  const md = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  return `${md(from)} to ${to.getMonth() === from.getMonth() ? to.getDate() : md(to)}`;
 }
 
 /** Main's line for one prescribed exercise (FIX-928-BW, #197-E10: a body-weight exercise reads "BW prescribed", never "0 lb"). */
@@ -283,46 +179,6 @@ function usePlan(a: Assignment) {
   const exerciseIds = useMemo(() => plan.exercises.map((e) => e.exercise_external_id), [plan]);
   const { names, bodyWeight } = useExerciseNames(exerciseIds);
   return { plan, prescribed: plan.exercises, names, bodyWeight };
-}
-
-/** One session on the THIS WEEK card (C2_history rows 368-817): it opens its workout exactly as main's card does. */
-function WeekSession({ a, state, styles, sc, onPress }: {
-  a: Assignment; state: SegmentState; styles: Styles; sc: SemanticTokens; onPress: () => void;
-}) {
-  const { plan, prescribed, names, bodyWeight } = usePlan(a);
-  const word = state === 'done' ? sc.data.leaf : state === 'missed' ? sc.data.missedOnDark : sc.textOnMastheadMuted;
-  return (
-    <Pressable
-      testID={`week-row-${a.id}`}
-      onPress={onPress}
-      style={({ pressed }) => [styles.weekRow, pressed ? { opacity: 0.85 } : null]}
-      accessibilityRole="button"
-      accessibilityLabel={`Open workout ${plan.name}`}
-    >
-      <View style={styles.weekLine}>
-        <View
-          testID={`week-mark-${state}`}
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
-          style={[styles.mark, state === 'done' ? styles.markDone : state === 'missed' ? styles.markMissed : styles.markPlanned]}
-        >
-          {state === 'done' ? <Ionicons name="checkmark" size={14} color={colors.ink} /> : null}
-        </View>
-        <View style={styles.weekWhat}>
-          <Text style={styles.weekDay}>{sessionDay(a)}</Text>
-          <Text style={styles.weekName}>{plan.name}</Text>
-        </View>
-        <Text style={[styles.weekWord, { color: word }]}>{TRAIN_COPY.day[state]}</Text>
-      </View>
-      {/* Main's exercise lines, kept for every workout the list shows (timedSets196Display reads them on the list). */}
-      {prescribed.map((exercise, index) => (
-        <View key={exercise.order} style={styles.weekLift}>
-          <Text style={styles.weekLiftName}>{names[exercise.exercise_external_id] || `Exercise ${index + 1}`}</Text>
-          <Text style={styles.weekLiftLine}>{prescriptionText(exercise, bodyWeight)}</Text>
-        </View>
-      ))}
-    </Pressable>
-  );
 }
 
 function AssignmentCard({
@@ -399,7 +255,6 @@ function formatScheduled(iso: string): string {
 type Styles = ReturnType<typeof makeStyles>;
 
 function makeStyles(sc: SemanticTokens) {
-  const mark = { width: MARK, height: MARK, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' } as const;
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: sc.bgPrimary },
     // C2_history: the 24 pt gutter (col 48); the top clears the status bar by 12 pt (inline, from the insets).
@@ -407,53 +262,8 @@ function makeStyles(sc: SemanticTokens) {
     eyebrow: { ...typography.eyebrow, color: sc.textMuted },
     // C2_history "EARLIER" (rows 876-899): the eyebrow over its own hairline; the first card follows the rule.
     sectionHead: { ...sectionHead(sc), marginBottom: 0 },
-    // C2_history rows 236-843: deep forest, 16 pt corners (col 50 meets the ground at row 257), 16 pt in (col 80).
-    weekCard: {
-      marginTop: spacing.sm,
-      backgroundColor: sc.surface.masthead,
-      borderRadius: radius.card,
-      paddingHorizontal: spacing.lg,
-      paddingTop: spacing.lg,
-      paddingBottom: spacing.md,
-    },
-    weekHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingBottom: spacing.sm },
-    weekEyebrow: { ...typography.eyebrow, color: sc.textOnMastheadMuted, flex: 1 },
-    weekCount: { ...typography.bodySmall, fontFamily: typography.micro.fontFamily, color: sc.textOnAccent, fontVariant: ['tabular-nums'] },
-    // A 56 pt session row under a 1 pt rule (rules #3B4C40 at rows 368, 480, 592, 704: the forest band on deep).
-    weekRow: { minHeight: layout.rowMinHeight, borderTopWidth: 1, borderTopColor: sc.surface.forestBand },
-    weekLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: layout.rowMinHeight - 1 },
-    // Day and name side by side (cols 145 and 269); under 112 pt left for the name, it goes under the day.
-    weekWhat: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: spacing.md, paddingVertical: spacing.xs },
-    weekDay: { ...typography.body, color: sc.textOnMastheadMuted, minWidth: 52, fontVariant: ['tabular-nums'] },
-    weekName: { ...typography.h4, color: sc.textOnAccent, flexGrow: 1, flexShrink: 1, minWidth: 112 },
-    weekWord: { ...typography.bodySmall, fontFamily: typography.micro.fontFamily },
-    weekLift: { flexDirection: 'row', flexWrap: 'wrap', columnGap: spacing.sm, marginLeft: MARK + spacing.md, paddingBottom: spacing.sm },
-    weekLiftName: { ...typography.bodySmall, color: sc.textOnAccent },
-    weekLiftLine: { ...typography.bodySmall, color: sc.textOnMastheadMuted, fontVariant: ['tabular-nums'] },
-    // The row marks (cols 80-123: 22 pt), from StyleCMarks' on-dark roles.
-    mark,
-    markDone: { backgroundColor: sc.data.leaf },
-    markPlanned: { borderWidth: 1.5, borderColor: sc.data.plannedOnDark },
-    markMissed: { borderWidth: 1.5, borderColor: sc.data.missedOnDark, borderStyle: 'dashed' },
-    // C2_history rows 900-1027: 64 pt per week, the ring, then the span over its line, a hairline under.
-    earlierRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing.lg,
-      minHeight: layout.rowMinHeight + spacing.sm,
-      paddingVertical: spacing.sm,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: sc.border,
-    },
-    earlierCount: { ...typography.bodySmall, fontFamily: typography.micro.fontFamily, color: sc.textPrimary, fontVariant: ['tabular-nums'] },
-    flex: { flex: 1 },
-    // C2_history rows 1434-1469: 18 pt marks, light ground (StyleCMarks' light roles).
-    legend: { flexDirection: 'row', flexWrap: 'wrap', columnGap: spacing.lg, rowGap: spacing.sm, marginTop: spacing.lg },
-    legendItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: layout.touchMin },
-    legendMark: { width: LEGEND_MARK, height: LEGEND_MARK, borderRadius: radius.pill },
-    legendDone: { borderWidth: 4, borderColor: sc.data.forest },
-    legendPlanned: { borderWidth: 1.5, borderColor: sc.data.planned },
-    legendMissed: { borderWidth: 1.5, borderColor: sc.data.missed, borderStyle: 'dashed' },
+    // The kit's QuietRow under the title (FULL-1), clear of it by the section gap.
+    fullProgram: { marginTop: spacing.sm },
     // A C2_history row (rows 900-1027): 12 pt above and below, hairline under; the card has no fill.
     card: {
       minHeight: 44,
@@ -477,11 +287,7 @@ function makeStyles(sc: SemanticTokens) {
     },
     // The card's own 12 pt closes the last row above its hairline.
     lastRow: { paddingBottom: 0 },
-    // C2_first: the serif title over its line, 18 pt under the page title; no rule.
-    empty: { marginTop: layout.sectionPadY, gap: spacing.sm },
+    // The line of R3-W3 in main's state role (workoutWeeks.tsx ListState).
     state: { marginTop: layout.sectionPadY },
   });
 }
-
-const MARK = 22; // C2_history cols 80-123
-const LEGEND_MARK = 18; // C2_history cols 48-83

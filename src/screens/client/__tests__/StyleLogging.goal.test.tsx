@@ -22,9 +22,9 @@ jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate, goBack: mockBack }),
   useRoute: () => ({ params: { routineId: mockRoutineId } }),
 }));
-// REFINE-987: the list now draws this week on its own card (C2_history); these R1 cases pin the R1 cards, so the
-// phone's today is fixed a week after their 13 November rows (they read as an earlier week, on main's two lists).
-jest.mock('../../../utils/date', () => ({ ...jest.requireActual('../../../utils/date'), getTodayString: () => '2026-11-20' }));
+// REFINE-987R3: the list shows this week and the two after (WINDOW-1), on main's cards; the phone's today is the week
+// of these R1 cases' 13 November rows (round 2 had fixed it a week later to keep the rows off its week card).
+jest.mock('../../../utils/date', () => ({ ...jest.requireActual('../../../utils/date'), getTodayString: () => '2026-11-13' }));
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({ colors: require('../wearables/recoveryTestColors').testColors,
     semanticColors: require('../../../theme/tokens').lightTokens }),
@@ -140,7 +140,10 @@ describe.each(DEVICES)('at $name', (device) => {
     expect(name.fontSize).toBe(typography.h4.fontSize);
     const card = flat(view.getByRole('button', { name: 'Open workout Full body A' }));
     expect(card.paddingVertical).toBe(spacing.md);
-    const chevrons = hosts(view.toJSON()).filter((n) => n.type === 'Ionicons' && n.props.name === 'chevron-forward');
+    // REFINE-987R3: the cards' chevrons (the page's "Full program" row draws the kit's own; StyleLogging.r3.weeks C).
+    const cards = view.getAllByRole('button', { name: /^Open workout / });
+    const chevrons = cards.flatMap((c) => hosts(c)).filter((n) => n.type === 'Ionicons' && n.props.name === 'chevron-forward');
+    expect(cards).toHaveLength(2);
     expect(chevrons).toHaveLength(2);
     expect(chevrons[0].props.color).toBe(sc.textPrimary); // cols 718-720 #1A1A18
   });
