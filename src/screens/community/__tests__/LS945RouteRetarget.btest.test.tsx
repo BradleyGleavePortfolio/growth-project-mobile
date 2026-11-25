@@ -1,7 +1,7 @@
 import React from 'react';
 import { FlatList } from 'react-native';
 import { act, render, waitFor } from '@testing-library/react-native';
-import { CommonActions, StackRouter } from '@react-navigation/routers';
+const { CommonActions, StackRouter } = jest.requireActual<typeof import('@react-navigation/native')>('@react-navigation/native');
 
 const mockFlags = { communitySpaceChat: true, communityVoiceNotes: true, communityTab: true, coachCommunity: true };
 jest.mock('../../../config/featureFlags', () => ({ featureFlags: mockFlags }));
