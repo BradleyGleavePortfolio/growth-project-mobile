@@ -1,5 +1,5 @@
 // BEAUTY-930 (agent 197): the Style C day brought to its drawing (C2 Style C C_day, GOAL_MOCKUPS_170). The page keeps the
-// app's bone #F9F4EC (owner #203-E84: the soft warm cream, in place of #197-E6's near-white); the time gutter keeps "12:35 pm" on
+// app's bone #F7EED9 (owner #203-E86: Sunlit sand, in place of #197-E6's near-white); the time gutter keeps "12:35 pm" on
 // one line and grows with the text size; a food saved offline keeps main's dashed mark on the Style C timeline.
 import React from 'react';
 import { StyleSheet, Text, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
@@ -72,10 +72,10 @@ async function show(foodLogs: FoodLog[] = [breakfast, lunch]) {
 beforeEach(() => { jest.clearAllMocks(); mockScale = 1; mockWidth = 390; });
 
 describe('BEAUTY-930: the Style C day at its drawing', () => {
-  it('keeps the app page colour (#F9F4EC) under the timeline, so the page and the screen behind it never show a seam', async () => {
+  it('keeps the app page colour (#F7EED9) under the timeline, so the page and the screen behind it never show a seam', async () => {
     await show();
     expect(flat(screen.getByTestId('food-day-page')).backgroundColor).toBe(palette.bone);
-    expect(palette.bone).toBe('#F9F4EC');
+    expect(palette.bone).toBe('#F7EED9');
   });
 
   it.each([

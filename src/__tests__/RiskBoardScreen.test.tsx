@@ -107,14 +107,14 @@ jest.mock('../hooks/useCurrentUser', () => ({
 jest.mock('../theme/ThemeProvider', () => ({
   useTheme: () => ({
     colors: {
-      background: '#F9F4EC',
+      background: '#F7EED9',
       surface: '#F1E8D5',
       primary: '#2C4A36',
       primaryTint: 'rgba(44,74,54,0.06)',
       textPrimary: '#1A1A18',
       textSecondary: '#3D3D3A',
       textMuted: '#6B675F',
-      textOnPrimary: '#F9F4EC',
+      textOnPrimary: '#F7EED9',
       border: '#B08D57',
       divider: 'rgba(176,141,87,0.2)',
       success: '#2C4A36',

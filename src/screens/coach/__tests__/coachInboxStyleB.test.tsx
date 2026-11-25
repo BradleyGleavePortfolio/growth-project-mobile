@@ -106,7 +106,7 @@ it('sits on the app page (owner #197-E6)', async () => {
   const view = await draw(<MessagesScreen />);
   const bg = StyleSheet.flatten((await view.findByTestId('coach-messages')).props.style).backgroundColor;
   expect(bg).toBe(coachInboxB.page);
-  expect(String(bg).toUpperCase()).toBe('#F9F4EC');
+  expect(String(bg).toUpperCase()).toBe('#F7EED9');
 });
 
 it('the drafts screen says how many wait, counts them by kind, and Back goes back', async () => {

@@ -16,7 +16,7 @@ jest.mock('../theme/useTheme', () => ({
   useTheme: () => ({
     colors: {
       primary: '#2C4A36',
-      background: '#F9F4EC',
+      background: '#F7EED9',
       textPrimary: '#1A1A18',
       textSecondary: '#6B6B6B',
       textOnPrimary: '#FFFFFF',

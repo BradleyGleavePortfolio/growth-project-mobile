@@ -19,7 +19,7 @@ import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 
 const SEMANTIC_COLORS = {
-  bgPrimary: '#F9F4EC',
+  bgPrimary: '#F7EED9',
   bgSurface: '#FFFDF8',
   textPrimary: '#1A1A18',
   textMuted: '#78736E',

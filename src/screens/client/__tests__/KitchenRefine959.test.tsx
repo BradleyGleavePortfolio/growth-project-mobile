@@ -2,7 +2,7 @@
 // frames @ 119dbbef; C2 style-c C_recipe @ a9434a53 where ctx#457 draws no recipe page) on what the earlier rounds left
 // as notes. Each case mounts the real screen (KitchenTitle954's mocks) at iPhone 390 / 100% and 320 x 568 / 130% and
 // checks the drawing's own number, quoted from the frame's CSS beside it. Colours the theme cannot hit exactly are an
-// alpha of an existing token over the paper (bone #F9F4EC, owner #203-E84); each case says how close the drawing allows.
+// alpha of an existing token over the paper (bone #F7EED9, owner #203-E84); each case says how close the drawing allows.
 import React from 'react';
 import { Dimensions, StyleSheet } from 'react-native';
 import { render, waitFor } from '@testing-library/react-native';
@@ -112,7 +112,7 @@ async function mount(Screen: React.ComponentType, state: State, size: Size) {
   return ui;
 }
 
-// A colour as drawn on the paper: hex, or an rgba() laid over #F9F4EC. The frames were drawn on the near-white paper the
+// A colour as drawn on the paper: hex, or an rgba() laid over #F7EED9. The frames were drawn on the near-white paper the
 // app had before owner #203-E84; over the soft warm cream two token recipes land a little further from the frames' hexes,
 // and those cases state their measured distance.
 const PAPER = [0xf9, 0xf4, 0xec];
@@ -219,7 +219,7 @@ it.each(EACH)('D11: the method numerals are gold, at 4.5:1 or better on the pape
   const ui = await mount(RecipeDetailScreen, 'loaded', size);
   const colour = flat(await waitFor(() => ui.getByText('1') as unknown as Host)).color as string;
   expect(colour).toBe(gold[700]);
-  expect(contrast(colour, '#F9F4EC')).toBeGreaterThanOrEqual(4.5);
+  expect(contrast(colour, '#F7EED9')).toBeGreaterThanOrEqual(4.5);
 });
 
 it.each(EACH)('D12: a Recipes row follows the drawn kitchen row (%s)', async (_s, size) => {

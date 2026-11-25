@@ -47,7 +47,7 @@ function contrast(a: string, b: string): number {
 }
 const WORDS = 4.5;
 const MARK = 3;
-const PAGE = lightTokens.bgPrimary; // #F9F4EC, the page under all three surfaces
+const PAGE = lightTokens.bgPrimary; // #F7EED9, the page under all three surfaces
 
 describe('safety gold: the shared file', () => {
   it('is the owner-approved deep gold, byte for byte the file NEEDS-YOU-M ships (m#934)', () => {

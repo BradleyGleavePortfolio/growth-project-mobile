@@ -18,7 +18,7 @@ import { render, fireEvent } from '@testing-library/react-native';
 // `semanticColors` off useTheme(). The forest/bone/ink brand tokens it also
 // uses come from the real ../theme/tokens module (not mocked here).
 const SEMANTIC_COLORS = {
-  bgPrimary: '#F9F4EC',
+  bgPrimary: '#F7EED9',
   bgSurface: '#FFFDF8',
   textPrimary: '#1A1A18',
   textMuted: '#78736E',
