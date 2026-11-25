@@ -134,7 +134,7 @@ describe('Train tab: one forest action and every route kept (TRAIN-TAB-FIN-130)'
     expect(mockNavigate).toHaveBeenLastCalledWith('ExerciseLibrary');
     // B22/B29: no coach, no Coach guidelines (WorkoutScreen.coachless135).
     expect(view.queryByLabelText('Coach guidelines')).toBeNull();
-    expect(view.queryByLabelText('All coach workouts')).toBeNull();
+    expect(view.queryByLabelText('Workout plans')).toBeNull();
   });
 
   it('one pending coach workout leads; completed coach workouts and Quick workout stay one tap away', async () => {
@@ -146,7 +146,7 @@ describe('Train tab: one forest action and every route kept (TRAIN-TAB-FIN-130)'
     await fireEvent.press(view.getByLabelText('Open assigned workout: Upper body A'));
     expect(mockNavigate).toHaveBeenLastCalledWith('MoreTab', { screen: 'WorkoutAssignmentDetail', params: { assignmentId: 'a1' }, initial: false });
     expect(view.getByText('1 completed')).toBeTruthy();
-    await fireEvent.press(view.getByLabelText('All coach workouts'));
+    await fireEvent.press(view.getByLabelText('Workout plans'));
     expect(mockNavigate).toHaveBeenLastCalledWith('MoreTab', { screen: 'ClientWorkoutViewer', initial: false });
     await fireEvent.press(view.getByLabelText('Quick workout'));
     expect(mockNavigate).toHaveBeenLastCalledWith(...QUICK);
@@ -160,7 +160,7 @@ describe('Train tab: one forest action and every route kept (TRAIN-TAB-FIN-130)'
     expect(forestButtons(view)).toEqual(['View 2 coach-assigned workouts']);
     await fireEvent.press(view.getByLabelText('View 2 coach-assigned workouts'));
     expect(mockNavigate).toHaveBeenLastCalledWith('MoreTab', { screen: 'ClientWorkoutViewer', initial: false });
-    expect(view.queryByLabelText('All coach workouts')).toBeNull();
+    expect(view.queryByLabelText('Workout plans')).toBeNull();
   });
 
   it('nothing pending but some completed: Quick workout leads and the completed list stays reachable', async () => {
@@ -169,7 +169,7 @@ describe('Train tab: one forest action and every route kept (TRAIN-TAB-FIN-130)'
     const view = await render(<WorkoutScreen />);
     await waitFor(() => expect(view.getByText('2 completed')).toBeTruthy());
     expect(forestButtons(view)).toEqual(['Quick workout']);
-    await fireEvent.press(view.getByLabelText('All coach workouts'));
+    await fireEvent.press(view.getByLabelText('Workout plans'));
     expect(mockNavigate).toHaveBeenLastCalledWith('MoreTab', { screen: 'ClientWorkoutViewer', initial: false });
   });
 

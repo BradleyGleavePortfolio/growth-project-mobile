@@ -792,7 +792,7 @@ export default function WorkoutScreen() {
               <QuietRow title={assignedTitle} meta="From your coach" label={assignedLabel} onPress={openAssignedList} styles={styles} iconColor={sc.textMuted} />
             ) : null}
             {showAllCoachRow ? (
-              <QuietRow title="All coach workouts" meta={completedAssignments > 0 || !trainV2 ? `${completedAssignments} completed` : `${pendingAssignments.length} workouts waiting`} label="All coach workouts" onPress={() => openInMoreTab('ClientWorkoutViewer')} testID="workout-all-coach-workouts" styles={styles} iconColor={sc.textMuted} />
+              <QuietRow title="Workout plans" meta={completedAssignments > 0 || !trainV2 ? `${completedAssignments} completed` : `${pendingAssignments.length} workouts waiting`} label="Workout plans" onPress={() => openInMoreTab('ClientWorkoutViewer')} testID="workout-all-coach-workouts" styles={styles} iconColor={sc.textMuted} />
             ) : null}
             {quickLeads ? null : (
               <QuietRow title="Quick workout" meta="Start an empty session" label="Quick workout" onPress={startQuickWorkout} testID="workout-quick-start" styles={styles} iconColor={sc.textMuted} />

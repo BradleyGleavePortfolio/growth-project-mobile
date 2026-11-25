@@ -109,6 +109,7 @@ import ClientUpcomingSessionsScreen from '../screens/client/ClientUpcomingSessio
 import PackageCheckoutScreen from '../screens/client/PackageCheckoutScreen';
 import ClientDailyMealPlanScreen from '../screens/client/ClientDailyMealPlanScreen';
 import ClientWorkoutViewerScreen from '../screens/client/ClientWorkoutViewerScreen';
+import YourWeeksScreen from '../screens/client/workouts/YourWeeksScreen';
 import WorkoutAssignmentDetailScreen from '../screens/client/WorkoutAssignmentDetailScreen';
 // Phase 9 — Notification center
 import NotificationCenterScreen from '../screens/notifications/NotificationCenterScreen';
@@ -191,6 +192,7 @@ const ProtectedWorkoutScreen = withProtectedScreen(WorkoutScreen, OWN);
 const ProtectedActiveWorkoutScreen = withProtectedScreen(ActiveWorkoutScreen, OWN);
 const ProtectedWorkoutHistoryEditScreen = withProtectedScreen(WorkoutHistoryEditScreen, OWN);
 const ProtectedClientWorkoutViewerScreen = withProtectedScreen(ClientWorkoutViewerScreen, OWN);
+const ProtectedYourWeeksScreen = withProtectedScreen(YourWeeksScreen, OWN);
 const ProtectedWorkoutAssignmentDetailScreen = withProtectedScreen(WorkoutAssignmentDetailScreen, OWN);
 const ProtectedClientDailyMealPlanScreen = withProtectedScreen(ClientDailyMealPlanScreen, OWN);
 const ProtectedFastingScreen = withProtectedScreen(FastingScreen, OWN);
@@ -353,7 +355,10 @@ export type MoreStackParamList = {
   ClientMacros:        undefined;
   /** `assignmentId`: a delivered meal plan (Deliverables); `date`: a day. */
   ClientDailyMealPlan: { date?: string; assignmentId?: string } | undefined;
-  ClientWorkoutViewer: { assignmentId: string };
+  /** REFINE-987R3: `week`, a Monday, from a Your weeks row (that week's workouts); none, the default window. */
+  ClientWorkoutViewer: { week?: string } | undefined;
+  /** REFINE-987R3: the program a week at a time, from Your workouts' Full program. */
+  YourWeeks: undefined;
   WorkoutAssignmentDetail: { assignmentId: string };
   /** Concierge Phase 1 — scheduling client surfaces. */
   ClientUpcomingSessions:  undefined;
@@ -668,6 +673,7 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
       <MoreStackNav.Screen name="ClientMacros"        component={ProtectedClientMacrosScreen} options={backOnlyHeader('Macro targets', lightTokens.surface.masthead)} />
       <MoreStackNav.Screen name="ClientDailyMealPlan" component={ProtectedClientDailyMealPlanScreen} options={backOnlyHeader('', PLAN_BAND)} />
       <MoreStackNav.Screen name="ClientWorkoutViewer" component={ProtectedClientWorkoutViewerScreen} />
+      <MoreStackNav.Screen name="YourWeeks" component={ProtectedYourWeeksScreen} />
       <MoreStackNav.Screen name="WorkoutAssignmentDetail" component={ProtectedWorkoutAssignmentDetailScreen} />
       {/* Concierge Phase 1 — scheduling client surfaces. The old
           ClientBookingRequest route (no entry point, superseded by the
