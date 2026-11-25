@@ -179,12 +179,20 @@ function SinceLine({ since, sc }: { since: SinceWeek1; sc: SemanticTokens }) {
   );
 }
 
+/**
+ * Whether the history is drawn at all: the server's best with a top set and at least one session. The one test for it
+ * (REFINE-986R2): the component draws nothing without it, and the page's bar reads it to know an animation sits under
+ * a drawn history.
+ */
+export const historyIsDrawn = (h: ExerciseHistory | null | undefined): h is ExerciseHistory & { best: HistoryPoint } =>
+  !!h?.best?.top_set && h.sessions.length > 0;
+
 export function ExerciseHistoryStyleC({ history, bodyWeight }: { history: ExerciseHistory; bodyWeight: boolean }) {
   const { semanticColors: sc } = useTheme();
   const s = useMemo(() => makeStyles(sc), [sc]);
   const italic = useCoachItalic();
-  const best = history.best?.top_set ? history.best : null;
-  if (!best || history.sessions.length === 0) return null;
+  if (!historyIsDrawn(history)) return null;
+  const best = history.best;
   const top = best.top_set as TopSet;
   const star = starRow(history);
   const since = sinceWeek1(history);

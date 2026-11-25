@@ -17,8 +17,9 @@
  * navigator; the screen itself is presentation-agnostic.
  *
  * REFINE-986: the screen sets its own bar as C2_detail draws it (rows 130-161), for every way in: no title and no
- * back label, and the drawn play control at the right only while a demonstration can show (a tap scrolls to it and
- * starts a video). ClientNavigator.tsx keeps the registration as it was.
+ * back label, and the drawn play control at the right only while a press has something to do (a tap scrolls to the
+ * demonstration and starts a video; with an animation, only while the history sits above it). ClientNavigator.tsx
+ * keeps the registration as it was.
  */
 
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -43,7 +44,7 @@ import HapticPressable from '../../components/HapticPressable';
 import type { WorkoutStackParamList } from '../../navigation/ClientNavigator';
 import { sectionHead } from './workouts/workoutStyleC';
 import { exerciseHistoryApi, type ExerciseHistory } from '../../api/exerciseHistoryApi';
-import { ExerciseHistoryStyleC } from './workouts/exerciseHistoryStyleC';
+import { ExerciseHistoryStyleC, historyIsDrawn } from './workouts/exerciseHistoryStyleC';
 import { isBodyWeightEquipment } from '../../utils/workout/bodyWeight';
 
 type Props = NativeStackScreenProps<WorkoutStackParamList, 'ExerciseDetail'>;
@@ -60,11 +61,15 @@ export function metaLine(d: Pick<ExerciseDetail, 'primaryMuscle' | 'category' | 
   return once.map(capital).join(' · ');
 }
 
-/** C2_detail's play triangle (cols 703-726, rows 130-161: 15.5 pt tall) in a 44 pt box at the bar's right. */
-function PlayControl({ onPress, color }: { onPress: () => void; color: string }) {
+/**
+ * C2_detail's play triangle (cols 703-726, rows 130-161: 15.5 pt tall) in a 44 pt box at the bar's right. Its spoken
+ * name says what a press does (REFINE-986R2): a video plays; an animation, already moving, is brought into view.
+ */
+function PlayControl({ onPress, color, kind }: { onPress: () => void; color: string; kind: 'video' | 'animation' }) {
   return (
     <HapticPressable
-      disableAnimation onPress={onPress} accessibilityRole="button" accessibilityLabel="Play demonstration"
+      disableAnimation onPress={onPress} accessibilityRole="button"
+      accessibilityLabel={kind === 'video' ? 'Play demonstration' : 'Show demonstration'}
       testID="exercise-detail-play" style={playBox.box}
     >
       <Ionicons name="play-outline" size={21} color={color} />
@@ -145,12 +150,13 @@ export default function ExerciseDetailScreen({ route, navigation }: Props) {
   useLayoutEffect(() => {
     navigation.setOptions?.({ title: '', headerBackButtonDisplayMode: 'minimal' });
   }, [navigation]);
-  // The play control: only while the player or the animation can show (never a dead tap); a tap scrolls the page to
-  // the demonstration and starts a video. Unset in every other state.
+  // The play control: only while a press has something to do (never a dead tap); a tap scrolls the page to the
+  // demonstration and starts a video. A video always counts. An animation plays by itself, so it counts only while
+  // the history is drawn above it and a press brings it into view (REFINE-986R2; LS-986R2 B1). Unset otherwise.
   const scrollRef = useRef<ScrollView>(null);
   const demoY = useRef(0);
   const demo = !loading && !error && detail && !mediaFailed
-    ? (playbackUrl ? 'video' : detail.gifUrl ? 'animation' : null)
+    ? (playbackUrl ? 'video' : detail.gifUrl && historyIsDrawn(history) ? 'animation' : null)
     : null;
   const play = useRef<() => void>(() => undefined);
   play.current = () => {
@@ -159,7 +165,9 @@ export default function ExerciseDetailScreen({ route, navigation }: Props) {
   };
   useLayoutEffect(() => {
     navigation.setOptions?.({
-      headerRight: demo ? () => <PlayControl onPress={() => play.current()} color={sc.textPrimary} /> : undefined,
+      headerRight: demo
+        ? () => <PlayControl kind={demo} onPress={() => play.current()} color={sc.textPrimary} />
+        : undefined,
     });
   }, [navigation, demo, sc]);
   const onDemoLayout = (e: LayoutChangeEvent) => {
