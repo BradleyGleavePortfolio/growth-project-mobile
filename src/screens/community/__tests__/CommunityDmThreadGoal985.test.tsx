@@ -236,7 +236,7 @@ describe('REFINE-985: what the thread does not draw (KT-3) and every control tha
   const buttons = (view: View) => view.container.queryAll((n) => typeof n.type === 'string' && n.props.accessibilityRole === 'button')
     .map((n) => n.props.accessibilityLabel as string);
 
-  it('m, o, p: no Attach, no voice note mic, no "Type a message…", no "New messages" line, in a thread or an empty one', async () => {
+  it('m, o, p: no Attach, no voice note mic, no "New messages" line, in a thread or an empty one; the box reads "Type a message..." (REFINE-985R3 WORDS-1)', async () => {
     for (const messages of [NAMED, []]) {
       serve({ '/community/me': ME, [COACH_URL]: { id: COACH, name: 'Alex Morgan' }, [msgsUrl(COACH)]: { messages } });
       const view = await open({ recipientId: COACH });
@@ -245,7 +245,7 @@ describe('REFINE-985: what the thread does not draw (KT-3) and every control tha
         expect(view.queryByText(words)).toBeNull();
         expect(view.queryByLabelText(words)).toBeNull();
       }
-      expect(view.getByTestId(FIELD).props.placeholder).toBe('Message');
+      expect(view.getByTestId(FIELD).props.placeholder).toBe('Type a message...');
       await view.unmount();
     }
   });
