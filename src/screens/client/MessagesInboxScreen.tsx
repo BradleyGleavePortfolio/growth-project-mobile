@@ -266,7 +266,7 @@ export default function MessagesInboxScreen({ navigation }: { navigation: Naviga
                     {first ? <Text style={[s.monoText, { color: sc.accent }]}>{first.charAt(0).toUpperCase()}</Text>
                       : <Ionicons name="person-outline" size={24} color={sc.accent} />}
                   </View>
-                  <View style={s.who}>
+                  <View style={s.coachWho}>
                     <Text style={[s.over, { color: gold[200] }]}>Your coach</Text>
                     <Text style={[coachNameStyle, { color: sc.textOnAccent }]}>{first ?? 'Message your coach'}</Text>
                   </View>
@@ -330,7 +330,10 @@ const s = StyleSheet.create({
   pressed: { opacity: 0.85 },
   top: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   who: { flex: 1, gap: 0 },
-  coachWho: { flexGrow: 1, flexShrink: 1, flexBasis: 'auto' },
+  // The coach's monogram-and-name row and its name column: they may shrink and never grow. The phone (Yoga) gives a lone
+  // grow-and-shrink child a basis of 0, so the row would never wrap, and stretches a growing child to the whole row, so
+  // the ring would always wrap. With neither, the ring moves under the name only when the name needs the room.
+  coachWho: { flexShrink: 1, flexBasis: 'auto' },
   shrink: { flexShrink: 1 },
   over: { ...typography.eyebrow, fontFamily: 'Inter_600SemiBold', fontWeight: '600', lineHeight: 14.3, letterSpacing: 1.6 },
   heroTitle: { ...typography.h1, fontFamily: 'CormorantGaramond_500Medium', fontWeight: '500', letterSpacing: 0, marginTop: 4 },
