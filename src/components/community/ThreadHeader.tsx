@@ -36,8 +36,9 @@ export interface ThreadHeaderProps {
    * coach's DM screens pass it; unset, the deep bar draws as before (20 pt). */
   studio?: boolean;
   /** REFINE-985 (Voice B Studio 05b, B-05b-feed-1000_ios.html .mast :20, .mt :22, .mtt :23, .mts :24): a 19 pt title,
-   * 05b's padding and gap, a 13 pt line under the title, and C6CHAT-S-V2 c08's person tile (.mono.sm). Only the client's
-   * DM thread passes it; unset, the bar draws exactly as before. */
+   * 05b's padding and gap, a 13 pt line under the title, and C6CHAT-S-V2 c08's person tile (.mono.sm; REFINE-985R3: its
+   * one letter in a face App.tsx loads, hidden from screen readers, its growth capped). Only the client's DM thread
+   * passes it; unset, the bar draws exactly as before. */
   voiceB?: boolean;
   testID?: string;
 }
@@ -72,8 +73,12 @@ export default function ThreadHeader({
             </Pressable>
           ) : null}
         </View>
-        {initials ? <View style={[styles.tile, voiceB ? styles.voiceBTile : null]} testID={testID ? `${testID}-tile` : undefined}>
-          <Text style={[styles.tileText, voiceB ? styles.voiceBTileText : null]}>{initials}</Text></View> : null}
+        {/* REFINE-985R3 TILE-1 (voiceB only): the name beside the tile is what a screen reader reads, so the tile is
+            hidden from it; its letter grows with the phone's text size to 130% and no further (21 pt to 27.3 pt: the
+            face's widest capital is then 25.1 pt and its line 33.1 pt, inside the tile's 34 pt). */}
+        {initials ? <View style={[styles.tile, voiceB ? styles.voiceBTile : null]} testID={testID ? `${testID}-tile` : undefined}
+          {...(voiceB ? { importantForAccessibility: 'no-hide-descendants' as const, accessibilityElementsHidden: true } : {})}>
+          <Text style={[styles.tileText, voiceB ? styles.voiceBTileText : null]} maxFontSizeMultiplier={voiceB ? 1.3 : undefined}>{initials}</Text></View> : null}
         {subtitle ? (
           <View style={[styles.titles, voiceB ? styles.voiceBTitles : null]}>
             {heading}

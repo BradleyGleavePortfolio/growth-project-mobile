@@ -60,8 +60,10 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
   const coach = useMyCoachName(given === undefined && myCoach ? client?.coach_id : null);
   const participantLabel = given ?? (myCoach ? coach.name ?? 'Coach' : NO_NAME);
   // REFINE-985 (C6CHAT-S-V2 c08's bar): my own coach, once the phone knows the name, gets "Your coach" (SpaceTree.tsx:68)
-  // under it and their initials in c08's tile; while the name is unknown, and for anyone else, no line and no tile.
+  // under it and their initial in c08's tile; while the name is unknown, and for anyone else, no line and no tile.
   const coachLine = given === undefined && myCoach && coach.name ? coach.name : null;
+  // REFINE-985R3 TILE-1: one letter, as c08 draws (the name's first character, whatever its script).
+  const coachLetter = coachLine ? Array.from(initialsOf(coachLine) ?? '')[0] ?? null : null;
   const composerRef = useRef<ComposerInputHandle>(null);
   const me = useCommunityMe();
   const workspaceId = me.data?.workspace_id ?? '';
@@ -138,7 +140,7 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
           voiceB
           title={participantLabel}
           subtitle={coachLine ? 'Your coach' : undefined}
-          initials={coachLine ? initialsOf(coachLine) : null}
+          initials={coachLetter}
           onBack={() => navigation.goBack()}
           trailing={latestFromOther ? (
             <SafetyMenu
