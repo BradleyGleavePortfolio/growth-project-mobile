@@ -13,7 +13,7 @@ import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, Tex
 import NetInfo from '@react-native-community/netinfo';
 import HapticPressable from '../HapticPressable';
 import { useTheme } from '../../theme/ThemeProvider';
-import { radius, spacing, typography, type SemanticTokens } from '../../theme/tokens';
+import { layout, radius, spacing, typography, type SemanticTokens } from '../../theme/tokens';
 import type { MealType } from '../../types';
 import type { DailyMealPlanSlot } from '../../api/mealTemplatesApi';
 import { MEAL_SECTIONS } from '../../utils/log/types';
@@ -88,8 +88,14 @@ function refreshFoodLog() {
 
 type Phase = 'idle' | 'saving' | 'logged' | 'queued' | 'undoing';
 
-/** `planSlotId` (FOODLINK): the coach's plan meal, so the Food tab's checklist ticks that same meal. */
-export default function LogPlannedMealButton({ meal, slot, planSlotId }: { meal: PlannedMeal; slot?: string | null; planSlotId?: string }) {
+/**
+ * `planSlotId` (FOODLINK): the coach's plan meal, so the Food tab's checklist ticks that same meal.
+ * `planned` (GOAL-927-M, RULING 6): today's next meal on the meal plan draws C2 C_day's filled forest button,
+ * "Ate it as planned"; its tap, write, sheet, Undo and accessibility label are the link's.
+ */
+export default function LogPlannedMealButton({ meal, slot, planSlotId, planned }: {
+  meal: PlannedMeal; slot?: string | null; planSlotId?: string; planned?: boolean;
+}) {
   const { semanticColors: sc } = useTheme();
   const styles = useMemo(() => makeStyles(sc), [sc]);
   const name = meal.name.trim();
@@ -188,8 +194,8 @@ export default function LogPlannedMealButton({ meal, slot, planSlotId }: { meal:
         </Text>
       ) : (
         <HapticPressable onPress={onPress} disabled={busy} accessibilityRole="button"
-          accessibilityLabel={`Log this meal: ${name}`} accessibilityState={{ disabled: busy, busy }} style={styles.action}>
-          <Text style={styles.link}>{phase === 'saving' ? 'Saving…' : 'Log this meal'}</Text>
+          accessibilityLabel={`Log this meal: ${name}`} accessibilityState={{ disabled: busy, busy }} style={planned ? styles.planned : styles.action}>
+          <Text style={planned ? styles.plannedText : styles.link}>{phase === 'saving' ? 'Saving…' : planned ? 'Ate it as planned' : 'Log this meal'}</Text>
         </HapticPressable>
       )}
       {note && !sheet ? <Text style={styles.muted} accessibilityLiveRegion="polite">{note}</Text> : null}
@@ -245,6 +251,15 @@ function makeStyles(sc: SemanticTokens) {
     row: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.md },
     action: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
     link: { ...typography.bodySmall, fontFamily: 'Inter_500Medium', color: sc.accentText },
+    // C2 C_day .c-next .btn: filled forest, 54 pt, radius 12, Inter 600 14, 10 pt under the meal's foods.
+    planned: {
+      minHeight: layout.buttonHeight, borderRadius: radius.button, backgroundColor: sc.accent, alignItems: 'center',
+      justifyContent: 'center', alignSelf: 'stretch', paddingHorizontal: spacing.lg, marginTop: 10,
+    },
+    plannedText: {
+      ...typography.bodyMd, fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 14, lineHeight: 18, letterSpacing: 0.2,
+      color: sc.textOnAccent, textAlign: 'center',
+    },
     muted: { ...typography.bodySmall, color: sc.textMuted },
     overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: sc.overlay },
     sheet: {
