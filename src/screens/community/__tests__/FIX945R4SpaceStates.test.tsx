@@ -358,11 +358,12 @@ describe('FIX-945R4 B1 (LS-945 B1): a push or a link into the chat already on sc
     expect(r.queryByTestId('space-info-sheet')).toBeNull();
   });
 
-  it('(f) the record sheet open in one space, then a push into another: it closes; nothing is aimed at the other space', async () => {
+  it('(f) the record sheet open in one space, then a push into another kept from earlier: it closes; nothing is aimed at the other space', async () => {
     const r = await open();
     await r.findByTestId('space-chat-row-a3');
     await fireEvent.press(await r.findByTestId('space-chat-mic'));
     expect((await r.findByTestId('voice-sheet')).props.children).toBe('Running');
+    client.setQueryData(['community', 'space-chat', 'me-1', 'c-b'], { pages: [{ messages: spaces['c-b'].page, next_before: null }], pageParams: [null] });
     await retarget(r, { cohortId: 'c-b' });
     await r.findByTestId('space-chat-row-b4');
     await r.findByTestId('space-chat-composer-field');
