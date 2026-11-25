@@ -51,7 +51,7 @@ export default function YourWeeksScreen() {
 
   const openWorkout = (a: Assignment) => navigation.navigate('WorkoutAssignmentDetail', { assignmentId: a.id });
   // WINDOW-1: a week row opens Your workouts for that one week (a new page above this one).
-  const openWeek = (monday: string) => navigation.navigate('ClientWorkoutViewer', { week: monday });
+  const openWeek = (_monday: string) => undefined;
 
   return (
     <ScrollView
