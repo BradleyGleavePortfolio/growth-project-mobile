@@ -195,19 +195,22 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
   useEffect(() => { if (!placed && (target === null || (!!target && seen.has(target)))) setPlaced(true); }, [placed, target, seen]);
 
   // The pill: someone else posts while the row that was newest is off screen; it goes once the newest row is seen.
+  // FIX-945R4 (LS-945 B3, LO-945 C1): a closed space has none and nothing lights it; open again, it starts as on a fresh open.
   const [pill, setPill] = useState(false);
   const newest = chat.messages.find(live);
   const prevNewest = useRef<{ id: string; at: string } | undefined>(undefined);
   useEffect(() => {
+    if (chat.noAccess) { prevNewest.current = undefined; setPill(false); return; }
     if (!newest || newest.id === prevNewest.current?.id) return;
     const prev = prevNewest.current;
     prevNewest.current = { id: newest.id, at: newest.created_at };
     // Only a newer row: a removal that leaves an older row newest is not a new message.
     if (prev !== undefined && newest.created_at > prev.at && !seen.has(prev.id) && newest.sender_user_id !== client?.id) setPill(true);
-  }, [newest, seen, client?.id]);
+  }, [newest, seen, client?.id, chat.noAccess]);
   useEffect(() => { if (newest && seen.has(newest.id)) setPill(false); }, [newest, seen]);
-  // Read up to the newest row actually on screen; a failed mark is tried again with the next one seen.
-  const newestSeen = placed && focused ? chat.messages.find((m) => live(m) && seen.has(m.id)) : undefined;
+  // Read up to the newest row actually on screen; a failed mark is tried again with the next one seen. None while the
+  // space is closed (FIX-945R4, LS-945 B3).
+  const newestSeen = placed && focused && !chat.noAccess ? chat.messages.find((m) => live(m) && seen.has(m.id)) : undefined;
   const marked = useRef('');
   useEffect(() => {
     if (!newestSeen || newestSeen.created_at <= (marked.current || chat.readCursor?.last_read_at || '')) return;
@@ -436,7 +439,7 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
             testID="space-chat-list"
           />
         )}
-        {pill && chat.readCursor ? (
+        {pill && chat.readCursor && !chat.noAccess ? (
           <TouchableOpacity
             onPress={() => { listRef.current?.scrollToOffset({ offset: 0, animated: true }); setPill(false); }}
             accessibilityRole="button" accessibilityLabel="New messages" style={s.pill} testID="space-chat-pill"
