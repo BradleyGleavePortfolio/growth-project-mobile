@@ -112,7 +112,14 @@ beforeEach(() => {
 afterEach(() => require('@react-native-community/netinfo').__reset());
 
 it('is off by default, and off Programs has no Meal plans', async () => {
-  expect(jest.requireActual('../../../../config/featureFlags').featureFlags.mealPlansV2).toBe(false);
+  // ALL-ON-GREEN-M: reads the shipped default with EXPO_PUBLIC_FF_MEAL_PLANS_V2 unset, whatever the run's env holds.
+  const saved = process.env.EXPO_PUBLIC_FF_MEAL_PLANS_V2;
+  delete process.env.EXPO_PUBLIC_FF_MEAL_PLANS_V2;
+  try {
+    jest.isolateModules(() => expect(jest.requireActual('../../../../config/featureFlags').featureFlags.mealPlansV2).toBe(false));
+  } finally {
+    if (saved !== undefined) process.env.EXPO_PUBLIC_FF_MEAL_PLANS_V2 = saved;
+  }
   mockFlag = false;
   const s = await mount(<ProgramsLibraryScreen />);
   expect(s.queryByTestId('programs-tab-plans')).toBeNull();
