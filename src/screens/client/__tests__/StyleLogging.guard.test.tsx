@@ -3,6 +3,9 @@
  * take every colour from the theme (no hex, rgb or rgba literal in code; comments are skipped, so a ruling id such as
  * "#197-E10" in a comment is not a colour), never clip or shrink text that can grow with the phone's text size, and
  * keep every pressable at a 44 pt floor at 320 pt with long names (the shape of StyleWorkouts.guard.test.tsx).
+ * REFINE-987R3: Your weeks and its helper file join the files read; the phone's today is pinned inside the fixture's
+ * week (LS-987R2 C5), with a second workout in an earlier week, so the list draws main's card and Your weeks draws its
+ * week card and an Earlier row.
  */
 import React from 'react';
 import * as fs from 'fs';
@@ -17,18 +20,22 @@ jest.mock('@react-navigation/native', () => ({
   useNavigation: () => mockNavigation,
   useRoute: () => ({ params: { routineId: 'routine' } }),
 }));
+jest.mock('../../../utils/date', () => ({ ...jest.requireActual('../../../utils/date'), getTodayString: () => '2026-11-13' }));
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({ colors: require('../wearables/recoveryTestColors').testColors,
     semanticColors: require('../../../theme/tokens').lightTokens }),
 }));
+const mockWorkout = (id: string, day: string) => ({
+  id, workout_plan_id: 'plan', client_id: 'client', assigned_by_coach_id: 'coach',
+  scheduled_for: `${day}T12:00:00Z`, completed_at: null, post_rpe: null, post_notes: null,
+  workout_plan: { id: 'plan', coach_id: 'coach', name: LONG, type: 'strength', duration_estimate_minutes: 55,
+    created_at: '', updated_at: '', archived_at: null, exercises: [{ id: 'r1', workout_plan_id: 'plan',
+      exercise_external_id: 'long', order: 1, sets: 3, reps_or_duration_seconds: 8, weight_lbs: 135, rest_seconds: 90,
+      superset_group_id: null, notes: null }] } });
+// This week (Mon 9 to Sun 15 November) and an earlier week.
+const mockWorkouts = [mockWorkout('a-1', '2026-11-13'), mockWorkout('a-0', '2026-11-03')];
 jest.mock('../../../hooks/useWorkoutBuilder', () => ({
-  useMyWorkoutAssignments: () => ({ isLoading: false, isError: false, isRefetching: false, refetch: jest.fn(), data: [{
-    id: 'a-1', workout_plan_id: 'plan', client_id: 'client', assigned_by_coach_id: 'coach',
-    scheduled_for: '2026-11-13T12:00:00Z', completed_at: null, post_rpe: null, post_notes: null,
-    workout_plan: { id: 'plan', coach_id: 'coach', name: LONG, type: 'strength', duration_estimate_minutes: 55,
-      created_at: '', updated_at: '', archived_at: null, exercises: [{ id: 'r1', workout_plan_id: 'plan',
-        exercise_external_id: 'long', order: 1, sets: 3, reps_or_duration_seconds: 8, weight_lbs: 135, rest_seconds: 90,
-        superset_group_id: null, notes: null }] } }] }),
+  useMyWorkoutAssignments: () => ({ isLoading: false, isError: false, isRefetching: false, refetch: jest.fn(), data: mockWorkouts }),
 }));
 jest.mock('../../../hooks/useExerciseNames', () => ({ useExerciseNames: () => ({ names: { long: LONG }, loading: false }) }));
 const mockRoutines = [{ id: 'routine', name: LONG, exercises: [{ exercise_id: 'long', exercise_name: LONG,
@@ -50,6 +57,7 @@ jest.mock('../../../hooks/usePrograms', () => ({
 }));
 
 import ClientWorkoutViewerScreen from '../ClientWorkoutViewerScreen';
+import YourWeeksScreen from '../workouts/YourWeeksScreen';
 import RoutineBuilderScreen from '../RoutineBuilderScreen';
 import ProgramAssignScreen from '../../coach/programs/ProgramAssignScreen';
 
@@ -57,8 +65,9 @@ const SCREENS = [
   path.join(__dirname, '../ClientWorkoutViewerScreen.tsx'),
   path.join(__dirname, '../RoutineBuilderScreen.tsx'),
   path.join(__dirname, '../../coach/programs/ProgramAssignScreen.tsx'),
+  path.join(__dirname, '../workouts/YourWeeksScreen.tsx'),
 ];
-const PARTS = [path.join(__dirname, '../../coach/programs/programAssignStyleC.tsx')];
+const PARTS = [path.join(__dirname, '../../coach/programs/programAssignStyleC.tsx'), path.join(__dirname, '../workouts/workoutWeeks.tsx')];
 const files = () => [...SCREENS, ...PARTS.filter((f) => fs.existsSync(f))];
 /** Code only: block and line comments removed (a "//" inside a string literal is not a comment here). */
 const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"])\/\/.*$/gm, '$1');
@@ -115,7 +124,19 @@ it('no line clamp, shrink-to-fit or fixed text size in the three screens or a pa
 
 it('the list of workouts at 320 pt: a long name stays whole and every pressable keeps a 44 pt floor', async () => {
   const view = await mount(<ClientWorkoutViewerScreen />);
+  // This week's workout on main's card (its name and its exercise row); the earlier one is on Your weeks only.
+  expect(view.getAllByRole('button', { name: `Open workout ${LONG}` })).toHaveLength(1);
   expect(view.getAllByText(LONG).length).toBe(2);
+  expect(view.getByRole('button', { name: 'Full program' })).toBeTruthy();
+  expect(textProblems(view.toJSON())).toEqual([]);
+  expect(smallActions(view.toJSON())).toEqual([]);
+});
+
+it('Your weeks at 320 pt: the week card with a long name and an Earlier row; nothing clipped, every pressable at 44 pt', async () => {
+  const view = await mount(<YourWeeksScreen />);
+  expect(view.getByTestId('week-card')).toBeTruthy();
+  expect(view.getAllByText(LONG)).toHaveLength(1);
+  expect(view.getByTestId('earlier-2026-11-02')).toBeTruthy();
   expect(textProblems(view.toJSON())).toEqual([]);
   expect(smallActions(view.toJSON())).toEqual([]);
 });
