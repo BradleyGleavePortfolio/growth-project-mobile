@@ -37,7 +37,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useIsFocused, useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTheme, type ThemeColors } from '../../theme/ThemeProvider';
-import { coachInboxB as B, typography, radius, spacing } from '../../theme/tokens';
+import { coachInboxB as B, forestPop, layout, typography, radius, spacing } from '../../theme/tokens';
+import { ForestStatusBar } from '../../components/StatusBarBand';
 import ErrorBoundary from '../../components/ErrorBoundary';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
@@ -62,6 +63,7 @@ import { readStateOf, romanDraftsCount } from './romanDraftsCount';
 import { checkInDraftOf, type CheckInDraft } from './checkInDrafts';
 import { CheckInDraftCard } from './CheckInDraftCard';
 import { CheckInDraftSheet } from './client-detail/CheckInDraftSheet';
+import { RomanMark } from './home-v11/RomanMark';
 
 /** Roles allowed to see + decide AI drafts. Mirrors backend
  *  `@Roles('coach', 'owner')` on the gateway list/decide endpoints. */
@@ -156,38 +158,48 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
   // DRAFTS-COUNT-M: from the one count, as coach Home and the Messages card count it (the read is off with the switch off).
   const ready = romanDraftsCount(allRows, readStateOf(query), { n: path.data?.length, state: readStateOf(path) }).waiting;
   const bare = renderable.length === 0 && !query.isLoading && !path.isLoading && !hasPath && !pathFailed;
-  // LS-952 B1, LO-952 B1: the header and kind tiles scroll with the cards (a 320 pt screen at 130% text keeps room for
-  // them). The screen keeps insets.top so a scrolled card stops below the clock; the header adds 8 as before.
+  // ROUND-989 (owner #203-E74; ctx#503 B-list frame, CD-68, CD-69, CD-72): the deep head (Back, Roman's mark, "Roman"
+  // and its line), then on the page the queue line from the one count and, with a Stream 2 kind, the tiles. LS-952 B1,
+  // LO-952 B1: all of it scrolls with the cards (a 320 pt screen at 130% text keeps room for them). The status band is
+  // the head's deep while the list is focused (ForestStatusBar, as the client file), and the screen keeps insets.top, so
+  // a scrolled card stops below the clock. The frame's Chat and Drafts labels are not drawn (v1.1, #203-E81).
   const header = (
-    <View style={[styles.header, bare && styles.headerSides]}>
-      {navigation.canGoBack() ? (
-        <Pressable onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Back" hitSlop={8} style={styles.back}>
-          <Ionicons name="chevron-back" size={26} color={B.ink} />
-        </Pressable>
-      ) : null}
-      <Text style={ready > 0 ? styles.eyebrow : styles.headerTitle}>Pending AI drafts</Text>
-      {ready > 0 ? (
-        <Text style={styles.headerTitle} maxFontSizeMultiplier={1.3}>{`Roman has ${ready} ${ready === 1 ? 'draft' : 'drafts'} ready`}</Text>
-      ) : null}
-      <Text style={styles.headerSubtitle}>
-        Review what the AI proposed before it reaches your clients.
-      </Text>
-      {kinds.kinds.length > 0 ? (
-        <View style={styles.kindRow} testID="pending-ai-drafts-kinds">
-          {kinds.kinds.map((k) => (
-            <View key={k.label} style={styles.kindTile} accessible accessibilityLabel={`${k.count} ${k.label}`}>
-              <Text style={styles.kindCount} maxFontSizeMultiplier={1.3}>{k.count}</Text>
-              <Text style={styles.kindLabel}>{k.label}</Text>
-            </View>
-          ))}
+    <>
+      <View style={[styles.head, !bare && styles.headBleed]} testID="pending-ai-drafts-head">
+        <View style={styles.bar}>
+          {navigation.canGoBack() ? (
+            <Pressable onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Back" hitSlop={8} style={styles.back} testID="pending-ai-drafts-back">
+              <Ionicons name="chevron-back" size={26} color={forestPop.onDeep} />
+            </Pressable>
+          ) : null}
+          <View style={styles.grow} />
+          <RomanMark size={24} r={14} testID="pending-ai-drafts-mark" />
         </View>
-      ) : null}
-    </View>
+        <Text style={styles.title} accessibilityRole="header" maxFontSizeMultiplier={1.3}>Roman</Text>
+        <Text style={styles.line}>Your drafts, ready when you are.</Text>
+      </View>
+      <View style={[styles.queueBlock, bare && styles.headerSides]}>
+        {ready > 0 ? (
+          <Text style={styles.queue} testID="pending-ai-drafts-queue">{`${ready} ${ready === 1 ? 'draft' : 'drafts'} to review`}</Text>
+        ) : null}
+        {kinds.kinds.length > 0 ? (
+          <View style={styles.kindRow} testID="pending-ai-drafts-kinds">
+            {kinds.kinds.map((k) => (
+              <View key={k.label} style={styles.kindTile} accessible accessibilityLabel={`${k.count} ${k.label}`}>
+                <Text style={styles.kindCount} maxFontSizeMultiplier={1.3}>{k.count}</Text>
+                <Text style={styles.kindLabel}>{k.label}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+      </View>
+    </>
   );
 
   return (
     <ErrorBoundary>
       <View style={[styles.root, { paddingTop: insets.top }]} testID="pending-ai-drafts-screen">
+        <ForestStatusBar />
         <FlatList
           data={renderable}
           // The Copilot editors' number pad has no Done key: lift content over it, first tap lands, drag dismisses.
@@ -398,12 +410,18 @@ function makeStyles() {
   return StyleSheet.create({
     // K2 Style B (owner #196-D10): the drawn tiles and cards on the app page (owner #197-E6), colours from coachInboxB.
     root: { flex: 1, backgroundColor: B.page },
-    header: { paddingTop: 8, paddingBottom: 16, gap: 6 },
+    // ROUND-989: the B-list frame's head, NeedsYouList's deep masthead (forestPop.deep, radius.sheet bottom corners),
+    // edge to edge over the list's gutter; the frame's queue line in the page's small muted type.
+    head: { backgroundColor: forestPop.deep, paddingHorizontal: layout.gutter, paddingBottom: spacing.xl, borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet },
+    headBleed: { marginHorizontal: -layout.gutter },
+    bar: { flexDirection: 'row', alignItems: 'center', minHeight: layout.touchMin },
+    grow: { flex: 1 },
+    title: { ...typography.h1, color: forestPop.onDeep, marginTop: spacing.sm },
+    line: { ...typography.bodySmall, color: forestPop.onDeepMuted, marginTop: spacing.md },
+    queueBlock: { paddingTop: spacing.lg, paddingBottom: spacing.md },
+    queue: { ...typography.bodySmall, color: B.muted },
     headerSides: { paddingHorizontal: 24 },
     back: { width: 44, height: 44, marginLeft: -10, alignItems: 'center', justifyContent: 'center' },
-    eyebrow: { fontFamily: 'Inter_600SemiBold', fontSize: 13, lineHeight: 18, fontWeight: '600', letterSpacing: 1.6, textTransform: 'uppercase', color: B.muted },
-    headerTitle: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 34, lineHeight: 43, fontWeight: '400', fontVariant: ['lining-nums'], color: B.ink },
-    headerSubtitle: { ...typography.body, color: B.muted },
     kindRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 10 },
     kindTile: { flexGrow: 1, flexShrink: 0, backgroundColor: B.tile, borderRadius: radius.card, paddingVertical: 14, paddingHorizontal: 14, gap: 2 },
     kindCount: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 38, lineHeight: 48, fontVariant: ['lining-nums'], color: B.deep },
