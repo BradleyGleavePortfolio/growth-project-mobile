@@ -29,7 +29,7 @@ export function dayOf(a: Assignment): string {
 }
 
 /** Monday (YYYY-MM-DD) of a readable day, by the Train tab's own week rule. */
-export const mondayOf = (day: string) => trainWeek([], day).week;
+export const mondayOf = (day: string) => new Date(Date.parse(day) - new Date(Date.parse(day)).getUTCDay() * DAY).toISOString().slice(0, 10);
 
 /** The route's week: a real Monday, else null (the page shows the default window). */
 export function weekParam(value: unknown): string | null {
