@@ -30,11 +30,12 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { exerciseCatalogApi } from '../../api/exerciseCatalog';
 import type { ExerciseDetail } from '../../types/exerciseCatalog';
-import { radius, spacing, typography } from '../../theme/tokens';
+import { layout, radius, spacing, typography } from '../../theme/tokens';
 import type { SemanticTokens } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import HapticPressable from '../../components/HapticPressable';
 import type { WorkoutStackParamList } from '../../navigation/ClientNavigator';
+import { sectionHead } from './workouts/workoutStyleC';
 
 type Props = NativeStackScreenProps<WorkoutStackParamList, 'ExerciseDetail'>;
 
@@ -162,31 +163,33 @@ export default function ExerciseDetailScreen({ route }: Props) {
       )}
 
       {detail.primaryMuscle || detail.secondaryMuscles.length > 0 ? (
-        <View style={styles.facetBlock}>
-          <Text style={styles.facetLabel}>MUSCLES</Text>
+        <View>
+          <Text style={styles.sectionHead}>MUSCLES</Text>
           {detail.primaryMuscle ? <Text style={styles.facetValue}>{detail.primaryMuscle}</Text> : null}
           {detail.secondaryMuscles.length > 0 ? (
-            <Text style={styles.meta}>Also works: {detail.secondaryMuscles.join(', ')}</Text>
+            <Text style={styles.alsoWorks}>Also works: {detail.secondaryMuscles.join(', ')}</Text>
           ) : null}
         </View>
       ) : null}
 
       {detail.equipment.length > 0 ? (
-        <View style={styles.facetBlock}>
-          <Text style={styles.facetLabel}>EQUIPMENT</Text>
+        <View>
+          <Text style={styles.sectionHead}>EQUIPMENT</Text>
           <Text style={styles.facetValue}>{detail.equipment.join(', ')}</Text>
         </View>
       ) : null}
 
       {detail.instructions.length > 0 ? (
-        <View style={styles.instructionsBlock}>
-          <Text style={styles.facetLabel}>HOW TO</Text>
-          {detail.instructions.map((step, i) => (
-            <View key={`${i}-${step.slice(0, 16)}`} style={styles.stepRow}>
-              <Text style={styles.stepIndex}>{i + 1}.</Text>
-              <Text style={styles.stepText}>{step}</Text>
-            </View>
-          ))}
+        <View>
+          <Text style={styles.sectionHead}>HOW TO</Text>
+          <View style={styles.steps}>
+            {detail.instructions.map((step, i) => (
+              <View key={`${i}-${step.slice(0, 16)}`} style={styles.stepRow}>
+                <Text style={styles.stepIndex}>{i + 1}.</Text>
+                <Text style={styles.stepText}>{step}</Text>
+              </View>
+            ))}
+          </View>
         </View>
       ) : null}
     </ScrollView>
@@ -199,8 +202,10 @@ function makeStyles(sc: SemanticTokens) {
       flex: 1,
       backgroundColor: sc.bgPrimary,
     },
+    // C2_detail (STYLE-WORKOUTS-M): the title and every section start at col 48 of the 2x frame, a 24 pt gutter.
     scrollContent: {
-      padding: spacing.lg,
+      paddingHorizontal: layout.gutter,
+      paddingTop: spacing.lg,
       paddingBottom: spacing['3xl'],
     },
     center: {
@@ -226,39 +231,33 @@ function makeStyles(sc: SemanticTokens) {
       backgroundColor: sc.bgPrimary,
       borderRadius: radius.lg,
       overflow: 'hidden',
-      marginBottom: spacing.lg,
     },
+    // The demonstration's caption; the next section's own rule follows it (C2_detail rows 868-891).
     noVideo: {
       width: '100%',
-      paddingVertical: spacing.lg,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderColor: sc.border,
-      marginBottom: spacing.lg,
+      paddingVertical: spacing.md,
     },
     noVideoText: {
       ...typography.bodySmall,
       color: sc.textMuted,
     },
-    facetBlock: {
-      paddingVertical: spacing.lg,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: sc.border,
-    },
-    facetLabel: {
-      ...typography.eyebrow,
+    // Inside a section the second line follows the value; the next section's 18 pt is the only gap after it.
+    alsoWorks: {
+      ...typography.bodySmall,
       color: sc.textMuted,
-      marginBottom: spacing.xs,
+      marginTop: spacing.xs,
     },
+    // MUSCLES, EQUIPMENT and HOW TO in C2_detail's "YOUR HISTORY" look: eyebrow over its own hairline.
+    sectionHead: sectionHead(sc),
     facetValue: {
       ...typography.body,
       color: sc.textPrimary,
     },
-    instructionsBlock: {
-      marginTop: spacing.xl,
+    steps: {
+      gap: spacing.md,
     },
     stepRow: {
       flexDirection: 'row',
-      marginTop: spacing.md,
     },
     stepIndex: {
       ...typography.bodyMd,

@@ -27,7 +27,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { loadActiveWorkoutSession } from '../../storage/activeWorkoutSession';
 import { useExerciseNames } from '../../hooks/useExerciseNames';
 import { formatPlanType } from '../../utils/workout/formatPlanType';
-import { layout, spacing, typography } from '../../theme/tokens';
+import { layout, radius, spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import {
   buildActiveWorkoutExercises,
@@ -35,6 +35,8 @@ import {
 } from '../../utils/workout/buildActiveWorkout';
 import { assignmentPrescription } from '../../utils/workout/assignmentPrescription';
 import { countWord } from '../../utils/workout/exerciseUnit';
+import { blocksOf, TRAIN_COPY } from './train/TrainToday';
+import { sectionHead, useCoachItalic, wsc } from './workouts/workoutStyleC';
 
 type RouteParams = {
   WorkoutAssignmentDetail: { assignmentId: string };
@@ -97,6 +99,10 @@ export default function WorkoutAssignmentDetailScreen() {
   // into the live workout and its saved history. A failed or offline
   // lookup does not block Start; it keeps the prettified fallback.
   const { names: exerciseNames, loading: namesLoading } = useExerciseNames(exerciseIds);
+  // C2_today and TrainDay draw one lettered block per contiguous superset.
+  // The inner exercise views retain their ids, prescriptions and coach notes.
+  const blocks = useMemo(() => blocksOf(prescription?.exercises ?? []), [prescription]);
+  const italic = useCoachItalic();
   const nameFor = useCallback(
     (externalId: string) =>
       exerciseNames[externalId] || prettifyExerciseName(externalId) || 'Exercise',
@@ -163,8 +169,8 @@ export default function WorkoutAssignmentDetailScreen() {
   const isCompleted = !!data.completed_at;
   const actionLabel = canResume ? 'Resume workout' : 'Start workout';
 
-  // REDO-LIVE-133 (reference: clientfile-workouts): overline, serif title,
-  // numbered hairline rows, and the one forest action pinned at the bottom.
+  // REDO-LIVE-133, restyled to C1 Style C v2 (STYLE-WORKOUTS-M, C2_today and C2_adjusted): overline, serif title,
+  // lettered hairline rows, a coach-changed row on sage, and the one forest action pinned at the bottom.
   return (
     <Screen
       edges={['top']}
@@ -204,42 +210,67 @@ export default function WorkoutAssignmentDetailScreen() {
         </View>
       ) : null}
 
-      <View style={[styles.list, { borderTopColor: sc.border }]}>
-        <Overline style={styles.listOverline}>Exercises</Overline>
-        {sorted.map((ex, i) => (
-          // TOUR-133: the tour's first-exercise beat spotlights the first row.
-          // Keyed by `order`: frozen rows have no database id.
-          <TutorialTarget key={ex.order} id={i === 0 ? 'first-exercise' : undefined}>
-          <View style={[styles.exerciseRow, { borderBottomColor: sc.border }]} testID={`assignment-row-${ex.order}`}>
-            <Text style={[styles.index, { color: sc.textMuted }]} accessible={false} importantForAccessibility="no">
-              {ex.order}
-            </Text>
-            <View style={styles.exerciseText}>
-              <Text style={[typography.h3, { color: sc.textPrimary }]}>
-                {nameFor(ex.exercise_external_id)}
+      <View>
+        <Overline style={[sectionHead(sc), styles.listOverline]}>Exercises</Overline>
+        {blocks.map((block, i) => {
+          const superset = block.rows.length > 1;
+          return (
+          // TOUR-133: the tour's first-exercise beat spotlights block A.
+          <TutorialTarget key={block.letter} id={i === 0 ? 'first-exercise' : undefined}>
+          <View testID={`assignment-block-${block.letter}`} style={[styles.exerciseRow, { borderBottomColor: sc.border }]}>
+            {/* The block letter in the moss chip; decorative for screen readers, as the numeral was. */}
+            <View style={[styles.letter, { borderColor: sc.data.moss }]}>
+              <Text maxFontSizeMultiplier={1.15} style={[typography.h3, { color: sc.textPrimary }]} accessible={false} importantForAccessibility="no">
+                {block.letter}
               </Text>
-              <Text style={[typography.bodySmall, styles.tabular, { color: sc.textMuted }]}>
-                {ex.sets} sets × {ex.reps_or_duration_seconds} {countWord(ex)}
-                {ex.weight_lbs ? ` · ${ex.weight_lbs} lb` : ''}
-                {ex.rest_seconds ? ` · ${ex.rest_seconds}s rest` : ''}
-              </Text>
-              {plan.adjustedOrders.has(ex.order) ? (
-                <Text
-                  style={[typography.bodySmall, { color: sc.accentText, marginTop: 2 }]}
-                  testID={`assignment-adjusted-${ex.order}`}
-                >
-                  Updated by your coach
-                </Text>
+            </View>
+            <View style={[styles.exerciseText, superset && styles.supersetText]}>
+              {superset ? (
+                <View style={styles.prescription}>
+                  <Text style={[typography.h4, { color: sc.textPrimary }]}>
+                    {block.rows.map((ex) => nameFor(ex.exercise_external_id)).join(' + ')}
+                  </Text>
+                  <Text style={[typography.bodySmall, styles.tabular, { color: sc.textMuted }]}>
+                    {TRAIN_COPY.superset} · {TRAIN_COPY.rounds(Math.max(...block.rows.map((ex) => ex.sets)))}
+                  </Text>
+                </View>
               ) : null}
-              {ex.notes ? (
-                <Text style={[typography.bodySmall, { color: sc.textMuted, marginTop: 2 }]}>
-                  {ex.notes}
-                </Text>
-              ) : null}
+              {block.rows.map((ex, rowIndex) => {
+                const changed = plan.adjustedOrders.has(ex.order);
+                return (
+                  <View key={`${ex.order}-${rowIndex}`} testID={`assignment-row-${ex.order}`}
+                    style={[styles.prescription,
+                      changed && [styles.changed, { backgroundColor: sc.surface.sage, borderLeftColor: sc.data.forest }]]}>
+                    <Text style={[superset ? typography.bodySmall : typography.h4,
+                      superset && styles.innerName, { color: sc.textPrimary }]}>
+                      {nameFor(ex.exercise_external_id)}
+                    </Text>
+                    <Text style={[typography.bodySmall, styles.tabular, { color: sc.textMuted }]}>
+                      {ex.sets} sets × {ex.reps_or_duration_seconds} {countWord(ex)}
+                      {ex.weight_lbs ? ` · ${ex.weight_lbs} lb` : ''}
+                      {ex.rest_seconds ? ` · ${ex.rest_seconds}s rest` : ''}
+                    </Text>
+                    {changed ? (
+                      <Text
+                        style={[typography.bodySmall, styles.mark, { color: sc.accentText }]}
+                        testID={`assignment-adjusted-${ex.order}`}
+                      >
+                        Updated by your coach
+                      </Text>
+                    ) : null}
+                    {ex.notes ? (
+                      <Text style={[typography.h3, italic, styles.note, { color: sc.textPrimary }]}>
+                        {ex.notes}
+                      </Text>
+                    ) : null}
+                  </View>
+                );
+              })}
             </View>
           </View>
           </TutorialTarget>
-        ))}
+          );
+        })}
       </View>
     </Screen>
   );
@@ -249,17 +280,40 @@ const styles = StyleSheet.create({
   retry: { marginTop: spacing.md },
   tabular: { fontVariant: ['tabular-nums'] },
   completed: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md },
-  list: { marginTop: spacing.xl, paddingTop: layout.sectionPadY, borderTopWidth: StyleSheet.hairlineWidth },
-  listOverline: { marginBottom: spacing.xs },
+  // "EXERCISES" is the eyebrow over the hairline above row A (C2_today rows 864-865); the rows follow the rule.
+  listOverline: { marginBottom: 0 },
+  // C2_today rows 866-1007: 12 pt above and below, chip and name top-aligned, 14 pt from chip to name.
   exerciseRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: spacing.md,
+    gap: wsc.letterGap,
     minHeight: layout.rowMinHeight,
     paddingVertical: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  // Serif tabular index, as in the reference's numbered rows; decorative for screen readers.
-  index: { ...typography.h3, fontVariant: ['tabular-nums'], minWidth: 18 },
+  // C2_today cols 48-103: the 28 pt moss letter chip, 6 pt corners (TrainDay's chip, TrainToday.tsx:327).
+  letter: {
+    width: wsc.letterChip,
+    height: wsc.letterChip,
+    borderRadius: radius.control,
+    borderWidth: wsc.letterLine,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   exerciseText: { flex: 1, gap: 2 },
+  prescription: { gap: 2 },
+  innerName: { fontFamily: 'Inter_600SemiBold' },
+  supersetText: { gap: spacing.md },
+  // C2_adjusted cols 128-133, rows 1040-1203: sage, a 3 pt forest edge, 16 pt right corners, 4 pt from the rules.
+  changed: {
+    borderLeftWidth: wsc.changedEdge,
+    borderTopRightRadius: radius.card,
+    borderBottomRightRadius: radius.card,
+    marginVertical: -spacing.sm,
+    paddingVertical: 10,
+    paddingHorizontal: spacing.md,
+  },
+  // The coach's mark and words as TrainDay draws them (TrainToday.tsx:322, :281, :313).
+  mark: { fontFamily: 'Inter_600SemiBold' },
+  note: { marginTop: spacing.xs },
 });

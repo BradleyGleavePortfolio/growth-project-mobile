@@ -15,8 +15,11 @@ import { radius, typography } from '../../../theme/tokens';
 import { Headline, PrimaryButton } from '../../../ui';
 import { errorMessage } from '../../../types/common';
 import { useReduceMotion } from '../wearables/components/useReduceMotion';
+import { isEffectivelyOnline, useNetworkStatus } from '../../../hooks/useNetworkStatus';
 import type { WeightLog } from '../../../types';
 import { lastWas, monthDay, one, toLbs, toUnit, type WeightUnit } from './progressV2';
+import { saveWeighInOffline, WEIGH_IN_SAVED_OFFLINE } from './offlineWeighIn';
+import { featureFlags } from '../../../config/featureFlags';
 
 /** The server takes 40 to 1,500 lb; the kg bounds stay inside it once converted. */
 const BOUNDS = { lb: [40, 1500], kg: [18.2, 680] } as const;
@@ -29,11 +32,16 @@ export interface LogWeightSheetV2Props {
   /** The coach's first name; null for a coachless client (no sharing line). Undefined while it loads. */
   coachName: string | null | undefined;
   onClose: () => void;
-  onSaved: (lbs: number) => void;
+  /** `queued`: saved with no signal; it waits on this phone and sends itself (OFFLINE-WATER-WEIGHT-M). */
+  onSaved: (lbs: number, queued?: boolean) => void;
+  /** The signed-in member the page shows: a weigh-in saved with no signal is queued for this member only. */
+  userId?: string;
 }
 
-export default function LogWeightSheetV2({ visible, unit, today, lastLog, coachName, onClose, onSaved }: LogWeightSheetV2Props) {
+export default function LogWeightSheetV2({ visible, unit, today, lastLog, coachName, onClose, onSaved, userId }: LogWeightSheetV2Props) {
   const { semanticColors: sc } = useTheme();
+  // OFFLINE-WATER-WEIGHT-M: food's send decision, the call site's network state (LogScreen).
+  const online = isEffectivelyOnline(useNetworkStatus());
   const { width } = useWindowDimensions();
   const reduce = useReduceMotion(); // index-v2 section 7: the sheet slides up, or fades with Reduce Motion
   const [text, setText] = useState('');
@@ -62,6 +70,25 @@ export default function LogWeightSheetV2({ visible, unit, today, lastLog, coachN
     busy.current = true;
     setSaving(true);
     const lbs = Math.round(toLbs(value, unit) * 100) / 100;
+    if (!online && userId) {
+      // OFFLINE-WATER-WEIGHT-M (191-S5): no signal, so the weigh-in waits on this phone and sends itself later.
+      try {
+        await saveWeighInOffline(userId, { weight_lbs: lbs, date: today, notes: notes.trim() || undefined });
+      } catch {
+        // LS-972R1 C5: the fallback words alone, never a storage or fence error's own text.
+        void HapticService.error();
+        Alert.alert("Couldn't log weight", 'Please try again.');
+        return;
+      } finally {
+        busy.current = false;
+        setSaving(false);
+      }
+      void HapticService.success();
+      // REFINE-972: with offlineFoodInDay on, Progress V2 draws and says it (C8 C2_offline); off, the alert says it.
+      if (!featureFlags.offlineFoodInDay) Alert.alert(...WEIGH_IN_SAVED_OFFLINE);
+      onSaved(lbs, true);
+      return;
+    }
     try {
       await weightApi.log({ weight_lbs: lbs, date: today, notes: notes.trim() || undefined });
     } catch (err) {

@@ -1,4 +1,4 @@
-// Sends foods saved offline and shows them in the day once they land.
+// Sends foods, glasses of water and weigh-ins saved offline and shows them in the day once they land.
 //
 // The queue itself lives in foodLogQueue.ts. This module decides WHEN it is
 // sent (sign-in / cold start, back online, back in the foreground, pull to
@@ -7,7 +7,7 @@
 // Log how many foods are still waiting, so a food saved offline is never
 // invisible.
 
-import { flush as flushFoodLogQueue, getQueueLength, readQueue, readSent, type PendingFoodLog, type SentFoodLog } from './foodLogQueue';
+import { flush as flushFoodLogQueue, getQueueLength, readQueue, readSent, readWaterWeight, type PendingFoodLog, type SentFoodLog } from './foodLogQueue';
 import { useClientStore } from '../store/clientStore';
 import { readUserCacheSync } from '../lib/userCache';
 import { logger } from '../utils/logger';
@@ -48,11 +48,24 @@ async function readSentSafe(): Promise<SentFoodLog[] | null> {
   }
 }
 
+/** OFFLINE-WATER-WEIGHT-M: the phone's glasses and weigh-ins (foodLogQueue.readWaterWeight), or null when unreadable. */
+async function readWaterWeightSafe() {
+  try {
+    return await readWaterWeight();
+  } catch (err) {
+    logger.warn('FoodLogSync', 'water and weigh-in read failed', err);
+    return null;
+  }
+}
+
 /** Re-reads the pending count and tells every subscriber; the day on screen gets the queue too. */
 export async function notifyPendingFoodLogs(): Promise<number> {
   const inDay = featureFlags.offlineFoodInDay;
-  const [pending, queue] = await Promise.all([readPendingFoodLogCount(), inDay ? readQueueSafe() : null]);
+  const [pending, queue, waterWeight] = await Promise.all([readPendingFoodLogCount(), inDay ? readQueueSafe() : null, readWaterWeightSafe()]);
   if (queue) useClientStore.getState().showQueuedFoods?.(queue);
+  // OFFLINE-WATER-WEIGHT-M: the glasses and weigh-ins go to the store with the switch on or off (off, they are counted
+  // in the Food log's note and refresh the weight readers once sent; only on are they joined into the numbers).
+  if (waterWeight) useClientStore.getState().showQueuedWaterWeight?.(waterWeight);
   listeners.forEach((listener) => listener(pending));
   return pending;
 }
@@ -65,8 +78,9 @@ export function subscribePendingFoodLogs(listener: PendingListener): () => void 
 }
 
 /**
- * Sends every food saved offline. When at least one lands, the selected day
- * reloads so the entry and the day's totals appear without a manual refresh.
+ * Sends every food, glass and weigh-in saved offline. When at least one lands, the selected day
+ * reloads so the entry and the day's totals appear without a manual refresh; the weight readers
+ * refresh when the store's sent weigh-ins change (notifyPendingFoodLogs below).
  * Calls that overlap share one send. Never rejects; returns the number sent.
  */
 export function syncFoodLogQueue(): Promise<number> {

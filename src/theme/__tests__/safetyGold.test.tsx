@@ -84,7 +84,7 @@ describe('safety gold: a contrast gate for each colour pair', () => {
 });
 
 const SENT = '2026-11-04T14:41:00.000Z';
-const QUOTE = "I've been throwing up since last night.";
+const QUOTE = 'A neutral stand-in that describes an urgent client message and never quotes one.';
 const item = (alert_id: string, alert_type: string, client_name: string, message: string, quote: string | null): ActionQueueItem =>
   ({ alert_id, client_id: `c-${alert_id}`, client_name, alert_type, message, created_at: SENT, dismissed_at: null, quote, sent_at: SENT }) as ActionQueueItem;
 
@@ -136,9 +136,9 @@ describe('safety gold on the three surfaces', () => {
     );
     expect(StyleSheet.flatten(getByTestId('coach-safety-alert-summary').props.style).color).toBe(safetyGold.text);
     if (quote) {
-      const box = StyleSheet.flatten(getByTestId('coach-safety-alert-quote').props.style);
+      const box = StyleSheet.flatten(getByTestId('coach-safety-alert-card').props.style);
       expect(box.backgroundColor).toBe(safetyGold.card);
-      expect(box.borderLeftColor).toBe(safetyGold.edge);
+      expect(box.borderColor).toBe(safetyGold.edge);
     } else {
       expect(queryByTestId('coach-safety-alert-quote')).toBeNull(); // a crisis alert never shows the client's words
     }
