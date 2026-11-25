@@ -141,14 +141,15 @@ describe('REFINE-985: the bar (05b .mast :20, .mt :22, .mtt :23, .mts :24; c08 .
     expect(css(bar(view))).toMatchObject({ gap: 2, paddingTop: 2, paddingBottom: 10, paddingHorizontal: 6, backgroundColor: fp.deep });
   });
 
-  it('d: my coach with a known name: "Your coach" under the name (13 pt, #B8CCBF) and c08\'s tile with the initials', async () => {
+  it('d: my coach with a known name: "Your coach" under the name (13 pt, #B8CCBF) and c08\'s tile with one letter', async () => {
     serve({ '/community/me': ME, [COACH_URL]: { id: COACH, name: 'Alex Morgan' }, [msgsUrl(COACH)]: { messages: NAMED } });
     const view = await open({ recipientId: COACH });
     await waitFor(() => expect(within(bar(view)).getByText('Your coach')).toBeTruthy());
     expect(css(within(bar(view)).getByText('Your coach'))).toMatchObject({ fontSize: 13, lineHeight: 17.55, color: fp.onDeepMuted });
     const tile = view.getByTestId('community-dmthread-header-tile');
     expect(css(tile)).toMatchObject({ width: 36, height: 36, borderRadius: 10, borderWidth: 1, borderColor: brand[500], backgroundColor: fp.forest });
-    expect(css(within(tile).getByText('AM'))).toMatchObject({ fontFamily: 'CormorantGaramond_600SemiBold', fontSize: 21, color: fp.gold });
+    // REFINE-985R3 TILE-1: one letter (c08), hidden from screen readers; that App.tsx loads this face is fontsLoaded.guard's.
+    expect(css(within(tile).getByText('A', { includeHiddenElements: true }))).toMatchObject({ fontFamily: 'CormorantGaramond_600SemiBold', fontSize: 21, color: fp.gold });
   });
 
   it('d: my coach\'s name not known, or a member: no line under the title and no tile', async () => {
