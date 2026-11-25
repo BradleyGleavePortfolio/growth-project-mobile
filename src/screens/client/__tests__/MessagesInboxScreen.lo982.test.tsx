@@ -129,7 +129,10 @@ it.each(rowCases)('keeps the coach identity together at $width pt / $fontScale s
   expect(title).toBeDefined();
   const row = title.up[title.up.length - 2];
   const outer = title.up[title.up.length - 3];
-  expect(style(row)).toMatchObject({ flexDirection: 'row', flexGrow: 1, flexShrink: 1 });
+  // FIX-982R2 (LO-982R2 B1): what the phone needs is a row that may shrink and whose grow resolves to 0, as Yoga resolves it
+  // (yoga/node/Node.cpp:426-437): a lone child that both grows and shrinks gets basis 0 and the outer row never wraps.
+  expect(style(row)).toMatchObject({ flexDirection: 'row', flexShrink: 1 });
+  expect(style(row).flexGrow ?? (Number(style(row).flex) > 0 ? style(row).flex : 0)).toBe(0);
   expect(style(row).flexWrap).not.toBe('wrap');
   const children = row.children as Node[];
   expect(style(children[0])).toMatchObject({ width: 48, height: 48 });
