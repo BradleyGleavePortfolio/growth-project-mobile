@@ -9,7 +9,6 @@ import React from 'react';
 import { AccessibilityInfo, Alert, FlatList, Keyboard, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { CommonActions, StackRouter } from '@react-navigation/routers';
 import { authEvents } from '../../../utils/authEvents';
 import { spacing } from '../../../theme/tokens';
 
@@ -90,6 +89,8 @@ const mockApi = { get: jest.fn(), post: jest.fn(), delete: jest.fn() };
 jest.mock('../../../services/api', () => ({ __esModule: true, default: mockApi }));
 
 const Screen = require('../CommunitySpaceChatScreen').default;
+// The installed StackRouter, through the declared package (declaredDependencies.test.ts: routers is not declared).
+const { CommonActions, StackRouter } = jest.requireActual<typeof import('@react-navigation/native')>('@react-navigation/native');
 
 type Who = { id: string; name: string; is_coach?: boolean };
 const COACH: Who = { id: 'coach-1', name: 'Sam Okafor', is_coach: true };
