@@ -105,7 +105,7 @@ export default function YourWeeksScreen() {
             </View>
           ) : null}
 
-          {weeks.rows.length > 0 || weeks.later.length > 0 || weeks.earlier.length > 0 ? (
+          {true ? (
             <View testID="week-legend" style={styles.legend}>
               {LEGEND.map((s) => (
                 <View key={s} style={styles.legendItem}>
