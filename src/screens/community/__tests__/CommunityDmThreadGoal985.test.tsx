@@ -146,7 +146,7 @@ describe('REFINE-985: the bar (05b .mast :20, .mt :22, .mtt :23, .mts :24; c08 .
     const view = await open({ recipientId: COACH });
     await waitFor(() => expect(within(bar(view)).getByText('Your coach')).toBeTruthy());
     expect(css(within(bar(view)).getByText('Your coach'))).toMatchObject({ fontSize: 13, lineHeight: 17.55, color: fp.onDeepMuted });
-    const tile = view.getByTestId('community-dmthread-header-tile');
+    const tile = view.getByTestId('community-dmthread-header-tile', { includeHiddenElements: true });
     expect(css(tile)).toMatchObject({ width: 36, height: 36, borderRadius: 10, borderWidth: 1, borderColor: brand[500], backgroundColor: fp.forest });
     // REFINE-985R3 TILE-1: one letter (c08), hidden from screen readers; that App.tsx loads this face is fontsLoaded.guard's.
     expect(css(within(tile).getByText('A', { includeHiddenElements: true }))).toMatchObject({ fontFamily: 'CormorantGaramond_600SemiBold', fontSize: 21, color: fp.gold });
@@ -158,14 +158,14 @@ describe('REFINE-985: the bar (05b .mast :20, .mt :22, .mtt :23, .mts :24; c08 .
     await waitFor(() => expect(within(bar(unknown)).getByText('Coach')).toBeTruthy());
     await waitFor(() => expect(mockGet.mock.calls.some((c) => String(c[0]).startsWith(COACH_URL))).toBe(true));
     expect(unknown.queryByText('Your coach')).toBeNull();
-    expect(unknown.queryByTestId('community-dmthread-header-tile')).toBeNull();
+    expect(unknown.queryByTestId('community-dmthread-header-tile', { includeHiddenElements: true })).toBeNull();
     await unknown.unmount();
 
     serve({ '/community/me': ME, [COACH_URL]: { id: COACH, name: 'Alex Morgan' }, [msgsUrl(MEMBER)]: { messages: [msg(905, MEMBER, CLIENT, 'Nice run')] } });
     const member = await open({ recipientId: MEMBER });
     await waitFor(() => expect(member.getByText('Nice run')).toBeTruthy());
     expect(member.queryByText('Your coach')).toBeNull();
-    expect(member.queryByTestId('community-dmthread-header-tile')).toBeNull();
+    expect(member.queryByTestId('community-dmthread-header-tile', { includeHiddenElements: true })).toBeNull();
   });
 
   it('e: Report on the bar is bare and light (#FBF7F0, 05b\'s info button), 22 pt, with no bone chip behind it', async () => {

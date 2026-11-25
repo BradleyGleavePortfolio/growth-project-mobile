@@ -112,6 +112,8 @@ const msg = (n: number, from: string, other: string) => ({
 const css = (el: { props: { style?: unknown } }) => (StyleSheet.flatten(el.props.style as never) ?? {}) as Record<string, unknown>;
 const TILE = 'community-dmthread-header-tile';
 const BAR = 'community-dmthread-header';
+/** The tile is hidden from screen readers, so every lookup of it, the absent ones too, counts hidden elements. */
+const HIDDEN = { includeHiddenElements: true } as const;
 
 /** The faces App.tsx hands to useFonts (read from the file, as fontsLoaded.guard.test.ts does). */
 const loaded = (/useFonts\(\{([\s\S]*?)\}\)/.exec(fs.readFileSync(path.resolve(__dirname, '../../../../App.tsx'), 'utf8'))?.[1] ?? '')
@@ -153,8 +155,8 @@ describe('TILE-1: the coach\'s tile on the client\'s DM bar', () => {
     if (_what === 'a 40-character name') expect(name.length).toBe(40);
     coachName = name;
     const view = await open();
-    await waitFor(() => expect(view.queryByTestId(TILE)).not.toBeNull());
-    const drawn = within(view.getByTestId(TILE)).getAllByText(/[\s\S]*/, { includeHiddenElements: true }).map((n) => String(n.props.children));
+    await waitFor(() => expect(view.queryByTestId(TILE, HIDDEN)).not.toBeNull());
+    const drawn = within(view.getByTestId(TILE, HIDDEN)).getAllByText(/[\s\S]*/, HIDDEN).map((n) => String(n.props.children));
     expect(drawn).toEqual([letter]);
     expect(Array.from(drawn[0]).length).toBe(1);
     await view.unmount();
@@ -162,9 +164,9 @@ describe('TILE-1: the coach\'s tile on the client\'s DM bar', () => {
 
   it('its face is one App.tsx loads, its growth is capped, and the tile is hidden from screen readers while the name is read', async () => {
     const view = await open();
-    await waitFor(() => expect(view.queryByTestId(TILE)).not.toBeNull());
-    const tile = view.getByTestId(TILE);
-    const letter = within(tile).getByText('S', { includeHiddenElements: true });
+    await waitFor(() => expect(view.queryByTestId(TILE, HIDDEN)).not.toBeNull());
+    const tile = view.getByTestId(TILE, HIDDEN);
+    const letter = within(tile).getByText('S', HIDDEN);
     expect(loaded).toContain(css(letter).fontFamily);
     expect(css(letter)).toMatchObject({ fontSize: 21 });
     // 21 pt may grow to 27.3 pt (130%, the largest text size the renders name) and no further: the widest capital in
@@ -189,7 +191,7 @@ describe('TILE-1: the coach\'s tile on the client\'s DM bar', () => {
     arrange();
     const view = await open();
     await waitFor(() => expect(mockGet.mock.calls.some((c) => String(c[0]).startsWith('/community/workspaces/'))).toBe(true));
-    expect(view.queryByTestId(TILE)).toBeNull();
+    expect(view.queryByTestId(TILE, HIDDEN)).toBeNull();
     expect(view.queryByText('Your coach')).toBeNull();
     await view.unmount();
   });
