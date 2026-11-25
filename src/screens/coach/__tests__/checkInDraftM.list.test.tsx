@@ -135,7 +135,7 @@ describe('CHECKIN-DRAFT-M: the check-in card in Roman\'s drafts list', () => {
     expect(view.queryByTestId('checkin-draft-card-u-1')).toBeNull();
     expect(view.getByTestId('ai-draft-card-draft.assign_workout')).toBeTruthy();
     expect(view.getByText('Workout suggestion')).toBeTruthy();
-    expect(view.getByText('Roman has 2 drafts ready')).toBeTruthy();
+    expect(view.getByText('2 drafts to review')).toBeTruthy();
   });
 
   it('case 17: an older day reads as its date; a client not on the roster keeps main\'s card label', async () => {
@@ -154,7 +154,7 @@ describe('CHECKIN-DRAFT-M: the check-in card in Roman\'s drafts list', () => {
     expect(heroCard.getByText('Roman has 2 drafts ready')).toBeTruthy();
     expect(heroCard.getByText('1 Workout')).toBeTruthy();
     expect(heroCard.queryByText(/Check-in/)).toBeNull();
-    expect(view.getAllByText('Roman has 2 drafts ready')).toHaveLength(2);
+    expect([...view.getAllByText('Roman has 2 drafts ready'), ...view.getAllByText('2 drafts to review')]).toHaveLength(2);
     expect(JSON.parse(String(view.getByTestId('home-count').props.children).split('|')[2])).toEqual({ workouts: 1, mealPlans: 0, nudges: 0, workoutChanges: 0 });
   });
 
@@ -173,7 +173,7 @@ describe('CHECKIN-DRAFT-M: the check-in card in Roman\'s drafts list', () => {
     const reads = mockListPending.mock.calls.length;
     await act(async () => { useBlockedUsersStore.setState({ blocked: [{ id: 'client-1', displayName: 'Jordan Reyes' } as never] }); });
     await waitFor(() => expect(view.queryByTestId('checkin-draft-card-d-7')).toBeNull());
-    expect(view.getAllByText('Roman has 1 draft ready')).toHaveLength(2);
+    expect([...view.getAllByText('Roman has 1 draft ready'), ...view.getAllByText('1 draft to review')]).toHaveLength(2);
     expect(mockListPending.mock.calls.length).toBe(reads);
   });
 
