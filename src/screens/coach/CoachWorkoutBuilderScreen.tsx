@@ -58,7 +58,7 @@ import {
   useWorkoutPlan,
 } from '../../hooks/useWorkoutBuilder';
 import { useExerciseSearch } from '../../hooks/useExerciseLibrary';
-import { layout, radius, spacing, typography } from '../../theme/tokens';
+import { layout, radius, schemeCard, schemeCardOutline, spacing, typography } from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
 import { Overline, PrimaryButton, ScreenTopBar, useScreenInsets } from '../../ui';
 import type { SemanticTokens } from '../../theme/tokens';
@@ -1905,9 +1905,9 @@ export default function CoachWorkoutBuilderScreen() {
                 })}
                 </View>
               </View>
-              {/* LS-928 B5: the sage stepper card (C_row): one line per number, its
+              {/* LS-928 B5: the stepper card (C_row; the scheme's cream card, owner #203-E91): one line per number, its
                   label at the start and minus, the number, plus at the end. */}
-              <View testID={`row-${idx}-steppers`} style={[styles.stepperCard, { backgroundColor: sc.surface.sage, borderColor: sc.surface.sageLine }]}>
+              <View testID={`row-${idx}-steppers`} style={[styles.stepperCard, schemeCardOutline, schemeCard]}>
                 <StepperField
                   label="Sets"
                   spoken="sets"
@@ -2016,7 +2016,7 @@ export default function CoachWorkoutBuilderScreen() {
 }
 
 /**
- * LS-928 B5: one line of the K3 Style C row's sage stepper card. The number
+ * LS-928 B5: one line of the K3 Style C row's stepper card. The number
  * stays typeable (the same field as before); minus and plus move it by `step`
  * and never below `min` or past 9999 (the field's four digits).
  */

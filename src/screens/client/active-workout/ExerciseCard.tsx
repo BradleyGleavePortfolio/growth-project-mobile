@@ -3,7 +3,7 @@ import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../../../components/HapticPressable';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
-import { lightTokens as sc, radius, typography } from '../../../theme/tokens';
+import { lightTokens as sc, radius, schemeCard, schemeCardOutline, typography } from '../../../theme/tokens';
 import { Headline } from '../../../ui';
 import type { SessionExercise, SessionSet } from './types';
 import type { ActiveWorkoutStyles } from './styles';
@@ -52,7 +52,7 @@ export function ExerciseCard({
   onChangeRest?: (index: number, seconds: number) => void;
   isLast?: boolean;
   disabled?: boolean;
-  /** C1 v2: the exercise in progress sits on the sage card. */
+  /** C1 v2: the exercise in progress sits on the scheme's cream card. */
   active?: boolean;
   /** C1 v2: every set is done and the client has moved on, so the block folds. */
   foldable?: boolean;
@@ -124,7 +124,7 @@ export function ExerciseCard({
   return (
     <View style={[styles.exerciseCard, active && local.activeCard]} testID={active ? `exercise-active-${exIdx}` : undefined}>
       <View pointerEvents={disabled ? 'none' : 'auto'}>
-      {/* C1 v2: a lettered block; the open one is the sage card. */}
+      {/* C1 v2: a lettered block; the open one is the cream card. */}
       <View style={styles.exerciseHeader}>
         {letter}
         <View style={styles.exerciseHeaderText}>
@@ -254,12 +254,11 @@ const local = StyleSheet.create({
   letterDone: { backgroundColor: sc.accent },
   letterText: { ...typography.h3, fontSize: 17, lineHeight: 22 },
   foldedHeader: { marginBottom: 0, alignItems: 'center' },
-  // C1 v2: the exercise in progress on a sage card with a sage line.
+  // C1 v2: the exercise in progress on the scheme's cream card (owner #203-E91) with a 1 pt line.
   activeCard: {
-    backgroundColor: sc.surface.sage,
     borderWidth: 1,
-    borderColor: sc.surface.sageLine,
-    borderBottomColor: sc.surface.sageLine,
+    ...schemeCardOutline,
+    ...schemeCard,
     borderRadius: radius.card,
     paddingHorizontal: 16,
     marginVertical: 12,

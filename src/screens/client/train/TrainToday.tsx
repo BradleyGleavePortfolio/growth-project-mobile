@@ -4,12 +4,12 @@
  *   - `TrainMasthead`: the week on deep forest (light status bar), the SegmentedRing (one segment per workout
  *     the coach set this week) and the DayMark strip, Monday first. The tab's own header sits on it.
  *   - `TrainDay`, in the ctx#88 section 8.A order (#TRAIN-START-TOP: Train to the workout is one tap): the
- *     overline, today's workout name, Start workout, the coach's note on sage (the first coach note in its rows),
+ *     overline, today's workout name, Start workout, the coach's note on the scheme's cream card (the first coach note in its rows),
  *     the details line, then its lettered blocks (rows next to each other in one superset share a letter).
  * A coachless client keeps every logging route and reads "Your plan" with no coach voice (NOLOCK-R).
  * Reads only GET /assignments/me, the signed-in client's own rows; no write. TRAIN-TAB-2 (agent 160) reads three more of
  * its fields (backend main, C1V2-C1): the coach's day note (`client_note`) leads the note card; a changed row reads
- * "Changed by Sam · 3 sets, was 4" on sage with the coach's reason (`sets_before`, `client_reason`); a skipped day
+ * "Changed by Sam · 3 sets, was 4" on the cream card with the coach's reason (`sets_before`, `client_reason`); a skipped day
  * (`skipped_at`) is never offered with Start and reads missed on the strip, as on the coach's This week.
  * "Week 3, day 2" still waits for `program_week` and `program_day`, which are not on main.
  */
@@ -23,7 +23,7 @@ import { useMyCoaches } from '../../../hooks/useCalendar';
 import { useExerciseNames } from '../../../hooks/useExerciseNames';
 import { loadActiveWorkoutSession } from '../../../storage/activeWorkoutSession';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { layout, radius, typography } from '../../../theme/tokens';
+import { layout, radius, schemeCard, typography } from '../../../theme/tokens';
 import { PrimaryButton, QuietTextButton, useScreenInsets } from '../../../ui';
 import { DayMark, SegmentedRing, type DayState } from '../../../ui/charts/StyleCMarks';
 import { HapticService } from '../../../ui/haptics/haptics.service';
@@ -258,7 +258,7 @@ export function TrainDay({ workout, hasAny, state, coachless, coachId, userId, o
         <Text style={[typography.h4, ink, s.lead]} testID="train-adjusted-lead">{c.adjustedToday(author)}</Text>
       ) : null}
       {note ? (
-        <View style={[s.card, { backgroundColor: sc.surface.sage }]} testID="train-coach-note" accessible>
+        <View style={[s.card, schemeCard]} testID="train-coach-note" accessible>
           {author ? (
             <View style={[s.avatar, { backgroundColor: sc.surface.masthead }]} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
               <Text maxFontSizeMultiplier={1.15} style={[typography.h3, { color: sc.textOnAccent }]}>{author.charAt(0).toUpperCase()}</Text>
@@ -280,7 +280,7 @@ export function TrainDay({ workout, hasAny, state, coachless, coachId, userId, o
             <View style={[s.letter, { borderColor: sc.data.moss }]}>
               <Text maxFontSizeMultiplier={1.15} style={[typography.h3, ink]}>{b.letter}</Text>
             </View>
-            <View style={[s.flex, changed && [s.changed, { backgroundColor: sc.surface.sage, borderLeftColor: sc.data.forest }]]}>
+            <View style={[s.flex, changed && [s.changed, schemeCard]]}>
               <Text style={[typography.h4, ink]}>{b.rows.map((r) => nameOf(r.exercise_external_id)).join(' + ')}</Text>
               <Text style={[typography.bodySmall, muted, s.tabular]}>{blockLine(b)}</Text>
               {changed ? (

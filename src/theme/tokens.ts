@@ -537,6 +537,21 @@ export const forestPop = {
 export type ForestPopRole = keyof typeof forestPop;
 
 /**
+ * The scheme's panel and success message (203-D40 option 1, owner #203-E91: "into the scheme"). One definition each;
+ * every panel and success message reads these and none carries its own colour or its own edge width. Every value is
+ * an existing token. Light ground only, like forestPop (the app launches light, ThemeProvider).
+ * schemeCard: a cream card with a 3 pt forest left edge (the page against cream is 1.05:1, so the edge marks it).
+ * schemeCardOutline: for a panel that had its own outline, the other three sides in the border colour, at the width
+ * the panel already sets. schemeBar: a forest bar with light words and icon (9.19:1).
+ * Members and pairs: __tests__/schemePanels994.test.tsx.
+ */
+export const schemeCard = { backgroundColor: colors.cream, borderLeftWidth: 3, borderLeftColor: colors.forest } as const;
+export const schemeCardOutline = {
+  borderTopColor: lightTokens.border, borderRightColor: lightTokens.border, borderBottomColor: lightTokens.border,
+} as const;
+export const schemeBar = { fill: colors.forest, text: lightTokens.textOnAccent, border: colors.forest } as const;
+
+/**
  * Coach inbox and Roman's drafts, K2 Style B (planning/MOCKUP3/K2/style-b, owner #196-D10: "BUILD THE PICKED
  * STYLES AND SCREENS"). Exact drawing shades for the tiles, cards and monograms; the page is the app page, not the
  * drawn cream (owner #197-E6: "#196-D13 - we keep the toothpaste color for v1"). Contrast pairs in
