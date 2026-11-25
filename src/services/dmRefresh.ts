@@ -4,7 +4,8 @@
  * re-reads the ones on screen, so a message that lands in the thread already open is drawn there: its banner is held
  * back because its own tap would open that screen (foregroundBannerStore.ts showBanner), and useDmMessages has no poll.
  * Called where the push is received and where its tap is delivered, as mealPlanRefresh.ts is. Its own file, importing
- * only the app's queryClient, for the reason mealPlanRefresh.ts gives. It never drops a saved answer.
+ * only the app's queryClient, for the reason mealPlanRefresh.ts gives. It never drops a saved answer, and a re-read that
+ * fails takes nothing off the screen: the thread keeps drawing what it had (CommunityDmThreadScreen.tsx, EMPTY-1).
  */
 import type { QueryClient } from '@tanstack/react-query';
 import { queryClient } from './queryClient';

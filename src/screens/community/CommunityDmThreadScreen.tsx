@@ -8,7 +8,7 @@
  * Empty conversation → Roman-voiced empty state with a primary action.
  * Standardized on semanticColors / tokens.ts.
  */
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Alert,
   View,
@@ -67,18 +67,24 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
   const workspaceId = me.data?.workspace_id ?? '';
 
   const messages = useDmMessages(workspaceId, recipientId);
+  // REFINE-985R3 (P-B; LS-985R2 N5): a refused read holds no saved answer, so its re-read (a ping, the return to the
+  // front) starts with no error for a moment and the closed line would blink to "Loading messages…". This person's
+  // refusal is held until that re-read answers.
+  const [refusal, setRefusal] = useState<{ id: string; error: unknown } | null>(null);
+  if (messages.error && (refusal?.id !== recipientId || refusal.error !== messages.error)) setRefusal({ id: recipientId, error: messages.error });
+  const readError = messages.error ?? (messages.isFetching && messages.data === undefined && refusal?.id === recipientId ? refusal.error : null);
   const sendDm = useSendDm(workspaceId, recipientId, client?.id ?? '');
   // BLOCK-ALL-M: a block either way (or a ban) closes the DM: no composer, and the read refusal is not an empty thread.
   // FX-872: open only once the DM read came back. Signed in with no community membership (left, removed) is closed too.
   const noAccess = me.isSuccess && !me.data?.workspace_id;
   const { closed, open, close } = useConversationClosed(
     recipientId,
-    [messages.error],
+    [readError],
     useServerAnswered(messages) && workspaceId.length > 0,
     noAccess ? true : undefined,
   );
   // BLOCK-TELL #169-5: the read refusal's code (blocked_by_you / blocked_by_them) says who closed it.
-  const by = useClosedBy(recipientId, closed, { errors: [messages.error] });
+  const by = useClosedBy(recipientId, closed, { errors: [readError] });
   // FR-877R2 (LO C2): BAM-2b names them only by a name this screen was given, or, for my own coach, the bar's name
   // (COACH-DM-CLIENT-M). A member reached with no name (a link) gets BAM-1, never NO_NAME or "Coach" as their name.
   const shownName = given ?? (myCoach ? participantLabel : null);
@@ -89,7 +95,10 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
   const reading = messages.isLoading || (!me.data && !me.isError);
   const failed = meFailed || (messages.isError && !open);
   const data = messages.data ?? [];
-  const isEmpty = !messages.isLoading && (messages.isError || data.length === 0);
+  // REFINE-985R3 EMPTY-1 (LO-985R2 C3 = LS-985R2 C2): empty is a read that answered with no messages (the coach
+  // thread's rule). A re-read that fails keeps the saved answer, so a conversation stays a conversation and "Say hello"
+  // is drawn only over a thread with none; a read that never answered is the failed page (`failed`, above).
+  const isEmpty = !messages.isLoading && data.length === 0;
   // Header-level Report / Block acts on the latest message from the other
   // person (a report needs concrete content to review).
   const latestFromOther = data.find((m) => m.sender_user_id === recipientId && !m.deleted);
