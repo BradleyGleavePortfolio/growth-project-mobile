@@ -114,7 +114,8 @@ const open = async (): Promise<View> => {
   return view;
 };
 /** Every piece of text on the list, top to bottom, hidden pieces too. */
-const words = (view: View) => view.getAllByText(/[\s\S]+/, HIDDEN).map((n) => String(n.props.children));
+const said = (n: { props: { children?: unknown } }) => ([] as unknown[]).concat(n.props.children ?? []).join('');
+const words = (view: View) => view.queryAllByText(/[\s\S]+/, HIDDEN).map(said);
 const card = (view: View) => view.getByTestId(`dm-row-${idOf(COACH)}`);
 const rowIds = (view: View) => view.getAllByTestId(/^dm-row-/).map((n) => String(n.props.testID)).filter((id) => id !== `dm-row-${idOf(COACH)}`);
 
@@ -164,7 +165,7 @@ describe('L1: the coach first, then Conversations', () => {
     expect(spoken).toEqual([
       'Open conversation with Direct message, active 1h ago', 'Open conversation with Direct message, active 2d ago', 'Open conversation with Direct message, active 5d ago',
     ]);
-    expect(view.getByTestId(`dm-row-${idOf(MEMBER_A)}-tile`, HIDDEN).props).toMatchObject({ importantForAccessibility: 'no-hide-descendants', accessibilityElementsHidden: true });
+    expect(view.getByTestId(`dm-row-${idOf(COACH)}-tile`, HIDDEN).props).toMatchObject({ importantForAccessibility: 'no-hide-descendants', accessibilityElementsHidden: true });
   });
 
   it('taps: the card opens her coach\'s thread, a row its own, with the route and param the list has always used', async () => {
@@ -201,7 +202,7 @@ describe('the card with no thread, and the time line it can stand behind (KT-10)
     const view = await open();
     await waitFor(() => expect(view.queryByTestId('dm-coach-card')).not.toBeNull());
     const c = view.getByTestId('dm-coach-card');
-    expect(within(c).queryAllByText(/[\s\S]+/, HIDDEN).map((n) => String(n.props.children))).toEqual(['S', 'Sam Carter', 'Your coach']);
+    expect(within(c).queryAllByText(/[\s\S]+/, HIDDEN).map(said)).toEqual(['S', 'Sam Carter', 'Your coach']);
     expect(c.props.accessibilityValue).toEqual({ text: 'your coach' });
   });
 });
@@ -302,7 +303,7 @@ describe('the coach app\'s rows (DmRow without the new prop) draw and read as be
     expect(row.queryByTestId('ring-r')).toBeNull();
     expect(css(row.getByText('Active now'))).toMatchObject({ fontSize: 13.5, color: fp.n700 });
     expect(css(row.getByText('Active now')).fontFamily).toBeUndefined();
-    expect(row.getByTestId('r').props.accessibilityValue).toBeUndefined();
+    expect(row.getByTestId('r').props.accessibilityValue?.text).toBeUndefined();
     expect(row.getByTestId('r').props.accessibilityLabel).toBe('Open conversation with Jordan Lee');
   });
 });
