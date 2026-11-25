@@ -13,4 +13,3 @@ GET	/api/admin/ptm/clients/:id	services/ptmApi.ts	ROUTE-GAP-1	unreachable on mai
 GET	/api/admin/ptm/outcomes	services/ptmApi.ts	ROUTE-GAP-1	unreachable on main: ptmApi.getOutcomeHistory has no production caller; removed or wired by ROUTE-GAP-1.
 POST	/api/admin/ptm/clients/:id/outcomes	services/ptmApi.ts	ROUTE-GAP-1	unreachable on main: ptmApi.labelOutcome has no production caller or UI button (screens/coach/RISK_BOARD.md:114); removed or wired by ROUTE-GAP-1.
 GET	/api/applications/me	services/talentMarketplaceApi.ts	ROUTE-GAP-1	unreachable on main: ApplicationStatusScreen is in no navigator; removed or wired by ROUTE-GAP-1.
-POST	/api/ai/gateway/drafts	services/aiGatewayClient.ts	ROUTE-GAP-1	unreachable on main: no production file imports aiGatewayClient; removed or wired by ROUTE-GAP-1.

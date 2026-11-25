@@ -17,6 +17,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { HapticService } from '../ui/haptics/haptics.service';
 import { authEvents } from '../utils/authEvents';
+import { registerSignOutQueue } from '../services/signOutQueues';
 import { featureFlags } from '../config/featureFlags';
 import { readUserCache } from '../lib/userCache';
 import { queryClient } from '../services/queryClient';
@@ -230,6 +231,25 @@ async function run(id: string, qc: QueryClient): Promise<void> {
     if (authEpoch() !== startedAt) flush();
   }
 }
+
+/**
+ * FIX-942 (LS-942 B3): the sign-out confirm (services/signOutQueues) counts this author's notes still
+ * only on this phone (Hall, space and message notes alike): waiting, failed and on their way.
+ */
+async function voiceOutboxLength(authorId: string): Promise<number> {
+  await restore();
+  return items.filter((i) => i.authorId === authorId).length;
+}
+/** The sign-out's one try: each of this author's notes not already on its way goes once more, under this sign-in. */
+async function sendVoiceOutboxBeforeSignOut(authorId: string): Promise<void> {
+  await restore();
+  if (session && session.authorId !== authorId) return;
+  const s = (session ??= { authorId, qc: queryClient });
+  const net = await NetInfo.fetch().catch(() => null);
+  if (net) online = isEffectivelyOnline({ isOnline: !!net.isConnected, isInternetReachable: net.isInternetReachable });
+  await Promise.allSettled(items.filter((i) => i.authorId === authorId && i.status !== 'sending').map((i) => run(i.id, s.qc)));
+}
+registerSignOutQueue('voice-notes', { count: voiceOutboxLength, send: sendVoiceOutboxBeforeSignOut });
 
 export interface VoiceOutbox {
   items: VoiceOutboxItem[];

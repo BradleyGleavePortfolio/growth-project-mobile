@@ -252,7 +252,10 @@ describe('the coach Roman room keeps the room and the draft through the typed re
       draftKept();
     } else {
       await waitFor(() => expect(r.getByTestId('roman-composer-input').props.value).toBe(''));
-      expect(mockSend.mock.calls).toEqual([['s1', DRAFT], ['s1', DRAFT]]);
+      // SEND-ONCE-PHONE: nothing was stored, so Allow resumes the same send with the same send-once key.
+      const key = { idempotencyKey: expect.any(String) };
+      expect(mockSend.mock.calls).toEqual([['s1', DRAFT, key], ['s1', DRAFT, key]]);
+      expect(mockSend.mock.calls[1][2]).toEqual(mockSend.mock.calls[0][2]);
     }
   });
 });

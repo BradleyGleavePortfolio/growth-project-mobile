@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useClosedBy, useConversationClosed, type ClosedBy } from '../../../components/messaging/ConversationClosed';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { coachApi } from '../../../services/api';
+import { rememberUnreadCounts, useChatClosureHeard } from '../../../store/closedClientsStore';
 import { useCoachBlockList } from '../home-v11/blockList';
 
 export type NudgePair = 'open' | 'me' | 'them' | null;
@@ -39,6 +40,7 @@ export function useNudgeGate(clientId: string): NudgeGate {
     const mine = ++seq.current;
     try {
       const res = await coachApi.getUnreadCounts();
+      rememberUnreadCounts(coachId, res); // LS-952R3 B3: Roman's drafts count hears it too
       const closed: unknown = res?.data?.closed_client_ids;
       const ids = new Set(Array.isArray(closed) ? closed.filter((x): x is string => typeof x === 'string') : []);
       if (mine === seq.current) setRead({ key, ids });
@@ -57,5 +59,6 @@ export function useNudgeGate(clientId: string): NudgeGate {
   // FIX-940 (LO-T2B C1): an unknown pair says nothing (undefined), so it never clears a refusal remembered this session.
   const gate = useConversationClosed(clientId, [], pair != null, pair == null ? undefined : pair !== 'open');
   const by = useClosedBy(clientId, gate.closed, { pair: true, mine: pair === 'me' });
+  useChatClosureHeard(coachId, clientId, pair != null, gate.closed); // LS-952R3 B3: a refusal closes it there too
   return { pair, open: gate.open, closed: gate.closed, by, reload, close: gate.close };
 }

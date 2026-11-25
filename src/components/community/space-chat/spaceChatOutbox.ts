@@ -19,6 +19,7 @@ import { useMemo, useSyncExternalStore } from 'react';
 import NetInfo from '@react-native-community/netinfo';
 import { cacheStorage } from '../../../storage/mmkv';
 import { authEvents } from '../../../utils/authEvents';
+import { registerSignOutQueue } from '../../../services/signOutQueues';
 import { generateIdempotencyKey } from '../../../utils/idempotency';
 import { isEffectivelyOnline } from '../../../hooks/useNetworkStatus';
 import { describeCommunityFailure } from '../../../api/communityErrors';
@@ -48,6 +49,8 @@ let online = false;
 // Each sign-in (and sign-out) starts a new generation; a send still out for an earlier one never touches the rows.
 let gen = 0;
 let running = -1;
+let flushing: Promise<void> = Promise.resolve();
+let loaded: Promise<void> = Promise.resolve();
 // FIX-938 B3: the account this generation's texts were queued by (its credential subject, pinned once) and the publisher
 // of its current sign-in. Another account's credential never binds; a new sign-in of the same account does.
 let account: string | null = null;
@@ -91,8 +94,12 @@ async function publisher(g: number): Promise<SpacePublisher | null> {
   return bound && bindingIsCurrent(bound.binding) && bound.session === sessionGeneration() ? bound : null;
 }
 
-/** One send at a time, oldest first, so a space reads in the order the texts were written. */
-async function flush(): Promise<void> {
+/** One send at a time, oldest first, so a space reads in the order the texts were written; resolves when it ends. */
+function flush(): Promise<void> {
+  if (running !== gen) flushing = drain();
+  return flushing;
+}
+async function drain(): Promise<void> {
   if (running === gen || !online || !uid) return;
   const g = gen;
   running = g;
@@ -177,7 +184,7 @@ export function startSpaceOutbox(userId: string | null): void {
   void publisher(g).catch(() => undefined);
   rows = [];
   subs.forEach((fn) => fn());
-  void cacheStorage.getStringAsync(`${SPACE_OUTBOX_PREFIX}${userId}`).then((raw) => {
+  loaded = cacheStorage.getStringAsync(`${SPACE_OUTBOX_PREFIX}${userId}`).then((raw) => {
     if (gen !== g || !raw) return;
     const kept = (JSON.parse(raw) as Partial<PendingRow>[]).filter(valid)
       .map((r): PendingRow => (r.state === 'failed'
@@ -191,6 +198,25 @@ export function startSpaceOutbox(userId: string | null): void {
       setSpaceOutboxOnline(isEffectivelyOnline({ isOnline: !!s.isConnected, isInternetReachable: s.isInternetReachable ?? null })));
   }
 }
+
+/**
+ * FIX-942 (LO-942 B1, LS-942 B3): the sign-out confirm (services/signOutQueues) counts this account's
+ * texts still only on this phone: waiting, failed (refused too) and on their way. It starts this account's outbox.
+ */
+async function spaceOutboxLength(userId: string): Promise<number> {
+  startSpaceOutbox(userId);
+  await loaded;
+  return rows.filter((r) => r.state !== 'sent').length;
+}
+/** The sign-out's one try: every text the server has not refused goes again, oldest first, as this account. */
+async function sendSpaceOutboxBeforeSignOut(userId: string): Promise<void> {
+  await spaceOutboxLength(userId);
+  set(rows.map((r) => (r.state === 'failed' && !r.reason ? { ...r, state: 'waiting' } : r)));
+  const s = await NetInfo.fetch();
+  online = isEffectivelyOnline({ isOnline: !!s.isConnected, isInternetReachable: s.isInternetReachable ?? null });
+  await flush();
+}
+registerSignOutQueue('space-texts', { count: spaceOutboxLength, send: sendSpaceOutboxBeforeSignOut });
 
 export const spaceOutbox = {
   add(cohortId: string, body: string, reply?: SpaceReplyTarget): void {

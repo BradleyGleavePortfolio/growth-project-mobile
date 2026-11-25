@@ -67,7 +67,7 @@ async function addManualFood() {
   await act(async () => {
     fireEvent.press(screen.getAllByText('Add food')[0]);
   });
-  await fireEvent.press(await screen.findByText('Enter manually'));
+  await fireEvent.press(await screen.findByText('Quick add'));
   await fireEvent.changeText(screen.getByPlaceholderText('Food name'), 'Breakfast bowl');
   for (const [index, value] of ['400', '25', '45', '13'].entries()) {
     await fireEvent.changeText(screen.getAllByPlaceholderText('0')[index], value);

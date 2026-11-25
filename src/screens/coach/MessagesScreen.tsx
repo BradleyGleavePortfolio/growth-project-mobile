@@ -1,22 +1,23 @@
-import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
-  TouchableOpacity,
-  TextInput,
   RefreshControl,
+  Pressable,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
 import { useBlockedUsersStore } from '../../store/blockedUsersStore';
+import { rememberUnreadCounts } from '../../store/closedClientsStore';
 import { coachApi } from '../../services/api';
 import { subscribeToMessages } from '../../services/realtime';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import { layout, radius } from '../../theme/tokens';
+import { useTheme } from '../../theme/ThemeProvider';
+import { coachInboxB, layout } from '../../theme/tokens';
 import { Screen } from '../../ui';
 import { EmptyStateNoClients, EmptyStateNoResults } from '../../ui/empty-states';
 import { useFeatureFlags } from '../../hooks/useFeatureFlags';
@@ -25,6 +26,7 @@ import { openInboxChat } from '../../navigation/coachInbox';
 import { BroadcastsEntry } from './broadcasts/BroadcastsEntry';
 import { CommunityReportsEntry } from './CommunityReportsEntry';
 import { CommunityEntry } from './CommunityEntry';
+import { InboxTile, RomanDraftsHero, canSeeDrafts, inboxB } from './inboxStyleB';
 
 // Backstop poll — Realtime broadcasts drive most refreshes now. Was 30s.
 const FALLBACK_POLL_MS = 60000;
@@ -49,7 +51,6 @@ export default function MessagesScreen() {
 
 function LegacyCoachMessages() {
   const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const currentUser = useCurrentUser();
   const { clients, loadClients } = useCoachStore();
@@ -65,11 +66,13 @@ function LegacyCoachMessages() {
       const raw = res.data || {};
       const byClient: UnreadByClient = raw.by_client || raw.byClient || {};
       setUnreadByClient(byClient);
-      setClosedIds(Array.isArray(raw.closed_client_ids) ? raw.closed_client_ids : []); // absent on an older server
+      const closed: string[] = Array.isArray(raw.closed_client_ids) ? raw.closed_client_ids : []; // absent on an older server
+      setClosedIds(closed);
+      rememberUnreadCounts(currentUser?.id, res); // LS-952R2 B1, LS-952R3 B3: Roman's drafts count leaves them out too
     } catch (err) {
       // Silent — keep previous counts
     }
-  }, []);
+  }, [currentUser?.id]);
 
   useEffect(() => {
     if (currentUser) {
@@ -126,39 +129,39 @@ function LegacyCoachMessages() {
     .sort((a, b) => b.unread - a.unread);
 
   return (
-    <Screen edges={['top']} scroll={false} contentStyle={styles.bare} testID="coach-messages">
+    <Screen edges={['top']} scroll={false} contentStyle={styles.bare} style={inboxB.page} testID="coach-messages">
       <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Messages</Text>
-          {totalUnread > 0 && (
-            <Text style={styles.unreadSummary}>
-              {totalUnread} unread message{totalUnread !== 1 ? 's' : ''}
-            </Text>
-          )}
+        <View style={inboxB.headerRow}>
+          <Text style={inboxB.title}>Messages</Text>
+          <View style={inboxB.headerEntries}>
+            <CommunityEntry />
+            <CommunityReportsEntry />
+            <BroadcastsEntry />
+          </View>
         </View>
-        <View style={styles.headerEntries}>
-          <CommunityEntry />
-          <CommunityReportsEntry />
-          <BroadcastsEntry />
-        </View>
+        {totalUnread > 0 && (
+          <Text style={inboxB.summary}>
+            {totalUnread} unread message{totalUnread !== 1 ? 's' : ''}
+          </Text>
+        )}
       </View>
 
       <View style={styles.searchContainer}>
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={18} color={colors.textMuted} />
+        <View style={[inboxB.search, searchQuery.length > 0 && inboxB.searchOn]}>
+          <Ionicons name="search" size={20} color={coachInboxB.muted} />
           <TextInput
-            style={styles.searchInput}
+            style={inboxB.searchInput}
             placeholder="Search clients..."
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor={coachInboxB.muted}
             value={searchQuery}
             onChangeText={setSearchQuery}
             accessibilityLabel="Search clients"
           />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-            </TouchableOpacity>
-          )}
+          {searchQuery.length > 0 ? (
+            <Pressable onPress={() => setSearchQuery('')} accessibilityRole="button" accessibilityLabel="Clear search" hitSlop={12} style={inboxB.clear}>
+              <Ionicons name="close-circle" size={20} color={coachInboxB.muted} />
+            </Pressable>
+          ) : null}
         </View>
       </View>
 
@@ -167,6 +170,7 @@ function LegacyCoachMessages() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -175,6 +179,7 @@ function LegacyCoachMessages() {
             colors={[colors.primary]}
           />
         }
+        ListHeaderComponent={canSeeDrafts(currentUser?.role) && !searchQuery.trim() ? <View style={styles.heroWrap}><RomanDraftsHero /></View> : null}
         ListEmptyComponent={
           searchQuery
             ? <EmptyStateNoResults query={searchQuery} onClearSearch={() => setSearchQuery('')} />
@@ -191,104 +196,24 @@ function LegacyCoachMessages() {
             )
         }
         renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.convoCard}
+          <InboxTile
+            name={item.name}
+            preview={item.unread > 0 ? `${item.unread} new message${item.unread !== 1 ? 's' : ''}` : 'Tap to open conversation'}
+            unread={item.unread}
             onPress={() => openInboxChat(navigation, item.id, item.name)}
-            activeOpacity={0.7}
-            accessibilityRole="button"
             accessibilityLabel={`Open messages with ${item.name}${item.unread ? `, ${item.unread} unread` : ''}`}
-          >
-            <View style={styles.convoAvatar}>
-              <Text style={styles.convoAvatarText}>
-                {item.name.split(' ').map((n) => n[0]).join('')}
-              </Text>
-            </View>
-            <View style={styles.convoInfo}>
-              <Text style={[styles.convoName, item.unread > 0 && styles.convoNameUnread]}>
-                {item.name}
-              </Text>
-              <Text style={styles.convoPreview} numberOfLines={1}>
-                {item.unread > 0 ? `${item.unread} new message${item.unread !== 1 ? 's' : ''}` : 'Tap to open conversation'}
-              </Text>
-            </View>
-            {item.unread > 0 && (
-              <View style={styles.unreadBadge}>
-                <Text style={styles.unreadBadgeText}>{item.unread}</Text>
-              </View>
-            )}
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </TouchableOpacity>
+          />
         )}
       />
     </Screen>
   );
 }
 
-const makeStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
+const styles = StyleSheet.create({
   // Screen (src/ui) owns the top: insets.top + 12; the header adds 12 like the Clients and Settings tabs (B13 B28).
   bare: { paddingHorizontal: 0, paddingBottom: 0 },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    // Title + Reports + Broadcasts can be wider than a phone: wrap, never clip.
-    flexWrap: 'wrap',
-    gap: 8,
-    paddingHorizontal: layout.gutter,
-    paddingTop: 12,
-    marginBottom: 8,
-  },
-  headerEntries: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
-  title: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 32, lineHeight: 39, letterSpacing: 0.6, fontWeight: '400', color: colors.textPrimary },
-  unreadSummary: { fontSize: 13, color: colors.primary, fontWeight: '600', marginTop: 2 },
-  searchContainer: { paddingHorizontal: layout.gutter, marginBottom: 8 },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: radius.input,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  searchInput: { flex: 1, fontSize: 15, color: colors.textPrimary },
+  header: { paddingHorizontal: layout.gutter, paddingTop: 12, marginBottom: 12 },
+  searchContainer: { paddingHorizontal: layout.gutter, marginBottom: 12, gap: 12 },
   listContent: { paddingHorizontal: layout.gutter, paddingBottom: 100 },
-  convoCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    padding: 14,
-    marginBottom: 8,
-    gap: 12,
-  },
-  convoAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.chip,
-    backgroundColor: colors.primaryDark,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  convoAvatarText: { fontFamily: 'Inter_600SemiBold', color: colors.textOnPrimary, fontSize: 14, fontWeight: '600', letterSpacing: 0.5 },
-  convoInfo: { flex: 1, gap: 4 },
-  convoName: { fontFamily: 'Inter_500Medium', fontSize: 15, fontWeight: '500', color: colors.textPrimary },
-  convoNameUnread: { fontFamily: 'Inter_600SemiBold', fontWeight: '600' },
-  convoPreview: { fontSize: 13, color: colors.textSecondary },
-  unreadBadge: {
-    minWidth: 22,
-    height: 22,
-    borderRadius: radius.chip,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-  },
-  unreadBadgeText: { color: colors.textOnPrimary, fontSize: 12, fontWeight: '500' },
-
-
-  });
-
+  heroWrap: { marginBottom: 12 },
+});

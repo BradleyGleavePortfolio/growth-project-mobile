@@ -258,7 +258,7 @@ describe('MONEY-INBOX-130: money rows in the Notification center', () => {
 
     await fireEvent.press(screen.getByText('New content'));
     await waitFor(() =>
-      expect(navigate).toHaveBeenCalledWith('MoreTab', { screen: 'Deliverables', params: { purchaseId: 'cp-1' } }),
+      expect(navigate).toHaveBeenCalledWith('MoreTab', { screen: 'Deliverables', params: { purchaseId: 'cp-1' }, initial: false }),
     );
     expect(mockPost).toHaveBeenCalledWith('/notifications/n-drip/read');
 

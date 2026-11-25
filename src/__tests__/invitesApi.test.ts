@@ -19,7 +19,7 @@ import {
   MAX_BULK_EMAILS,
   normaliseEmail,
   parseCsvEmails,
-  tokeniseEmails,
+  parseInviteLines,
 } from '../api/invites';
 import { isValidInviteToken } from '../utils/inviteToken';
 
@@ -104,11 +104,20 @@ describe('inviteToken — validator', () => {
 });
 
 describe('invitesApi — paste / csv parsers', () => {
-  it('tokeniseEmails splits on whitespace, comma, semicolon, newline and dedupes', () => {
-    const out = tokeniseEmails(
-      'a@b.co\nb@c.co , a@b.co; d@e.co  c@d.co\t a@b.co',
-    );
-    expect(out).toEqual(['a@b.co', 'b@c.co', 'd@e.co', 'c@d.co']);
+  // INVITE-ONE-M: the old paste screen's rule (email, name, note per line) plus lists of emails.
+  it.each([
+    ['email only', 'a@b.co', [{ email: 'a@b.co' }]],
+    ['email and name', 'a@b.co, Alice', [{ email: 'a@b.co', name: 'Alice' }]],
+    ['email, name and note', 'a@b.co, Alice, Knee is sore', [{ email: 'a@b.co', name: 'Alice', note: 'Knee is sore' }]],
+    ['tab separated', 'a@b.co\tAlice\tSee you Monday', [{ email: 'a@b.co', name: 'Alice', note: 'See you Monday' }]],
+    ['a note keeps its commas', 'a@b.co, Alice, Mon, Wed, Fri', [{ email: 'a@b.co', name: 'Alice', note: 'Mon, Wed, Fri' }]],
+    ['a note without a name', 'a@b.co,, Hi', [{ email: 'a@b.co', note: 'Hi' }]],
+    ['blank lines and padding', '\n  a@b.co ,  Alice  \n\n', [{ email: 'a@b.co', name: 'Alice' }]],
+    ['a line of emails is a list', 'a@b.co, b@c.co; c@d.co  d@e.co', [{ email: 'a@b.co' }, { email: 'b@c.co' }, { email: 'c@d.co' }, { email: 'd@e.co' }]],
+    ['one invite per line', 'a@b.co, Alice\r\nb@c.co', [{ email: 'a@b.co', name: 'Alice' }, { email: 'b@c.co' }]],
+    ['an invalid email is kept for the preview', 'not-an-email, Bob', [{ email: 'not-an-email', name: 'Bob' }]],
+  ])('parseInviteLines: %s', (_case, input, expected) => {
+    expect(parseInviteLines(input)).toEqual(expected);
   });
 
   it('parseCsvEmails: header-detection picks "email" column', () => {
@@ -174,6 +183,20 @@ describe('invitesApi.bulkInvite', () => {
         ],
       },
     );
+  });
+
+  it('keeps each row\'s name and note; the message fills only rows without a note', async () => {
+    mockedApi.post.mockResolvedValueOnce({ data: { total: 2, created: [], rejected: [] } });
+    await invitesApi.bulkInvite(
+      [{ email: 'a@ex.com', name: 'Alice', note: 'Knee first' }, { email: 'b@ex.com', name: 'Bob' }],
+      'hi friend',
+    );
+    expect(mockedApi.post).toHaveBeenCalledWith('/coach/invite-codes/bulk', {
+      rows: [
+        { email: 'a@ex.com', name: 'Alice', note: 'Knee first' },
+        { email: 'b@ex.com', name: 'Bob', note: 'hi friend' },
+      ],
+    });
   });
 
   it('omits `note` when no message is supplied', async () => {

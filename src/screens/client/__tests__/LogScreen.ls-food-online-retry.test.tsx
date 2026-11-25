@@ -80,7 +80,7 @@ describe('LS-FOOD B3: online retry after an acknowledgement is lost', () => {
       if (path === 'recent') {
         await fireEvent.press(await screen.findByText('Banana'));
       } else {
-        await fireEvent.press(await screen.findByText('Enter manually'));
+        await fireEvent.press(await screen.findByText('Quick add'));
         await fireEvent.changeText(screen.getByPlaceholderText('Food name'), 'Breakfast bowl');
         for (const [index, value] of ['400', '25', '45', '13'].entries()) {
           await fireEvent.changeText(screen.getAllByPlaceholderText('0')[index], value);

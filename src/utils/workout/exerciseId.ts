@@ -46,6 +46,9 @@ export function libraryExerciseId(value: unknown): string | null {
 // exercise list (`ex_` + random). The catalog can never resolve one.
 const PHONE_MADE_ID = /^(routine|manual|plan-exercise|assignment-exercise|logged|session)[:/]|^ex_/;
 
+/** True for an id the phone made for itself (the catalog can never resolve it). */
+export const isPhoneMadeId = (id: string): boolean => PHONE_MADE_ID.test(id.trim());
+
 /**
  * The key the exercise catalog resolves (id, slug or source reference) for an
  * exercise's Watch video and instructions: its catalog id (a saved routine's

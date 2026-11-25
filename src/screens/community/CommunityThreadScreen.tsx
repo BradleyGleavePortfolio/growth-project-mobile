@@ -318,8 +318,8 @@ export default function CommunityThreadScreen(): React.ReactElement {
           placeholder="Add a reply"
           maxLength={COMMENT_MAX}
           sending={addComment.isPending}
-          onSubmit={(body) =>
-            addComment.mutateAsync(body).then(
+          onSubmit={(body, idempotencyKey) =>
+            addComment.mutateAsync({ body, idempotencyKey }).then(
               () => undefined,
               (err: unknown) => {
                 // Apple 1.2 content filter: keep the draft (the composer

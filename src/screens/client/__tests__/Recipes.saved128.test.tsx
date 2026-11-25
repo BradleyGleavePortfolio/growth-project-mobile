@@ -12,6 +12,8 @@ const base = { calories: 320, protein: 24, carbs: 40, fat: 8, prep_time_min: 5, 
 const soup = { ...base, id: 'r1', title: 'Lentil soup', tags: ['vegan'] };
 const toast = { ...base, id: 'r2', title: 'Egg toast', tags: ['breakfast'] };
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: jest.fn(), navigate: mockNavigate }), useRoute: () => ({ params: { recipeId: 'r1' } }) }));
+// The Style C masthead paints the status bar on focus; no navigator here (STYLE-KITCHEN-M).
+jest.mock('../../../components/StatusBarBand', () => ({ useStatusBarBand: () => undefined }));
 jest.mock('../../../theme/ThemeProvider', () => ({ useTheme: () => ({ semanticColors: require('../../../theme/tokens').lightTokens, colors: new Proxy({}, { get: () => 'legacy' }) }) }));
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'client', profile: { diet_restrictions: [] } }) }));
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));

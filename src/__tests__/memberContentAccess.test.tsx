@@ -31,8 +31,9 @@
  *     the gap (delete its KNOWN GAP row so the rule is enforced from now on) or broke the harness (fix the harness).
  *   - "stale row": a registered file moved, or no longer reads or sends member content. Update or remove the row.
  * The composers are drawn in memberContentAccess.composers.test.tsx (the same registry rows, by file).
- * Space chat (m#871, m#879, m#887, m#897) is not on main: when it merges the scan names its screen and its hook
- *   (screens/community/CommunitySpaceChatScreen.tsx, components/community/space-chat/useSpaceChat.ts) until they are rows.
+ * Space chat (m#871, m#879, m#887, m#897): its data layer is the SPLIT-938C rows below (useSpaceChat, spaceChatOutbox,
+ *   useSpaceVoiceOutbox, spaceChatApi); its screen (screens/community/CommunitySpaceChatScreen.tsx) comes in a later part,
+ *   and the scan names it until it is a row.
  */
 import fs from 'fs';
 import path from 'path';
@@ -167,16 +168,43 @@ const REGISTRY: Surface[] = [
     proof: gap('screens/client/CommunityScreen.tsx:CommunityScreen', 'ban, departure',
       'the wins form asks no closed gate, so a banned or departed member can type and send a win (the server decides)',
       { lacks: /useConversationClosed|isClosedRefusal|useBlockedUsersStore/ }) },
-  ...([
-    ['screens/coach/ClientDetailScreen.tsx', 'ClientDetailScreen:sendNudge', 'a typed nudge (title and body)'],
-    ['screens/coach/lookup/useLookupNudge.tsx', 'useLookupNudge', 'a typed nudge from the coach lookup'],
-    ['screens/coach/ClientRiskDetailScreen.tsx', 'ClientRiskDetailScreen:sendNudge', 'a fixed check-in nudge'],
-  ] as const).map(([file, fn, what]): Surface => ({
-    file, kind: 'composer', what: `${what} pushed to a client (coachApi.sendNudge)`, how: 'none: no closed gate before the send',
-    proof: gap(`${file}:${fn}`, 'block (both ways), closed conversation',
-      'the nudge is offered and sent to a client who blocked the coach, or whom the coach blocked; nothing on the phone asks whether the chat is closed (the server decides)',
-      { lacks: /useConversationClosed|useCoachingRow|useCoachChatClosed|closed_client_ids|useBlockedUsersStore/ }),
-  })),
+  // KT2-940 (LO-940R2 C1, 6675884966): m#940 (NUDGE-GATE-M) gated Send Nudge on the client file and the risk screen
+  // through useNudgeGate, so their KNOWN GAP rows were untrue; they are gated composers now, proved by their suites.
+  { file: 'screens/coach/ClientDetailScreen.tsx', kind: 'composer', what: 'a typed nudge (title and body) pushed to a client (coachApi.sendNudge)',
+    how: 'useNudgeGate(clientId): Send Nudge and the nudge form only while it says open; my block (block store), their block or a closed chat (closed_client_ids) and a refusal remembered this session close it and draw the closed line; unknown is closed; a refused send closes it (close(err)); a pull reads again',
+    proof: { by: 'suite', file: 'screens/coach/__tests__/ClientFileNudgeGateNGM.test.tsx', titles: [
+      '$name: Send Nudge $nudge, closed line $line',
+      'a pull to refresh reads the pair again: an unblock on the server brings Send Nudge back',
+    ] } },
+  { file: 'screens/coach/ClientDetailScreen.tsx', kind: 'composer', what: 'the same nudge: the gate keeps a refusal while the pair is unknown, and a refused send closes it',
+    how: 'useNudgeGate: an unknown pair (read out, offline, block list not read) stays closed and keeps the refusal; close(err) closes only on a blocked refusal',
+    proof: { by: 'suite', file: 'screens/coach/__tests__/NudgeGateRefusalFIX940.test.tsx', titles: [
+      '$name: still closed, no nudge, the refusal kept',
+      'the server answers closed: still closed, the refusal kept',
+      '$name: closes $closes',
+    ] } },
+  { file: 'screens/coach/ClientRiskDetailScreen.tsx', kind: 'composer', what: 'a fixed check-in nudge pushed to a client (coachApi.sendNudge)',
+    how: 'useNudgeGate(userId): \'Send check-in nudge\' only while it says open; my block, their block or a closed chat and a refusal remembered this session close it and draw the closed line; unknown is closed; a refused send closes it (close(err))',
+    proof: { by: 'suite', file: 'screens/coach/__tests__/ClientRiskNudgeGateNGM.test.tsx', titles: [
+      '$name: nudge $nudge, closed line $line',
+    ] } },
+  // FIX-933R4 (LS-933R4 B1): m#933 gated the lookup nudge (LS-933R3 B1: the form opens only while the lookup's pair is
+  // open; LS-933R4 B1: a pair that closes under it says why in its place), so its KNOWN GAP row was untrue; it is a
+  // gated composer now, proved by its suites (ClientLookupScreen's via row for it went with the gap row).
+  { file: 'screens/coach/lookup/useLookupNudge.tsx', kind: 'composer', what: 'a typed nudge from the coach lookup pushed to a client (coachApi.sendNudge)',
+    how: 'the lookup\'s pair (my block from the block store, their block or a closed chat remembered from a refusal this session, unread is closed): the nudge form opens only while it is open; a send refused as closed goes through useConversationClosed\'s close(err) (remembered, announced) and takes the form\'s fields and Send away',
+    proof: { by: 'suite', file: 'screens/coach/__tests__/ClientLookupNudgeGateFIX933R3.test.tsx', titles: [
+      'opens no nudge form when the pair is %s',
+      'an open pair opens the form; a 403 messaging.blocked takes it away, is remembered and the entry stays closed',
+      'a plain network error keeps the form, its words and Send',
+    ] } },
+  { file: 'screens/coach/lookup/useLookupNudge.tsx', kind: 'composer', what: 'the same nudge: a pair that closes under the open form says why at once',
+    how: 'a refusal or a block either way landing while the form is up draws ConversationClosedLine where the title, message and Send were (over the peek the form goes and the peek\'s line says it); the draft is kept; one send at a time, and its answer acts only on the form it was sent from',
+    proof: { by: 'suite', file: 'screens/coach/__tests__/ClientLookupNudgeSaysWhyFIX933R4.test.tsx', titles: [
+      '%s, %s: says why at once (no extra tap), announced, remembered; the draft is kept',
+      'a block landing while the form is up, %s: says why at once and keeps the draft',
+      'a second Send while one is in flight sends nothing more; the refusal then says why',
+    ] } },
 
   // ── Lists, previews and counts ──
   { file: 'screens/community/CommunityDmListScreen.tsx', kind: 'list', what: 'my DM rows: name, preview, unread',
@@ -187,6 +215,13 @@ const REGISTRY: Surface[] = [
     proof: { by: 'cache', id: 'coach-inbox' } },
   { file: 'screens/coach/MessagesScreen.tsx', kind: 'list', what: 'the legacy coach list (messaging v2 off): client rows and unread',
     how: 'hides closed_client_ids (blocked either way) and my blocks from the block store at once', proof: { by: 'state', id: 'legacy-coach-list' } },
+  // FIX-952R1 (LS-952 B2): Roman's drafts card on both coach Messages screens counts drafts for clients; the drafts
+  // screen and Home read the same list (usePendingAiDrafts), so one rule and one proof cover the three counts.
+  { file: 'screens/coach/CoachInboxV2.tsx', kind: 'list', what: 'Roman\'s drafts card: drafts waiting for clients, by kind',
+    how: 'usePendingAiDrafts leaves out a draft with words for a client I block (block store) or whose chat Messages heard is closed (closedClientsStore, LS-952R2 B1), at once; the server leaves out a client who moved on',
+    proof: { by: 'state', id: 'coach-drafts-count' } },
+  { file: 'screens/coach/MessagesScreen.tsx', kind: 'list', what: 'Roman\'s drafts card on the legacy coach list: drafts waiting, by kind',
+    how: 'the same card and the same rule as the coach inbox (usePendingAiDrafts)', proof: { by: 'state', id: 'coach-drafts-count' } },
   { file: 'screens/client/MessagesInboxScreen.tsx', kind: 'list', what: 'the client inbox: the coach card, preview, unread',
     how: 'the coaching row\'s closed / blocked_by_me and my block store hide the card; a block reads the list again',
     proof: { by: 'suite', file: 'screens/client/__tests__/MessagesInboxScreen.test.tsx', titles: [
@@ -255,6 +290,34 @@ const REGISTRY: Surface[] = [
     proof: { by: 'suite', file: '__tests__/notificationCenter.blockReturn.test.tsx', titles: [
       'does not retain the blocked coach words when the existing centre regains focus; unrelated rows stay',
     ] } },
+  // COACH-DM-M (m#962): the coach's community direct messages. The server (b#1243) lists and opens only the coach's
+  // threads with their own current clients and leaves out a block either way, a ban and a departure; on the phone a
+  // block drops the row at once (blockSync, the DM list key prefix) and a closed thread draws no words and no box.
+  ...((): Surface[] => {
+    const file = 'screens/community/coach-dm/__tests__/coachDm.test.tsx';
+    const dir = 'screens/community/coach-dm/';
+    const BLOCK = 'KT-2: my block made elsewhere drops that client from the list and the count at once';
+    const OPEN_BLOCK = 'KT-2: my block made elsewhere closes the open thread at once: no box, no words';
+    const NEW = 'KT-2: New message leaves out a client I blocked; one who blocked me opens only the closed thread';
+    const CLOSED = ['404: BAM-1, no composer, no messages', '403 blocked_by_you: BAM-2a, and Settings opens Settings > Blocked users',
+      '403 blocked_by_them: BAM-2b with the roster name'];
+    return [
+      { file: `${dir}CoachDmThreadScreen.tsx`, kind: 'composer', what: 'a DM to one client: typed text (ComposerInput -> useSendDm)',
+        how: 'useConversationClosed(client, [thread read, send]) + ConversationClosedLine, as the client thread: my block from the block store, theirs, a ban or a departure from the read refusal; nothing editable before the read answers (useServerAnswered)',
+        proof: { by: 'suite', file, titles: [...CLOSED, OPEN_BLOCK] } },
+      { file: `${dir}CoachDmThreadScreen.tsx`, kind: 'list', what: 'one client\'s DM messages',
+        how: 'closed (either block, a ban, a departure) draws none of the client\'s words', proof: { by: 'suite', file, titles: [CLOSED[0], OPEN_BLOCK] } },
+      { file: `${dir}CoachDmListScreen.tsx`, kind: 'list', what: 'the coach\'s DM rows: roster name, last active',
+        how: 'blockSync drops a blocked client\'s row from the cached list at once (communityKeys.dmThreads prefix); the server leaves out theirs, bans and departures',
+        proof: { by: 'suite', file, titles: [BLOCK] } },
+      { file: `${dir}CoachDmEntryRow.tsx`, kind: 'list', what: '"{n} conversations" on the coach Community home',
+        how: 'counts the same cached list, so a block drops it at once', proof: { by: 'suite', file, titles: [BLOCK] } },
+      { file: `${dir}coachDm.tsx`, kind: 'list', what: 'useCoachDms: the coach\'s DM list read (useDmThreads with ?limit=100)',
+        how: 'the client\'s hook under the same key prefix, which blockSync filters; the row stops nothing (exports: []), so each caller is named on its own', proof: { by: 'suite', file, titles: [BLOCK] }, exports: [] },
+      { file: `${dir}CoachDmNewScreen.tsx`, kind: 'composer', what: 'New message: opens a DM with one client (communityApi.openDmThread); sends no words',
+        how: 'leaves out clients in my block store; a refusal either way opens only the closed thread, whose box is gated', proof: { by: 'suite', file, titles: [NEW] } },
+    ];
+  })(),
   // FR-911: named by the fail-closed scan (a send through services/messageOutbox, a coach inbox drawn in a FlatList).
   { file: 'components/share/ShareSheet.tsx', kind: 'composer', what: '"Send to {coach}": a share card sent into the coaching chat (sendCardViaOutbox)',
     how: 'none before the send: a refused card leaves the outbox and Send goes away (shareB156), but nothing asks whether the chat is closed first',
@@ -286,24 +349,28 @@ const REGISTRY: Surface[] = [
     const file = 'components/community/space-chat/__tests__/spaceChatKT2.test.tsx';
     const BLOCK = 'KT-2: a block drops the rows of the blocked author, and every quote of them, from the kept list at once';
     const READ = 'KT-2: a read refused with 403 (a ban, a departure, another workspace) closes the space and leaves nothing readable';
+    const READ_HELD = 'KT-2: a read refused with $status mid-visit (a ban, a departure, another workspace) ends reply mode and the sheet and leaves the cached messages unreadable';
+    const BLOCK_UNHELD = 'KT-2: a block also ends reply mode on, and empties a waiting reply to, a message of the blocked author the phone never held';
     const SEND = 'KT-2: a text refused with 403 fails as closed (never sent again) and closes the space';
     const WIRE = 'KT-2: 403 and 404 are no access; any other failure is not';
     return [
       { file: 'components/community/space-chat/useSpaceChat.ts', kind: 'list', what: 'one space\'s messages (text, voice, photo, quotes) and its read line',
-        how: 'the server leaves out blocks (both ways), bans and departed authors; my block (dropAuthor) takes the author\'s rows and every quote of them from every kept list at once; a read or send refused with 403 / 404 closes the space (noAccess: nothing readable, no sheet, no reply)',
-        proof: { by: 'suite', file, titles: [BLOCK, READ, SEND] } },
+        how: 'the server leaves out blocks (both ways), bans and departed authors; my block (dropAuthor) takes the author\'s rows and every quote of them (held this visit, or by who wrote it) from every kept list, reply mode and a waiting reply at once; a read or send refused with 403 / 404 closes the space, mid-visit too (noAccess: nothing readable, no sheet, no reply)',
+        proof: { by: 'suite', file, titles: [BLOCK, BLOCK_UNHELD, READ, READ_HELD, SEND] } },
+      // FIX-942 (LO-942 N2): the row claims only what SEND proves; the account binding is proven in
+      // spaceChatOutbox.account.test.ts and LO938R2SameAccountLogin, the sign-out in LO942 / LS942SpaceSignOut.
       { file: 'components/community/space-chat/spaceChatOutbox.ts', kind: 'composer', what: 'the space chat text outbox (texts queued on the phone, sent one at a time)',
-        how: 'a 403 / 404 fails the row as closed (never sent again) and tells the open space; a text goes out only as the account that queued it; a sign-out wipes the queue',
+        how: 'a 403 / 404 fails the row as closed (never sent again) and tells the open space',
         proof: { by: 'suite', file, titles: [SEND] }, exports: ['spaceOutbox', 'startSpaceOutbox', 'setSpaceOutboxOnline'] },
       { file: 'components/community/space-chat/useSpaceVoiceOutbox.ts', kind: 'composer', what: 'the space chat\'s voice notes on the voice outbox (useVoiceOutbox)',
         how: 'holds only my own notes for this space and sends into this space only; the record entry is drawn only by the space chat while the space is open',
         proof: { by: 'suite', file, titles: ['KT-2: the space voice outbox holds only my notes for this space, and sends into this space only'] } },
       ...(['list', 'composer'] as const).map((kind): Surface => ({ file: 'components/community/space-chat/spaceChatApi.ts', kind,
-        what: 'the space chat wire (messages read, send, delete)', how: 'the server leaves out blocks (both ways), bans and departed authors and refuses a send with 403 / 404 (isNoAccess), which the hook and the outbox turn into a closed space',
+        what: 'the space chat wire (messages read, send, delete)', how: 'the server leaves out blocks (both ways), bans and departed authors and refuses a send with 403 / 404 (isNoAccess), which the hook and the outbox turn into a closed space; the row stops nothing (exports: [], LS-942 N1), so every caller is named on its own',
         proof: { by: 'suite', file, titles: [WIRE] }, exports: [] })),
       // Part 2: the rows. A row is drawn only for a message useSpaceChat hands the screen (above).
       { file: 'components/community/space-chat/SpaceVoiceNote.tsx', kind: 'list', what: 'one space voice row\'s note (communityVoiceApi.getOne, for its playable copy)',
-        how: 'read only for a row useSpaceChat still holds (a block, a ban or a departure takes the row there); a row the coach removed draws no player and reads nothing; a refused lookup draws Try again, never the note',
+        how: 'read only for a row useSpaceChat still holds (a block, a ban or a departure takes the row there); a row the coach removed draws no player and reads nothing; a refused lookup (403 / 404), cold or after an earlier answer, draws Try again and hands the player no url, so a clip it had is let go (LS-943 B1), never the note',
         proof: { by: 'suite', file: 'components/community/space-chat/__tests__/spaceChatRowsKT2.test.tsx', titles: [
           'KT-2: a row the coach removed draws its one line only: no words, no player, no menu and no lookup of the note',
           'KT-2: a voice note whose lookup is refused (403 / 404) draws no New mark and nothing to play, only Try again',
@@ -351,11 +418,12 @@ const REGISTRY: Surface[] = [
     ['screens/client/ProgressScreen.tsx', 'Share a progress card: ShareSheet ("Send to {coach}")', SHARE],
     ['screens/client/active-workout/WorkoutFinishSummary.tsx', 'Share a finished workout: ShareSheet ("Send to {coach}")', SHARE],
     ['screens/client/wearables/MetricDetailV2.tsx', 'Share a metric card: ShareSheet ("Send to {coach}")', SHARE],
-    ['screens/coach/lookup/ClientLookupScreen.tsx', 'a typed nudge from the lookup (useLookupNudge)', ['screens/coach/lookup/useLookupNudge.tsx']],
     ['navigation/CommunityNavigator.tsx', 'the voice note composer route', ['screens/community/CommunityVoiceComposerScreen.tsx']],
     ['navigation/ClientNavigator.tsx', 'the wins route (CommunityScreen)', ['screens/client/CommunityScreen.tsx']],
-    ['navigation/CoachNavigator.tsx', 'the client detail and risk detail routes (a nudge)', ['screens/coach/ClientDetailScreen.tsx', 'screens/coach/ClientRiskDetailScreen.tsx']],
   ] as const).map(([file, what, parts]): Surface => ({ file, kind: 'composer', what, how: 'the part\'s own (its KNOWN GAP row)', proof: { by: 'via', parts: [...parts] } })),
+  // KT2-940: CoachNavigator's via row for the client detail and risk detail routes went with their KNOWN GAP rows: both
+  // screens are gated composers now (rows above), so their own rows stop the scan and the navigator draws no gap part.
+  // FIX-933R4: ClientLookupScreen's via row (useLookupNudge) went the same way: the part's own rows stop the scan now.
   ...([
     ['navigation/CommunityNavigator.tsx', 'the community routes (today, a space, a post, a challenge, search, a voice note)', [
       'screens/community/CommunityTodayScreen.tsx', 'screens/community/CommunitySpaceScreen.tsx', 'screens/community/CommunityThreadScreen.tsx',
@@ -413,7 +481,7 @@ const EXEMPT: { file: string; kinds: Kind[]; why: string; passes?: true; exports
   { file: 'screens/community/CommunityChallengesScreen.tsx', kinds: ['list'], why: 'coach-made challenges of a space; the notes are the registered challenge screen' },
   { file: 'screens/community/CommunityClassroomScreen.tsx', kinds: ['list'], why: 'coach-made lessons' },
   { file: 'screens/community/CommunityWearablePromptsScreen.tsx', kinds: ['list'], why: 'coach-only prompts the server drafts from a client\'s own opted-in wearable insights' },
-  { file: 'screens/roman/RomanChatScreen.tsx', kinds: ['list'], why: 'Roman (the assistant), not a member' },
+  { file: 'screens/roman/RomanChatScreen.tsx', kinds: ['list', 'composer'], why: 'Roman (the assistant), not a member' },
   // FR-911R2 (F1): a services/api call whose path the scan cannot read fails closed; the ones in src/ today, each with why.
   { file: 'services/health/ingestBatching.ts', kinds: ['composer'], exports: ['postIngestBatches'],
     why: 'my own health samples to WEARABLES_INGEST_PATH (/v1/wearables/samples/ingest), through a post seam whose path is a parameter; no member words' },
@@ -1336,7 +1404,8 @@ describe('KT-2 lists: a blocked person already in the cache drops out after a bl
 
 // ─── Lists kept outside the query cache ───────────────────────────────────────────────────────────────────────────
 
-const STATE_CASES = ['legacy-coach-list', 'coach-bell-source', 'coach-community-inbox-source', 'focus-reread-coach-home', 'focus-reread-lookup'];
+const STATE_CASES = ['legacy-coach-list', 'coach-bell-source', 'coach-community-inbox-source', 'focus-reread-coach-home', 'focus-reread-lookup',
+  'coach-drafts-count'];
 
 describe('KT-2 lists kept in screen state', () => {
   it('legacy-coach-list: a client I block from another screen leaves the legacy coach list at once', async () => {
@@ -1352,6 +1421,42 @@ describe('KT-2 lists kept in screen state', () => {
     });
     await waitFor(() => expect(view.queryByLabelText(/Open messages with Ana Ruiz/)).toBeNull());
     expect(view.getByLabelText(/Open messages with Ben Ode/)).toBeTruthy();
+  });
+
+  // FIX-952R1 (LS-952 B2): the cached drafts list is not read again; the block store alone moves the count.
+  it('coach-drafts-count: a client I block from another screen leaves Roman\'s draft count at once, with no new read', async () => {
+    const { COACH_AI_PENDING_DRAFTS_QUERY_KEY } = require('../hooks/usePendingAiDrafts');
+    const { useRomanDrafts } = require('../screens/coach/inboxStyleB');
+    const { Text } = require('react-native');
+    const { QueryClientProvider } = require('@tanstack/react-query');
+    const draft = (id: string, capability: string, subject: string | null, payload: Record<string, unknown> = {}) =>
+      ({ id, capability, status: 'pending', tenant_coach_id: 'coach-1', subject_user_id: subject, requester_id: 'coach-1', created_at: '2026-11-06T10:00:00Z', payload });
+    const qc = new QueryClient();
+    qc.setQueryData(COACH_AI_PENDING_DRAFTS_QUERY_KEY, { drafts: [
+      draft('nudge-blocked', 'draft.send_notification', BLOCKED),
+      draft('nudge-named', 'draft.send_notification', null, { clientId: BLOCKED }),
+      draft('workout-blocked', 'draft.assign_workout', BLOCKED), // the server keeps a workout across a block
+      draft('nudge-other', 'draft.send_notification', OTHER),
+    ] });
+    registerBlockSyncClient(qc);
+    useBlockedUsersStore.setState({ blocked: [] });
+    function Count() {
+      return <Text testID="count">{String(useRomanDrafts(false).total)}</Text>;
+    }
+    const view = await render(<QueryClientProvider client={qc}><Count /></QueryClientProvider>);
+    expect(view.getByTestId('count').props.children).toBe('4');
+    mockPost.mockResolvedValue({ data: {} });
+    await act(async () => {
+      await messagesModerationApi.block(BLOCKED);
+    });
+    await waitFor(() => expect(view.getByTestId('count').props.children).toBe('2'));
+    expect(qc.getQueryState(COACH_AI_PENDING_DRAFTS_QUERY_KEY)?.fetchStatus).toBe('idle');
+    // the drafts screen and Home count from the same list, not a read of their own
+    for (const file of ['screens/coach/PendingAiDraftsScreen.tsx', 'screens/coach/home-v11/useCoachHomeV11.ts']) {
+      expect(read(file)).toMatch(/usePendingAiDrafts\(/);
+      expect(read(file)).not.toMatch(/listPending\(/);
+    }
+    qc.clear();
   });
 
   // These read the block store in place; a full draw needs the whole navigator, so the rule is checked in the source.
@@ -1566,7 +1671,8 @@ describe('FR-911R2 F2: a row stops only what it proves', () => {
   });
   it.each([
     ['ShareSheet (its row is a KNOWN GAP)', "import ShareSheet from '../../components/share/ShareSheet';", 'return <ShareSheet card={null} onClose={() => undefined} />;'],
-    ['useLookupNudge (its row is a KNOWN GAP)', "import { useLookupNudge } from '../coach/lookup/useLookupNudge';", 'const n = useLookupNudge({} as never);\n  return <Text>{String(n)}</Text>;'],
+    // FIX-933R4: useLookupNudge's row is a proof now (it stops its callers), so the second gap part is the wins screen.
+    ['CommunityScreen (its row is a KNOWN GAP)', "import CommunityScreen from './CommunityScreen';", 'return <CommunityScreen />;'],
   ])('a new caller of %s is named a composer', (_label, imp, use) => {
     const text = screen(imp, use);
     expect(classify('screens/client/FR911R2Peek.tsx', text).composer).toBe(true);
@@ -1915,7 +2021,9 @@ it('LO-911R4 outside: no case in this file writes a fixture under src/', () => {
 // ─── FIX-911R4 (LO-911R4 B1, class-first): every via row, every part ──────────────────────────────────────────────
 // A via row's parts read as empty only at its file's own root and in the exports the row stops (default and file-named,
 // or the row's exports), and in a local those reach. Any other export of a via file carries its parts' kinds on, so a
-// new screen that draws a gap part through it is named. One case per via row and part (all 11 rows, 18 parts).
+// new screen that draws a gap part through it is named. One case per via row and part (all 9 rows, 15 parts;
+// KT2-940: CoachNavigator's via row went when its two parts were gated; FIX-933R4: ClientLookupScreen's went when
+// useLookupNudge was).
 describe('FIX-911R4: a via row mutes its parts only at its root and in the exports it stops', () => {
   const ctx0 = scanCtx();
   const cases = REGISTRY.flatMap((s) => (s.proof.by === 'via' ? s.proof.parts.map((part) => [s.kind, s.file, part] as [Kind, string, string]) : []));
@@ -1928,7 +2036,7 @@ describe('FIX-911R4: a via row mutes its parts only at its root and in the expor
     return [s, `import React from 'react';\nimport { FIX911R4Wrap } from './${base}';\nexport default function FIX911R4Card() { return <FIX911R4Wrap />; }\n`] as const;
   };
   it('every via part is imported by a name the cases below draw', () => {
-    expect(cases.length).toBe(18);
+    expect(cases.length).toBe(15);
     expect(cases.filter(([, f, p]) => !localOf(f, p)).map(([k, f, p]) => `${k} ${f} ${p}`)).toEqual([]);
   });
   it.each(cases)('%s via %s: a new export drawing %s, drawn on a new screen, names that screen (the via file stays muted)', (kind, file, part) => {
@@ -1968,5 +2076,53 @@ describe('FIX-911R4: a via row mutes its parts only at its root and in the expor
     const ctx2 = scanCtx({ [f]: synth, [s]: st, [h]: ht });
     expect(classify(s, st, ctx2).composer).toBe(true);
     expect(classify(h, ht, ctx2).composer).toBe(false);
+  });
+});
+
+// ROMAN-HOLD-M2 (operator agent 201's ruling, undo word "narrow roman exempt"): the RomanChatScreen EXEMPT row was widened
+// to ['list', 'composer'] because its ReplyComposer sends only to Roman (Reply quotes a Roman message into a message to
+// Roman; Report goes only to TGP's team). The limit: that row stops RomanChatScreen and nothing else.
+describe('ROMAN-HOLD-M2: the RomanChatScreen composer exemption stops only RomanChatScreen', () => {
+  const roman = 'screens/roman/RomanChatScreen.tsx';
+  const row = () => EXEMPT.find((e) => e.file === roman);
+  const peek = (imp: string, use: string) => `import React from 'react';\n${imp}\nexport default function RomanHoldM2Peek() {\n  ${use}\n}\n`;
+  const unnamed = (ctx: ScanCtx) => {
+    const s = scan(ctx);
+    return (['composer', 'list'] as Kind[]).flatMap((k) => s[k].filter((f) => !registered(f, k)).map((f) => `${k} ${f}`)).sort();
+  };
+  it('the row is the one widened row: list and composer, the same why, no passes, no exports', () => {
+    expect(EXEMPT.filter((e) => e.file === roman)).toHaveLength(1);
+    expect(row()).toEqual({ file: roman, kinds: ['list', 'composer'], why: 'Roman (the assistant), not a member' });
+    expect(classify(roman, read(roman)).composer).toBe(true);
+  });
+  it('a second file drawing ReplyComposer is still named a composer', () => {
+    const f = 'screens/client/RomanHoldM2Peek.tsx';
+    const text = peek("import ReplyComposer from '../../components/messaging/ReplyComposer';",
+      "return <ReplyComposer target={{ id: 'm1', body: 'hi', authorLabel: 'A member' }} onCancel={() => undefined} />;");
+    expect(classify(f, text).composer).toBe(true);
+    expect(unnamed(scanCtx({ [f]: text }))).toContain(`composer ${f}`);
+  });
+  it('a file drawing RomanChatScreen and a ReplyComposer of its own is still named a composer', () => {
+    const f = 'navigation/RomanHoldM2Peek.tsx';
+    const text = peek("import RomanChatScreen from '../screens/roman/RomanChatScreen';\nimport ReplyComposer from '../components/messaging/ReplyComposer';",
+      "return <><RomanChatScreen surface=\"client\" /><ReplyComposer target={null} onCancel={() => undefined} /></>;");
+    expect(classify(f, text).composer).toBe(true);
+  });
+  it('a file drawing only RomanChatScreen is quiet (as the navigators are)', () => {
+    const f = 'navigation/RomanHoldM2Peek.tsx';
+    const text = peek("import RomanChatScreen from '../screens/roman/RomanChatScreen';", 'return <RomanChatScreen surface="client" />;');
+    expect(classify(f, text).composer).toBe(false);
+  });
+  it('narrowed back to list, the scan names exactly RomanChatScreen and the navigators that reach it, so the row quiets nothing else', () => {
+    const r = row()!;
+    const kinds = r.kinds;
+    r.kinds = ['list'];
+    let narrowed: string[];
+    try { narrowed = unnamed(scanCtx()); } finally { r.kinds = kinds; }
+    expect(narrowed).toEqual([
+      'composer navigation/ClientNavigator.tsx', 'composer navigation/CoachNavigator.tsx', 'composer navigation/RootNavigator.tsx',
+      `composer ${roman}`, 'composer screenshots/ScreenshotNavigator.tsx',
+    ]);
+    expect(unnamed(scanCtx())).toEqual([]);
   });
 });

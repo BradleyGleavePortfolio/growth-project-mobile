@@ -97,7 +97,7 @@ describe('pushTapRouter', () => {
       attachPushNavigator(nav);
       setPushSession(STUDENT_A);
       routePushTap('Timeline');
-      expect(nav.navigate).toHaveBeenCalledWith('MoreTab', { screen: 'Timeline', params: undefined });
+      expect(nav.navigate).toHaveBeenCalledWith('MoreTab', { screen: 'Timeline', params: undefined, initial: false });
     });
 
     it('RENEWAL-M: PlanRenewal opens Home, then asks for the renewal pop-up, only once the tap is delivered', () => {
@@ -163,6 +163,7 @@ describe('pushTapRouter', () => {
       expect(nav.navigate).toHaveBeenCalledWith('CommunityTab', {
         screen: 'CommunityEventDetail',
         params: { eventId: 'ev-1' },
+        initial: false,
       });
     });
 
@@ -191,7 +192,7 @@ describe('pushTapRouter', () => {
       attachPushNavigator(nav);
       setPushSession(STUDENT_A);
       routePushTap('CalendarSession', { sessionId: 's-1' }, 'nb1');
-      expect(nav.navigate).toHaveBeenCalledWith('CalendarTab', { screen: 'CalendarSession', params: { sessionId: 's-1' } });
+      expect(nav.navigate).toHaveBeenCalledWith('CalendarTab', { screen: 'CalendarSession', params: { sessionId: 's-1' }, initial: false });
     });
 
     it('client CalendarSession with the Calendar flag off -> notification center', () => {
@@ -216,7 +217,7 @@ describe('pushTapRouter', () => {
       attachPushNavigator(clientNav);
       setPushSession(STUDENT_A);
       expect(routeInAppNotification('CalendarSession', { sessionId: 's-9' })).toBe(true);
-      expect(clientNav.navigate).toHaveBeenCalledWith('CalendarTab', { screen: 'CalendarSession', params: { sessionId: 's-9' } });
+      expect(clientNav.navigate).toHaveBeenCalledWith('CalendarTab', { screen: 'CalendarSession', params: { sessionId: 's-9' }, initial: false });
 
       const coachNav = makeNav(COACH_TABS);
       attachPushNavigator(coachNav);
@@ -318,6 +319,7 @@ describe('pushTapRouter', () => {
       expect(nav.navigate).toHaveBeenCalledWith('CommunityStack', {
         screen: 'CoachCommunityEvents',
         params: { eventId: 'ev-2' },
+        initial: false,
       });
     });
 

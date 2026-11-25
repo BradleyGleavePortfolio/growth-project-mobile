@@ -13,7 +13,7 @@ describe('coach Settings truthfulness', () => {
   it('removes only the orphan meal-template route, retaining adjacent coach routes', () => {
     const navigator = fs.readFileSync(path.join(__dirname, '../../../navigation/CoachNavigator.tsx'), 'utf8');
     expect(navigator.includes('CoachMealTemplates')).toBe(false);
-    for (const route of ['CoachMacrosReview', 'ClientConsultation', 'CoachWorkoutBuilder', 'CoachBulkInvite', 'InviteCodes']) {
+    for (const route of ['CoachMacrosReview', 'ClientConsultation', 'CoachWorkoutBuilder', 'BulkInvite', 'InviteCodes']) {
       expect(navigator.includes(`name="${route}"`)).toBe(true);
     }
   });

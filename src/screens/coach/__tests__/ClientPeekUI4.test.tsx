@@ -62,7 +62,7 @@ const onNudge = jest.fn();
 const onClose = jest.fn();
 
 async function mount(c = client()) {
-  await render(<ClientPeekSheet client={c} onClose={onClose} onOpen={onOpen} onNudge={onNudge} />);
+  await render(<ClientPeekSheet client={c} onClose={onClose} onOpen={onOpen} onNudge={onNudge} pair="open" />);
   await waitFor(() => expect(screen.queryByText('Loading')).toBeNull());
 }
 
@@ -77,14 +77,15 @@ beforeEach(() => {
 });
 
 describe('UI-4 peek sheet', () => {
-  it('matches the mockup: header, status line, four slices and no weigh-in yet', async () => {
+  // PEEK-K1-M (C_peek): no status line; Check-ins reads K1-S-19 "{n} to review"; Food reads kcal alone.
+  it('matches the mockup: header, four rows and no weigh-in yet', async () => {
     await mount();
     expect(mockCheckIns).toHaveBeenCalledWith('c1', { limit: 1 });
     expect(screen.getByText('Maya Brooks')).toBeTruthy();
     expect(screen.getByText('Active, joined Aug 14')).toBeTruthy();
-    expect(screen.getByText('Logged today. 2 check-ins waiting for you.')).toBeTruthy();
-    expect(screen.getByText('Today: energy 2 of 5, knee tight')).toBeTruthy();
-    expect(screen.getByText('1,420 of 1,900 kcal, protein 96 g')).toBeTruthy();
+    expect(screen.queryByText(/Logged today/)).toBeNull();
+    expect(screen.getByText('2 to review')).toBeTruthy();
+    expect(screen.getByText('1,420 of 1,900\u00a0kcal')).toBeTruthy();
     expect(screen.getByText(WORKOUT)).toBeTruthy();
     expect(mockWeek).toHaveBeenCalledWith('c1');
     expect(screen.getByText('Nothing logged yet')).toBeTruthy();
@@ -109,7 +110,9 @@ describe('UI-4 peek sheet', () => {
       await fireEvent.press(screen.getByTestId(id));
       expect(onOpen).toHaveBeenLastCalledWith(maya, target);
     }
-    expect(screen.queryByTestId('peek-chip-Meal plan')).toBeNull(); // MEALPLAN-M removed the Plan tab it opened
+    // Meal plan is drawn but display only (owner #197-E6): not a button, and pressing it opens nothing.
+    expect(screen.getByTestId('peek-chip-Meal plan').props.accessibilityRole).toBe('text');
+    expect(screen.getByTestId('peek-chip-Meal plan').props.onPress).toBeUndefined();
     await fireEvent.press(screen.getByTestId('peek-nudge'));
     expect(onNudge).toHaveBeenCalledWith(maya);
     await fireEvent.press(screen.getByTestId('peek-close'));
@@ -117,20 +120,25 @@ describe('UI-4 peek sheet', () => {
     expect(onClose).toHaveBeenCalledTimes(2);
   });
 
+  // PEEK-K1-M: C_peek draws the two side by side at every size, 130% included. FIX-933 (LO-933 B2, newer than
+  // LO-847 B2's equal halves, which were graded on the UI-4 mockup before #196-E8): each is as wide as its words.
   it.each([
     ['default text', 1, 'Maya', 'row'],
-    ['130% text', 1.3, 'Maya', 'column'],
-    ['a long first name', 1, 'Maximiliana-Jo', 'column'],
-  ])('Message and Send nudge stay two equal buttons at %s (LO-847 B2)', async (_case, scale, first, direction) => {
+    ['130% text', 1.3, 'Maya', 'row'],
+    ['a long first name', 1, 'Maximiliana-Jo', 'row'],
+  ])('Message and Send nudge stay two buttons in one row, sized to their words, at %s (LO-933 B2)', async (_case, scale, first, direction) => {
     mockFontScale = scale as number;
     await mount({ ...client(), firstName: first } as RosterClient);
     const row = StyleSheet.flatten(screen.getByTestId('peek-buttons').props.style);
     expect(row.flexDirection).toBe(direction);
     expect(row.flexWrap).toBeUndefined(); // never a content-sized wrap
-    // Side by side each slot is an equal half (flex 1, zero basis); stacked each button is the full width.
+    // Each slot starts at its words' width (basis auto) and takes an equal share of what is left; never a zero-basis
+    // half. When short of room, Message gives way first; Send nudge never passes half the row (C_peek android360 130%).
     const slots = screen.getAllByTestId('peek-slot');
     expect(slots).toHaveLength(2);
-    for (const slot of slots) expect(StyleSheet.flatten(slot.props.style)?.flex).toBe(direction === 'row' ? 1 : undefined);
+    expect(StyleSheet.flatten(slots[0].props.style)).toMatchObject({ flexGrow: 1, flexShrink: 1, flexBasis: 'auto' });
+    expect(StyleSheet.flatten(slots[1].props.style)).toMatchObject({ flexGrow: 1, flexShrink: 0, flexBasis: 'auto', maxWidth: '50%' });
+    for (const slot of slots) expect(StyleSheet.flatten(slot.props.style).flex).toBeUndefined();
     expect(screen.getByText(`Message ${first}`)).toBeTruthy();
   });
 
@@ -158,7 +166,8 @@ describe('UI-4 peek sheet', () => {
     mockCheckIns.mockResolvedValue({ data: [] });
     mockWeek.mockResolvedValue(week(0));
     await mount();
-    expect(screen.getAllByText('Nothing logged yet')).toHaveLength(3);
+    expect(screen.getAllByText('Nothing logged yet')).toHaveLength(2);
+    expect(screen.getByText('2 to review')).toBeTruthy(); // PEEK-K1-M: the roster's count, K1-S-19, still reads
     expect(screen.getByText('Nothing planned this week')).toBeTruthy();
   });
 
@@ -176,20 +185,22 @@ describe('UI-4 peek sheet', () => {
       const p = new Promise((resolve, reject) => { settle = { resolve, reject }; });
       return { p, ...settle };
     };
-    const theo = { ...client(), id: 'c2', firstName: 'Theo', lastName: 'Grant' } as unknown as RosterClient;
+    const theo = { ...client(false), id: 'c2', firstName: 'Theo', lastName: 'Grant' } as unknown as RosterClient;
     const theoSummary = summary();
     theoSummary.data.today.total_calories = 2210;
-    const MAYA = ['Today: energy 2 of 5, knee tight', '1,420 of 1,900 kcal, protein 96 g'];
-    const THEO = ['Today: energy 4 of 5, felt strong', '2,210 of 1,900 kcal, protein 96 g'];
+    // Nothing waiting to review, so the Check-ins row shows each client's own latest check-in.
+    // FIX-933: the app's words and the client's note are drawn apart (only the note may be cut).
+    const MAYA = ['Today: energy 2 of 5', 'knee tight', '1,420 of 1,900\u00a0kcal'];
+    const THEO = ['Today: energy 4 of 5', 'felt strong', '2,210 of 1,900\u00a0kcal'];
     mockCheckIns.mockImplementation((id: string) => Promise.resolve({
       data: [id === 'c2' ? { id: 'k2', date: `${day(0)}T00:00:00.000Z`, energy: 4, notes: 'felt strong' } : { id: 'k1', date: `${day(0)}T00:00:00.000Z`, energy: 2, notes: 'knee tight' }],
     }));
-    const sheet = (c: RosterClient | null) => <ClientPeekSheet client={c} onClose={onClose} onOpen={onOpen} onNudge={onNudge} />;
+    const sheet = (c: RosterClient | null) => <ClientPeekSheet client={c} onClose={onClose} onOpen={onOpen} onNudge={onNudge} pair="open" />;
     const showsOnly = (mine: string[], other: string[]) => {
       for (const t of mine) expect(screen.getByText(t)).toBeTruthy();
       for (const t of other) expect(screen.queryByText(t)).toBeNull();
     };
-    const { rerender } = await render(sheet(client()));
+    const { rerender } = await render(sheet(client(false)));
     await waitFor(() => showsOnly(MAYA, THEO));
 
     // Maya has loaded; the coach closes her and opens Theo while his read is still on its way.
@@ -208,7 +219,7 @@ describe('UI-4 peek sheet', () => {
       const mayaRead = later();
       mockSummary.mockImplementation((id: string) => (id === 'c1' ? mayaRead.p : Promise.resolve(theoSummary)));
       await rerender(sheet(null));
-      await rerender(sheet(client()));
+      await rerender(sheet(client(false)));
       await rerender(sheet(null));
       await rerender(sheet(theo));
       await waitFor(() => showsOnly(THEO, MAYA));
@@ -221,7 +232,7 @@ describe('UI-4 peek sheet', () => {
   it("every chip is a 44 pt touch target around the mockup's 36 pt pill", async () => {
     mockFlags = { coach_payment_actions: true };
     await mount();
-    for (const label of ['Food log', 'Workouts', 'Payments', 'Full profile']) {
+    for (const label of ['Food log', 'Meal plan', 'Workouts', 'Payments', 'Full profile']) {
       expect(StyleSheet.flatten(screen.getByTestId(`peek-chip-${label}`).props.style).minHeight).toBeGreaterThanOrEqual(44);
     }
   });
@@ -230,7 +241,8 @@ describe('UI-4 peek sheet', () => {
     const s = summary().data;
     const slices = peekSlices(client(), { ...s, weight_logs: [{ weight_lbs: 182.44, date: day(0) }] }, [], workoutWeek(week(0).data), null);
     expect(slices.weighIn.text).toBe('Today: 182.4\u00a0lb');
-    expect(slices.food.text).toBe('1,420\u00a0kcal, protein 96\u00a0g'); // no target: no "of"; units never wrap apart
-    expect(slices.checkIn).toEqual({ text: 'Nothing logged yet', hasOne: false });
+    expect(slices.food.text).toBe('1,420\u00a0kcal'); // no target: no "of"; units never wrap apart; C_peek draws no protein
+    expect(slices.checkIn).toEqual({ text: '2 to review', hasOne: true, note: null }); // K1-S-19 from the roster
+    expect(peekSlices(client(false), s, [], workoutWeek(week(0).data), null).checkIn).toEqual({ text: 'Nothing logged yet', hasOne: false, note: null });
   });
 });

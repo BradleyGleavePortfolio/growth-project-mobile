@@ -281,7 +281,7 @@ describe('Community quiet reading and action parity', () => {
     expect(mockMutate).toHaveBeenCalledWith(expect.objectContaining({ postId: 'p-1', active: false }));
     await fireEvent.changeText(getByTestId('community-thread-composer-field'), 'Reply text');
     await fireEvent.press(getByTestId('community-thread-composer-send'));
-    expect(mockMutate).toHaveBeenCalledWith('Reply text');
+    expect(mockMutate).toHaveBeenCalledWith({ body: 'Reply text', idempotencyKey: expect.any(String) }); // SEND-ONCE-PHONE
   });
   it('uses neutral post confirmation and returns within 300ms', async () => {
     jest.useFakeTimers();
@@ -307,7 +307,7 @@ describe('Composer — submit wiring', () => {
     await fireEvent.changeText(getByTestId('community-composer-body'), 'My body');
     await fireEvent.press(getByTestId('community-composer-submit'));
     expect(mockMutate).toHaveBeenCalledWith(
-      { title: 'My title', body: 'My body' },
+      { title: 'My title', body: 'My body', idempotencyKey: expect.any(String) }, // SEND-ONCE-PHONE: the draft's key
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
   });
@@ -336,7 +336,7 @@ describe('Composer — submit wiring', () => {
     await fireEvent.changeText(getByTestId('community-composer-body'), 'hello');
     await fireEvent.press(getByTestId('community-composer-submit'));
     expect(mockMutate).toHaveBeenCalledWith(
-      'hello',
+      { body: 'hello', idempotencyKey: expect.any(String) }, // SEND-ONCE-PHONE: the draft's key
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
   });

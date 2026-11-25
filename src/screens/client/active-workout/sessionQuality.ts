@@ -1,5 +1,6 @@
 import type { Exercise, SessionExercise, SessionSet } from './types';
 import { toServerMuscleGroup } from '../../../utils/workout/muscleGroup';
+import { setVolume, unitField, unitOf } from '../../../utils/workout/exerciseUnit';
 
 export interface LoggedExercise {
   exercise_name: string;
@@ -10,6 +11,17 @@ export interface LoggedExercise {
   notes?: string | null;
   rpe?: number | null;
   video_url?: string | null;
+  /**
+   * SET-ASKED (b#1219): the assignment and row order a logged exercise came
+   * from. Sent only for an exercise logged from an assignment.
+   */
+  plan_assignment_id?: string | null;
+  plan_order?: number | null;
+  /** Read only: what the coach asked, as the server froze it. Never sent. */
+  asked_sets?: number | null;
+  asked_count?: number | null;
+  asked_unit?: string | null;
+  asked_weight_lbs?: number | null;
 }
 
 export interface LoggedWorkout {
@@ -22,10 +34,16 @@ export interface LoggedWorkout {
 
 const nameKey = (name: string) => name.trim().toLowerCase();
 
-/** API returns newest first. Match names because saved workouts have no catalog id. */
-export function previousSets(history: LoggedWorkout[], name: string): SessionSet[] {
+/**
+ * API returns newest first. Match names because saved workouts have no catalog id.
+ * LS-928R2 B1: only a past exercise counted in today's unit is offered (a saved
+ * row with no asked_unit counts reps); reps and seconds are never converted.
+ */
+export function previousSets(history: LoggedWorkout[], name: string, unit?: unknown): SessionSet[] {
+  const today = unitOf({ unit });
   for (const workout of history) {
-    const exercise = workout.exercises?.find((e) => nameKey(e.exercise_name) === nameKey(name));
+    const exercise = workout.exercises?.find((e) => nameKey(e.exercise_name) === nameKey(name)
+      && unitOf({ unit: e.asked_unit }) === today);
     if (exercise?.sets_completed) {
       return Array.from({ length: exercise.sets_completed }, (_, i) => ({
         weight: exercise.weight_per_set[i] ?? 0,
@@ -71,7 +89,22 @@ export function swapExercise(exercises: SessionExercise[], index: number, replac
   return result;
 }
 
-export function completedExercisePayload(exercise: SessionExercise): LoggedExercise {
+/**
+ * TIMED-SETS-M: `{ plan_assignment_id, plan_order }` for an exercise logged
+ * from an assignment (both known), else `{}`. A free workout, an added or a
+ * swapped-in exercise has no plan order, so it sends neither.
+ */
+function planRowFields(
+  exercise: SessionExercise,
+  planAssignmentId?: string,
+): { plan_assignment_id?: string; plan_order?: number } {
+  const id = exercise.planAssignmentId ?? planAssignmentId;
+  return typeof id === 'string' && id.length > 0 && typeof exercise.planOrder === 'number'
+    ? { plan_assignment_id: id, plan_order: exercise.planOrder }
+    : {};
+}
+
+export function completedExercisePayload(exercise: SessionExercise, planAssignmentId?: string): LoggedExercise {
   const sets = exercise.sets.filter((s) => s.completed);
   return {
     exercise_name: exercise.exerciseName,
@@ -80,6 +113,7 @@ export function completedExercisePayload(exercise: SessionExercise): LoggedExerc
     weight_per_set: sets.map((s) => s.weight),
     reps_per_set: sets.map((s) => s.reps),
     notes: exercise.notes ?? '',
+    ...planRowFields(exercise, planAssignmentId),
   };
 }
 
@@ -95,7 +129,10 @@ export function workoutSummary(exercises: SessionExercise[], history: LoggedWork
       ? [{ name: exercise.exerciseName, weight: best }]
       : [];
   });
-  return { exercises: done.length, sets: sets.length, volume: sets.reduce((sum, s) => sum + s.weight * s.reps, 0), records };
+  // LS-928 B4: a set counted in seconds adds no lb volume.
+  const volume = done.reduce((sum, e) => sum + e.sets.reduce(
+    (inner, s) => inner + (s.completed ? setVolume(s.weight, s.reps, e.unit) : 0), 0), 0);
+  return { exercises: done.length, sets: sets.length, volume, records };
 }
 
 export function loggedWorkoutExercises(workout: LoggedWorkout): SessionExercise[] {
@@ -104,6 +141,12 @@ export function loggedWorkoutExercises(workout: LoggedWorkout): SessionExercise[
     exerciseName: e.exercise_name,
     muscleGroup: e.muscle_group,
     notes: e.notes ?? '',
+    // LS-928 B1: a saved timed exercise stays in seconds in the history edit.
+    ...unitField(e.asked_unit),
+    // The plan row the server stored is sent back as it was (PUT is replace-all).
+    ...(typeof e.plan_assignment_id === 'string' && e.plan_assignment_id && typeof e.plan_order === 'number'
+      ? { planAssignmentId: e.plan_assignment_id, planOrder: e.plan_order }
+      : {}),
     sets: Array.from({ length: e.sets_completed }, (_, i) => ({
       weight: e.weight_per_set[i] ?? 0,
       reps: e.reps_per_set[i] ?? 0,

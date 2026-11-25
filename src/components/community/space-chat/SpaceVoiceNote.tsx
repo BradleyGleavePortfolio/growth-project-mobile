@@ -23,6 +23,8 @@ import { spaceChatApi, type SpaceMessage } from './spaceChatApi';
 const SMALL_GREY = colors.graphite;
 
 export const spaceVoiceKey = (voiceNoteId: string) => ['community', 'space-chat-voice', voiceNoteId] as const;
+/** LS-943 B1: the server will not give this viewer the note: 403, or 404 (a note out of sight is a 404; spaceChatApi isNoAccess). */
+const refusedBy = (err: unknown): boolean => [403, 404].includes((err as { status?: number } | null)?.status ?? 0);
 
 /** The resolved player, with one extra step when a clip plays to the end. */
 export function withHeard(base: VoicePlaybackPort, onHeard: () => void): VoicePlaybackPort {
@@ -59,7 +61,10 @@ export default function SpaceVoiceNote(p: SpaceVoiceNoteProps): React.ReactEleme
     staleTime: 5 * 60_000,
     enabled: !localUri,
   });
-  const heard = !mine && !localUri && !!note.data?.heard_at;
+  // LS-943 B1: once the lookup is refused, the copy kept from an earlier answer is not played or marked (its url goes,
+  // so the player lets the clip go); an offline or passing error keeps it, with Try again.
+  const data = !localUri && note.isError && refusedBy(note.error) ? undefined : note.data;
+  const heard = !mine && !localUri && !!data?.heard_at;
   const sentRef = useRef(false);
   const wantHeard = !mine && !localUri && !heard;
   const wantRef = useRef(wantHeard);
@@ -85,7 +90,7 @@ export default function SpaceVoiceNote(p: SpaceVoiceNoteProps): React.ReactEleme
       ) : null}
     </View>
   ) : null;
-  const trailing = send ? status : mine || localUri || !note.data ? null : heard ? (
+  const trailing = send ? status : mine || localUri || !data ? null : heard ? (
     <View style={s.played} testID={`space-chat-voice-played-${voice.id}`}>
       <Ionicons name="checkmark" size={14} color={coach ? fp.onDeep : SMALL_GREY} />
       <Text style={[s.playedText, coach ? s.onDeep : null]}>Played</Text>
@@ -96,6 +101,8 @@ export default function SpaceVoiceNote(p: SpaceVoiceNoteProps): React.ReactEleme
     </View>
   );
 
+  // LO-943 N1: the bar and its spoken value share one clamped figure.
+  const pct = Math.round(Math.min(1, Math.max(0, progress ?? 0)) * 100);
   const confirmDiscard = () => Alert.alert('Delete this voice note?', undefined, [
     { text: 'Cancel', style: 'cancel' },
     { text: 'Delete', style: 'destructive', onPress: p.onDiscard },
@@ -118,8 +125,8 @@ export default function SpaceVoiceNote(p: SpaceVoiceNoteProps): React.ReactEleme
     </View>
   ) : send === 'sending' && progress !== undefined ? (
     <View style={[s.track, coach ? s.trackCoach : null]} accessibilityRole="progressbar"
-      accessibilityValue={{ min: 0, max: 100, now: Math.round(progress * 100) }} testID={`space-chat-voice-progress-${voice.id}`}>
-      <View style={[s.fill, coach ? s.fillCoach : null, { width: `${Math.round(Math.min(1, Math.max(0, progress)) * 100)}%` }]} />
+      accessibilityValue={{ min: 0, max: 100, now: pct }} testID={`space-chat-voice-progress-${voice.id}`}>
+      <View style={[s.fill, coach ? s.fillCoach : null, { width: `${pct}%` }]} />
     </View>
   ) : !localUri && note.isError && !note.isFetching ? (
     <TouchableOpacity onPress={() => { void note.refetch(); }} accessibilityRole="button" accessibilityLabel="Try again" style={s.del} testID={`space-chat-voice-retry-${voice.id}`}>
@@ -129,7 +136,7 @@ export default function SpaceVoiceNote(p: SpaceVoiceNoteProps): React.ReactEleme
 
   return (
     <VoiceNotePlayer
-      url={localUri ?? note.data?.url ?? null}
+      url={localUri ?? data?.url ?? null}
       durationMs={voice.duration_ms}
       peaks={voice.waveform_peaks ?? undefined}
       tone={coach ? 'coach' : 'light'}

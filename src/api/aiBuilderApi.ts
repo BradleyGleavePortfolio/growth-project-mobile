@@ -18,7 +18,8 @@ const StatusSchema = z.object({
 export type AiBuilderStatus = z.infer<typeof StatusSchema>;
 
 const n = z.number().nullable().optional();
-const RowSchema = z.object({ exercise_external_id: z.string().optional(), sets: n, reps_or_duration_seconds: n, rest_seconds: n, weight_lbs: n }).nullable().optional();
+// TIMED-SETS-M: a change row may carry its unit (b#1211); anything else reads reps.
+const RowSchema = z.object({ exercise_external_id: z.string().optional(), sets: n, reps_or_duration_seconds: n, unit: z.string().nullable().optional(), rest_seconds: n, weight_lbs: n }).nullable().optional();
 
 const ChangeSchema = z.object({
   change_id: z.string().min(1), kind: z.enum(['added', 'changed', 'removed', 'moved', 'meta']),

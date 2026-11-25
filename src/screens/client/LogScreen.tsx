@@ -820,6 +820,8 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
         visible={modalVisible && !suspended}
         activeMealType={activeMealType}
         onMealChange={mealChoice ? setActiveMealType : undefined}
+        // REFINE-968 (ruling 3): "Add at {time}" only when a save now files under today, by the save's own day rule.
+        savesToday={() => dayForNewLog({ selectedDate, selectedOn }) === getTodayString()}
         addedFoodName={addedFoodName}
         onClose={() => {
           if (!foodSaving) {

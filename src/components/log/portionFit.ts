@@ -27,16 +27,17 @@ const titleEm = (name: string) =>
   [...name].reduce((sum, ch) => sum + (CORMORANT_EM[(ch.codePointAt(0) ?? 0) - 32] ?? 600), 0) / 1000;
 
 /**
- * The food name's size: its own size (30 pt times the text size) when it fits one line; else the largest size that
+ * The food name's size: its own size (24 pt times the text size) when it fits one line; else the largest size that
  * keeps it on one line, down to 24 pt (C_portion draws the name at about 24 pt). A name too long for one line even
- * then wraps at its own size, between words only (`text` keeps each hyphenated word whole).
+ * then wraps at its own size, keeping its normal word and hyphen break opportunities.
  */
 export function fitTitle(name: string, room: number, fontScale: number, letterSpacing = 0) {
-  const own = 30 * (fontScale > 0 ? fontScale : 1);
+  const own = 24 * (fontScale > 0 ? fontScale : 1);
   const chars = [...name].length;
   const fit = Math.floor(((room * SAFE - letterSpacing * chars) / Math.max(titleEm(name), 0.001)) * 4) / 4;
   const fontSize = fit >= own ? own : fit >= 24 ? fit : own;
-  return { fontSize, lineHeight: Math.round(fontSize * (38 / 30)), oneLine: fontSize <= fit, text: name.replace(/-/g, '\u2011') };
+  const oneLine = fontSize <= fit;
+  return { fontSize, lineHeight: Math.round(fontSize * (38 / 30)), oneLine, text: oneLine ? name.replace(/-/g, '\u2011') : name };
 }
 
 /**

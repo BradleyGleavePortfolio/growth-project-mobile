@@ -12,6 +12,8 @@ import PrepGuideScreen from '../PrepGuideScreen';
 const mockNavigation = { goBack: jest.fn(), navigate: jest.fn() };
 let mockTokens = lightTokens;
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => mockNavigation }));
+// The Style C masthead paints the status bar on focus; no navigator here (STYLE-KITCHEN-M).
+jest.mock('../../../components/StatusBarBand', () => ({ useStatusBarBand: () => undefined }));
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({ colors: jest.requireActual('../../../constants/colors').default, semanticColors: mockTokens }),
 }));
@@ -110,7 +112,7 @@ it('preserves prep back, both week arrows, refresh, add/cancel and success groce
   const view = await mount(PrepGuideScreen);
   await view.findByText('Soup');
   expect(view.getByText('Sunday')).toBeTruthy();
-  expect(view.getByText('30 min')).toBeTruthy();
+  expect(view.getByText(/30 min/)).toBeTruthy();
   expect(view.queryByText(/keep fresh food ready/)).toBeNull();
   await fireEvent.press(view.getByLabelText('Back'));
   await fireEvent.press(view.getByLabelText('Previous week'));
@@ -122,8 +124,9 @@ it('preserves prep back, both week arrows, refresh, add/cancel and success groce
   expect(listsApi.bulkAdd).not.toHaveBeenCalled();
   await confirm('Add');
   await waitFor(() => expect(listsApi.bulkAdd).toHaveBeenCalledWith('grocery', [{ name: 'Carrots', quantity: 2, unit: 'kg' }]));
-  await waitFor(() => expect(jest.mocked(Alert.alert).mock.calls.at(-1)?.[0]).toBe('Added to Grocery List'));
-  await confirm('View List');
+  // REFINE-929: the success is the Style C sheet (ctx#457 prep-added), same words and the same two choices.
+  await view.findByText('Added to Grocery List');
+  await fireEvent.press(view.getByText('View List'));
   expect(mockNavigation.navigate).toHaveBeenCalledWith('GroceryList');
 });
 it('uses neutral empty/loading copy and disables Add all when there are no ingredients', async () => {
@@ -147,7 +150,8 @@ it('describes fetching the prep guide without claiming it is being built', async
 it.each([GroceryListScreen, ShoppingListScreen, PrepGuideScreen])('uses semantic page colors in dark mode', async (Screen) => {
   mockTokens = darkTokens;
   const view = await mount(Screen);
-  expect(StyleSheet.flatten(view.getByTestId('grocery-prep-screen').props.style).backgroundColor).toBe(darkTokens.bgPrimary);
+  // STYLE-KITCHEN-M: the page under the inset top is the Style C forest masthead token; the paper is bgSurface.
+  expect(StyleSheet.flatten(view.getByTestId('grocery-prep-screen').props.style).backgroundColor).toBe(darkTokens.surface.forestBand);
 });
 
 describe('prep guide says where its recipes come from (NUTR-AUD-128 B1)', () => {
@@ -225,7 +229,7 @@ describe('Add all adds once (NUTR-AUD-128 U3)', () => {
     await waitFor(() => expect(listsApi.bulkAdd).toHaveBeenCalledTimes(1));
     expect(listsApi.bulkAdd).toHaveBeenCalledWith('grocery', [{ name: 'Carrots', quantity: 2, unit: 'kg' }, { name: 'Salt', quantity: 0, unit: undefined }]);
     expect(listsApi.addItem).not.toHaveBeenCalled();
-    await waitFor(() => expect(jest.mocked(Alert.alert).mock.calls.at(-1)?.[1]).toBe('2 ingredients added to your grocery list.'));
+    expect(await view.findByText('2 ingredients added to your grocery list.')).toBeTruthy();
   });
   it('says nothing was added when the single request fails', async () => {
     jest.mocked(listsApi.bulkAdd).mockRejectedValue(new Error('offline'));

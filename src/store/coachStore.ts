@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { coachApi } from '../services/api';
 import { logger } from '../utils/logger';
+import { rosterLoaded } from './rosterVersion';
 import {
   matchesRosterSearch,
   rosterActivityFromWire,
@@ -126,6 +127,7 @@ export const useCoachStore = create<CoachStore>((set, get) => ({
         };
       });
       set({ clients, isLoading: false, loadError: null });
+      rosterLoaded(wireStatus, clients.map((c) => c.id)); // LS-952R3 B5: the drafts queue is read again on a change
     } catch (err) {
       if (mine !== session) return;
       // Read-only client list load. Existing state stays so the previous

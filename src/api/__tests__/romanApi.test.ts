@@ -26,6 +26,7 @@ import {
   openOrResumeSession,
   parseSseChunks,
   RomanApiError,
+  RomanKeySpentError,
   RomanWireMessageSchema,
   RomanSessionSchema,
   RomanWireError,
@@ -34,6 +35,7 @@ import {
   type RomanSession,
 } from '../romanApi';
 import { featureFlags } from '../../config/featureFlags';
+import { failedSendKeepsKey } from '../../lib/sendOnce';
 
 const pins: { restore: () => void }[] = [];
 afterEach(() => pins.splice(0).forEach((p) => p.restore()));
@@ -271,7 +273,7 @@ describe('romanApi — sendMessage (buffered SSE over fetch)', () => {
     global.fetch = mock;
   }
 
-  it('POSTs the event-stream and returns the settled reply without any retry/dedupe header', async () => {
+  it('POSTs the event-stream and returns the settled reply without a send-once header when no key is given', async () => {
     mockFetchOnce({
       text:
         'data: {"type":"delta","text":"Good "}\n\n' +
@@ -282,11 +284,10 @@ describe('romanApi — sendMessage (buffered SSE over fetch)', () => {
     const [url, opts] = fetchMock.mock.calls[0];
     expect(url).toBe(`http://test.local/api/roman/sessions/${SESSION_ID}/messages`);
     expect(opts.method).toBe('POST');
-    // The backend does not implement a retry/dedupe header; the client must not
-    // advertise a guarantee that does not exist (#2 fabrication). Build the
-    // forbidden header name dynamically so this source file carries no literal
-    // reference to it, then assert it is absent from the sent header set.
-    const forbiddenDedupeHeader = ['idem', 'potency-key'].join('');
+    // SEND-ONCE-PHONE (b#1228): the header is optional and travels only when the
+    // caller hands a send-once key (RomanSendOnce.test.tsx covers the keyed send).
+    // With no key, no send-once header is sent.
+    const forbiddenDedupeHeader = 'idempotency-key';
     const sentHeaderKeys = Object.keys(opts.headers ?? {}).map((k) => k.toLowerCase());
     expect(sentHeaderKeys).not.toContain(forbiddenDedupeHeader);
     expect(opts.headers.Accept).toBe('text/event-stream');
@@ -316,5 +317,31 @@ describe('romanApi — sendMessage (buffered SSE over fetch)', () => {
       text: 'event: error\ndata: {"code":"ROMAN_UNAVAILABLE","message":"Roman is not available right now."}\n\n',
     });
     await expect(sendMessage(SESSION_ID, 'hi')).rejects.toMatchObject({ kind: 'unavailable' });
+  });
+
+  // FIX-953R3: backend main f239683f answers a same-key resend whose first send may still store its reply with its
+  // own code (roman.controller.ts:307-309; CONTRACT 6754738036), the same words as ROMAN_UNAVAILABLE. Exactly that
+  // code keeps the send-once key; every other coded frame still ends it, and a frame off the strict schema is drift.
+  it.each([
+    ['the ROMAN_REPLY_PENDING frame', 'kept', '{"code":"ROMAN_REPLY_PENDING","message":"Roman is not available right now."}', 'generic'],
+    ['the ROMAN_UNAVAILABLE frame', 'spent', '{"code":"ROMAN_UNAVAILABLE","message":"Roman is not available right now."}', 'unavailable'],
+    ['a frame with an unknown code', 'spent', '{"code":"ROMAN_SOMETHING_NEW","message":"Roman is not available right now."}', 'generic'],
+    ['the pending code in lower case', 'spent', '{"code":"roman_reply_pending","message":"Roman is not available right now."}', 'generic'],
+    ['the pending code with a suffix', 'spent', '{"code":"ROMAN_REPLY_PENDING_V2","message":"Roman is not available right now."}', 'generic'],
+    ['the pending frame with a third field', 'kept: wire drift', '{"code":"ROMAN_REPLY_PENDING","message":"Roman is not available right now.","retry":true}', null],
+  ] as const)('%s on a keyed send: the key is %s', async (_label, key, data, kind) => {
+    mockFetchOnce({ text: `event: error\ndata: ${data}\n\n` });
+    const err = await sendMessage(SESSION_ID, 'hi', { idempotencyKey: '0f8b5c2e-6a1d-4c3b-9e7f-2d4a6b8c0e1f' }).then(
+      () => { throw new Error('the send should have failed'); },
+      (e: unknown) => e,
+    );
+    if (key === 'kept: wire drift') {
+      expect(err).toBeInstanceOf(RomanWireError);
+      return;
+    }
+    expect(err).toBeInstanceOf(RomanApiError);
+    expect(err instanceof RomanKeySpentError).toBe(key === 'spent');
+    expect(err).toMatchObject({ kind, turnStored: true, message: 'Roman is not available right now.' });
+    expect(failedSendKeepsKey(err)).toBe(key === 'kept');
   });
 });

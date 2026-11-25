@@ -73,7 +73,7 @@ test('after an answer the starters not asked yet stay as chips; the disclaimer s
   expect(s.queryByTestId('copilot-more-1')).toBeNull();
   send.mockResolvedValueOnce({ text: 'A good week.', messageId: 'm2', interrupted: false, copilot: { sources: [], suggestion: null } } as never);
   await act(async () => fireEvent.press(s.getByText('How was my week')));
-  expect(send).toHaveBeenLastCalledWith('sess-1', 'How was my week', { copilot: true });
+  expect(send).toHaveBeenLastCalledWith('sess-1', 'How was my week', { copilot: true, idempotencyKey: expect.any(String) });
   expect(s.queryByTestId('copilot-more')).toBeNull();
 });
 

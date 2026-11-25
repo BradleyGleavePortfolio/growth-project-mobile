@@ -35,6 +35,7 @@ import {
   useMyCoachName,
 } from '../../hooks/useCommunity';
 import { describeCommunityFailure } from '../../api/communityErrors';
+import { useDraftSendKey } from '../../lib/sendOnce';
 import { useConversationClosed, useServerAnswered, useClosedBy, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
 import type { CommunityNav, CommunityRoute } from './communityNavTypes';
 
@@ -94,6 +95,9 @@ export default function CommunityComposerScreen(): React.ReactElement {
 
   // Apple 1.2 content filter: the server rejects objectionable text with 422.
   // The draft stays in the fields so the member can rephrase.
+  // SEND-ONCE-PHONE (b#1228): the draft's send-once key lives here with the fields (lib/sendOnce.ts): Send / Post
+  // again with the same words after a failure that may have reached the server sends the same key.
+  const sendKey = useDraftSendKey();
   const showSendError = (err: unknown) => {
     if (close(err)) return;
     const failure = describeCommunityFailure(err, mode === 'dm' ? 'send_message' : 'send_post');
@@ -103,20 +107,22 @@ export default function CommunityComposerScreen(): React.ReactElement {
   const submit = () => {
     if (!canSubmit) return;
     if (mode === 'dm') {
-      sendDm.mutate(trimmedBody, {
-        onSuccess: () => navigation.goBack(),
-        onError: showSendError,
+      sendDm.mutate({ body: trimmedBody, idempotencyKey: sendKey.keyFor(trimmedBody) }, {
+        onSuccess: () => { sendKey.sent(); navigation.goBack(); },
+        onError: (err) => { sendKey.failed(err); showSendError(err); },
       });
       return;
     }
     createPost.mutate(
-      { title: trimmedTitle, body: trimmedBody },
+      // A post's words are its title and body together: a change to either is a new draft, a new key.
+      { title: trimmedTitle, body: trimmedBody, idempotencyKey: sendKey.keyFor(JSON.stringify([trimmedTitle, trimmedBody])) },
       {
         onSuccess: () => {
+          sendKey.sent();
           setConfirmation('Post published.');
           setTimeout(() => navigation.goBack(), 300);
         },
-        onError: showSendError,
+        onError: (err) => { sendKey.failed(err); showSendError(err); },
       },
     );
   };

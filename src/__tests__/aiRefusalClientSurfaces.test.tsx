@@ -87,7 +87,7 @@ jest.mock('../screens/client/wearables/components/useReduceMotion', () => ({ use
 import AIGuideScreen from '../screens/client/AIGuideScreen';
 import RomanChatScreen from '../screens/roman/RomanChatScreen';
 import { captureError } from '../services/sentry';
-import { ROMAN_STORED_NO_REPLY } from '../components/roman/romanVoice';
+import { ROMAN_HELD_NO_ANSWER } from '../components/roman/romanVoice';
 import { ClientWearableInsightPanel } from '../screens/client/wearables/ClientWearableInsightPanel';
 
 function httpError(status: number, data: Record<string, unknown>, headers: Record<string, string> = {}) {
@@ -188,7 +188,7 @@ describe('RomanChatScreen — a refusal after the turn was stored (B-326-3)', ()
   it('a stored turn without an answer (non-refusal) says it is saved, not that it failed to send', async () => {
     mockUseRomanChat.mockReturnValue(romanState({ kind: 'unavailable', message: 'x', turnStored: true }));
     const r = await render(<RomanChatScreen surface="client" />);
-    expect(r.getByText(ROMAN_STORED_NO_REPLY)).toBeTruthy();
+    expect(r.getByText(ROMAN_HELD_NO_ANSWER)).toBeTruthy();
   });
 });
 

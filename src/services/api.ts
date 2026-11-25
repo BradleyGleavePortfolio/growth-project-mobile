@@ -133,6 +133,10 @@ const api = axios.create({
   baseURL: API_BASE,
   timeout: 30000, // 30sec — Fly.io free tier cold start can take up to 25sec
   headers: { 'Content-Type': 'application/json' },
+  // TOKEN-CACHE-M: an AxiosError's JSON (error.toJSON(), so any JSON.stringify
+  // of the error) shows this header as '[REDACTED ****]', never the bearer
+  // token. The request itself still sends the token.
+  redact: ['authorization'],
 });
 
 // Attach JWT token to every request automatically.

@@ -29,7 +29,7 @@ export interface AppLinkTarget {
   params?: Record<string, string>;
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const nested = (root: string, screen: string, params?: Record<string, string>): AppLinkTarget =>
   ({ root, screen, params, initial: false });
 
@@ -99,6 +99,11 @@ export function resolveAppLink(path: string, role: 'student' | 'coach'): AppLink
       }
     }
     return null;
+  }
+  // COACH-DM-M (b#1243 CONTRACT 6763103674): a coach's DM link names the client; their thread in the coach Community stack.
+  if (first === 'community' && id === 'dm' && segments.length === 3 && UUID.test(segments[2]) && featureFlags.coachCommunity &&
+      featureFlags.communityDm) {
+    return nested('CommunityStack', 'CommunityDmThread', { recipientId: segments[2] });
   }
   if (plain === 'messages' || (first === 'messages' && uuidPair)) {
     return featureFlags.coachTabsV2 ? { root: 'Messages', screen: 'MessagesInbox', pop: true } : { root: 'Messages' };

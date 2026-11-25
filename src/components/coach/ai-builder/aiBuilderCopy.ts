@@ -64,10 +64,10 @@ export function describeAiBuilderError(code: AiBuilderErrorCode, resetsAt: strin
   return code === 'no_credits' ? noCreditsCopy(resetsAt) : ERROR_COPY[code];
 }
 
-type RowLike = { sets?: number | null; reps_or_duration_seconds?: number | null; weight_lbs?: number | null } | null | undefined;
+type RowLike = { sets?: number | null; reps_or_duration_seconds?: number | null; unit?: string | null; weight_lbs?: number | null } | null | undefined;
 export function formatRow(row: RowLike): string {
   if (!row) return '';
-  const base = row.sets != null && row.reps_or_duration_seconds != null ? `${row.sets} x ${row.reps_or_duration_seconds}` : row.sets != null ? `${row.sets} sets` : '';
+  const base = row.sets != null && row.reps_or_duration_seconds != null ? `${row.sets} x ${row.reps_or_duration_seconds}${row.unit === 'seconds' ? ' sec' : ''}` : row.sets != null ? `${row.sets} sets` : '';
   return `${base}${row.weight_lbs != null ? ` @ ${row.weight_lbs} lb` : ''}`.trim();
 }
 

@@ -98,7 +98,7 @@ it('links a recent food, a manual entry and a Repeat logged from Something else'
   await waitFor(() => expect(lastWrite()).toEqual(expect.objectContaining({ food_item_id: 'f9', plan_slot_id: 's' })));
 
   await fireEvent.press(await screen.findByText('Something else'));
-  await fireEvent.press(await screen.findByText('Enter manually'));
+  await fireEvent.press(await screen.findByText('Quick add'));
   await fireEvent.changeText(screen.getByPlaceholderText('Food name'), 'Toast');
   for (const input of screen.getAllByPlaceholderText('0')) await fireEvent.changeText(input, '5');
   await fireEvent.press(screen.getByTestId('manual-log-food'));

@@ -83,7 +83,7 @@ it.each(['client', 'coach'] as const)(
     await fireEvent.changeText(view.getByTestId('roman-composer-input'), 'Training question');
     expect(state.clearSendError).toHaveBeenCalledTimes(1);
     await fireEvent.press(view.getByTestId('roman-composer-send'));
-    expect(state.send).toHaveBeenCalledWith('Training question');
+    expect(state.send).toHaveBeenCalledWith('Training question', expect.objectContaining({ key: expect.any(String) }));
     expect(view.getByTestId('roman-composer-input').props.value).toBe('Training question');
     await fireEvent.press(view.getByTestId('roman-send-retry'));
     expect(state.send).toHaveBeenCalledTimes(2);

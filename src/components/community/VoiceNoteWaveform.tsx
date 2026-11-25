@@ -19,8 +19,8 @@
  *     and `deep` (the coach card: unplayed voiceShades.barOnDeep, played leaf).
  *   - Tokens only (no raw hex). No emoji, no heavy font weights.
  */
-import React, { useMemo } from 'react';
-import { View, StyleSheet } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, StyleSheet, PixelRatio } from 'react-native';
 import { forestPop as fp, voiceShades } from '../../theme/tokens';
 import { downsamplePeaks } from './voiceFormat';
 
@@ -67,16 +67,29 @@ export default function VoiceNoteWaveform({
   testID,
 }: VoiceNoteWaveformProps): React.ReactElement {
   const t = TONES[tone];
+  const [width, setWidth] = useState(0);
+  // Keep every sample at >= 1 pt, thinning gaps only after the bars reach that
+  // floor. Only a slot narrower than the bar count needs fewer samples.
+  // Fixed review bars deliberately keep their GOAL geometry.
+  const count = !barWidth && width > 0 ? Math.min(barCount, Math.max(1, Math.floor(width))) : barCount;
+  const fittedGap = !barWidth && width > 0 && count > 1
+    ? Math.min(gap, Math.max(0, (width - count) / (count - 1))) : gap;
+  const fittedBarWidth = !barWidth && width > 0
+    ? Math.min(6, Math.max(0, (width - fittedGap * (count - 1)) / count)) : undefined;
+  const pixel = 1 / PixelRatio.get();
+  const fittedBorderWidth = fittedBarWidth === undefined || fittedBarWidth >= 2
+    ? 1 : pixel * 2 < fittedBarWidth ? pixel : 0;
   const bars = useMemo(
-    () => downsamplePeaks(peaks, barCount),
-    [peaks, barCount],
+    () => downsamplePeaks(peaks, count),
+    [peaks, count],
   );
   const clampedProgress = Math.min(1, Math.max(0, progress));
   const headIndex = Math.round(clampedProgress * bars.length);
 
   return (
     <View
-      style={[styles.row, { height, gap }, barWidth ? styles.packed : styles.fill]}
+      style={[styles.row, { height, gap: fittedGap }, barWidth ? styles.packed : styles.fill]}
+      onLayout={barWidth ? undefined : (e) => setWidth(e.nativeEvent.layout.width)}
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
       testID={testID ?? 'voice-waveform'}
@@ -91,6 +104,9 @@ export default function VoiceNoteWaveform({
               // Fixed bars carry no flex at all: on react-native-web `flex: 0` is CSS `0 1 0%`, which drops
               // the width to the border (a 2 pt bar in the web preview); a plain width holds on both.
               barWidth ? [styles.fixedBar, { width: barWidth }] : styles.bar,
+              // Keep a one-device-pixel edge when both sides fit inside a narrow bar.
+              // At 1x the same bar may have no room for the edge and its leaf core.
+              !barWidth && fittedBarWidth !== undefined && { borderWidth: fittedBorderWidth },
               {
                 height: Math.max(4, Math.round(height * scale)),
                 backgroundColor: played ? t.played : t.unplayed,
@@ -114,7 +130,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 3,
   },
-  fill: { flex: 1 },
+  fill: { flex: 1, overflow: 'hidden' },
   packed: { justifyContent: 'flex-start' },
   bar: {
     flex: 1,

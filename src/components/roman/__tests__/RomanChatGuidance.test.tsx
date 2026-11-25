@@ -103,7 +103,7 @@ it.each(['client', 'coach'] as const)('%s keeps history, editing, send, preserve
   await fireEvent.changeText(r.getByTestId('roman-composer-input'), 'Explain recovery');
   expect(state.clearSendError).toHaveBeenCalled();
   await fireEvent.press(r.getByTestId('roman-composer-send'));
-  expect(state.send).toHaveBeenCalledWith('Explain recovery');
+  expect(state.send).toHaveBeenCalledWith('Explain recovery', expect.objectContaining({ key: expect.any(String) }));
   expect(r.getByTestId('roman-composer-input').props.value).toBe('Explain recovery');
   await fireEvent.press(r.getByTestId('roman-send-retry'));
   expect(state.send).toHaveBeenCalledTimes(2);

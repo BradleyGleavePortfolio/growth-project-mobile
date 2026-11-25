@@ -6,6 +6,7 @@ import { randomUuid } from '../idempotency';
 import { libraryExerciseId, routineExerciseId } from './exerciseId';
 import { toServerMuscleGroup } from './muscleGroup';
 import { instantDay, workoutDay } from './workoutDay';
+import { unitField } from './exerciseUnit';
 import type { RoutineExercise, SessionExercise } from '../../screens/client/active-workout/types';
 
 // PATCH /assignments/:id/complete validates `idempotency_key` with
@@ -119,7 +120,10 @@ export function formatLoggedSets(ex: {
   sets_completed: number;
   weight_per_set?: number[];
   reps_per_set?: number[];
+  /** TIMED-SETS-M: b#1219's read; "seconds" reads each count as sec, else as on main. */
+  asked_unit?: string | null;
 }): string {
+  const timed = ex.asked_unit === 'seconds';
   const weights = ex.weight_per_set || [];
   const reps = ex.reps_per_set || [];
   const n = Math.max(weights.length, reps.length);
@@ -129,7 +133,7 @@ export function formatLoggedSets(ex: {
   for (let i = 0; i < n; i++) {
     const w = weights[i] ?? 0;
     const r = reps[i] ?? 0;
-    parts.push(w > 0 ? `${w} lb x ${r}` : `${r} reps`);
+    parts.push(w > 0 ? `${w} lb x ${r}${timed ? ' sec' : ''}` : `${r} ${timed ? 'sec' : 'reps'}`);
   }
   return `${head} · ${parts.join(', ')}`;
 }
@@ -143,6 +147,7 @@ type CoachSessionExercise = {
   reps_per_set?: number[];
   sets_data?: unknown[];
   notes?: string | null;
+  asked_unit?: string | null;
 };
 export type CoachSessionRow = {
   id: string;
@@ -229,6 +234,8 @@ export function mapCoachWorkoutSessions(rows: unknown) {
           exerciseName: name,
           sets,
           notes: typeof ex.notes === 'string' ? ex.notes.trim() : '',
+          // TIMED-SETS-M: a set the coach asked in seconds reads sec (b#1219).
+          ...(ex.asked_unit === 'seconds' ? { unit: 'seconds' as const } : {}),
         };
       })),
     };
@@ -242,9 +249,11 @@ export function mapCoachWorkoutSessions(rows: unknown) {
  */
 export function formatCoachSessionSets(
   sets: Array<{ weight?: number; reps?: number; completed?: boolean }>,
+  unit?: string | null,
 ): string {
   const done = (sets || []).filter((s) => s && s.completed !== false);
   return formatLoggedSets({
+    asked_unit: unit,
     sets_completed: done.length,
     weight_per_set: done.map((s) => Number(s.weight) || 0),
     reps_per_set: done.map((s) => Number(s.reps) || 0),
@@ -315,6 +324,9 @@ export function routineSessionExercises(exercisesJson: string): SessionExercise[
       muscleGroup: re.muscleGroup,
       // FU-WORKLOG-126: the coach's cue stays visible mid-workout.
       ...(re.coachNote ? { coachNote: re.coachNote } : {}),
+      // TIMED-SETS-M: a timed row stays timed; plan_order goes back on save.
+      ...unitField(re.unit),
+      ...(typeof re.planOrder === 'number' ? { planOrder: re.planOrder } : {}),
     }));
   } catch (err) {
     // Best-effort parse of the routine JSON. An empty list lets the user add

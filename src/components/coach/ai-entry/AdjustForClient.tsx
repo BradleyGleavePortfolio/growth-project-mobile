@@ -14,6 +14,7 @@ import { workoutBuilderApi } from '../../../api/workoutBuilderApi';
 import type { SavedWorkout } from '../../../api/programsApi';
 import { useAiEntryStatus } from './useAiEntryStatus';
 import { fireAiHaptic } from '../ai-builder/useAiBuilder';
+import { unitField } from '../../../utils/workout/exerciseUnit';
 
 export const ADJUST_COPY = {
   failed: 'The copy was not made. The saved workout is unchanged. Check your connection and try again.',
@@ -28,6 +29,8 @@ export async function copyWorkoutForClient(sourcePlanId: string, firstName: stri
   })).data;
   const rows = [...src.exercises].sort((a, b) => a.order - b.order).map((e, i) => ({
     exercise_external_id: e.exercise_external_id, order: i + 1, sets: e.sets, reps_or_duration_seconds: e.reps_or_duration_seconds,
+    // TIMED-SETS-M: a timed row stays timed in the client's copy.
+    ...unitField(e.unit),
     weight_lbs: e.weight_lbs ?? undefined, rest_seconds: e.rest_seconds ?? undefined, superset_group_id: e.superset_group_id ?? undefined, notes: e.notes ?? undefined,
   }));
   await workoutBuilderApi.setExercises(created.id, rows);

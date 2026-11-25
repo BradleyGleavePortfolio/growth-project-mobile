@@ -1,5 +1,6 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
+  AccessibilityInfo,
   View,
   Text,
   StyleSheet,
@@ -24,6 +25,7 @@ import type { IoniconName } from '../../types/common';
 import { communityWinsApi, type CommunityWin } from '../../api/communityWinsApi';
 import { describeCommunityFailure } from '../../api/communityErrors';
 import { communitySafetyApi, communitySafetyKeys } from '../../api/communitySafetyApi';
+import { crisisFlagInError, holdCrisisLine } from '../../lib/communityCrisisLine';
 
 /**
  * CommunityScreen (More > Community) — member wins.
@@ -93,8 +95,18 @@ export default function CommunityScreen() {
     await wins.refetch();
   }, [wins]);
 
+  // CRISIS-TEXT-M: the 911 / 988 line for a flagged win waits until this sheet is gone (iOS can drop an Alert raised
+  // while a Modal closes; SafetyMenu afterClose): held from open to the Modal's onDismiss, and let go on unmount.
+  const lineHold = useRef<(() => void) | null>(null);
+  const sheetGone = useCallback(() => {
+    lineHold.current?.();
+    lineHold.current = null;
+  }, []);
+  useEffect(() => sheetGone, [sheetGone]);
+
   const openComposer = useCallback(() => {
     setPostError(null);
+    if (!lineHold.current) lineHold.current = holdCrisisLine();
     setPostWinOpen(true);
   }, []);
 
@@ -113,7 +125,10 @@ export default function CommunityScreen() {
       setPostWinOpen(false);
     } catch (err) {
       // The draft stays in the fields so the member can rephrase or retry.
-      setPostError(describeCommunityFailure(err, 'send_win').message);
+      const message = describeCommunityFailure(err, 'send_win').message;
+      setPostError(message);
+      // CRISIS-TEXT-M: a flagged refusal leads with the line; VoiceOver hears it whole (Android: the live region below).
+      if (crisisFlagInError(err) && Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility(message);
     }
   }, [winTitle, winDesc, postWin]);
 
@@ -255,6 +270,7 @@ export default function CommunityScreen() {
         transparent
         animationType="slide"
         onRequestClose={() => setPostWinOpen(false)}
+        onDismiss={sheetGone}
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}

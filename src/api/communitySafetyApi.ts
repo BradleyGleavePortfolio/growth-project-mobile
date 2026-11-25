@@ -22,6 +22,8 @@ import { call } from './apiCall';
 import { blockPlaced, blockLifted } from '../lib/blockSync';
 import { blockListOwner } from '../store/blockedUsersStore';
 import { COMMUNITY_SUPPORT_EMAIL, describeCommunityFailure } from './communityErrors';
+import { CRISIS_LINE_911_988 } from '../constants/crisisLines';
+import { withCrisisLine } from '../lib/communityCrisisLine';
 
 /**
  * Report targets accepted by the backend report route. Voice notes and member
@@ -62,7 +64,7 @@ export const COMMUNITY_GUIDELINES: ReadonlyArray<string> = [
   'Share training experience, not medical advice. This is a personal-training community.',
   "Keep private things private. Do not share anyone else's personal or health information.",
   'Report anything that breaks these rules. Reports go to your coach and to the team.',
-  'This space is not for emergencies. If you are in danger, call 911. If you are struggling emotionally, call or text 988.',
+  `This space is not for emergencies. ${CRISIS_LINE_911_988}`, // #202-S5: its 911 / 988 sentences live in constants/crisisLines
 ];
 
 /** The 24-hour moderation sentence (owner-approved 2026-10-01 09:07 PDT). */
@@ -259,9 +261,11 @@ export function contentRejectedMessage(err: unknown): string | null {
   const res = responseOf(err);
   if (!res || res.status !== 422) return null;
   if (res.data?.code !== CONTENT_REJECTED_CODE) return null;
-  return typeof res.data.message === 'string' && res.data.message
-    ? res.data.message
-    : CONTENT_REJECTED_FALLBACK;
+  // CRISIS-TEXT-M: a refusal the crisis check flagged leads with the 911 / 988 line.
+  return withCrisisLine(
+    typeof res.data.message === 'string' && res.data.message ? res.data.message : CONTENT_REJECTED_FALLBACK,
+    err,
+  );
 }
 
 /**

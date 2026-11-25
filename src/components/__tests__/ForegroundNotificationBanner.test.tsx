@@ -81,6 +81,10 @@ describe('ForegroundNotificationBanner safe-area inset', () => {
   it.each([true, false])('legacy Guidance banner redirects with Roman=%s', async (roman) => {
     mockNavigate.mockClear();
     mockFlags.romanChat = roman;
+    // FOREGROUND-BANNER-M: the banner taps through the router (CLIENT_PUSH_ROUTES.AIGuide), so attach it.
+    __resetPushTapRouterForTests();
+    attachPushNavigator({ isReady: () => true, navigate: mockNavigate, getRootState: () => ({ routeNames: ['Home', 'MoreTab'] }) });
+    setPushSession({ kind: 'app', userId: 'one', role: 'student' });
     const timing = jest.spyOn(Animated, 'timing').mockReturnValue({
       start: (done) => done?.({ finished: true }), stop: jest.fn(), reset: jest.fn(),
     });

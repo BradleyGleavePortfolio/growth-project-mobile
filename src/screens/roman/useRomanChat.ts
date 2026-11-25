@@ -39,6 +39,7 @@ import type { AiDailyCap } from '../../lib/ai/aiDailyCap';
 import { romanChatsEvents } from '../settings/romanChatsEvents';
 import { romanChatsApi } from '../../api/romanChatsApi';
 import { captureAccountBinding } from '../../services/accountBinding';
+import { failedSendKeepsKey } from '../../lib/sendOnce';
 
 /** Page size for the initial / "load older" message fetch (<= backend cap 100). */
 const PAGE_LIMIT = 30;
@@ -65,6 +66,8 @@ export interface RomanSendError {
    * may append it again automatically (Sol B-326-3, Opus C-326-1).
    */
   turnStored?: boolean;
+  /** ROMAN-PENDING-WORDS-M: the server said Roman is still writing this turn's answer (ROMAN_REPLY_PENDING). */
+  replyPending?: boolean;
 }
 
 /**
@@ -78,6 +81,12 @@ export interface RomanSendError {
  *   - 'noop'        — nothing was sent (empty/duplicate guard).
  */
 export type RomanSendOutcome = 'sent' | 'send-failed' | 'stored-no-reply' | 'noop';
+
+/** The draft's send-once key for one send, and how the hook says a failure keeps it (SEND-ONCE-PHONE). */
+export interface RomanSendOnce {
+  key: string;
+  keep: () => void;
+}
 
 export interface UseRomanChatResult {
   phase: RomanChatPhase;
@@ -97,7 +106,11 @@ export interface UseRomanChatResult {
   loadingOlder: boolean;
   reload: () => void;
   loadOlder: () => void;
-  send: (content: string) => Promise<RomanSendOutcome>;
+  /**
+   * SEND-ONCE-PHONE (b#1228): `sendOnce.key` is the draft's send-once key, sent as the Idempotency-Key header;
+   * `sendOnce.keep()` is called when the send failed in a way that keeps it for Send again (lib/sendOnce.ts).
+   */
+  send: (content: string, sendOnce?: RomanSendOnce) => Promise<RomanSendOutcome>;
   clearSendError: () => void;
 }
 
@@ -223,7 +236,7 @@ export function useRomanChat(surface: RomanSurface): UseRomanChatResult {
     }
   }, [nextCursor, loadingOlder]);
 
-  const send = useCallback(async (content: string): Promise<RomanSendOutcome> => {
+  const send = useCallback(async (content: string, sendOnce?: RomanSendOnce): Promise<RomanSendOutcome> => {
     const trimmed = content.trim();
     if (trimmed === '' || sendingRef.current) return 'noop';
     let s = sessionRef.current;
@@ -256,9 +269,13 @@ export function useRomanChat(surface: RomanSurface): UseRomanChatResult {
 
     let reply: RomanAssistantReply;
     try {
-      reply = await sendMessage(s.id, trimmed);
+      reply = await sendMessage(s.id, trimmed, { idempotencyKey: sendOnce?.key });
     } catch (err) {
       logger.warn('useRomanChat.send', err);
+      // SEND-ONCE-PHONE: no answer, a timeout, a 5xx, a cut stream or ROMAN_REPLY_PENDING may have stored this send
+      // or may still answer it: Send again replays its key. A 400 / 409 or any other coded frame after the stream
+      // opened ends it (romanApi RomanKeySpentError).
+      if (sendOnce && failedSendKeepsKey(err)) sendOnce.keep();
       // After an HTTP 200 the backend has stored the user turn before the
       // stream failed (in-stream refusal, ROMAN_UNAVAILABLE, a cut stream).
       // Keep the turn and re-read the thread from the server; never roll it
@@ -273,6 +290,7 @@ export function useRomanChat(surface: RomanSurface): UseRomanChatResult {
             message: e?.message ?? 'Roman could not finish this answer.',
             ...(e?.refusal ? { refusal: e.refusal } : {}),
             ...(e?.dailyCap ? { dailyCap: e.dailyCap } : {}),
+            ...(e?.replyPending ? { replyPending: true } : {}),
             turnStored: true,
           });
         }

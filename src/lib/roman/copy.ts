@@ -283,8 +283,12 @@ export function romanWorkoutComplete(args: RomanWorkoutCompleteArgs): string {
 export interface RomanVoiceLogArgs {
   /** Parsed weight in pounds (readback unit per spec §2.9). */
   weight: number;
-  /** Parsed rep count. */
+  /** Parsed rep count (seconds for a timed set). */
   reps: number;
+  /** LS-928 B3: the set is counted in seconds (TIMED-SETS-M); read "seconds", never "reps". */
+  timed?: boolean;
+  /** LS-928 B3: a body-weight exercise (#197-E10); an unloaded set reads "Body weight", never "0 pounds". */
+  bodyWeight?: boolean;
   /**
    * default — readback of a parsed set; celebration — the logged set is a new
    * best; error — the utterance could not be parsed (weight/reps unknown).
@@ -304,23 +308,27 @@ export interface RomanVoiceLogArgs {
  * spoken set could not be parsed; otherwise `default`.
  */
 export function romanVoiceLog(args: RomanVoiceLogArgs): string {
-  const { weight, reps, mode } = args;
+  const { weight, reps, mode, timed, bodyWeight } = args;
   if (mode === 'error') {
     // spec §2.9 error (could not parse the utterance) — no tokens.
     return 'I did not catch that cleanly. Tell me the weight and the reps once more, and I will record it.';
   }
+  // LS-928 B3: the set's own unit and load words ("60 seconds", "Body weight");
+  // a weighted rep set reads exactly as before ("135 pounds, 5 reps.").
+  const load = bodyWeight && !(weight > 0) ? 'Body weight' : `${weight} pounds`;
+  const count = `${reps} ${timed ? 'seconds' : 'reps'}`;
   if (mode === 'celebration') {
     // §2.9 milestone-celebration (a logged PR via voice).
     // Roman P3 voice: never use exclamation marks. Period-terminated lines only.
     // No durable-save claim (P1-B-03): the readback fires on parse, so it states
     // the new-best fact about the parsed set, not that it has been persisted.
-    return `${weight} pounds, ${reps} reps — and a new best. Noted.`;
+    return `${load}, ${count} — and a new best. Noted.`;
   }
   // spec §2.9 default — pure readback of the parsed set, e.g.
   // "315 pounds, 5 reps." No "Recorded." claim (P1-B-03): the confirmation
   // fires the moment the utterance is parsed, before persistence is verified,
   // so asserting it has been recorded here would be untrue.
-  return `${weight} pounds, ${reps} reps.`;
+  return `${load}, ${count}.`;
 }
 
 // ── §2.10 Generic error / system failure (BOTH apps) ────────────────────────

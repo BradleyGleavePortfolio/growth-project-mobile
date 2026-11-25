@@ -10,7 +10,7 @@
 //   Dismissing an alert: optimistic removal, rolled back on error.
 //   Pull-to-refresh transitions loading → data/error.
 //
-// Data source: commandCenterApi.getActionQueue() + commandCenterApi.dismissAlert()
+// Data source: readOpenAlerts() + commandCenterApi.dismissAlert()
 // Status: MOCKED until Phase 8 backend ships.
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -35,6 +35,7 @@ import CommandCenterMockDataBanner from '../../../components/command-center/Mock
 import LoadFailedNotice from '../../../components/coach/LoadFailedNotice';
 import { SkeletonScreen } from '../../../ui/skeletons/Skeleton';
 import RomanAdjustmentsSection from '../../../components/roman/adjust/RomanAdjustmentsSection';
+import { readOpenAlerts } from './coachHomeSources';
 
 type LoadState = 'loading' | 'refreshing' | 'data' | 'error';
 
@@ -54,9 +55,9 @@ export default function ActionQueueScreen({ onSelectClient, onOpenSafetyAlert }:
   const load = useCallback(async (isRefresh = false) => {
     setState(isRefresh ? 'refreshing' : 'loading');
     try {
-      const res = await commandCenterApi.getActionQueue();
-      setItems(res.data.items.filter((i) => i.dismissed_at === null));
-      setTotalPending(res.data.total_pending);
+      const open = (await readOpenAlerts()).filter((i) => i.dismissed_at === null);
+      setItems(open);
+      setTotalPending(open.length);
       setState('data');
     } catch {
       setState('error');

@@ -95,6 +95,7 @@ import { AiMomentumLine, AiWinToast } from '../../components/coach/ai-builder/Ai
 import { fireAiHaptic, useAiBuilder } from '../../components/coach/ai-builder/useAiBuilder';
 import type { AiBuilderRef } from '../../api/aiBuilderApi';
 import { appliedToast, NEW_WORKOUT_NAME, NEW_WORKOUT_PROMPT, NEW_WORKOUT_SAVE_FAILED, NEW_WORKOUT_SAVING } from '../../components/coach/ai-builder/aiBuilderCopy';
+import { unitField, unitOf, type ExerciseUnit } from '../../utils/workout/exerciseUnit';
 
 /** S-MWB-3: the undo / redo barrier phases (see the screen body). */
 type HistoryOutcome = 'applied' | 'elsewhere';
@@ -170,6 +171,11 @@ export interface DraftExerciseRow {
   display_name: string;
   sets: number;
   reps_or_duration_seconds: number;
+  /**
+   * TIMED-SETS-M: "reps" or "seconds" when the server sent one or the coach
+   * chose one; undefined reads Reps and is sent as no unit.
+   */
+  unit?: ExerciseUnit;
   rest_seconds: number | null;
   weight_lbs: number | null;
   superset_group_id: string | null;
@@ -215,6 +221,10 @@ export function buildSetExercisesPayload(
       order: idx + 1,
       sets: r.sets,
       reps_or_duration_seconds: r.reps_or_duration_seconds,
+      // TIMED-SETS-M: the PUT is a full replace, so a row the server counts in
+      // seconds must say so or it would come back as reps. A row with no known
+      // unit sends none (the byte-identical legacy row).
+      ...unitField(r.unit),
       rest_seconds: r.rest_seconds ?? undefined,
       notes: r.notes ?? undefined,
     }));
@@ -224,6 +234,7 @@ export function buildSetExercisesPayload(
     order: idx + 1,
     sets: r.sets,
     reps_or_duration_seconds: r.reps_or_duration_seconds,
+    ...unitField(r.unit),
     weight_lbs: r.weight_lbs ?? undefined,
     rest_seconds: r.rest_seconds ?? undefined,
     superset_group_id: r.superset_group_id ?? undefined,
@@ -342,6 +353,7 @@ export default function CoachWorkoutBuilderScreen() {
       display_name: e.exercise_external_id,
       sets: e.sets,
       reps_or_duration_seconds: e.reps_or_duration_seconds,
+      ...unitField(e.unit),
       rest_seconds: e.rest_seconds,
       weight_lbs: e.weight_lbs,
       superset_group_id: e.superset_group_id,
@@ -491,6 +503,7 @@ export default function CoachWorkoutBuilderScreen() {
         exerciseExternalId: r.exercise_external_id,
         sets: r.sets,
         repsOrDurationSeconds: r.reps_or_duration_seconds,
+        ...unitField(r.unit),
         restSeconds: r.rest_seconds,
         weightLbs: r.weight_lbs,
         supersetGroupId: r.superset_group_id,
@@ -844,6 +857,7 @@ export default function CoachWorkoutBuilderScreen() {
         exerciseExternalId: e.exercise_external_id,
         sets: e.sets,
         repsOrDurationSeconds: e.reps_or_duration_seconds,
+        ...unitField(e.unit),
         restSeconds: e.rest_seconds,
         weightLbs: e.weight_lbs,
         supersetGroupId: e.superset_group_id,
@@ -983,6 +997,7 @@ export default function CoachWorkoutBuilderScreen() {
           display_name: e.exercise_external_id,
           sets: e.sets,
           reps_or_duration_seconds: e.reps_or_duration_seconds,
+          ...unitField(e.unit),
           rest_seconds: e.rest_seconds,
           weight_lbs: e.weight_lbs,
           superset_group_id: e.superset_group_id,
@@ -1359,6 +1374,7 @@ export default function CoachWorkoutBuilderScreen() {
           display_name: e.exercise_external_id,
           sets: e.sets,
           reps_or_duration_seconds: e.reps_or_duration_seconds,
+          ...unitField(e.unit),
           rest_seconds: e.rest_seconds,
           weight_lbs: e.weight_lbs,
           superset_group_id: e.superset_group_id,
@@ -1548,7 +1564,7 @@ export default function CoachWorkoutBuilderScreen() {
       setName(meta.name);
       setType(meta.type);
       setRows(plan.exercises.map((e) => ({ clientId: clientIdForServerRow(e.id), row_id: e.id, exercise_external_id: e.exercise_external_id, display_name: e.exercise_external_id,
-        sets: e.sets, reps_or_duration_seconds: e.reps_or_duration_seconds, rest_seconds: e.rest_seconds, weight_lbs: e.weight_lbs, superset_group_id: e.superset_group_id, notes: e.notes })));
+        sets: e.sets, reps_or_duration_seconds: e.reps_or_duration_seconds, ...unitField(e.unit), rest_seconds: e.rest_seconds, weight_lbs: e.weight_lbs, superset_group_id: e.superset_group_id, notes: e.notes })));
     },
     [autosave, refetchPlan, buildServerWorkingCopy, runReplayRefetch, setUndoStack, setRedoStack, clientIdForServerRow],
   );
@@ -1804,17 +1820,17 @@ export default function CoachWorkoutBuilderScreen() {
           rows.map((row, idx) => (
             <View
               key={`${row.exercise_external_id}-${idx}`}
-              style={[styles.rowCard, { borderColor: sc.border }]}
+              style={[styles.rowCard, { borderColor: sc.surface.sageLine, backgroundColor: sc.bgSurface }]}
             >
-              <View style={styles.rowHeader}>
+              {/* LS-928 B5: the K3 Style C row (C_row) treatment: the exercise on a
+                  deep-forest band in the serif, its controls in near-white on it. */}
+              <View testID={`row-${idx}-header`} style={[styles.rowHeader, { backgroundColor: sc.surface.masthead }]}>
                 <View style={styles.rowIdentity}>
-                  {/* Reorder marker, not a drag target: the arrows below move rows. */}
-                  <Ionicons name="reorder-three-outline" size={20} color={sc.textMuted} accessible={false} />
                   <CoachExerciseName
                     id={row.exercise_external_id}
                     fallback={row.display_name}
                     prefix={`${idx + 1}. `}
-                    style={[typography.bodyMd, { color: sc.textPrimary, flex: 1 }]}
+                    style={[typography.h2, styles.rowName, { color: sc.textOnAccent }]}
                   />
                 </View>
                 <View style={styles.rowControls}>
@@ -1826,7 +1842,7 @@ export default function CoachWorkoutBuilderScreen() {
                     disabled={editorLocked || idx === 0}
                     style={[styles.controlBtn, (editorLocked || idx === 0) && styles.historyButtonDisabled]}
                   >
-                    <Ionicons name="chevron-up-outline" size={20} color={sc.textPrimary} />
+                    <Ionicons name="chevron-up-outline" size={20} color={sc.textOnAccent} />
                   </HapticPressable>
                   <HapticPressable
                     accessibilityRole="button"
@@ -1836,7 +1852,7 @@ export default function CoachWorkoutBuilderScreen() {
                     disabled={editorLocked || idx === rows.length - 1}
                     style={[styles.controlBtn, (editorLocked || idx === rows.length - 1) && styles.historyButtonDisabled]}
                   >
-                    <Ionicons name="chevron-down-outline" size={20} color={sc.textPrimary} />
+                    <Ionicons name="chevron-down-outline" size={20} color={sc.textOnAccent} />
                   </HapticPressable>
                   <HapticPressable
                     accessibilityRole="button"
@@ -1847,7 +1863,7 @@ export default function CoachWorkoutBuilderScreen() {
                     onPress={() => setsInputRefs.current.get(row.clientId)?.focus()}
                     style={[styles.controlBtn, editorLocked && styles.historyButtonDisabled]}
                   >
-                    <Ionicons name="create-outline" size={20} color={sc.textPrimary} />
+                    <Ionicons name="create-outline" size={20} color={sc.textOnAccent} />
                   </HapticPressable>
                   <HapticPressable
                     accessibilityRole="button"
@@ -1857,36 +1873,76 @@ export default function CoachWorkoutBuilderScreen() {
                     onPress={() => removeRow(idx)}
                     style={[styles.controlBtn, editorLocked && styles.historyButtonDisabled]}
                   >
-                    <Ionicons name="trash-outline" size={20} color={sc.textMuted} />
+                    <Ionicons name="trash-outline" size={20} color={sc.textOnAccent} />
                   </HapticPressable>
                 </View>
               </View>
-              <View style={styles.rowInputs}>
-                <NumberField
+              <View style={styles.rowBody}>
+              {/* TIMED-SETS-M: K3 Style C row sheet, "Count by" Reps | Seconds (K3-C-19, K3-S-40, K3-S-41). */}
+              <View style={styles.countByRow}>
+                <Text style={[typography.bodyMd, styles.countByLabel, { color: sc.textPrimary }]}>Count by</Text>
+                <View
+                  testID={`row-${idx}-count-by`}
+                  style={[styles.countSegments, { borderColor: sc.accent }, editorLocked && styles.historyButtonDisabled]}
+                >
+                {(['reps', 'seconds'] as const).map((u, i) => {
+                  const on = unitOf(row) === u;
+                  return (
+                    <HapticPressable
+                      key={u}
+                      testID={`row-${idx}-count-${u}`}
+                      accessibilityRole="button"
+                      accessibilityState={{ disabled: editorLocked, selected: on }}
+                      disabled={editorLocked}
+                      onPress={() => updateRow(idx, { unit: u })}
+                      style={[styles.countSegment, i === 0 ? styles.countSegmentFirst : styles.countSegmentLast, on && { backgroundColor: sc.accent }]}
+                    >
+                      <Text style={[typography.bodyMd, styles.countSegmentText, { color: on ? sc.textOnAccent : sc.textPrimary }]}>
+                        {u === 'reps' ? 'Reps' : 'Seconds'}
+                      </Text>
+                    </HapticPressable>
+                  );
+                })}
+                </View>
+              </View>
+              {/* LS-928 B5: the sage stepper card (C_row): one line per number, its
+                  label at the start and minus, the number, plus at the end. */}
+              <View testID={`row-${idx}-steppers`} style={[styles.stepperCard, { backgroundColor: sc.surface.sage, borderColor: sc.surface.sageLine }]}>
+                <StepperField
                   label="Sets"
+                  spoken="sets"
                   inputRef={(input) => {
                     if (input) setsInputRefs.current.set(row.clientId, input);
                     else setsInputRefs.current.delete(row.clientId);
                   }}
                   editable={!editorLocked}
                   value={row.sets}
+                  step={1}
+                  min={1}
                   onChange={(v) => updateRow(idx, { sets: v })}
                   sc={sc}
                 />
-                <NumberField
-                  label="Reps / sec"
+                <StepperField
+                  label={unitOf(row) === 'seconds' ? 'Seconds' : 'Reps'}
+                  spoken={unitOf(row) === 'seconds' ? 'seconds' : 'reps'}
                   editable={!editorLocked}
                   value={row.reps_or_duration_seconds}
+                  step={unitOf(row) === 'seconds' ? 5 : 1}
                   onChange={(v) => updateRow(idx, { reps_or_duration_seconds: v })}
                   sc={sc}
+                  divider
                 />
-                <NumberField
+                <StepperField
                   label="Rest (s)"
+                  spoken="rest"
                   editable={!editorLocked}
                   value={row.rest_seconds ?? 0}
+                  step={15}
                   onChange={(v) => updateRow(idx, { rest_seconds: v })}
                   sc={sc}
+                  divider
                 />
+              </View>
               </View>
             </View>
           ))
@@ -1959,41 +2015,74 @@ export default function CoachWorkoutBuilderScreen() {
   );
 }
 
-function NumberField(props: {
+/**
+ * LS-928 B5: one line of the K3 Style C row's sage stepper card. The number
+ * stays typeable (the same field as before); minus and plus move it by `step`
+ * and never below `min` or past 9999 (the field's four digits).
+ */
+function StepperField(props: {
   label: string;
+  spoken: string;
   value: number;
   onChange: (n: number) => void;
   sc: SemanticTokens;
+  step: number;
+  min?: number;
   editable?: boolean;
+  divider?: boolean;
   inputRef?: (input: TextInput | null) => void;
 }) {
-  const { label, value, onChange, sc, editable = true, inputRef } = props;
+  const { label, spoken, value, onChange, sc, step, min = 0, editable = true, divider, inputRef } = props;
+  const clamp = (n: number) => Math.min(9999, Math.max(min, n));
+  const canDown = editable && value > min;
+  const canUp = editable && value < 9999;
+  const button = (dir: -1 | 1, enabled: boolean) => (
+    <HapticPressable
+      intent="light"
+      accessibilityRole="button"
+      accessibilityLabel={`${dir < 0 ? 'Decrease' : 'Increase'} ${spoken}`}
+      accessibilityState={{ disabled: !enabled }}
+      disabled={!enabled}
+      onPress={() => onChange(clamp(value + dir * step))}
+      style={[stepperStyles.button, { borderColor: sc.textPrimary, backgroundColor: sc.bgSurface }, !enabled && { opacity: 0.4 }]}
+    >
+      <Ionicons name={dir < 0 ? 'remove-outline' : 'add-outline'} size={22} color={sc.textPrimary} />
+    </HapticPressable>
+  );
   return (
-    <View style={{ flex: 1 }}>
-      <Text style={[typography.caption, { color: sc.textMuted, fontSize: 13 }]}>{label}</Text>
-      <TextInput
-        ref={inputRef}
-        accessibilityLabel={label}
-        value={String(value)}
-        editable={editable}
-        onChangeText={(t) => {
-          const parsed = parseInt(t.replace(/[^0-9]/g, ''), 10);
-          onChange(Number.isFinite(parsed) ? parsed : 0);
-        }}
-        keyboardType="number-pad"
-        style={[typography.body, {
-          borderBottomWidth: StyleSheet.hairlineWidth,
-          borderColor: sc.border,
-          minHeight: 44,
-          paddingVertical: spacing.xs,
-          color: sc.textPrimary,
-          fontVariant: ['tabular-nums'],
-        }]}
-        maxLength={4}
-      />
+    <View style={[stepperStyles.line, divider && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: sc.surface.sageLine }]}>
+      <Text style={[typography.body, stepperStyles.label, { color: sc.textPrimary }]}>{label}</Text>
+      <View style={stepperStyles.group}>
+        {button(-1, canDown)}
+        <TextInput
+          ref={inputRef}
+          accessibilityLabel={label}
+          value={String(value)}
+          editable={editable}
+          onChangeText={(t) => {
+            const parsed = parseInt(t.replace(/[^0-9]/g, ''), 10);
+            onChange(Number.isFinite(parsed) ? parsed : 0);
+          }}
+          keyboardType="number-pad"
+          style={[typography.h4, stepperStyles.value, { color: sc.textPrimary }]}
+          maxLength={4}
+        />
+        {button(1, canUp)}
+      </View>
     </View>
   );
 }
+
+const stepperStyles = StyleSheet.create({
+  // The minus-number-plus group moves under its label as one group when they
+  // do not fit on one line (320 wide, large text). The number is 60 wide:
+  // four 17 px digits at 130% text (about 55) still fit.
+  line: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', columnGap: spacing.sm, rowGap: spacing.xs, paddingVertical: spacing.sm },
+  label: { flexGrow: 1, flexShrink: 1 },
+  group: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginStart: 'auto' },
+  button: { width: 44, height: 44, borderRadius: radius.chip, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  value: { width: 60, minHeight: 44, textAlign: 'center', fontFamily: 'Inter_600SemiBold', fontVariant: ['tabular-nums'], paddingVertical: 0 },
+});
 
 function makeStyles(sc: SemanticTokens) {
   return StyleSheet.create({
@@ -2049,20 +2138,41 @@ function makeStyles(sc: SemanticTokens) {
     rowCard: {
       borderWidth: StyleSheet.hairlineWidth,
       borderRadius: radius.card,
-      padding: spacing.lg,
       marginBottom: spacing.md,
+      overflow: 'hidden',
     },
+    // LS-928 B5 (K3 C_row): the deep-forest band carrying the exercise.
     rowHeader: {
       gap: spacing.sm,
-      marginBottom: spacing.sm,
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.md,
+      paddingBottom: spacing.md,
     },
     rowIdentity: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
+    // Lining figures: the serif's old-style 1 reads as a capital I ("I. Plank").
+    rowName: { flex: 1, fontVariant: ['lining-nums'] },
     rowControls: { flexDirection: 'row', gap: spacing.sm, justifyContent: 'flex-end' },
     controlBtn: {
-      minHeight: 44, minWidth: 44, borderWidth: StyleSheet.hairlineWidth, borderColor: sc.border,
+      minHeight: 44, minWidth: 44, borderWidth: StyleSheet.hairlineWidth, borderColor: sc.surface.forestBandLine,
       borderRadius: radius.button, alignItems: 'center', justifyContent: 'center',
     },
+    rowBody: { padding: spacing.lg },
+    stepperCard: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.card, paddingHorizontal: spacing.lg, paddingVertical: spacing.xs },
     rowInputs: { flexDirection: 'row', gap: spacing.sm },
+    // K3 C row (BEAUTY-928, as drawn): "Count by" at the start in the row's
+    // label type, and one joined Reps | Seconds control at the end: a forest
+    // outline with radius 12 (radius.input, segmented controls), the chosen
+    // half filled forest with near-white type. It is a selection, not a
+    // second filled button. The control moves under the label as one group
+    // when they do not fit (320 wide, large text).
+    countByRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginBottom: spacing.md },
+    countByLabel: { flexGrow: 1 },
+    countSegments: { flexDirection: 'row', borderWidth: 1.5, borderRadius: radius.input },
+    countSegment: { minHeight: 44, paddingHorizontal: spacing.lg, alignItems: 'center', justifyContent: 'center' },
+    // Inner corners follow the outline (12 less the 1.5 border).
+    countSegmentFirst: { borderTopLeftRadius: radius.input - 1.5, borderBottomLeftRadius: radius.input - 1.5 },
+    countSegmentLast: { borderTopRightRadius: radius.input - 1.5, borderBottomRightRadius: radius.input - 1.5 },
+    countSegmentText: { fontFamily: 'Inter_600SemiBold' },
     searchResults: { marginTop: spacing.sm },
     searchHit: {
       flexDirection: 'row',

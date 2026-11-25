@@ -15,6 +15,7 @@ import {
 import type { OpenSafetyAlert } from './SafetyAlertCard';
 import { mapCoachWorkoutSessions, newestWorkoutsFirst, workoutTimelineSubtitle, type CoachSessionRow } from '../../../utils/workout/workoutLogging';
 import { dayStart, instantDay, workoutDay } from '../../../utils/workout/workoutDay';
+import { setVolume } from '../../../utils/workout/exerciseUnit';
 
 /** A workout's place on the timeline: when it was stored, or its recorded day when it synced on a later day. */
 function recordedAt(s: { date?: string; created_at?: string }): string {
@@ -352,7 +353,7 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
               const weights = ex.weight_per_set || [];
               const reps = ex.reps_per_set || [];
               for (let i = 0; i < weights.length; i++) {
-                week.totalWeightMoved += (weights[i] || 0) * (reps[i] || 0);
+                week.totalWeightMoved += setVolume(weights[i], reps[i], ex.asked_unit);
               }
             }
           }

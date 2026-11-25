@@ -1,3 +1,5 @@
+import type { ExerciseUnit } from '../../../utils/workout/exerciseUnit';
+
 export interface SessionExercise {
   exerciseId: string;
   exerciseName: string;
@@ -9,6 +11,12 @@ export interface SessionExercise {
   notes?: string;
   /** The coach's note on a coach-assigned exercise, shown while training. */
   coachNote?: string;
+  /** TIMED-SETS-M: "seconds" for a timed row; absent reads reps. */
+  unit?: ExerciseUnit;
+  /** The row's order on the assignment (SET-ASKED plan_order). */
+  planOrder?: number;
+  /** The assignment a logged exercise came from, as the server stored it. */
+  planAssignmentId?: string;
 }
 
 export interface SessionSet {
@@ -34,6 +42,10 @@ export interface RoutineExercise {
   muscleGroup?: string;
   /** The coach's note on a coach-assigned exercise. */
   coachNote?: string;
+  /** TIMED-SETS-M: "seconds" for a timed row; absent reads reps. */
+  unit?: ExerciseUnit;
+  /** The row's order on the assignment (SET-ASKED plan_order). */
+  planOrder?: number;
 }
 
 export interface Exercise {

@@ -33,6 +33,7 @@ import {
   type PersistedActiveWorkoutSession,
 } from '../../storage/activeWorkoutSession';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { useBodyWeightExercises } from '../../hooks/useBodyWeightExercises';
 import { errorMessage } from '../../types/common';
 import { randomUuid } from '../../utils/idempotency';
 import { toServerMuscleGroup } from '../../utils/workout/muscleGroup';
@@ -45,6 +46,7 @@ import {
 } from '../../utils/workout/workoutLogging';
 import { workoutStartDay } from '../../utils/workout/workoutDay';
 import { catalogKey } from '../../utils/workout/exerciseId';
+import { isTimedRow } from '../../utils/workout/exerciseUnit';
 // Offline-first write path (audit fix H-5: comments were left
 // referencing the deleted WatermelonDB stack — current implementation
 // is built on expo-sqlite, see src/offline/database.ts and
@@ -155,6 +157,14 @@ export default function ActiveWorkoutScreen() {
   const romanLocked = useClientNeedsCoach();
 
   const [sessionExercises, setSessionExercises] = useState<SessionExercise[]>([]);
+  // FIX-928-BW (#197-E10): body-weight exercises read "BW × 60 sec", from the
+  // cached catalog read (GET /exercises/:id equipment) the name lookup makes.
+  const exerciseIdsKey = sessionExercises.map((e) => e.exerciseId).join('\u0000');
+  const exerciseIds = useMemo(() => (exerciseIdsKey ? exerciseIdsKey.split('\u0000') : []), [exerciseIdsKey]);
+  // BW-LOCAL-M: with each row's name, an id the catalog can never answer (an
+  // Add or Swap from the phone's list, a saved routine) reads the phone's list.
+  const exerciseNames = Object.fromEntries(sessionExercises.map((e) => [e.exerciseId, e.exerciseName]));
+  const bodyWeight = useBodyWeightExercises(exerciseIds, exerciseNames);
   const [workoutNotes, setWorkoutNotes] = useState('');
   const [history, setHistory] = useState<LoggedWorkout[]>([]);
   const [historyState, setHistoryState] = useState<'loading' | 'loaded' | 'unavailable'>('loading');
@@ -613,6 +623,33 @@ export default function ActiveWorkoutScreen() {
     );
   };
 
+  // SET-EDIT-M: one set out of the workout. A set not ticked goes at once; a
+  // logged set asks first, as the exercise trash does. Finish then saves only
+  // the sets left (the POST and the coach's completion read the list as is).
+  const removeSet = (exIdx: number, setIdx: number, removed: () => void) => {
+    const target = sessionExercises[exIdx]?.sets[setIdx];
+    if (!target) return;
+    const drop = () => {
+      // The set ticked last: its rest stops, as an untick does.
+      const latest = Math.max(0, ...sessionExercises.flatMap((e) => e.sets.map((s) => (s.completed ? s.doneOrder ?? 0 : 0))));
+      if (target.completed && (target.doneOrder ?? 0) === latest && restActive) {
+        if (restIntervalRef.current) clearInterval(restIntervalRef.current);
+        restIntervalRef.current = null;
+        setRestActive(false);
+      }
+      setSessionExercises((prev) => prev.map((e, i) => (i === exIdx ? { ...e, sets: e.sets.filter((_, j) => j !== setIdx) } : e)));
+      removed();
+    };
+    if (!target.completed) {
+      drop();
+      return;
+    }
+    Alert.alert(`Remove set ${setIdx + 1}?`, 'This logged set will be removed from this workout.', [
+      { text: 'Keep', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: drop },
+    ]);
+  };
+
   const openExerciseDetail = (exercise: SessionExercise) => {
     // W-5 fix: prefer the catalog id when the upstream routine carries it
     // (coach-assigned workouts always do). A saved routine's exercises have
@@ -788,7 +825,8 @@ export default function ActiveWorkoutScreen() {
             workout_type: 'strength',
             duration_minutes: durationMinutes,
             notes: workoutNotes,
-            exercises: completedExercises.map(completedExercisePayload),
+            // TIMED-SETS-M: each exercise from the assignment names its plan row.
+            exercises: completedExercises.map((e) => completedExercisePayload(e, assignmentId ?? undefined)),
           };
           // Coach assignment completion (full exercise/set detail).
           const completionPayload = {
@@ -1188,15 +1226,18 @@ export default function ActiveWorkoutScreen() {
   // saved without an order keep list order). Drives Roman's readback with the
   // real logged weight/reps. A set with a zero weight (e.g. bodyweight) is still
   // a valid readback, so the only gate is `completed`.
-  const lastCompletedSet: SessionSet | null = (() => {
-    let found: SessionSet | null = null;
+  // LS-928 B3: with the exercise it belongs to, so a timed or body-weight set
+  // is read back in its own words.
+  const lastCompleted: { set: SessionSet; exercise: SessionExercise } | null = (() => {
+    let found: { set: SessionSet; exercise: SessionExercise } | null = null;
     for (const ex of sessionExercises) {
       for (const s of ex.sets) {
-        if (s.completed && (!found || (s.doneOrder ?? 0) >= (found.doneOrder ?? 0))) found = s;
+        if (s.completed && (!found || (s.doneOrder ?? 0) >= (found.set.doneOrder ?? 0))) found = { set: s, exercise: ex };
       }
     }
     return found;
   })();
+  const lastCompletedSet = lastCompleted?.set ?? null;
 
   // REDO-LIVE-133: the rest timer sits in the pinned footer above Finish, so it
   // never covers a set row. Its handlers are unchanged (#474 rest alert).
@@ -1306,6 +1347,8 @@ export default function ActiveWorkoutScreen() {
             <RomanVoiceLogReadback
               weight={lastCompletedSet.weight}
               reps={lastCompletedSet.reps}
+              timed={isTimedRow(lastCompleted?.exercise)}
+              bodyWeight={!!(lastCompleted && bodyWeight[lastCompleted.exercise.exerciseId])}
               mode="default"
               testID="roman-voicelog-card"
             />
@@ -1326,11 +1369,13 @@ export default function ActiveWorkoutScreen() {
             onUpdateSet={updateSet}
             onToggleSetComplete={toggleSetComplete}
             onAddSet={addSet}
+            onRemoveSet={removeSet}
             onRemoveExercise={removeExercise}
             onOpenExerciseDetail={openExerciseDetail}
             colors={colors}
             styles={styles}
-            previous={previousSets(history, exercise.exerciseName)}
+            previous={previousSets(history, exercise.exerciseName, exercise.unit)}
+            bodyWeight={!!bodyWeight[exercise.exerciseId]}
             isLast={exIdx === sessionExercises.length - 1}
             disabled={saving}
             onMove={(index, direction) => setSessionExercises((prev) => moveExercise(prev, index, direction))}

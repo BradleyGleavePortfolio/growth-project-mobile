@@ -173,7 +173,7 @@ it('control: an ordinary send before any delete goes to the live chat', async ()
     outcome = await live.result.current.send('Normal message');
   });
   expect(outcome).toBe('sent');
-  expect(mockSend).toHaveBeenCalledWith(LIVE, 'Normal message');
+  expect(mockSend).toHaveBeenCalledWith(LIVE, 'Normal message', { idempotencyKey: undefined });
 });
 
 it.each(['list-one', 'list-all', 'transcript-one'] as const)(
@@ -193,8 +193,8 @@ it.each(['list-one', 'list-all', 'transcript-one'] as const)(
       outcome = await live.result.current.send('Start fresh');
     });
     expect(outcome).toBe('sent');
-    expect(mockSend).toHaveBeenLastCalledWith(FRESH, 'Start fresh');
-    expect(mockSend).not.toHaveBeenCalledWith(LIVE, expect.anything());
+    expect(mockSend).toHaveBeenLastCalledWith(FRESH, 'Start fresh', { idempotencyKey: undefined });
+    expect(mockSend.mock.calls.filter((c) => c[0] === LIVE)).toEqual([]);
   },
 );
 
@@ -206,7 +206,7 @@ it('a send right after the erase waits for the fresh chat instead of the erased 
     outcome = await live.result.current.send('Straight away');
   });
   expect(outcome).toBe('sent');
-  expect(mockSend).toHaveBeenLastCalledWith(FRESH, 'Straight away');
+  expect(mockSend).toHaveBeenLastCalledWith(FRESH, 'Straight away', { idempotencyKey: undefined });
 });
 
 it('control: deleting another chat leaves the live chat as it is', async () => {
@@ -220,5 +220,5 @@ it('control: deleting another chat leaves the live chat as it is', async () => {
     outcome = await live.result.current.send('Still here');
   });
   expect(outcome).toBe('sent');
-  expect(mockSend).toHaveBeenLastCalledWith(LIVE, 'Still here');
+  expect(mockSend).toHaveBeenLastCalledWith(LIVE, 'Still here', { idempotencyKey: undefined });
 });

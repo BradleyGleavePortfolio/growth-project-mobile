@@ -18,6 +18,11 @@ const CANONICAL_SHA256: Record<string, string> = {
   'neutral.png': '22788a1bc8aa881de8b3cb4ff8dad17432b45ca4cc9020fa016b2edb8f4595e6',
   'neutral@2x.png': 'a72775533860de4bc589b60958a4d210e207b66191e408586a9386748388dc4e',
   'neutral@3x.png': '93ff1092fbc7c5638b513bd711883cae166f270689db591f4ab2c537df6248a2',
+  // FIX-935R1 (m#935 B4, C3 B_coachless): the same neutral crops in grey (luminance of each pixel, alpha kept), for the
+  // no-coach Messages card. Added beside the colour files; none of the hashes above changed.
+  'neutral-grey.png': 'a5c135374124c9ec07f04833ea1941583e18907bfa32cebcf36caba0f9aa011f',
+  'neutral-grey@2x.png': 'c201af5be533390c3ec5d5cafb8b53390fee1cb19ef1b6ea25cb0369bff9ad6a',
+  'neutral-grey@3x.png': 'f2f215abb1cad6fb39c1d21e99243294deba2ed67c5077c84885540a64fa2766',
   'portrait.jpg': '028d7a4cbce53a6d5ec5efa3186f128ba0812a53a60c28836727b78a61c69487',
   'smile.png': '22788a1bc8aa881de8b3cb4ff8dad17432b45ca4cc9020fa016b2edb8f4595e6',
   'smile@2x.png': 'a72775533860de4bc589b60958a4d210e207b66191e408586a9386748388dc4e',

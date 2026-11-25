@@ -23,6 +23,7 @@ import {
   type ExerciseSearchParams,
   type ExerciseSearchResult,
 } from '../api/exerciseLibraryApi';
+import { catalogReadRetry } from './exerciseByIdQuery';
 
 const FIFTEEN_MIN_MS = 15 * 60 * 1000;
 
@@ -45,5 +46,7 @@ export function useExerciseById(id: string | undefined) {
       exerciseLibraryApi.getById(id as string).then((r) => r.data),
     enabled: !!id,
     staleTime: FIFTEEN_MIN_MS,
+    // LS-928 B2: the same key as byIdQuery, so the same retry rule.
+    retry: catalogReadRetry,
   });
 }

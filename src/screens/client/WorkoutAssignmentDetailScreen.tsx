@@ -34,6 +34,7 @@ import {
   prettifyExerciseName,
 } from '../../utils/workout/buildActiveWorkout';
 import { assignmentPrescription } from '../../utils/workout/assignmentPrescription';
+import { countWord } from '../../utils/workout/exerciseUnit';
 
 type RouteParams = {
   WorkoutAssignmentDetail: { assignmentId: string };
@@ -218,7 +219,7 @@ export default function WorkoutAssignmentDetailScreen() {
                 {nameFor(ex.exercise_external_id)}
               </Text>
               <Text style={[typography.bodySmall, styles.tabular, { color: sc.textMuted }]}>
-                {ex.sets} sets × {ex.reps_or_duration_seconds} reps
+                {ex.sets} sets × {ex.reps_or_duration_seconds} {countWord(ex)}
                 {ex.weight_lbs ? ` · ${ex.weight_lbs} lb` : ''}
                 {ex.rest_seconds ? ` · ${ex.rest_seconds}s rest` : ''}
               </Text>

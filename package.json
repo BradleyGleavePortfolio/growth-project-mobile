@@ -31,7 +31,8 @@
     ],
     "testPathIgnorePatterns": [
       "/node_modules/",
-      "/.expo/"
+      "/.expo/",
+      "/scripts/__tests__/fixtures/"
     ]
   },
   "dependencies": {

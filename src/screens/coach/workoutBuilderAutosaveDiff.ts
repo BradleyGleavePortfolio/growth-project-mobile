@@ -39,6 +39,7 @@ import type {
   AutosaveUpsertExerciseRow,
 } from '../../api/workoutAutosaveApi';
 import type { WorkoutType } from '../../api/workoutBuilderApi';
+import { unitField, unitOf, type ExerciseUnit } from '../../utils/workout/exerciseUnit';
 
 /**
  * The screen's per-row working copy. `rowId` is the server-assigned uuid for a
@@ -53,6 +54,8 @@ export interface AutosaveDraftRow {
   exerciseExternalId: string;
   sets: number;
   repsOrDurationSeconds: number;
+  /** TIMED-SETS-M: the row's unit when the server or the coach named one. */
+  unit?: ExerciseUnit;
   restSeconds: number | null;
   weightLbs: number | null;
   supersetGroupId: string | null;
@@ -81,6 +84,8 @@ function toRowPayload(
     order,
     sets: row.sets,
     reps_or_duration_seconds: row.repsOrDurationSeconds,
+    // A row with no known unit sends none: the server keeps the row's unit.
+    ...unitField(row.unit),
     weight_lbs: row.weightLbs,
     rest_seconds: row.restSeconds,
     superset_group_id: row.supersetGroupId,
@@ -95,6 +100,7 @@ function rowFieldsDiffer(a: AutosaveDraftRow, b: AutosaveDraftRow): boolean {
     a.exerciseExternalId !== b.exerciseExternalId ||
     a.sets !== b.sets ||
     a.repsOrDurationSeconds !== b.repsOrDurationSeconds ||
+    unitOf(a) !== unitOf(b) ||
     a.restSeconds !== b.restSeconds ||
     a.weightLbs !== b.weightLbs ||
     a.supersetGroupId !== b.supersetGroupId ||

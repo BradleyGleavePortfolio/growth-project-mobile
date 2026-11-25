@@ -17,6 +17,7 @@ export function NudgeModal({
   onSend,
   colors,
   styles,
+  closed,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -30,6 +31,9 @@ export function NudgeModal({
   onSend: () => void;
   colors: ThemeColors;
   styles: ClientDetailStyles;
+  /** FIX-933R4 (LS-933R4 B1): the pair closed under the open form. Drawn where the words and Send were, so the form says
+   * why at once and no one types to a closed pair (KT-2); Cancel stays. The caller passes the chat's closed line. */
+  closed?: React.ReactNode;
 }) {
   // A status-bar-high spacer above the card centres it below the status bar, so a long message never pushes its title under the clock.
   const topInset = useContext(SafeAreaInsetsContext)?.top ?? 0;
@@ -40,38 +44,42 @@ export function NudgeModal({
         <View style={{ height: topInset }} />
         <View style={styles.nudgeModalContent}>
           <Text style={styles.nudgeModalTitle}>Send Nudge</Text>
-          <Text style={styles.nudgeModalDesc}>
-            Send a push-style notification to {clientName}.
-          </Text>
+          {closed ?? (
+            <>
+              <Text style={styles.nudgeModalDesc}>
+                Send a push-style notification to {clientName}.
+              </Text>
 
-          <Text style={styles.nudgeLabel}>Title</Text>
-          <TextInput
-            style={styles.nudgeInput}
-            placeholder="e.g. Great job today"
-            placeholderTextColor={colors.textMuted}
-            value={nudgeTitle}
-            onChangeText={setNudgeTitle}
-            maxLength={80}
-            accessibilityLabel="Nudge title"
-          />
+              <Text style={styles.nudgeLabel}>Title</Text>
+              <TextInput
+                style={styles.nudgeInput}
+                placeholder="e.g. Great job today"
+                placeholderTextColor={colors.textMuted}
+                value={nudgeTitle}
+                onChangeText={setNudgeTitle}
+                maxLength={80}
+                accessibilityLabel="Nudge title"
+              />
 
-          <Text style={styles.nudgeLabel}>Message</Text>
-          <TextInput
-            style={[styles.nudgeInput, styles.nudgeInputMulti]}
-            placeholder="Write a short message..."
-            placeholderTextColor={colors.textMuted}
-            value={nudgeBody}
-            onChangeText={setNudgeBody}
-            multiline
-            maxLength={500}
-            accessibilityLabel="Nudge message"
-          />
+              <Text style={styles.nudgeLabel}>Message</Text>
+              <TextInput
+                style={[styles.nudgeInput, styles.nudgeInputMulti]}
+                placeholder="Write a short message..."
+                placeholderTextColor={colors.textMuted}
+                value={nudgeBody}
+                onChangeText={setNudgeBody}
+                multiline
+                maxLength={500}
+                accessibilityLabel="Nudge message"
+              />
 
-          {nudgeError ? (
-            <Text style={styles.nudgeErrorText} accessibilityLiveRegion="assertive">
-              {nudgeError}
-            </Text>
-          ) : null}
+              {nudgeError ? (
+                <Text style={styles.nudgeErrorText} accessibilityLiveRegion="assertive">
+                  {nudgeError}
+                </Text>
+              ) : null}
+            </>
+          )}
 
           <View style={styles.nudgeButtons}>
             <TouchableOpacity
@@ -82,15 +90,17 @@ export function NudgeModal({
             >
               <Text style={styles.nudgeCancelText}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.nudgeSendBtn, nudgeSending && { opacity: 0.6 }]}
-              onPress={onSend}
-              disabled={nudgeSending}
-              accessibilityRole="button"
-              accessibilityLabel="Send nudge"
-            >
-              <Text style={styles.nudgeSendText}>{nudgeSending ? 'Sending…' : 'Send'}</Text>
-            </TouchableOpacity>
+            {closed ? null : (
+              <TouchableOpacity
+                style={[styles.nudgeSendBtn, nudgeSending && { opacity: 0.6 }]}
+                onPress={onSend}
+                disabled={nudgeSending}
+                accessibilityRole="button"
+                accessibilityLabel="Send nudge"
+              >
+                <Text style={styles.nudgeSendText}>{nudgeSending ? 'Sending…' : 'Send'}</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </KeyboardAvoidingView>

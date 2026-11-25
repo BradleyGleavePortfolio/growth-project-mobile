@@ -31,8 +31,9 @@ import { persistQueryClientSubscribe } from '@tanstack/react-query-persist-clien
 import type { PersistedClient } from '@tanstack/react-query-persist-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isSealedCacheValue, openCacheValue, sealCacheValue } from './queryCacheCrypto';
-import { isClosedRefusal } from '../components/messaging/closedRefusal';
+import { CLOSED_CODES, COACHING_BLOCKED, isClosedRefusal } from '../components/messaging/closedRefusal';
 import { registerBlockSyncClient } from '../lib/blockSync';
+import type { CommunityApiError } from '../api/apiCall';
 
 function getHttpStatus(err: unknown): number | undefined {
   return (err as { response?: { status?: number } })?.response?.status;
@@ -79,11 +80,13 @@ registerBlockSyncClient(queryClient); // FX-872: blocking and unblocking update 
  *   fetch runs in the background.
  *
  * What we DON'T persist:
- *   Mutations are intentionally not persisted. A pending mutation surviving
- *   an app restart could double-create rows (e.g. a workout logged twice if
- *   the user force-quit mid-network). Re-issuing those is the queue's job
- *   (foodLogQueue.ts), not the query cache's. Queries tagged with
- *   `meta: { persist: false }` are evicted before write.
+ *   Queries tagged with `meta: { persist: false }` are evicted before write.
+ *   Mutations are not re-run from the cache. The library's default does save
+ *   a mutation that is paused (waiting for the network), with its variables,
+ *   and persistableError cuts its error and failure reason down as for a
+ *   query. The app sets no mutation defaults, so a restored paused mutation
+ *   has no function to run and sends nothing. Re-issuing a write is the
+ *   queue's job (foodLogQueue.ts), not the query cache's.
  *
  * Cache TTL:
  *   24h max age. Anything older is treated as cold and refetched on first
@@ -125,6 +128,129 @@ export function persisterKeyForUser(userId: string | null | undefined): string {
 // composition this replaces).
 function shouldDehydrateQuery(query: Query): boolean {
   return query.meta?.persist !== false;
+}
+
+// TOKEN-CACHE-M: a saved error is a closed record. With the default
+// JSON.stringify an AxiosError writes its request config (the headers carry
+// `Authorization: Bearer <access token>`, the URL can be a signed one) and a
+// message that can name the address, app errors keep the AxiosError as their
+// `cause`, and any error can carry other text. So a saved error keeps at most
+// the fields below, each only with a value that a reader of a restored error
+// compares it with, and nothing else is written:
+//   name         'AxiosError' or 'CommunityApiError' (savedRequestFailure,
+//                api/communityErrors.ts)
+//   kind         a CommunityApiError kind (savedRequestFailure; the error
+//                kind useReconstructCounts reports)
+//   code         'ERR_NETWORK', 'ECONNABORTED' or 'ETIMEDOUT'
+//                (isConnectionFailure, calendarErrorMessage), a closed-
+//                conversation code (isClosedRefusal, ConversationClosed),
+//                'client_roster_incomplete' (describeProgramFailure)
+//   message      'Network Error' (isConnectionFailure)
+//   userMessage  the coaching-blocked sentence (isClosedRefusal)
+//   status       a number or null; isAxiosError: true or false
+// A field is read only where JSON.stringify would have read it (an own,
+// enumerable field of the error, or of its toJSON() result), so a restored
+// error never gains a field. Thrown text is saved as a fixed word (never its
+// own words), a thrown array as [], and a list or object inside a field not
+// at all. If reading the error throws (a getter, a toJSON), the error is
+// saved as {} and the rest of the cache is still saved.
+type SavedErrorText = 'name' | 'kind' | 'code' | 'message' | 'userMessage';
+type SavedError = Partial<Record<SavedErrorText, string>> & { status?: number | null; isAxiosError?: boolean };
+
+// Typed as every kind, so a kind added to CommunityApiError must be listed here.
+const SAVED_ERROR_KINDS: Record<CommunityApiError['kind'], true> = {
+  unauthorized: true,
+  forbidden: true,
+  gone: true,
+  conflict: true,
+  server: true,
+  network: true,
+  contract: true,
+  unknown: true,
+};
+
+const SAVED_ERROR_TEXT: Readonly<Record<SavedErrorText, ReadonlySet<string>>> = {
+  name: new Set(['AxiosError', 'CommunityApiError']),
+  kind: new Set(Object.keys(SAVED_ERROR_KINDS)),
+  code: new Set(['ERR_NETWORK', 'ECONNABORTED', 'ETIMEDOUT', 'client_roster_incomplete', ...Array.from(CLOSED_CODES)]),
+  message: new Set(['Network Error']),
+  userMessage: new Set([COACHING_BLOCKED]),
+};
+
+/** What a thrown string (or a toJSON() string) is saved as. No reader shows a restored error's text. */
+export const SAVED_THROWN_TEXT = 'error';
+
+/** A field JSON.stringify would have written: own and enumerable. */
+function savedField(record: object, field: string): unknown {
+  return Object.prototype.propertyIsEnumerable.call(record, field)
+    ? (record as Record<string, unknown>)[field]
+    : undefined;
+}
+
+function closedRecord(record: object): SavedError {
+  const saved: SavedError = {};
+  for (const field of Object.keys(SAVED_ERROR_TEXT) as SavedErrorText[]) {
+    const value = savedField(record, field);
+    if (typeof value === 'string' && SAVED_ERROR_TEXT[field].has(value)) saved[field] = value;
+  }
+  const status = savedField(record, 'status');
+  if (typeof status === 'number' || status === null) saved.status = status;
+  const isAxiosError = savedField(record, 'isAxiosError');
+  if (typeof isAxiosError === 'boolean') saved.isAxiosError = isAxiosError;
+  return saved;
+}
+
+/** The form of a query or mutation error that may be written to disk. */
+export function persistableError(error: unknown): unknown {
+  try {
+    // JSON.stringify writes toJSON()'s result when there is one (AxiosError),
+    // without calling toJSON on that result again.
+    let value = error;
+    if (error !== null && typeof error === 'object') {
+      const toJSON = (error as { toJSON?: unknown }).toJSON;
+      if (typeof toJSON === 'function') value = toJSON.call(error);
+    }
+    if (value === null || value === undefined || typeof value === 'number' || typeof value === 'boolean') return value;
+    if (typeof value === 'string') return value === '' ? '' : SAVED_THROWN_TEXT;
+    if (typeof value !== 'object') return undefined; // a bigint, symbol or function is not saved
+    if (Array.isArray(value)) return [];
+    return closedRecord(value);
+  } catch {
+    // LS-955 C1: one error that throws while it is read must not stop the save.
+    return {};
+  }
+}
+
+/**
+ * The persister's serialize: the dehydrated client as JSON, with the error
+ * and failure reason of every saved query (and of every saved paused
+ * mutation) cut down by persistableError. Which queries are saved is
+ * unchanged (shouldDehydrateQuery).
+ */
+export function serializePersistedClient(client: PersistedClient): string {
+  const { queries, mutations } = client.clientState;
+  return JSON.stringify({
+    ...client,
+    clientState: {
+      ...client.clientState,
+      queries: queries.map((query) => ({
+        ...query,
+        state: {
+          ...query.state,
+          error: persistableError(query.state.error),
+          fetchFailureReason: persistableError(query.state.fetchFailureReason),
+        },
+      })),
+      mutations: mutations.map((mutation) => ({
+        ...mutation,
+        state: {
+          ...mutation.state,
+          error: persistableError(mutation.state.error),
+          failureReason: persistableError(mutation.state.failureReason),
+        },
+      })),
+    },
+  });
 }
 
 export type RestoreOutcome = 'restored' | 'empty' | 'timeout' | 'retired' | 'failed';
@@ -261,6 +387,7 @@ export function createIdentityPersistence(
     storage: fencedStorage,
     key,
     throttleTime: QUERY_CACHE_THROTTLE_MS,
+    serialize: serializePersistedClient,
   });
 
   const subscribe = () => {

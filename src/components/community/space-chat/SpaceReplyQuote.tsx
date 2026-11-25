@@ -21,12 +21,18 @@ export const firstLine = (text?: string | null): string => (text ?? '').split('\
 /** A voice note in a quote: the report sheet's card line (GOAL B-06a, "voice note · 0:21"). */
 export const voiceLine = (ms: number): string => `voice note · ${formatDuration(ms)}`;
 
-/** The server's parent block as a quote; none on a row that answers nothing. */
+/** A photo's word: the inbox's approved one (owner 10-26, UPDATE 2; coachCommunityApi PHOTO_PREVIEW). */
+export const PHOTO_WORD = 'Photo';
+/** LO-943 B1: a photo, quoted or reported, says its caption's first line, else the word Photo (as the inbox does). */
+export const photoLine = (caption?: string | null): string => firstLine(caption) || PHOTO_WORD;
+
+/** The server's parent block as a quote (the server quotes a photo as kind 'image', its caption the snippet). */
 export function quoteOf(parent: SpaceMessage['parent']): SpaceQuote | null {
   if (!parent) return null;
   if (parent.gone) return { gone: true };
   const voiceMs = parent.kind === 'voice' ? parent.voice_duration_ms ?? 0 : null;
-  return { gone: false, name: parent.sender_name ?? '', text: voiceMs != null ? voiceLine(voiceMs) : firstLine(parent.snippet), voiceMs };
+  const text = voiceMs != null ? voiceLine(voiceMs) : parent.kind === 'image' ? photoLine(parent.snippet) : firstLine(parent.snippet);
+  return { gone: false, name: parent.sender_name ?? '', text, voiceMs };
 }
 /** A reply still on the phone: the quote it was written against. */
 /** FR-909: a waiting reply whose message went keeps no words; it reads "Message removed", as the server's quote does. */

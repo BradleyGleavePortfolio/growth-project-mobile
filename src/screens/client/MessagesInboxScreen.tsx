@@ -12,9 +12,12 @@
  * the coach row out: it does while either person blocks; with messaging v2 off the thread read's closed header says it,
  * FR-880R2) the coach card leaves the list, with no name and no unread; an unblock reads again and the card comes back.
  * Cards slide up 250 ms on the decel curve; with Reduce Motion they fade in 150 ms and nothing moves.
+ * D10-BUILD-CLOSE (C3 Style B, B_coachless): with no coach the old-chats row leads with how many chats are kept, from the
+ * client's own Roman history list (useRomanHistory, an existing route); the Roman portrait shows in grey. The coached
+ * Roman card keeps "Ask Roman anything." (FIX-935R1: the owner moved quoting Roman's latest answer to v1.1).
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Pressable, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import api from '../../services/api';
@@ -28,8 +31,14 @@ import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import { JOIN_A_COACH, ROMAN_LOCK_BODY, ROMAN_LOCK_TITLE, useClientNeedsCoach } from '../../components/coachless/JoinCoachState';
 import { useOpenSupport } from '../../components/ai/useOpenSupport';
 import RomanAvatar from '../../components/roman/RomanAvatar';
+// The same canonical portrait in grey (assets/roman/neutral-grey*.png, made from neutral*.png, pinned beside it).
+// Metro bundles an image only through a static require (as romanAvatarAssets does).
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const ROMAN_GREY = require('../../../assets/roman/neutral-grey.png') as ImageSourcePropType;
 import { ROMAN_COMPOSER_PLACEHOLDER } from '../../components/roman/romanVoice';
 import { ROMAN_CHATS_COPY } from '../settings/romanChatsCopy';
+import { romanChatsApi, ROMAN_CHATS_MAX_LIMIT, type RomanChatsApi } from '../../api/romanChatsApi';
+import { bindingIsCurrent, captureAccountBinding, type AccountBinding } from '../../services/accountBinding';
 import { Headline, Screen, ScreenTopBar } from '../../ui';
 import { Skeleton } from '../../ui/skeletons/Skeleton';
 import { HapticService } from '../../ui/haptics/haptics.service';
@@ -64,6 +73,36 @@ export function romanLeft(d: unknown): number | null {
   const used = u?.used?.messages;
   const limit = u?.limits?.messages;
   return typeof used === 'number' && typeof limit === 'number' && limit > 0 ? Math.max(0, Math.floor(limit - used)) : null;
+}
+
+/**
+ * How many Roman chats the client keeps, for the no-coach old-chats row (GET /roman/sessions only: no chat is opened and
+ * no Roman message text is read). Read on focus, bound to the signed-in account (A-331-4): an answer that lands after a
+ * sign-out or account switch is dropped and nothing from it is shown. A failed read keeps the last good count of the
+ * same sign-in. `count` is set only when the whole list fits one page (no guessed total).
+ */
+export function useRomanHistory(enabled: boolean, chats: RomanChatsApi = romanChatsApi) {
+  const [state, setState] = useState<{ binding: AccountBinding; count: number | null } | null>(null);
+  useFocusEffect(useCallback(() => {
+    if (!enabled) return undefined;
+    let live = true;
+    void (async () => {
+      const binding = await captureAccountBinding();
+      if (!live) return;
+      if (!binding) { setState(null); return; }
+      const page = await chats.list(binding, { limit: ROMAN_CHATS_MAX_LIMIT });
+      if (!live) return;
+      if (!bindingIsCurrent(binding)) { setState(null); return; } // that sign-in has ended: drop what it read
+      if (!page.ok) {
+        if (page.failure.reason === 'account_changed' || page.failure.reason === 'signed_out') setState(null);
+        return;
+      }
+      setState({ binding, count: page.value.nextCursor === null ? page.value.sessions.length : null });
+    })();
+    return () => { live = false; };
+  }, [enabled, chats]));
+  const current = state && bindingIsCurrent(state.binding) ? state : null;
+  return { count: current?.count ?? null };
 }
 
 const firstName = (name: string | null) => name?.split(/\s+/)[0] ?? null;
@@ -147,6 +186,8 @@ export default function MessagesInboxScreen({ navigation }: { navigation: Naviga
   const { messageCoach } = useEntitlement();
   const openSupport = useOpenSupport();
   const roman = featureFlags.romanChat;
+  const history = useRomanHistory(roman && needsCoach);
+  const chatCount = history.count !== null && history.count > 0 ? history.count : null;
   const tap = (go: () => void) => () => {
     void HapticService.selection();
     go();
@@ -178,10 +219,10 @@ export default function MessagesInboxScreen({ navigation }: { navigation: Naviga
           <Rise index={1}>
             <View style={[s.card, { backgroundColor: palette.cream }]} testID="inbox-roman">
               <View style={s.top}>
-                <View style={[s.ringed, { borderColor: palette.stone }]}><RomanAvatar crop="neutral" size={52} /></View>
+                <View style={[s.ringed, s.dim, { borderColor: palette.stone }]} testID="inbox-roman-grey"><RomanAvatar crop="neutral" size={52} source={ROMAN_GREY} testID="inbox-roman-grey-face" /></View>
                 <View style={s.who}>
                   <Text style={[s.over, { color: sc.textMuted }]}>Your assistant</Text>
-                  <Text style={[s.title, { color: sc.textPrimary }]}>{ROMAN_LOCK_TITLE}</Text>
+                  <Text style={[s.lockTitle, { color: sc.textPrimary }]} testID="inbox-roman-lock-title">{ROMAN_LOCK_TITLE}</Text>
                 </View>
               </View>
               <Text style={[s.body, { color: sc.textPrimary }]}>{ROMAN_LOCK_BODY}</Text>
@@ -190,7 +231,8 @@ export default function MessagesInboxScreen({ navigation }: { navigation: Naviga
           </Rise>
         ) : null}
         <Rise index={2}>
-          <Pressable onPress={openChats} accessibilityRole="button" accessibilityLabel={ROMAN_CHATS_COPY.entryLabel} accessibilityHint={ROMAN_CHATS_COPY.entryHint} testID="inbox-chats" style={({ pressed }) => [s.card, s.row, { backgroundColor: palette.cream }, pressed && s.pressed]}>
+          <Pressable onPress={openChats} accessibilityRole="button" accessibilityLabel={`${ROMAN_CHATS_COPY.entryLabel}${chatCount !== null ? `, ${chatCount}` : ''}`} accessibilityHint={ROMAN_CHATS_COPY.entryHint} testID="inbox-chats" style={({ pressed }) => [s.card, s.row, { backgroundColor: palette.cream }, pressed && s.pressed]}>
+            {chatCount !== null ? <Text style={[s.rowCount, { color: sc.textPrimary }]} testID="inbox-chats-count">{chatCount > 99 ? '99+' : chatCount}</Text> : null}
             <Text style={[s.rowText, { color: sc.textPrimary }]}>{ROMAN_CHATS_COPY.entryLabel}</Text>
             <Ionicons name="chevron-forward" size={20} color={sc.textPrimary} />
           </Pressable>
@@ -237,9 +279,9 @@ export default function MessagesInboxScreen({ navigation }: { navigation: Naviga
           <>
             <Rise index={1}>
               <Pressable onPress={tap(() => navigation.navigate('MoreTab', { screen: 'RomanChat', initial: false }))} accessibilityRole="button" accessibilityLabel={`Roman, your assistant${left !== null ? `, ${left} left today` : ''}`} testID="inbox-roman" style={({ pressed }) => [s.card, { backgroundColor: palette.cream }, pressed && s.pressed]}>
-                <View style={s.top}>
-                  <View style={[s.ringed, { borderColor: gold[500] }]}><RomanAvatar crop="neutral" size={52} /></View>
-                  <View style={s.who}>
+                <View style={[s.top, s.wrapTop]}>
+                  <View style={[s.ringed, { borderColor: palette.romanAccent }]}><RomanAvatar crop="neutral" size={52} /></View>
+                  <View style={[s.who, s.whoMin]}>
                     <Text style={[s.over, { color: sc.textMuted }]}>Your assistant</Text>
                     <Text style={[s.title, { color: sc.textPrimary }]}>Roman</Text>
                   </View>
@@ -250,7 +292,7 @@ export default function MessagesInboxScreen({ navigation }: { navigation: Naviga
                     </View>
                   ) : null}
                 </View>
-                <Text style={[s.body, { color: sc.textPrimary }]}>{ROMAN_COMPOSER_PLACEHOLDER}</Text>
+                <Text style={[s.body, { color: sc.textPrimary }]} testID="inbox-roman-line">{ROMAN_COMPOSER_PLACEHOLDER}</Text>
               </Pressable>
             </Rise>
             <Rise index={2}>
@@ -276,7 +318,8 @@ export default function MessagesInboxScreen({ navigation }: { navigation: Naviga
 const s = StyleSheet.create({
   heading: { marginTop: 8, marginBottom: 16 },
   list: { gap: 12 },
-  card: { borderRadius: radius.card, padding: 20, gap: 12 },
+  // C3 Style B: 18 pt inside every card, as drawn (was 20), so the drawn lines keep their breaks at 390 pt.
+  card: { borderRadius: radius.card, padding: 18, gap: 12 },
   hero: { borderRadius: radius.sheet },
   pressed: { opacity: 0.85 },
   top: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -285,23 +328,33 @@ const s = StyleSheet.create({
   over: { ...typography.eyebrow, lineHeight: 16 },
   heroTitle: { ...typography.h1 },
   title: { ...typography.h2 },
+  // B_coachless: "Roman works with a coach" in the drawn face (Cormorant Medium 22, tracking 0), one line at 390 pt.
+  lockTitle: { ...typography.h3, fontSize: 22, lineHeight: 28, letterSpacing: 0 },
   mono: { width: 48, height: 48, borderRadius: radius.chip, alignItems: 'center', justifyContent: 'center' },
   monoText: { ...typography.h2 },
   ringed: { borderWidth: 2, borderRadius: radius.chip, padding: 2 },
+  // B_coachless: Roman waits for a coach, so his portrait is grey and faded (the drawing's grayscale at 75%).
+  dim: { opacity: 0.75 },
   // A badge, not a tap target (the whole card is): 40 pt as drawn, so a long first name keeps its line.
   unread: { minWidth: 40, minHeight: 40, borderWidth: 2, borderRadius: radius.chip, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center' },
   unreadText: { ...typography.h3, fontVariant: ['tabular-nums'] },
   preview: { ...typography.body, fontSize: 17, lineHeight: 26 },
-  left: { alignItems: 'flex-end' },
-  count: { ...typography.h1, fontVariant: ['tabular-nums'] },
+  left: { alignItems: 'flex-end', marginLeft: 'auto' },
+  // Large text at 320 pt: "36 left today" moves under the name instead of splitting "Your assistant" mid-word.
+  wrapTop: { flexWrap: 'wrap', rowGap: 4 },
+  whoMin: { minWidth: 128 },
+  count: { ...typography.h1, fontVariant: ['lining-nums', 'tabular-nums'] },
   body: { ...typography.body },
   small: { ...typography.bodySmall },
   crisis: { borderLeftWidth: 2, paddingLeft: 12 },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 4 },
-  action: { flexGrow: 1, flexBasis: 132, minHeight: 48, borderRadius: radius.button, paddingHorizontal: 12, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
+  // B_coachless: 10 pt apart and no side padding, as drawn, so "Contact support" keeps one line at 360 pt.
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 4 },
+  action: { flexGrow: 1, flexBasis: 128, minHeight: 48, borderRadius: radius.button, paddingHorizontal: 0, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
   outline: { borderWidth: 1 },
-  actionText: { ...typography.bodyMd, textAlign: 'center' },
+  // Semibold as drawn (B_coachless): "Join a coach" and "Contact support" on one line each at 390 pt.
+  actionText: { ...typography.bodyMd, fontFamily: 'Inter_600SemiBold', fontWeight: '600', textAlign: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', minHeight: layout.rowMinHeight, paddingVertical: 12 },
+  rowCount: { ...typography.h1, fontVariant: ['lining-nums', 'tabular-nums'], marginRight: 12 },
   rowText: { ...typography.body, flex: 1 },
   privacy: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: layout.touchMin, paddingHorizontal: 4, justifyContent: 'center' },
 });
