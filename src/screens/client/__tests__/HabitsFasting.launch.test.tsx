@@ -476,14 +476,16 @@ describe('Fasting — production protocol and completed status', () => {
     expect(await AsyncStorage.getItem(ALERT_KEY)).toBeNull();
   });
 
-  it('a running fast reads in hours and minutes, with a progress bar and a forest End fast', async () => {
+  it('a running fast reads in hours and minutes, with a progress bar and an outlined forest End fast', async () => {
     runningFast(2);
     const screen = await render(<FastingScreen />);
     await waitFor(() => expect(screen.getByText('2h 00m')).toBeTruthy());
     expect(screen.queryByText(/\d{2}:\d{2}:\d{2}/)).toBeNull();
     expect(screen.getByLabelText('Fasting progress')).toBeTruthy();
     const end = StyleSheet.flatten(screen.getByLabelText('End fast').props.style);
-    expect(end.backgroundColor).toBe(mockSemanticColors.accent);
+    expect(end.backgroundColor).toBe(mockSemanticColors.bgSurface);
+    expect(end.borderColor).toBe(mockSemanticColors.accent);
+    expect(end.borderWidth).toBe(1.5);
     expect(end.backgroundColor).not.toBe(require('../../../constants/colors').default.error);
     // Serif only for the hero number; Inter for what is read.
     expect(StyleSheet.flatten(screen.getByText('2h 00m').props.style).fontFamily).toBe('CormorantGaramond_400Regular');
