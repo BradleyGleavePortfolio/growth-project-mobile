@@ -6,11 +6,18 @@
  * Called where the push is received and where its tap is delivered, as mealPlanRefresh.ts is. Its own file, importing
  * only the app's queryClient, for the reason mealPlanRefresh.ts gives. It never drops a saved answer.
  */
+import type { QueryClient } from '@tanstack/react-query';
 import { queryClient } from './queryClient';
 
-export function refreshDmReads(): void {
-  void queryClient.invalidateQueries({ queryKey: ['community', 'dm'] });
-  void queryClient.invalidateQueries({ queryKey: ['community', 'dms'] });
+/**
+ * REFINE-985R3 (LO-985R2 B1): the one list of the DM reads, for every way a DM reaches the phone: the push received
+ * (pushNotifications.ts), its tap (pushTapRouter.ts), the realtime ping alone (useCommunity.ts onCommunityPing, which
+ * answers for the query client it was handed and so passes it) and the app coming back to the front
+ * (pushNotifications.ts). With no argument it is the app's one client, which is also the one the hooks are given.
+ */
+export function refreshDmReads(client: QueryClient = queryClient): void {
+  void client.invalidateQueries({ queryKey: ['community', 'dm'] });
+  void client.invalidateQueries({ queryKey: ['community', 'dms'] });
 }
 
 /** The server's DM push (backend community-dms.service.ts, kind community_dm_received). */
