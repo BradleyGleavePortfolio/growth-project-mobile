@@ -135,6 +135,8 @@ const edge = (st: ViewStyle, side: 'Top' | 'Bottom' | 'Left' | 'Right') => {
   return st[`padding${side}` as const] ?? axis ?? st.padding;
 };
 const PLAY = 'Play demonstration';
+// REFINE-986R2 (PLAY-2): an animation's control says what its press does.
+const SHOW = 'Show demonstration';
 /** The play control in the bar the screen sets (the native header config draws the same headerRight). */
 const inBar = (view: { getByTestId: (id: string) => unknown }) => within(view.getByTestId('bar') as never);
 // The jest preset's ScrollView mock keeps scrollTo on its prototype (clientFileStyleC150.test.tsx reads it the same way).
@@ -163,13 +165,13 @@ it.each(['modal', 'push'] as const)('the bar on the %s way in has no title and a
 });
 
 it.each([
-  ['a video', VIDEO, 'exercise-detail-player'],
-  ['an animation only', GIF, 'exercise-detail-animation'],
-] as const)('the play control shows at the bar\'s right with %s, 44 pt, spoken "Play demonstration" (cols 703-726)', async (_l, detail, demoId) => {
+  ['a video', VIDEO, 'exercise-detail-player', PLAY],
+  ['an animation only', GIF, 'exercise-detail-animation', SHOW],
+] as const)('the play control shows at the bar\'s right with %s, 44 pt, spoken by what its press does (cols 703-726)', async (_l, detail, demoId, name) => {
   serve({ data: detail });
   const view = await screen();
   await view.findByTestId(demoId);
-  const play = await inBar(view).findByRole('button', { name: PLAY });
+  const play = await inBar(view).findByRole('button', { name });
   const st = flat(play);
   expect(st.minHeight).toBeGreaterThanOrEqual(44);
   expect(st.minWidth).toBeGreaterThanOrEqual(44);
@@ -194,7 +196,7 @@ it('a play press with an animation only scrolls to it and starts nothing (no thr
   const view = await screen();
   const gif = await view.findByTestId('exercise-detail-animation');
   await fireEvent(gif, 'layout', { nativeEvent: { layout: { x: 0, y: 598, width: 342, height: 192 } } });
-  await fireEvent.press(await inBar(view).findByRole('button', { name: PLAY }));
+  await fireEvent.press(await inBar(view).findByRole('button', { name: SHOW }));
   expect(scrollTo).toHaveBeenCalledWith({ y: 598, animated: true });
   expect(mockPlayer.play).not.toHaveBeenCalled();
 });
@@ -250,9 +252,10 @@ it('the play control goes when the video fails (statusChange error), with main\'
 it('the play control goes when the animation fails to load (the Image\'s onError)', async () => {
   serve({ data: GIF });
   const view = await screen();
-  await inBar(view).findByRole('button', { name: PLAY });
+  await inBar(view).findByRole('button', { name: SHOW });
   await fireEvent(view.getByTestId('exercise-detail-animation'), 'error');
   await view.findByTestId('exercise-detail-no-video');
+  expect(view.queryByRole('button', { name: SHOW })).toBeNull();
   expect(view.queryByRole('button', { name: PLAY })).toBeNull();
 });
 
