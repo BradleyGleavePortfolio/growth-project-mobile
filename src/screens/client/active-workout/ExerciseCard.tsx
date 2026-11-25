@@ -254,7 +254,7 @@ const local = StyleSheet.create({
   letterDone: { backgroundColor: sc.accent },
   letterText: { ...typography.h3, fontSize: 17, lineHeight: 22 },
   foldedHeader: { marginBottom: 0, alignItems: 'center' },
-  // C1 v2: the exercise in progress on the scheme's cream card (owner #203-E91) with a 1 pt line.
+  // C1 v2: the exercise in progress on the scheme's cream card (owner ruling 203-E91) with a 1 pt line.
   activeCard: {
     borderWidth: 1,
     ...schemeCardOutline,

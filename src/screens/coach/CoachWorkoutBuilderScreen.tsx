@@ -1905,7 +1905,7 @@ export default function CoachWorkoutBuilderScreen() {
                 })}
                 </View>
               </View>
-              {/* LS-928 B5: the stepper card (C_row; the scheme's cream card, owner #203-E91): one line per number, its
+              {/* LS-928 B5: the stepper card (C_row; the scheme's cream card, owner ruling 203-E91): one line per number, its
                   label at the start and minus, the number, plus at the end. */}
               <View testID={`row-${idx}-steppers`} style={[styles.stepperCard, schemeCardOutline, schemeCard]}>
                 <StepperField

@@ -54,7 +54,7 @@ describe('safety gold: the shared file', () => {
     expect(safetyGold).toEqual({ edge: gold[800], chipFill: gold[800], chipText: '#FFF8EC', card: '#FFF8EC', text: gold[800] });
     expect(gold[800]).toBe('#6B4F1A');
     const bytes = readFileSync(join(__dirname, '..', 'safetyGold.ts'));
-    expect(createHash('sha256').update(bytes).digest('hex')).toBe('9b751e1752be6f5576a94785d1600d93b6bd6a976d234ebd5d17436d5dbb9fe3');
+    expect(createHash('sha256').update(bytes).digest('hex')).toBe('133446766ed83ea83b5bba4168b4b7b8fa966e6315ca0fcebcc1f0f4f2818c1b');
   });
 });
 

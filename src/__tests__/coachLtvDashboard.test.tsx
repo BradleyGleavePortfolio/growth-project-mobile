@@ -265,15 +265,15 @@ describe('CoachLtvDashboard', () => {
       expect(ratio(colors.mutedGold, lightTokens.bgPrimary)).toBeLessThan(4.5);
     });
 
-    // Owner 10-26 13:5x: "2.) Darker gold" -> gold[800] #6B4F1A, 6.95:1 on bone (warningInk #8A6A2A is 4.59:1).
-    it('draws the flat chip in the darker gold, at 6.9:1 or more on the bone screen', async () => {
+    // Owner 10-26 13:5x: "2.) Darker gold" -> gold[800] #6B4F1A, 6.59:1 on bone (Sunlit sand; 7.24:1 on main's page; warningInk #8A6A2A is 4.36:1).
+    it('draws the flat chip in the darker gold, at 6.5:1 or more on the bone screen', async () => {
       await renderDashboard(makeApiGet({ ...MOCK_METRICS, mrr_trend: 'flat' }));
       await waitFor(() => expect(screen.getByTestId('ltv-trend-chip')).toBeTruthy());
       expect(gold[800]).toBe('#6B4F1A');
       expect(chipWords()).toEqual([gold[800], gold[800]]);
       expect(chipWords()).not.toContain(colors.warningInk);
-      expect(ratio(gold[800], lightTokens.bgPrimary)).toBeGreaterThanOrEqual(6.9);
-      expect(ratio(gold[800], lightTokens.bgPrimary)).toBeCloseTo(6.95, 2);
+      expect(ratio(gold[800], lightTokens.bgPrimary)).toBeGreaterThanOrEqual(6.5);
+      expect(ratio(gold[800], lightTokens.bgPrimary)).toBeCloseTo(6.59, 2);
     });
 
     it.each([

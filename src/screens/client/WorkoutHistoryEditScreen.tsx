@@ -33,7 +33,7 @@ export default function WorkoutHistoryEditScreen() {
       finishBtnText: { ...base.finishBtnText, color: sc.textOnAccent },
       content: { ...base.content, paddingTop: spacing.xl },
       // STYLE-WORKOUTS-M, nearest picked drawing C2_logger (no frame draws this screen): each exercise is the open
-      // block card, the scheme's cream card (owner #203-E91) with a 1 pt line, 16 pt corners and padding (rows 462-1065, cols 48-82), 16 pt apart.
+      // block card, the scheme's cream card (owner ruling 203-E91) with a 1 pt line, 16 pt corners and padding (rows 462-1065, cols 48-82), 16 pt apart.
       // These overrides are this screen's own; active-workout/styles.ts and the live workout do not change.
       exerciseCard: { ...base.exerciseCard, borderWidth: 1, borderBottomWidth: 1, ...schemeCardOutline, ...schemeCard,
         borderRadius: radius.card, padding: spacing.lg,

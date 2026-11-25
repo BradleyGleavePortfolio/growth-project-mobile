@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
   prescription: { gap: 2 },
   innerName: { fontFamily: 'Inter_600SemiBold' },
   supersetText: { gap: spacing.md },
-  // C2_adjusted cols 128-133, rows 1040-1203: a 3 pt forest edge (the fill is the scheme's cream card, owner #203-E91), 16 pt right corners, 4 pt from the rules.
+  // C2_adjusted cols 128-133, rows 1040-1203: a 3 pt forest edge (the fill is the scheme's cream card, owner ruling 203-E91), 16 pt right corners, 4 pt from the rules.
   changed: {
     borderLeftWidth: wsc.changedEdge,
     borderTopRightRadius: radius.card,

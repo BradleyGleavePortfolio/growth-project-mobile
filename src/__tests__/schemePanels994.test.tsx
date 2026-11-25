@@ -66,6 +66,17 @@ function filled(node: Node): Record<string, unknown> {
   throw new Error('no filled ancestor');
 }
 
+type Tree = { props: Record<string, unknown>; children?: ReadonlyArray<unknown> };
+
+/** Every node of a rendered tree that the test picks. */
+function all(node: Tree, pick: (at: Tree) => boolean, out: Tree[] = []): Tree[] {
+  if (pick(node)) out.push(node);
+  for (const child of node.children ?? []) {
+    if (typeof child === 'object' && child !== null) all(child as Tree, pick, out);
+  }
+  return out;
+}
+
 function holdsNoFamilyValue(style: Record<string, unknown>): void {
   for (const value of Object.values(style)) {
     if (typeof value === 'string') expect(FAMILY_VALUES).not.toContain(value.toUpperCase());
@@ -101,7 +112,8 @@ describe('the shared definitions (203-D40 option 1)', () => {
     expect(Colors.primaryPale).toBe(PALE);
     expect(Colors.feedbackSuccessBg).toBe(SAGE);
     expect(semantic.success.fg).toBe('#1C3023');
-    expect(semantic.success.border).toBe('#2C4A36');
+    expect(semantic.success.border).toBe('#6E9479');
+    expect(semantic.success.icon).toBe('#2C4A36');
   });
 
   it('the dark theme is unchanged', () => {
@@ -140,19 +152,22 @@ describe('members mounted as the app mounts them', () => {
     expect(pill.backgroundColor).toBe(schemeBar.fill);
     expect(pill.borderColor).toBe(schemeBar.border);
     holdsNoFamilyValue(pill);
-    const icons = (view.UNSAFE_root.findAll((node) => node.props.name === 'checkmark-circle-outline'));
-    expect(icons.length).toBeGreaterThan(0);
-    for (const icon of icons) expect(icon.props.color).toBe(schemeBar.text);
+    // Every word and icon colour drawn inside the pill is the light words token: nothing keeps the success green.
+    const drawn = all(view.container as unknown as Tree, () => true)
+      .map((node) => node.props.color ?? (StyleSheet.flatten(node.props.style as never) as { color?: unknown } | undefined)?.color)
+      .filter((value): value is string => typeof value === 'string');
+    expect(drawn.length).toBeGreaterThan(0);
+    for (const value of drawn) expect(value).toBe(schemeBar.text);
   });
 
   // The other states are not success messages: they read the tokens they read on main.
   it.each([
-    ['saving', {}, /Saving/, () => lightTokens.textMuted, () => lightTokens.bgSurface],
-    ['syncing', {}, /Syncing latest version/, () => semantic.info.fg, () => semantic.info.bg],
-    ['offline', {}, /Offline — saved on device, will sync/, () => semantic.warning.fg, () => semantic.warning.bg],
-    ['offline', { mirrorDegraded: true }, /Unable to save on this device/, () => semantic.warning.fg, () => semantic.warning.bg],
-    ['offline', { refused: true }, /Not saved — no edit access/, () => semantic.warning.fg, () => semantic.warning.bg],
-    ['conflict', {}, /Edited elsewhere — tap to refresh/, () => semantic.warning.fg, () => semantic.warning.bg],
+    ['saving', {}, /Saving/, (): string => lightTokens.textMuted, (): string => lightTokens.bgSurface],
+    ['syncing', {}, /Syncing latest version/, (): string => semantic.info.fg, (): string => semantic.info.bg],
+    ['offline', {}, /Offline — saved on device, will sync/, (): string => semantic.warning.fg, (): string => semantic.warning.bg],
+    ['offline', { mirrorDegraded: true }, /Unable to save on this device/, (): string => semantic.warning.fg, (): string => semantic.warning.bg],
+    ['offline', { refused: true }, /Not saved — no edit access/, (): string => semantic.warning.fg, (): string => semantic.warning.bg],
+    ['conflict', {}, /Edited elsewhere — tap to refresh/, (): string => semantic.warning.fg, (): string => semantic.warning.bg],
   ] as const)('the pill in %s %j is unchanged', async (status, extra, label, fg, bg) => {
     const view = await render(<AutosaveStatusPill status={status} lastSavedAt={null} onPress={() => undefined} {...extra} />);
     const words = view.getByText(label) as unknown as Node;
@@ -363,7 +378,7 @@ describe('census of the pale green family under src/', () => {
 });
 
 // ─── Text and ground pairs on Sunlit sand ────────────────────────────────────
-// [what, text, ground, the floor it must clear, the measured ratio cut to two places, main's ratio on #F7FAF7].
+// [what, text, ground, the floor it must clear, the measured ratio cut to two places, main's ratio on its near-white page].
 // 4.5:1 for body text; 3:1 for 18 pt, bold 14 pt and icons.
 const PAIRS: ReadonlyArray<readonly [string, () => string, () => string, number, number, number]> = [
   ['ink on the page', () => colors.ink, () => lightTokens.bgPrimary, 4.5, 15.09, 16.58],
