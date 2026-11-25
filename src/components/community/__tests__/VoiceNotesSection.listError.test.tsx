@@ -3,6 +3,8 @@
  * error names the list, not one note. It shows the title "Voice notes not loaded" above the reason, and a
  * server problem reads "could not load voice notes". The page for one note keeps "load this voice note".
  * Mocks and renderSection follow VoiceNotesSection.test.tsx; the switch is on unless a case turns it off.
+ * ROUND-990 (owner #203-E74): cases a to c now pin the one short line, "Could not load voice notes." and Try again; the
+ * title and the reason stay in the copy table (d) and are no longer drawn on this list.
  */
 import React from 'react';
 import { render, fireEvent, waitFor, within } from '@testing-library/react-native';
@@ -72,6 +74,7 @@ jest.mock('../../../api/communitySafetyApi', () => {
 const secure = jest.requireMock('expo-secure-store') as { __store: Map<string, string> };
 
 const TITLE = 'Voice notes not loaded';
+const SENTENCE = 'Could not load voice notes.';
 const ONE_NOTE_TITLE = 'Voice note not loaded';
 const LIST = 'The app could not load voice notes because of a server problem.';
 const OLD = 'load this voice note';
@@ -126,17 +129,18 @@ beforeEach(() => {
 });
 
 describe('the Hall voice notes list error names the list (VN-LIST-W1)', () => {
-  it('a. a server problem: the title, then "could not load voice notes", then one Try again that reads again', async () => {
+  it('a. a server problem: "Could not load voice notes.", then one Try again that reads again', async () => {
     mockListFeed.mockReset().mockRejectedValue(answered(503));
     const { findByTestId, queryByText } = await renderSection();
     const error = await findByTestId('vn-error');
     const lines = errorLines(error);
-    expect(lines[0]).toBe(TITLE);
-    expect(lines[1]).toContain(LIST);
-    expect(lines[2]).toBe('Try again');
-    expect(lines).toHaveLength(3);
+    expect(lines[0]).toBe(SENTENCE);
+    expect(lines[1]).toBe('Try again');
+    expect(lines).toHaveLength(2);
     expect(queryByText(new RegExp(OLD))).toBeNull();
     expect(queryByText(ONE_NOTE_TITLE)).toBeNull();
+    expect(queryByText(TITLE)).toBeNull();
+    expect(queryByText(new RegExp(LIST))).toBeNull();
     const retry = within(error).getAllByRole('button', { name: 'Try again' });
     expect(retry).toHaveLength(1);
     const before = mockListFeed.mock.calls.length;
@@ -144,16 +148,20 @@ describe('the Hall voice notes list error names the list (VN-LIST-W1)', () => {
     await waitFor(() => expect(mockListFeed.mock.calls.length).toBeGreaterThan(before));
   });
 
-  it('b. no answer (offline): the title over the offline sentence', async () => {
+  it('b. no answer (offline): the one line, no title and no offline sentence', async () => {
     mockListFeed.mockReset().mockRejectedValue(noAnswer());
-    const { findByTestId } = await renderSection();
-    expect(errorLines(await findByTestId('vn-error'))).toEqual([TITLE, OFFLINE, 'Try again']);
+    const { findByTestId, queryByText } = await renderSection();
+    expect(errorLines(await findByTestId('vn-error'))).toEqual([SENTENCE, 'Try again']);
+    expect(queryByText(TITLE)).toBeNull();
+    expect(queryByText(OFFLINE)).toBeNull();
   });
 
-  it('c. a 403 answer: the title over the no-access sentence', async () => {
+  it('c. a 403 answer: the one line, no title and no no-access sentence', async () => {
     mockListFeed.mockReset().mockRejectedValue(answered(403));
-    const { findByTestId } = await renderSection();
-    expect(errorLines(await findByTestId('vn-error'))).toEqual([TITLE, NO_ACCESS, 'Try again']);
+    const { findByTestId, queryByText } = await renderSection();
+    expect(errorLines(await findByTestId('vn-error'))).toEqual([SENTENCE, 'Try again']);
+    expect(queryByText(TITLE)).toBeNull();
+    expect(queryByText(NO_ACCESS)).toBeNull();
   });
 
   it('d. the list action: title "Voice notes not loaded", "could not load voice notes" and a reference', () => {
