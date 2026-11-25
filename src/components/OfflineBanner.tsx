@@ -8,6 +8,7 @@ import { View, Text, StyleSheet, Platform, StatusBar } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNetworkStatus, isEffectivelyOnline } from '../hooks/useNetworkStatus';
 import { Colors } from '../constants/colors';
+import { lightTokens } from '../theme/tokens';
 import { readUserCacheSync } from '../lib/userCache';
 import { isCoachLikeRole } from '../lib/roleSelectionGate';
 
@@ -24,7 +25,7 @@ export default function OfflineBanner() {
 
   return (
     <View style={styles.banner} accessibilityRole="alert" accessibilityLiveRegion="polite">
-      <Ionicons name="cloud-offline-outline" size={14} color={Colors.textOnPrimary} />
+      <Ionicons name="cloud-offline-outline" size={14} color={lightTokens.textOnAccent} />
       <Text style={styles.text}>{coach ? COACH_LINE : CLIENT_LINE}</Text>
     </View>
   );
@@ -44,7 +45,8 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 6 : 6,
   },
   text: {
-    color: Colors.textOnPrimary,
+    // The warm near-white: 4.71:1 on the banner's gold (the Sunlit sand page colour would be 4.36:1).
+    color: lightTokens.textOnAccent,
     fontSize: 12,
     fontWeight: '600',
   },

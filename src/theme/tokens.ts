@@ -113,7 +113,7 @@ export const semantic = {
   },
   warning: {
     bg:     '#F8F2E5',
-    fg:     '#8A6A2A',
+    fg:     '#6B4F1A',  // gold[800]: 6.59:1 as words on the Sunlit sand page (gold[700] was 4.36:1; owner #203-E86)
     border: '#C5A253',
     icon:   '#C5A253',
   },

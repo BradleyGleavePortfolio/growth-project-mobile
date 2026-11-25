@@ -78,7 +78,7 @@ export const Colors = {
   // accent (#9A3030) is a desaturated dark red that works on bone.
   noticeWarningBg:       '#F8F2E5',
   noticeWarningIconBg:   '#F3EBD8',
-  noticeWarningText:     '#8A6A2A',
+  noticeWarningText:     '#6B4F1A',  // gold[800]: 6.59:1 on the Sunlit sand page (was #8A6A2A, 4.36:1)
   noticeCriticalBg:      '#F2E0E0',
   noticeCriticalAccent:  '#9A3030',
   noticeCriticalText:    '#7A1F1F',
