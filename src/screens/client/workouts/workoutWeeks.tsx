@@ -42,7 +42,7 @@ export function listRows<T extends Assignment>(rows: ReadonlyArray<T>, today: st
   const to = plusDays(from, week ? 6 : 20);
   return rows.filter((a) => {
     const day = dayOf(a);
-    return day ? day >= from && day <= to : !week;
+    return day ? day >= from && day <= to && (!!week || mondayOf(day) !== mondayOf(today)) : !week;
   });
 }
 
