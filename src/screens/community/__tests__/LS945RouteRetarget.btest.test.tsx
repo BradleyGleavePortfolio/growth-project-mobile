@@ -30,7 +30,7 @@ jest.mock('../../../hooks/useCommunity', () => ({
     isLoading: false, isError: false,
   }),
 }));
-const mockMarkRead = jest.fn(async () => true);
+const mockMarkRead = jest.fn(async (_cohortId: string, _messageId: string) => true);
 const mockChats = Object.fromEntries(['space-a', 'space-b'].map((id, n) => [id, {
   messages: [3, 2, 1].map((k) => ({
     id: `${id}-${k}`, cohort_id: id, kind: 'text', body: `Row ${k}`, sender_user_id: 'author',
