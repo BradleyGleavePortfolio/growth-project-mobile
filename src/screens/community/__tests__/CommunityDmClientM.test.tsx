@@ -150,21 +150,23 @@ beforeEach(() => {
 describe('the client\'s DM list', () => {
   const list = () => render(withQuery(<CommunityDmListScreen workspaceId={WS} />));
 
-  it('case 9: my coach\'s row shows the coach\'s name with "your coach" and Roman\'s mark, and opens that thread', async () => {
+  it('case 9: my coach\'s card shows the coach\'s name with "Your coach" under it (REFINE-985R3, Style 1: no mark of Roman\'s on the list), and opens that thread', async () => {
     serve({ [COACH_URL]: { id: COACH, name: '  Alex Morgan ' }, [LIST_URL]: { threads: [thread(COACH, ago(3_600_000))] } });
     const view = await list();
-    await waitFor(() => expect(within(rowOf(view, COACH)).getByText(/^Alex Morgan\s+·\s+your coach$/)).toBeTruthy());
+    await waitFor(() => expect(within(rowOf(view, COACH)).getByText('Alex Morgan')).toBeTruthy());
+    expect(within(rowOf(view, COACH)).getByText('Your coach')).toBeTruthy();
     expect(view.getByLabelText('Open conversation with Alex Morgan')).toBeTruthy();
-    expect(within(rowOf(view, COACH)).getByTestId('dm-row-roman')).toBeTruthy();
+    expect(view.queryByTestId('dm-row-roman', { includeHiddenElements: true })).toBeNull();
     await act(async () => { fireEvent.press(rowOf(view, COACH)); });
     expect(mockNavigate.mock.calls).toEqual([['CommunityDmThread', { recipientId: COACH }]]);
   });
 
-  it('case 9: my coach\'s name not known (the read failed): "Coach" with "your coach" and Roman\'s mark, as today', async () => {
+  it('case 9: my coach\'s name not known (the read failed): "Coach" with "Your coach" under it', async () => {
     serve({ [COACH_URL]: NOT_FOUND, [LIST_URL]: { threads: [thread(COACH, ago(3_600_000))] } });
     const view = await list();
-    await waitFor(() => expect(within(rowOf(view, COACH)).getByText(/^Coach\s+·\s+your coach$/)).toBeTruthy());
-    expect(within(rowOf(view, COACH)).getByTestId('dm-row-roman')).toBeTruthy();
+    await waitFor(() => expect(within(rowOf(view, COACH)).getByText('Coach')).toBeTruthy());
+    expect(within(rowOf(view, COACH)).getByText('Your coach')).toBeTruthy();
+    expect(view.queryByTestId('dm-row-roman', { includeHiddenElements: true })).toBeNull();
   });
 
   it('case 10: another member and a former coach read "Direct message": no mark, no "your coach", no letter, never "Coach"', async () => {
@@ -201,7 +203,8 @@ describe('the client\'s DM list', () => {
     expect(view.queryByText('No conversations yet')).toBeNull();
     mockUser = { id: CLIENT, role: 'student', name: 'Dana Cruz', firstName: 'Dana', coach_id: COACH };
     await view.rerender(withQuery(<CommunityDmListScreen workspaceId={WS} />));
-    await waitFor(() => expect(within(rowOf(view, COACH)).getByText(/^Alex Morgan\s+·\s+your coach$/)).toBeTruthy());
+    await waitFor(() => expect(within(rowOf(view, COACH)).getByText('Alex Morgan')).toBeTruthy());
+    expect(within(rowOf(view, COACH)).getByText('Your coach')).toBeTruthy();
     expect(within(rowOf(view, MEMBER)).getByText('Direct message')).toBeTruthy();
   });
 
