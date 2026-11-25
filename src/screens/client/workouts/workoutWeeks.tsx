@@ -38,7 +38,7 @@ export function weekParam(value: unknown): string | null {
 
 /** The workouts a list shows: one week's when `week` is set, else the window's and every one whose day cannot be read. */
 export function listRows<T extends Assignment>(rows: ReadonlyArray<T>, today: string, week: string | null): T[] {
-  const from = week ?? mondayOf(today);
+  const from = week ?? plusDays(mondayOf(today), -7);
   const to = plusDays(from, week ? 6 : 20);
   return rows.filter((a) => {
     const day = dayOf(a);
