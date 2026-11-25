@@ -446,13 +446,20 @@ describe('F. reach (class): every row kind GET /assignments/me returns', () => {
     await def.unmount();
     const weeks = await mount(weeksPage());
     const rowIds = [...weeks.queryAllByTestId(/^coming-\d{4}-\d\d-\d\d$/), ...weeks.queryAllByTestId(/^earlier-\d{4}-\d\d-\d\d$/)];
-    const pages: Record<string, string[]> = {};
+    const opened: string[] = [];
     for (const row of rowIds) {
       mockNavigate.mockClear();
       await fireEvent.press(row);
       expect(mockNavigate).toHaveBeenCalledTimes(1);
       const [route, params] = mockNavigate.mock.calls[0] as [string, { week: string }];
       expect(route).toBe('ClientWorkoutViewer');
+      opened.push(params.week);
+    }
+    expect(opened).toHaveLength(7);
+    await weeks.unmount();
+    const pages: Record<string, string[]> = {};
+    for (const week of opened) {
+      const params = { week };
       const page = await mount(list(params.week));
       pages[params.week] = listed(page);
       // Every week row drawn opens a page with at least one card.
