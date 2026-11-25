@@ -62,7 +62,7 @@ export function weeksOf(rows: ReadonlyArray<Assignment>, today: string) {
     if (!day) continue; // a day that cannot be read is on the list only
     const monday = mondayOf(day);
     if (monday === thisMonday) thisWeek.push(a);
-    else other.set(monday, [...(other.get(monday) ?? []), a]);
+    other.set(monday, [...(other.get(monday) ?? []), a]);
   }
   const row = (monday: string): WeekRow => ({
     monday,
@@ -80,7 +80,7 @@ export function weeksOf(rows: ReadonlyArray<Assignment>, today: string) {
   return {
     rows: thisWeek,
     week: trainWeek(thisWeek, today),
-    later: mondays.filter((m) => m > thisMonday).map(row),
+    later: mondays.filter((m) => m >= thisMonday).map(row),
     earlier: mondays.filter((m) => m < thisMonday).reverse().map(row),
   };
 }
