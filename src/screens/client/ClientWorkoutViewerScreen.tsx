@@ -117,7 +117,7 @@ export default function ClientWorkoutViewerScreen({ route }: { route?: { params?
         <>
           {/* FULL-1: the kit's row, the first thing under the title, whenever the read holds a workout. */}
           {week ? null : (
-            <QuietRow label="Full program" onPress={() => navigation.navigate('YourWeeks')} testID="workout-full-program" style={styles.fullProgram} />
+            <QuietRow label="Full program" onPress={() => undefined} testID="workout-full-program" style={styles.fullProgram} />
           )}
           {!week && shown.length === 0 ? (
             <Text style={[typography.body, styles.state, { color: sc.textMuted }]}>
