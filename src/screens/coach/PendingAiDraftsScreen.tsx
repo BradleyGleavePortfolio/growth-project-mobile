@@ -38,7 +38,7 @@ import { useIsFocused, useNavigation, type NavigationProp, type ParamListBase } 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTheme, type ThemeColors } from '../../theme/ThemeProvider';
 import { coachInboxB as B, forestPop, layout, typography, radius, spacing } from '../../theme/tokens';
-import { ForestStatusBar } from '../../components/StatusBarBand';
+import { useStatusBarBandWhile } from '../../components/StatusBarBand';
 import ErrorBoundary from '../../components/ErrorBoundary';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
@@ -92,6 +92,9 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
   const path = usePathChangeDrafts(allowed && isFocused);
   const hasPath = (path.data?.length ?? 0) > 0;
   const pathFailed = path.isError && !path.data;
+  // ROUND-989: the status band behind the clock is the head's deep with light icons while the list is focused (the
+  // client file's band, StatusBarBand.tsx); the restricted state keeps the app's bone band.
+  useStatusBarBandWhile(forestPop.deep, allowed && isFocused);
 
   const approveMutation = useMutation({
     mutationFn: (draftId: string) => coachAiExecutionApi.approveDraft(draftId),
@@ -161,7 +164,7 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
   // ROUND-989 (owner #203-E74; ctx#503 B-list frame, CD-68, CD-69, CD-72): the deep head (Back, Roman's mark, "Roman"
   // and its line), then on the page the queue line from the one count and, with a Stream 2 kind, the tiles. LS-952 B1,
   // LO-952 B1: all of it scrolls with the cards (a 320 pt screen at 130% text keeps room for them). The status band is
-  // the head's deep while the list is focused (ForestStatusBar, as the client file), and the screen keeps insets.top, so
+  // the head's deep while the list is focused (useStatusBarBandWhile above), and the screen keeps insets.top, so
   // a scrolled card stops below the clock. The frame's Chat and Drafts labels are not drawn (v1.1, #203-E81).
   const header = (
     <>
@@ -199,7 +202,6 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
   return (
     <ErrorBoundary>
       <View style={[styles.root, { paddingTop: insets.top }]} testID="pending-ai-drafts-screen">
-        <ForestStatusBar />
         <FlatList
           data={renderable}
           // The Copilot editors' number pad has no Done key: lift content over it, first tap lands, drag dismisses.
