@@ -72,7 +72,9 @@ jest.mock('../../../api/copilotApi', () => {
 });
 jest.mock('../../../api/programsApi', () => ({ programsApi: { assignableClients: async () => [] } }));
 
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import PendingAiDraftsScreen from '../PendingAiDraftsScreen';
+import { StatusBarBand, STATUS_BAR_BONE } from '../../../components/StatusBarBand';
 import { romanDraftsCount } from '../romanDraftsCount';
 import { coachInboxB, forestPop, radius, spacing, typography } from '../../../theme/tokens';
 import { featureFlags } from '../../../config/featureFlags';
@@ -150,6 +152,27 @@ describe('ROUND-989: the B-list frame head on Roman\'s drafts list (B-list-390-1
     expect(head.backgroundColor).not.toBe(coachInboxB.deep);
     expect(head.borderBottomLeftRadius).toBe(radius.sheet);
     expect(head.borderBottomRightRadius).toBe(radius.sheet);
+  });
+
+  it('(a) the status band behind the clock is the head\'s deep while the list is focused, and bone again after it closes; restricted keeps bone', async () => {
+    mockListPending.mockResolvedValue({ drafts: [bound('d-7', 'client-1', 'ci-7')] });
+    // The app's own band (App.tsx mounts StatusBarBand over every screen) beside the list, with a phone's top inset.
+    const app = (node: React.ReactNode) => (
+      <SafeAreaInsetsContext.Provider value={{ top: 47, bottom: 34, left: 0, right: 0 }}>
+        <QueryClientProvider client={qc}>{node}<StatusBarBand /></QueryClientProvider>
+      </SafeAreaInsetsContext.Provider>
+    );
+    const band = (v: Awaited<ReturnType<typeof render>>) => flat(v.getByTestId('status-bar-band')).backgroundColor;
+    const view = await render(app(<PendingAiDraftsScreen />));
+    await view.findByTestId('pending-ai-drafts-head');
+    expect(band(view)).toBe(forestPop.deep);
+    await view.rerender(app(null));
+    expect(band(view)).toBe(STATUS_BAR_BONE);
+    view.unmount();
+    mockUser.role = 'client';
+    const restricted = await render(app(<PendingAiDraftsScreen />));
+    expect(restricted.getByTestId('pending-ai-drafts-screen-restricted')).toBeTruthy();
+    expect(band(restricted)).toBe(STATUS_BAR_BONE);
   });
 
   it('(b) Back is light on the deep, a 44 pt target labelled Back that goes back, and absent when the stack cannot go back', async () => {
