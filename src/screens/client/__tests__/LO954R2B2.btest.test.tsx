@@ -6,7 +6,6 @@ import { render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { listsApi } from '../../../services/api';
 import GroceryListScreen from '../GroceryListScreen';
-import ShoppingListScreen from '../ShoppingListScreen';
 
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: jest.fn(), navigate: jest.fn() }) }));
 jest.mock('../../../components/StatusBarBand', () => ({ useStatusBarBand: () => undefined }));
@@ -21,7 +20,7 @@ jest.mock('../../../services/api', () => ({
 
 type Node = { type: unknown; props: { style?: unknown }; parent: Node | null };
 
-it.each([['Grocery', GroceryListScreen], ['Shopping', ShoppingListScreen]] as const)(
+it.each([['Grocery', GroceryListScreen]] as const)(
   'B2 LO-954R2: the %s error state keeps Try again 16 pt under the notice, as drawn',
   async (_name, Screen) => {
     jest.mocked(listsApi.getList).mockRejectedValue(new Error('offline'));

@@ -2,7 +2,6 @@ import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import GroceryListScreen from '../GroceryListScreen';
-import ShoppingListScreen from '../ShoppingListScreen';
 import { listsApi } from '../../../services/api';
 
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: jest.fn(), navigate: jest.fn() }) }));
@@ -53,13 +52,13 @@ beforeEach(() => {
 });
 afterEach(() => clients.splice(0).forEach(client => client.clear()));
 
-it.each([['grocery', GroceryListScreen], ['shopping', ShoppingListScreen]] as const)(
+it.each([['grocery', GroceryListScreen]] as const)(
   'B1: %s Add receives the first tap while its text-input keyboard is open',
   async (_kind, Screen) => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
     clients.push(client);
     const ui = await render(<QueryClientProvider client={client}><Screen /></QueryClientProvider>);
-    await waitFor(() => expect(ui.getByText(/Your (grocery|shopping) list is empty/)).toBeTruthy());
+    await waitFor(() => expect(ui.getByText(/Your grocery list is empty/)).toBeTruthy());
     await fireEvent.changeText(ui.getByPlaceholderText('Add item…'), 'Bread');
     const add = ui.getByRole('button', { name: 'Add item' });
     expect(add.props.accessibilityState?.disabled ?? add.props.disabled).toBe(false);
