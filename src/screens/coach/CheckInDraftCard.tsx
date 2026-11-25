@@ -6,7 +6,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors as palette, coachInboxB as B, neutral, radius, typography } from '../../theme/tokens';
+import { colors as palette, coachInboxB as B, neutral, radius, spacing, typography } from '../../theme/tokens';
 import { SEMI, styleA } from './home-v11/HomeParts';
 import { RomanMark } from './home-v11/RomanMark';
 import { dayWord, type CheckInDraft } from './checkInDrafts';
@@ -38,13 +38,15 @@ const s = StyleSheet.create({
   card: { backgroundColor: neutral[0], borderRadius: radius.card, borderWidth: 1, borderColor: styleA.cardLine, padding: 18, marginBottom: 12 },
   name: { fontFamily: 'CormorantGaramond_500Medium', fontSize: 26, lineHeight: 32, color: B.ink },
   source: { fontFamily: SEMI, fontSize: 12.5, lineHeight: 17, letterSpacing: 1.6, textTransform: 'uppercase', color: B.ink, marginTop: 4 },
-  body: { fontFamily: 'Inter_400Regular', fontSize: 16, lineHeight: 22, color: B.body, marginTop: 12 },
+  // ROUND-989: the frame's words are its small body (B-list-390-100: about 14 pt on a 20 pt line), four lines whole at 390 pt.
+  body: { ...typography.bodySmall, color: B.body, marginTop: 12 },
   byRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
   by: { ...typography.bodySmall, color: styleA.inkMuted, flex: 1 },
   notSent: { ...typography.bodySmall, color: styleA.inkMuted },
   review: { minHeight: 48, marginTop: 16, borderRadius: radius.button, backgroundColor: palette.forest, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
   reviewText: { fontFamily: SEMI, fontSize: 16, lineHeight: 21, color: neutral[0] },
   pressed: { opacity: 0.85 },
-  back: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, marginTop: 8, alignSelf: 'flex-start' },
+  // ROUND-989: the frame's Back to check-in row sits 15 pt under Review draft (B-list-390-100).
+  back: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, marginTop: spacing.lg, alignSelf: 'flex-start' },
   backText: { ...typography.body, fontSize: 15, color: B.deep },
 });
