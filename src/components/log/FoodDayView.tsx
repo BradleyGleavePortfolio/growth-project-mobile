@@ -52,9 +52,11 @@ const REFUSED = "Couldn't log food";
 const longDay = (date: string) =>
   new Date(`${date}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }).replace(',', '');
 const nowMinutes = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
-// C_first: the three meals of a first day, each one tap from the search sheet.
-const FIRST_MEALS: Array<{ type: MealType; label: string }> = [
-  { type: 'breakfast', label: 'Breakfast' }, { type: 'lunch', label: 'Lunch' }, { type: 'dinner', label: 'Dinner' },
+// C_first: the three meals of a first day, each one tap from the search sheet. GOAL-930-M (D2): `word` is what
+// C_first writes in the time gutter beside the meal while it has nothing logged (GOAL930-W1 to W3).
+const FIRST_MEALS: Array<{ type: MealType; label: string; word: string }> = [
+  { type: 'breakfast', label: 'Breakfast', word: 'Morning' }, { type: 'lunch', label: 'Lunch', word: 'Midday' },
+  { type: 'dinner', label: 'Dinner', word: 'Evening' },
 ];
 
 export interface FoodDayViewProps {
@@ -139,6 +141,9 @@ export default function FoodDayView(p: FoodDayViewProps) {
   // On a narrow phone or at large text the up-next card takes the page's width under the gutter, so its
   // button keeps two lines at most ("Repeat yesterday's breakfast" at 320 wide, 130 percent).
   const wideCard = width - 2 * layout.gutter - gutter - RAIL - 8 < 215 * scale;
+  // GOAL-930-M (D1): C_first's three equal tool columns; when a third of the page cannot hold "manually" (about
+  // 66 pt of Inter 500 at 15 pt) inside its padding, the tile takes two shares, as the Add sheet's does (REFINE-968).
+  const wideTool = (width - 2 * layout.gutter - 16) / 3 - 26 < 66 * scale;
   const s = useMemo(() => makeStyles(sc, gutter, wideCard), [sc, gutter, wideCard]);
   const { messageCoach } = useEntitlement();
   const insets = useScreenInsets();
@@ -280,7 +285,7 @@ export default function FoodDayView(p: FoodDayViewProps) {
     };
     const firstItems = buildTimeline({ day: firstDay, nowMin, workout });
     const firstMeal = (x: DaySlot, min: number | null) => {
-      const m = { type: x.mealType, label: x.label };
+      const m = { type: x.mealType, label: x.label, word: FIRST_MEALS.find((f) => f.type === x.mealType)?.word ?? '' };
       const mine = x.logs;
       const waiting = mine.filter((l) => l.offline === 'waiting');
       // Nothing yet: the search sheet for this meal. One food: its edit sheet. Two or more: the meal
@@ -295,7 +300,10 @@ export default function FoodDayView(p: FoodDayViewProps) {
             accessibilityState={several ? { expanded } : undefined}
             accessibilityRole="button" accessibilityLabel={mine.length ? `${m.label}. ${joinNames(mine.map((l) => l.foodName))}${waiting.length ? `. ${offlineLine(waiting)}` : ''}` : `${m.label}. Nothing yet`}
             style={s.row}>
-            <Text style={s.time}>{mine.length && min != null ? clockOf(min) : ''}</Text>
+            {/* GOAL-930-M (D2, C_first .c-e .tm): the meal's word until it has a log, then its log time (main). The row's own
+                label says the meal, so the word is not read twice. */}
+            {mine.length ? <Text style={s.time}>{min != null ? clockOf(min) : ''}</Text>
+              : <Text style={s.time} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">{m.word}</Text>}
             <View style={s.rail}><View style={s.line} /><Mark done={mine.length > 0 && waiting.length === 0} waiting={waiting.length > 0} reduced={reduced}
               style={s.mark} fill={s.markFill} testID={waiting.length ? `food-day-waiting-${m.type}` : undefined} /></View>
             <View style={s.body}>
@@ -321,11 +329,20 @@ export default function FoodDayView(p: FoodDayViewProps) {
         <View style={s.paper} testID="food-day-page">
           {p.notes}
           <Text style={s.lead}>After a few days, this page builds your usual day from the meals you repeat.</Text>
-          <HapticPressable intent="light" onPress={() => p.onSomethingElse(nextFirst(counted), undefined, true)} style={s.tool}
-            accessibilityRole="button" accessibilityLabel="Enter manually" testID="food-day-first-manual">
-            <Ionicons name="create-outline" size={22} color={sc.accentText} />
-            <Text style={s.toolText}>Enter manually</Text>
-          </HapticPressable>
+          {/* GOAL-930-M (D1, C_first.html :121-122 .c-big2): the drawn three columns, main's Enter manually in the first
+              (the drawing has it third; working tiles fill from the left). Columns 2 and 3 hold their place for MEAL-PHOTO-M's
+              Photo of a meal and, if the owner brings it to v1 (203-D22), Scan a barcode: never a dead tile. */}
+          <View style={s.tools} testID="food-day-first-tools">
+            <View style={[s.toolCell, wideTool && s.toolCellWide]} testID="food-day-first-tool-cell">
+              <HapticPressable intent="light" onPress={() => p.onSomethingElse(nextFirst(counted), undefined, true)} style={s.tool}
+                accessibilityRole="button" accessibilityLabel="Enter manually" testID="food-day-first-manual">
+                <Ionicons name="create-outline" size={24} color={sc.accentText} />
+                <Text style={s.toolText}>Enter manually</Text>
+              </HapticPressable>
+            </View>
+            <View style={s.toolCell} testID="food-day-first-tool-cell" />
+            <View style={s.toolCell} testID="food-day-first-tool-cell" />
+          </View>
           <HapticPressable intent="light" disableAnimation onPress={() => p.onSomethingElse(nextFirst(counted))} style={s.search}
             accessibilityRole="search" accessibilityLabel="Search foods..." testID="food-day-first-search">
             <Ionicons name="search-outline" size={22} color={sc.textMuted} />
@@ -657,10 +674,15 @@ const makeStyles = (sc: SemanticTokens, gutter: number, wideCard = false) => Sty
   nowDot: { position: 'absolute', left: -2, top: '50%', marginTop: -3.25, width: 8, height: 8, borderRadius: 4, backgroundColor: gold[300] },
   nowRule: { flex: 1, height: 1.5, marginLeft: -RAIL, backgroundColor: gold[300] },
   nowAdd: { minHeight: layout.touchMin, minWidth: layout.touchMin, alignItems: 'flex-end', justifyContent: 'center', paddingLeft: 12 },
-  // C_first's one tool and the search field (Photo of a meal and Scan a barcode are v1.1, owner #192-E2).
-  tool: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingHorizontal: 16, borderRadius: radius.card,
-    borderWidth: 1, borderColor: palette.forest },
-  toolText: { ...typography.bodyMd, fontSize: 17, color: sc.accentText },
+  // C_first's tool tiles (C_first.html :121-122 .c-big2: three equal columns, gap 8; each a 1 pt forest border, corner 16,
+  // at least 72 tall, the glyph above the label, gap 6, padding 8 12, Inter 500 15/18.75 forest) and the search field.
+  // Photo of a meal is MEAL-PHOTO-M's (203-D8 op 1); Scan a barcode waits on the owner's 203-D22 (v1.1 by #192-E2).
+  tools: { flexDirection: 'row', gap: 8 },
+  toolCell: { flex: 1 },
+  toolCellWide: { flex: 2 },
+  tool: { minHeight: 72, paddingVertical: 8, paddingHorizontal: 12, gap: 6, alignItems: 'flex-start', justifyContent: 'center',
+    borderRadius: radius.card, borderWidth: 1, borderColor: palette.forest },
+  toolText: { ...typography.bodyMd, fontSize: 15, lineHeight: 19, letterSpacing: 0, color: sc.accentText },
   search: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 50, marginTop: 12, marginBottom: 20,
     borderBottomWidth: 1.5, borderColor: sc.textPrimary },
   searchText: { ...typography.body, fontSize: 17, color: sc.textMuted },

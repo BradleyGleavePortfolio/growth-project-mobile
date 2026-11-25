@@ -424,6 +424,53 @@ export function settleRemovedPost(qc: QueryClient, post: RemovablePost): void {
       : undefined);
 }
 
+/** The answer to one ping, for one query client (the body every useCommunityBadge caller ran at main). */
+function onCommunityPing(qc: QueryClient, ping?: CommunityPing): void {
+  // Untrusted ping → refetch authoritative unread counts over REST.
+  qc.invalidateQueries({ queryKey: communityKeys.me() });
+  // A coach's removal arrives as message.updated (backend #1165): re-read the voice feeds, voice
+  // note pages and open voice-bearing Find searches too, so a removed note turns into its
+  // placeholder, or leaves Find, with no tap. Only the event name is read; a missing or unknown
+  // one re-reads them as well. Other known events re-read none of them.
+  const event: unknown = ping?.event;
+  const known: readonly unknown[] = Object.values(COMMUNITY_BROADCAST_EVENTS);
+  if (event === COMMUNITY_BROADCAST_EVENTS.messageUpdated || !known.includes(event)) {
+    void refreshVoiceQueries(qc);
+  }
+  // REMOVED-BY-M3: a coach's removal of a post, or of a reply under it, arrives as post.updated
+  // (backend #1176, ids only), as an edit does. Only that event re-reads the posts: an odd ping
+  // already re-reads the voice queries and all-kinds searches above, and lists re-read on open.
+  if (event === COMMUNITY_BROADCAST_EVENTS.postUpdated) {
+    void refreshPostQueries(qc);
+  }
+}
+
+/**
+ * LO-881R7: one ping handler per (person, query client), however many components call useCommunityBadge (the
+ * tab library draws the tab icon twice, and the Community root calls it too), so one ping is one read of each
+ * query. Held while any caller is mounted; the last one to leave unsubscribes.
+ */
+const heldPings = new WeakMap<QueryClient, Map<string, { callers: number; off?: () => void }>>();
+
+function holdCommunityPings(qc: QueryClient, userId: string): () => void {
+  let users = heldPings.get(qc);
+  if (!users) heldPings.set(qc, (users = new Map()));
+  const byUser = users;
+  let held = byUser.get(userId);
+  if (!held) {
+    held = { callers: 0, off: subscribeToCommunityUser(userId, (ping?: CommunityPing) => onCommunityPing(qc, ping)) };
+    byUser.set(userId, held);
+  }
+  const mine = held;
+  mine.callers += 1;
+  return () => {
+    mine.callers -= 1;
+    if (mine.callers > 0) return;
+    if (byUser.get(userId) === mine) byUser.delete(userId);
+    mine.off?.();
+  };
+}
+
 /**
  * Returns the live unread badge state for the Community tab and wires the
  * Supabase Realtime subscription so the count updates without polling: each
@@ -438,29 +485,7 @@ export function useCommunityBadge(
   const qc = useQueryClient();
   const me = useCommunityMe();
 
-  useEffect(() => {
-    if (!userId) return undefined;
-    const unsubscribe = subscribeToCommunityUser(userId, (ping?: CommunityPing) => {
-      // Untrusted ping → refetch authoritative unread counts over REST.
-      qc.invalidateQueries({ queryKey: communityKeys.me() });
-      // A coach's removal arrives as message.updated (backend #1165): re-read the voice feeds, voice
-      // note pages and open voice-bearing Find searches too, so a removed note turns into its
-      // placeholder, or leaves Find, with no tap. Only the event name is read; a missing or unknown
-      // one re-reads them as well. Other known events re-read none of them.
-      const event: unknown = ping?.event;
-      const known: readonly unknown[] = Object.values(COMMUNITY_BROADCAST_EVENTS);
-      if (event === COMMUNITY_BROADCAST_EVENTS.messageUpdated || !known.includes(event)) {
-        void refreshVoiceQueries(qc);
-      }
-      // REMOVED-BY-M3: a coach's removal of a post, or of a reply under it, arrives as post.updated
-      // (backend #1176, ids only), as an edit does. Only that event re-reads the posts: an odd ping
-      // already re-reads the voice queries and all-kinds searches above, and lists re-read on open.
-      if (event === COMMUNITY_BROADCAST_EVENTS.postUpdated) {
-        void refreshPostQueries(qc);
-      }
-    });
-    return unsubscribe;
-  }, [userId, qc]);
+  useEffect(() => (userId ? holdCommunityPings(qc, userId) : undefined), [userId, qc]);
 
   const unread = me.data?.unread;
   const cohortMessages = unread?.cohort_messages ?? 0;

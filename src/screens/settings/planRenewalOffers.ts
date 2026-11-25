@@ -9,6 +9,8 @@ export const PLAN_RENEWAL_OFFERS_COPY = {
   label: 'Plan renewal offers',
   description: 'A note the day after your plan ends and a week later, with plans you can choose.',
   noun: 'plan renewal offers',
+  /** Owner 185-W1 (FR908R2-W1 B): Settings > Notifications loaded, only the plan read failed. */
+  readFailed: 'Your plan renewal offers setting could not load. Check your connection, then try again.',
 } as const;
 
 /** PATCH body field: true is a yes, false a no (backend #1184). */
