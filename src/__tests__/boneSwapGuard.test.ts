@@ -1,19 +1,20 @@
 /**
- * Page colour guard (owner ruling #203-E84, which replaces #203-E83 and #166-2).
+ * Page colour guard (owner ruling #203-E86, which replaces #203-E84, #203-E83 and #166-2).
  *
- * The owner chose the page colour: "a soft, warm cream / off-white", #F9F4EC,
- * swapped in everywhere at once (#203-E85). The token keeps its name, bone.
- * This guard fails if either earlier page colour comes back: the near-white
- * of #166-2 or the old tan of #203-E83, anywhere under src/, docs/, the root
+ * The owner chose the page colour: Sunlit sand, #F7EED9 ("a lighter tan, rich, less peachy more sand beach tone"),
+ * swapped in everywhere at once. The token keeps its name, bone.
+ * This guard fails if an earlier page colour comes back: the near-white
+ * of #166-2, the old tan of #203-E83 or the earlier cream of #203-E84, anywhere under src/, docs/, the root
  * App test files or app.json, in any form:
  *   - hex, any case, with or without '#', 6-digit or 8-digit (alpha suffix)
  *   - rgb(r, g, b) / rgba(r, g, b, a), comma or space separated
  * Five files under docs/ held the old tan on main before this swap, as
  * records of what earlier renders measured (one of them as a text colour,
- * not the page). They are named below and keep it; nothing else may.
+ * not the page). They are named below and keep it; nothing else may. The
+ * earlier cream has no such record: it is banned everywhere.
  * The guard also pins every place that paints the page, the status-bar band,
  * the tab bar, text on forest fills, the splash and the Android icon fill to
- * the cream, so the page tokens can never drift apart, and it holds the
+ * Sunlit sand, so the page tokens can never drift apart, and it holds the
  * theme's body text colours to WCAG AA on it.
  *
  * The banned values are assembled at runtime so this file never contains them.
@@ -23,14 +24,15 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { Colors } from '../constants/colors';
-import { colors as tokenColors, lightTokens } from '../theme/tokens';
+import { colors as tokenColors, gold, lightTokens, semantic } from '../theme/tokens';
 import { STATUS_BAR_BONE } from '../components/StatusBarBand';
 
-const BONE = '#F9F4EC';
+const BONE = '#F7EED9';
 // [name, hex, rgb] for each earlier page colour.
 const BANNED: ReadonlyArray<readonly [string, string, readonly number[]]> = [
   ['near-white', ['f7', 'fa', 'f7'].join(''), [247, 250, 247]],
   ['old tan', ['f5', 'ef', 'e4'].join(''), [245, 239, 228]],
+  ['earlier cream', ['f9', 'f4', 'ec'].join(''), [249, 244, 236]],
 ];
 const OLD_TAN = BANNED[1][0];
 
@@ -98,7 +100,7 @@ function contrast(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-describe('page colour guard (#203-E84)', () => {
+describe('page colour guard (#203-E86)', () => {
   it.each(BANNED)('the matcher catches every form of the banned %s', (name, hex, rgb) => {
     const upper = hex.toUpperCase();
     const samples = [
@@ -149,7 +151,7 @@ describe('page colour guard (#203-E84)', () => {
     expect(findBanned(fs.readFileSync(APP_JSON, 'utf8'))).toEqual([]);
   });
 
-  it('splash and Android icon fill are the cream', () => {
+  it('splash and Android icon fill are Sunlit sand', () => {
     const expo = JSON.parse(fs.readFileSync(APP_JSON, 'utf8')).expo;
     expect(expo.android.adaptiveIcon.backgroundColor).toBe(BONE);
     const splash = (expo.plugins as unknown[]).find(
@@ -167,23 +169,38 @@ describe('page colour guard (#203-E84)', () => {
     ['colors.bone', () => tokenColors.bone],
     ['lightTokens.bgPrimary', () => lightTokens.bgPrimary],
     ['STATUS_BAR_BONE', () => STATUS_BAR_BONE],
-  ])('%s is the cream', (_name, read) => {
+  ])('%s is Sunlit sand', (_name, read) => {
     expect(read()).toBe(BONE);
   });
 
-  // WCAG AA body text (4.5:1) on the cream, for the theme's own text colours.
+  // WCAG AA body text (4.5:1) on Sunlit sand, for the theme's own text colours. Each floor is the measured ratio, cut
+  // to two places (main's near-white page gave 16.58, 10.36, 9.33, 13.28, 16.58, 5.35, 9.33).
   it.each([
-    ['ink', () => tokenColors.ink, 15.9],
-    ['charcoal', () => tokenColors.charcoal, 9.9],
-    ['forest', () => tokenColors.forest, 8.9],
-    ['graphite', () => tokenColors.graphite, 12.7],
-    ['warningInk', () => tokenColors.warningInk, 4.59],
-    ['textPrimary', () => lightTokens.textPrimary, 15.9],
-    ['textMuted', () => lightTokens.textMuted, 5.1],
-    ['accentText', () => lightTokens.accentText, 8.9],
-  ])('%s reads on the cream', (_name, read, floor) => {
+    ['ink', () => tokenColors.ink, 15.09],
+    ['charcoal', () => tokenColors.charcoal, 9.43],
+    ['forest', () => tokenColors.forest, 8.49],
+    ['graphite', () => tokenColors.graphite, 12.09],
+    ['textPrimary', () => lightTokens.textPrimary, 15.09],
+    ['textMuted', () => lightTokens.textMuted, 4.87],
+    ['accentText', () => lightTokens.accentText, 8.49],
+    // Warning words drawn on the page (a connection row's "needs attention"): 4.78 on main's page, 4.36 on sand
+    // at the old value, so both text tokens are the darker gold (undo "warning gold 700").
+    ['semantic.warning.fg', () => semantic.warning.fg, 6.59],
+    ['Colors.noticeWarningText', () => Colors.noticeWarningText, 6.59],
+  ])('%s reads on Sunlit sand', (_name, read, floor) => {
     const ratio = contrast(read(), BONE);
     expect(ratio).toBeGreaterThanOrEqual(4.5);
     expect(ratio).toBeGreaterThanOrEqual(floor);
+  });
+
+  // warningInk is not body text on the page: its readers are icons on the warning ground and three edges, and the
+  // safety alert's in-app banner reads it for its edge and mark (ForegroundNotificationBanner), so its value is not
+  // this swap's to change. Round 2 held it to 4.5:1 on the page (4.59 on the earlier cream); on Sunlit sand it is
+  // 4.36, held here at the 3:1 floor for marks and at its value.
+  it('warningInk keeps its value and reads as a mark on Sunlit sand', () => {
+    expect(tokenColors.warningInk).toBe(gold[700]);
+    const ratio = contrast(tokenColors.warningInk, BONE);
+    expect(ratio).toBeGreaterThanOrEqual(3);
+    expect(ratio).toBeGreaterThanOrEqual(4.35);
   });
 });
