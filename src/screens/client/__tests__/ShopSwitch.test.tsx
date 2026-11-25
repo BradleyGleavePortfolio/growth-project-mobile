@@ -482,3 +482,18 @@ describe('SHOP-SWITCH-M: the switch itself', () => {
     expect(code).not.toMatch(/\brgba?\(/);
   });
 });
+
+// SHOPPING-CUT-M (owner 203-D44): the old Shopping list screen's one proof that nothing on main makes on this page,
+// carried here when that screen is deleted (KitchenRefine201's 'shopping' row: a failed reload keeps no Clear checked).
+describe('SHOPPING-CUT-M: carried from the retired Shopping list screen', () => {
+  it('p. on Shopping, a failed reload shows the shopping error words, and cached checked rows do not expose Clear checked', async () => {
+    const ui = await mount(SIZES[1]);
+    await ui.findByText('Salmon fillet');
+    await press(ui, 'Shopping, 2 to get');
+    await waitFor(() => expect(ui.getByRole('button', { name: 'Clear checked' })).toBeTruthy());
+    serve({ grocery: new Error('Network Error'), shopping: new Error('Network Error') });
+    await act(async () => { await clients[clients.length - 1].refetchQueries(); });
+    await waitFor(() => expect(ui.getByText("Couldn't load shopping list.")).toBeTruthy());
+    expect(ui.queryByRole('button', { name: 'Clear checked' })).toBeNull();
+  });
+});

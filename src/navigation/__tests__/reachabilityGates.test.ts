@@ -139,3 +139,51 @@ describe('coach consultation view (S-REACH)', () => {
     expect(stack.slice(0, stack.indexOf('</ClientsStack.Navigator>'))).toMatch(/name="ClientConsultation"/);
   });
 });
+
+describe('the retired Shopping list screen stays cut (SHOPPING-CUT-M, owner 203-D44)', () => {
+  // Its own walk, beside onScreenSources: every non-test code file under src, the navigators, tutorial, screenshots
+  // and pushTapRouter.ts included, because a route, a push tap or a linking entry is a way in too.
+  const CUT_ROOT = SRC;
+  const codeSources = (root: string): Array<{ file: string; text: string }> => {
+    const out: Array<{ file: string; text: string }> = [];
+    const walk = (dir: string) => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) {
+          if (e.name !== '__tests__') walk(p);
+        } else if (/\.(ts|tsx|js|jsx|json)$/.test(e.name) && !/\.test\./.test(e.name)) {
+          out.push({ file: path.relative(root, p), text: fs.readFileSync(p, 'utf8') });
+        }
+      }
+    };
+    walk(root);
+    return out;
+  };
+  const code = codeSources(CUT_ROOT);
+  const REGISTERS = (route: string) => new RegExp(`name=["']${route}["']`, 'g');
+  const OPENS = (route: string) => new RegExp(`(navigate\\(\\s*['"]${route}['"]|screen:\\s*['"]${route}['"])`);
+  const under = (...dirs: string[]) => code.filter((f) => dirs.some((d) => f.file.startsWith(d + path.sep)));
+
+  it('G1: nothing under src/navigation or src/screenshots registers a screen named ShoppingList', () => {
+    const hits = under('navigation', 'screenshots').filter((f) => REGISTERS('ShoppingList').test(f.text)).map((f) => f.file);
+    expect(hits).toEqual([]);
+  });
+
+  it('G2: no non-test code file under src holds the text ShoppingList (no key, target, import or comment)', () => {
+    expect(code.filter((f) => f.text.includes('ShoppingList')).map((f) => f.file)).toEqual([]);
+  });
+
+  it('G3: src/screens/client/ShoppingListScreen.tsx does not exist', () => {
+    expect(fs.existsSync(path.join(SRC, 'screens', 'client', 'ShoppingListScreen.tsx'))).toBe(false);
+  });
+
+  it('G4 (control): the same walk finds GroceryList registered once and opened from More and the Prep guide', () => {
+    const nav = code.find((f) => f.file === path.join('navigation', 'ClientNavigator.tsx'));
+    expect(nav?.text.match(REGISTERS('GroceryList')) ?? []).toHaveLength(1);
+    const openers = code.filter((f) => OPENS('GroceryList').test(f.text)).map((f) => f.file);
+    expect(openers).toEqual(expect.arrayContaining([
+      path.join('screens', 'client', 'MoreScreen.tsx'),
+      path.join('screens', 'client', 'PrepGuideScreen.tsx'),
+    ]));
+  });
+});
