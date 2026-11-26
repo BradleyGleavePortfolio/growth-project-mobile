@@ -10,8 +10,8 @@ import { mealPhotoAfterSave } from './mealPhoto';
 
 const OZ_TO_GRAMS = 28.3495;
 
-/** The new entry's id from POST /log/food's answer, or null. */
-const entryIdOf = (res: { data?: { id?: unknown } } | undefined): string | null =>
+/** The new entry's id from POST /log/food's answer, or null (Repeat reads it too, quickLog.ts). */
+export const entryIdOf = (res: { data?: { id?: unknown } } | undefined): string | null =>
   (typeof res?.data?.id === 'string' ? res.data.id : null);
 
 interface SearchLogArgs {

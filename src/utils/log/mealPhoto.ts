@@ -2,6 +2,9 @@
  * MEAL-PHOTO-M: the photo of a meal the open Add sheet keeps, in memory only, for the first food the client then logs
  * online to that sheet's meal and day (R5). It is let go when the sheet closes, at a sign-out or sign-in, and after its
  * attach, and the picker's file is deleted then too (R7). No food save waits on, fails with or changes because of it.
+ * FIX-992R2 (LO-992R1 B1, LS-992R1 B1, B2 and C3, one class): a photo the client took is never let go without her
+ * knowing. Every online save from the sheet takes it (search, Recent, Frequent, Quick add, Repeat), it follows the
+ * sheet's meal choice, and a sheet that closes with it unused says one line (`closeMealPhoto`).
  */
 import { Alert, Linking } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -42,6 +45,9 @@ let sheet = 0; // moves on at every drop: a pick that ends after it lets its pho
 let account = 0; // moves on at sign-out and sign-in: an attach begun for the last account stops
 let busy = false;
 
+/** Operator ruling (a), approved (operator, #203-E15): what a sheet that closes with an unused photo says. */
+const notKept = () => Alert.alert('Photo not saved — add a food to keep it');
+
 const forget = (uri: string) => {
   void (async () => {
     try {
@@ -58,6 +64,18 @@ export function dropMealPhoto(): void {
   const was = kept;
   kept = null;
   if (was) forget(was.uri);
+}
+
+/** FIX-992R2 (LS-992R1 C3): the sheet closed or unmounted. A photo no food took is let go, and she is told. */
+export function closeMealPhoto(): void {
+  const unused = kept !== null;
+  dropMealPhoto();
+  if (unused) notKept();
+}
+
+/** FIX-992R2 (LS-992R1 B2): the sheet's meal choice moved. A kept photo goes with the meal the sheet now shows. */
+export function mealPhotoFollows(mealType: string): void {
+  if (kept) kept.mealType = mealType;
 }
 
 const accountChanged = () => {
@@ -88,6 +106,7 @@ export async function chooseMealPhoto(mealType: string, source: MealPhotoSource)
   if (busy) return;
   busy = true;
   const mine = sheet;
+  const signedIn = account;
   try {
     if (source === 'camera') {
       const access = await ImagePicker.requestCameraPermissionsAsync();
@@ -115,6 +134,7 @@ export async function chooseMealPhoto(mealType: string, source: MealPhotoSource)
     const height = Math.round(asset.height);
     if (sheet !== mine) {
       forget(asset.uri);
+      if (account === signedIn) notKept(); // the sheet closed while the picker was up (FIX-992R2)
       return;
     }
     // Only a re-encoded JPEG leaves the phone: a source the picker passes through (TIFF, AVIF, WEBP, BMP, an
@@ -147,8 +167,9 @@ const codeOf = (err: unknown): unknown =>
   (err as { response?: { data?: { code?: unknown } } } | null)?.response?.data?.code;
 
 /**
- * R5: logSubmit's two online saves call this once POST /log/food has answered. It never throws and is never awaited,
- * so each save settles as it did before. The first food logged to the kept photo's meal and day takes the photo.
+ * R5: logSubmit's two online saves and Repeat (quickLog.ts, FIX-992R2) call this once POST /log/food has answered. It
+ * never throws and is never awaited, so each save settles as it did before. The first food logged to the kept photo's
+ * meal and day takes the photo.
  */
 export function mealPhotoAfterSave(log: { date: string; meal_type: string }, entryId: string | null): void {
   const photo = kept;
