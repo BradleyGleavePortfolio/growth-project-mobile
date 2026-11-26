@@ -8,7 +8,7 @@
  * Empty conversation → Roman-voiced empty state with a primary action.
  * Standardized on semanticColors / tokens.ts.
  */
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Alert,
   View,
@@ -28,6 +28,7 @@ import {
   useDmMessages,
   useSendDm,
   useCommunityMe,
+  useMyCoachName,
 } from '../../hooks/useCommunity';
 import {
   CommunityEmptyState,
@@ -36,39 +37,59 @@ import {
   ComposerInput,
 } from '../../components/community';
 import SafetyMenu from '../../components/community/SafetyMenu';
+import type { ComposerInputHandle } from '../../components/community/ComposerInput';
 import { ForestStatusBar } from '../../components/StatusBarBand';
 import { describeCommunityFailure } from '../../api/communityErrors';
 import { useConversationClosed, useServerAnswered, useClosedBy, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
 import type { CommunityNav, CommunityRoute } from './communityNavTypes';
+import { NO_NAME, initialsOf } from './coach-dm/coachDm';
 
 const DM_MAX = 4000; // mirror backend SendDmDto (body 1..4000)
 
 export default function CommunityDmThreadScreen(): React.ReactElement {
-  const { semanticColors } = useTheme();
+  const { semanticColors, colorScheme } = useTheme();
+  const light = colorScheme !== 'dark';
   const navigation = useNavigation<CommunityNav>();
   const route = useRoute<CommunityRoute<'CommunityDmThread'>>();
   const recipientId = route.params?.recipientId ?? '';
-  const participantLabel = route.params?.participantLabel ?? 'Coach';
   const client = useCurrentUser();
+  // COACH-DM-CLIENT-M: a given name wins; my own coach (client.coach_id) is named as the app knows them (useMyCoachName,
+  // as the composer), "Coach" until then; anyone else, a former coach included, is NO_NAME, never "Coach".
+  const given = route.params?.participantLabel;
+  const myCoach = !!recipientId && recipientId === client?.coach_id;
+  const coach = useMyCoachName(given === undefined && myCoach ? client?.coach_id : null);
+  const participantLabel = given ?? (myCoach ? coach.name ?? 'Coach' : NO_NAME);
+  // REFINE-985 (C6CHAT-S-V2 c08's bar): my own coach, once the phone knows the name, gets "Your coach" (SpaceTree.tsx:68)
+  // under it and their initial in c08's tile; while the name is unknown, and for anyone else, no line and no tile.
+  const coachLine = given === undefined && myCoach && coach.name ? coach.name : null;
+  // REFINE-985R3 TILE-1: one letter, as c08 draws (the name's first character, whatever its script).
+  const coachLetter = coachLine ? Array.from(initialsOf(coachLine) ?? '')[0] ?? null : null;
+  const composerRef = useRef<ComposerInputHandle>(null);
   const me = useCommunityMe();
   const workspaceId = me.data?.workspace_id ?? '';
 
   const messages = useDmMessages(workspaceId, recipientId);
+  // REFINE-985R3 (P-B; LS-985R2 N5): a refused read holds no saved answer, so its re-read (a ping, the return to the
+  // front) starts with no error for a moment and the closed line would blink to "Loading messages…". This person's
+  // refusal is held until that re-read answers.
+  const [refusal, setRefusal] = useState<{ id: string; error: unknown } | null>(null);
+  if (messages.error && (refusal?.id !== recipientId || refusal.error !== messages.error)) setRefusal({ id: recipientId, error: messages.error });
+  const readError = messages.error ?? (messages.isFetching && messages.data === undefined && refusal?.id === recipientId ? refusal.error : null);
   const sendDm = useSendDm(workspaceId, recipientId, client?.id ?? '');
   // BLOCK-ALL-M: a block either way (or a ban) closes the DM: no composer, and the read refusal is not an empty thread.
   // FX-872: open only once the DM read came back. Signed in with no community membership (left, removed) is closed too.
   const noAccess = me.isSuccess && !me.data?.workspace_id;
   const { closed, open, close } = useConversationClosed(
     recipientId,
-    [messages.error],
+    [readError],
     useServerAnswered(messages) && workspaceId.length > 0,
     noAccess ? true : undefined,
   );
   // BLOCK-TELL #169-5: the read refusal's code (blocked_by_you / blocked_by_them) says who closed it.
-  const by = useClosedBy(recipientId, closed, { errors: [messages.error] });
-  // FR-877R2 (LO C2): BAM-2b names them only by a name this screen was given, or "Coach" for my own coach. A member
-  // reached with no name (a link) gets BAM-1, never the "Coach" fallback as their name.
-  const shownName = route.params?.participantLabel ?? (recipientId && recipientId === client?.coach_id ? participantLabel : null);
+  const by = useClosedBy(recipientId, closed, { errors: [readError] });
+  // FR-877R2 (LO C2): BAM-2b names them only by a name this screen was given, or, for my own coach, the bar's name
+  // (COACH-DM-CLIENT-M). A member reached with no name (a link) gets BAM-1, never NO_NAME or "Coach" as their name.
+  const shownName = given ?? (myCoach ? participantLabel : null);
 
   // FR-880R2 (Sol B1, LO-872R4 C2): the DM read waits for /community/me (it is off until the space is known), so a slow,
   // failed or offline me read is this screen's read too: the same two lines, and Try again reads me again.
@@ -76,7 +97,10 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
   const reading = messages.isLoading || (!me.data && !me.isError);
   const failed = meFailed || (messages.isError && !open);
   const data = messages.data ?? [];
-  const isEmpty = !messages.isLoading && (messages.isError || data.length === 0);
+  // REFINE-985R3 EMPTY-1 (LO-985R2 C3 = LS-985R2 C2): empty is a read that answered with no messages (the coach
+  // thread's rule). A re-read that fails keeps the saved answer, so a conversation stays a conversation and "Say hello"
+  // is drawn only over a thread with none; a read that never answered is the failed page (`failed`, above).
+  const isEmpty = !messages.isLoading && data.length === 0;
   // Header-level Report / Block acts on the latest message from the other
   // person (a report needs concrete content to review).
   const latestFromOther = data.find((m) => m.sender_user_id === recipientId && !m.deleted);
@@ -109,25 +133,28 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         {/* FR-880R3 (Sol B2, #172-10): Voice B Studio frame 05b's deep-forest bar, open or closed; a 1:1 DM has no
-            member count. Report / Block keeps a light chip so its grey mark stays readable on the deep bar. */}
+            member count. REFINE-985: 05b's type and spacing (voiceB); Report / Block bare and light on the bar, as 05b's
+            info button (no chip). */}
         <ThreadHeader
           tone="deep"
+          voiceB
           title={participantLabel}
+          subtitle={coachLine ? 'Your coach' : undefined}
+          initials={coachLetter}
           onBack={() => navigation.goBack()}
           trailing={latestFromOther ? (
-            <View style={styles.infoSlot}>
-              <View style={styles.infoChip} pointerEvents="none" />
-              <SafetyMenu
-                targetType="message"
-                targetId={latestFromOther.id}
-                authorUserId={recipientId}
-                authorName={participantLabel}
-                viewerUserId={client?.id}
-                viewerCoachId={client?.coach_id}
-                onBlocked={() => navigation.goBack()}
-                testID="community-dmthread-safety"
-              />
-            </View>
+            <SafetyMenu
+              targetType="message"
+              targetId={latestFromOther.id}
+              authorUserId={recipientId}
+              authorName={participantLabel}
+              viewerUserId={client?.id}
+              viewerCoachId={client?.coach_id}
+              onBlocked={() => navigation.goBack()}
+              triggerColor={fp.onDeep}
+              triggerSize={22}
+              testID="community-dmthread-safety"
+            />
           ) : null}
           testID="community-dmthread-header"
         />
@@ -153,10 +180,8 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
               firstName={client?.firstName ?? client?.name ?? null}
               title="Say hello"
               actionLabel="Start the conversation"
-              onAction={() => {
-                /* The inline composer below is always present; this CTA simply
-                   signals intent — there is no separate compose surface here. */
-              }}
+              onAction={() => composerRef.current?.focus()} // COACH-DM-CLIENT-M: the box below, drawn whenever this is
+              voiceB
               testID="community-dmthread-empty"
             />
           </View>
@@ -171,6 +196,7 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
                   <MessageBubble
                     message={item}
                     myUserId={client?.id ?? ''}
+                    voiceB
                     testID={`dm-message-${item.id}`}
                   />
                 </View>
@@ -183,6 +209,8 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
                     viewerUserId={client?.id}
                     viewerCoachId={client?.coach_id}
                     onBlocked={() => navigation.goBack()}
+                    triggerColor={light ? fp.n700 : undefined}
+                    triggerSize={22}
                     testID={`dm-message-safety-${item.id}`}
                   />
                 ) : null}
@@ -193,12 +221,16 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
           />
         )}
 
-        {closed ? <ConversationClosedLine by={by} name={shownName} testID="community-dmthread-closed" /> : !open ? null : <ComposerInput
-          placeholder="Message"
+        {closed ? (coach.settled ? ( // the line waits for my coach's name, as the composer's does, so it never changes
+          <ConversationClosedLine by={by} name={shownName} testID="community-dmthread-closed" />
+        ) : null) : !open ? null : <ComposerInput
+          ref={composerRef}
+          placeholder="Type a message..." // REFINE-985R3 WORDS-1: 05b's words, as the coaching chat's box reads
           maxLength={DM_MAX}
           sending={sendDm.isPending}
           onSubmit={onSend}
           draftKey={recipientId && workspaceId ? `dm:${workspaceId}:${recipientId}` : undefined}
+          voiceB
           testID="community-dmthread-composer"
         />}
       </KeyboardAvoidingView>
@@ -213,8 +245,6 @@ const styles = StyleSheet.create({
   stateText: { textAlign: 'center', paddingHorizontal: 24 },
   retry: { minHeight: 44, justifyContent: 'center' },
   list: { paddingVertical: 8 },
-  // The 36 pt bone circle sits behind the menu's own 44 pt target (Android takes no touches outside a parent's bounds).
-  infoSlot: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  infoChip: { position: 'absolute', width: 36, height: 36, borderRadius: 18, backgroundColor: fp.onDeep },
-  messageRow: { flexDirection: 'row', alignItems: 'center' },
+  // REFINE-985: 05b's "•••" sits at the top of its message (B-05b-feed-1000_ios.html:130).
+  messageRow: { flexDirection: 'row', alignItems: 'flex-start' },
 });

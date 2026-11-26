@@ -85,11 +85,12 @@ describe('LS-962R1 C3: the coach\'s community DM push tap, through dispatchRespo
     stop();
   });
 
-  it('a client\'s DM push still lands on the Community tab, as on main (COACH-DM-CLIENT-M)', () => {
+  it('a client\'s DM push opens the coach\'s thread in the Community tab, once (COACH-DM-CLIENT-M case 1)', () => {
     signIn('student', CLIENT);
     const stop = installNotificationResponseHandler(router.routePushTap);
     (mockAddResponse.mock.calls[0][0] as (r: unknown) => void)(response('push-dm-3', COACH));
-    expect(navigate.mock.calls).toEqual([['CommunityTab', undefined]]);
+    (mockAddResponse.mock.calls[0][0] as (r: unknown) => void)(response('push-dm-3', COACH));
+    expect(navigate.mock.calls).toEqual([['CommunityTab', { screen: 'CommunityDmThread', params: { recipientId: COACH }, initial: false }]]);
     stop();
   });
 });
