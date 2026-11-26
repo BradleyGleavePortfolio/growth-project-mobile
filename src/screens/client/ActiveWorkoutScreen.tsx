@@ -36,6 +36,8 @@ import {
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useBodyWeightExercises } from '../../hooks/useBodyWeightExercises';
 import { errorMessage } from '../../types/common';
+import { refusalLines, refusalOf } from '../../offline/sync/refusal';
+import { REFUSAL_COPY } from '../../components/workout/RefusedWorkoutCard';
 import { randomUuid } from '../../utils/idempotency';
 import { toServerMuscleGroup } from '../../utils/workout/muscleGroup';
 import {
@@ -1155,6 +1157,12 @@ export default function ActiveWorkoutScreen() {
                   : 'No connection.';
                 // C5: a refusal (or no local copy) goes back to the logger, where "tap Finish again" is true.
                 if (rating) setSummaryOpen(false);
+                // WORKOUT-REFUSAL-M (Style 2): a coded refusal says what the server said and its next step.
+                const refusal = refusalOf(err);
+                if (refusal) {
+                  Alert.alert(REFUSAL_COPY.title, refusalLines(refusal, REFUSAL_COPY.said).join('\n\n'));
+                  return;
+                }
                 Alert.alert(
                   'Workout not saved yet',
                   `${reason.replace(/\.?$/, '.')} The sets stay on this screen. Check the connection, then tap Finish again.`,

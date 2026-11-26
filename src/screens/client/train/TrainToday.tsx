@@ -12,6 +12,7 @@
  * "Changed by Sam · 3 sets, was 4" on sage with the coach's reason (`sets_before`, `client_reason`); a skipped day
  * (`skipped_at`) is never offered with Start and reads missed on the strip, as on the coach's This week.
  * "Week 3, day 2" still waits for `program_week` and `program_day`, which are not on main.
+ * WORKOUT-REFUSAL-M: a workout the server refused with a reason shows first under the header (RefusedWorkoutCard).
  */
 import React, { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -19,6 +20,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { CormorantGaramond_400Regular_Italic, useFonts } from '@expo-google-fonts/cormorant-garamond';
 import type { AssignmentExercise, ClientWorkoutAssignmentWithPlan } from '../../../api/workoutBuilderApi';
 import { useStatusBarBand } from '../../../components/StatusBarBand';
+import RefusedWorkoutCard from '../../../components/workout/RefusedWorkoutCard';
 import { useMyCoaches } from '../../../hooks/useCalendar';
 import { useExerciseNames } from '../../../hooks/useExerciseNames';
 import { loadActiveWorkoutSession } from '../../../storage/activeWorkoutSession';
@@ -121,6 +123,7 @@ export function TrainMasthead({ rows, today, state, children }: {
   return (
     <View testID="train-masthead" style={[s.mast, { backgroundColor: sc.surface.masthead, paddingTop: insets.top + layout.statusBarGap }]}>
       {children}
+      <RefusedWorkoutCard />
       {state === 'loading' ? (
         <View style={s.pad} testID="train-masthead-loading" accessible accessibilityLabel={c.loading}>
           <View style={s.row}>
@@ -158,7 +161,7 @@ export function TrainMasthead({ rows, today, state, children }: {
 
 /** The tab's header alone with the flag off; on the masthead with it on (so no status-bar change when off). */
 export function TrainHead({ on, children, ...rest }: React.ComponentProps<typeof TrainMasthead> & { on: boolean }) {
-  return on ? <TrainMasthead {...rest}>{children}</TrainMasthead> : <>{children}</>;
+  return on ? <TrainMasthead {...rest}>{children}</TrainMasthead> : <>{children}<RefusedWorkoutCard /></>;
 }
 
 /**
