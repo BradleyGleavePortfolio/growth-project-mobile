@@ -56,12 +56,12 @@ it('B1: the drafts header and kind tiles sit inside the scrolling list, not abov
   mockDrafts.mockReturnValue({ data: { drafts: queue }, isLoading: false, isError: false, isFetching: false, error: null, refetch: jest.fn() });
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const view = await render(<QueryClientProvider client={qc}><PendingAiDraftsScreen /></QueryClientProvider>);
-  expect(await view.findByText('Roman has 3 drafts ready')).toBeTruthy();
+  expect(await view.findByText('3 drafts to review')).toBeTruthy();
   // The drafts FlatList's scroll view is the only node on this screen with a contentContainerStyle.
   type Node = { parent: Node | null; props: Record<string, unknown> } | null;
   const inList = (n: Node) => { for (let up = n?.parent ?? null; up; up = up.parent) if (up.props.contentContainerStyle) return true; return false; };
   expect(inList(view.getAllByText('Approve')[0] as unknown as Node)).toBe(true); // control: the cards are in the list
   expect(inList(view.getByTestId('pending-ai-drafts-kinds') as unknown as Node)).toBe(true);
-  expect(inList(view.getByText('Roman has 3 drafts ready') as unknown as Node)).toBe(true);
+  expect(inList(view.getByText('3 drafts to review') as unknown as Node)).toBe(true);
   qc.clear();
 });
