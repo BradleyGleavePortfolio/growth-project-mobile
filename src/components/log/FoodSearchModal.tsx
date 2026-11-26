@@ -143,7 +143,7 @@ export default function FoodSearchModal(props: Props) {
   // picker copies the source's EXIF location into its re-encoded file (R3), so that part is stopped.
   useEffect(() => (visible ? dropMealPhoto : undefined), [visible]);
   const [photoMenu, setPhotoMenu] = useState(false);
-  const onMealPhoto = Platform.OS === 'ios' ? () => { if (!mealPhotoBusy()) setPhotoMenu(true); } : undefined;
+  const onMealPhoto = true ? () => { if (!mealPhotoBusy()) setPhotoMenu(true); } : undefined;
 
   return (
     <Modal testID="food-search-sheet" visible={visible} animationType="slide" transparent statusBarTranslucent onRequestClose={onClose}>
