@@ -1,0 +1,9 @@
+src/utils/log
+src/components/log
+src/screens/client/__tests__/LogScreen
+quickLog
+LogPlannedMealButton
+ClientNavigator
+RootNavigator
+rootNavigator
+FoodDay
