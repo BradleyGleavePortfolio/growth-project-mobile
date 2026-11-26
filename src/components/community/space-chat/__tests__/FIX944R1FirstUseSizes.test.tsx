@@ -197,15 +197,16 @@ describe('FIX-944R1 d: what the card does is kept', () => {
   it.each([false, true])('coach %s: the grab, the title and both buttons stay outside the scroll, which has no indicator and no bounce while the lines fit', async (coach) => {
     const c = await draw({ coach, w: 320, h: 568, fs: 1.3, insets: { top: 20, bottom: 0 } });
     const scroll = scrollOf(c.lines[0], c.sheet);
-    const outside = [c.sheet.children[0] as TestInstance, c.title, c.record, c.notNow].map((n) => scrollOf(n, c.sheet) ?? null);
+    // Booleans, not tree nodes: a failure must print, and a node in a failed toEqual crashes jest's worker (M4).
+    const insideScroll = [c.sheet.children[0] as TestInstance, c.title, c.record, c.notNow].map((n) => Boolean(scrollOf(n, c.sheet)));
     expect({
       scroll: Boolean(scroll),
       sameScroll: c.lines.every((l) => scrollOf(l, c.sheet) === scroll),
-      outside,
+      insideScroll,
       indicator: scroll?.props.showsVerticalScrollIndicator,
       bounceWhileFits: scroll?.props.alwaysBounceVertical,
       grows: scroll ? flat(scroll).flexGrow : undefined,
-    }).toEqual({ scroll: true, sameScroll: true, outside: [null, null, null, null], indicator: false, bounceWhileFits: false, grows: 0 });
+    }).toEqual({ scroll: true, sameScroll: true, insideScroll: [false, false, false, false], indicator: false, bounceWhileFits: false, grows: 0 });
   });
 });
 
