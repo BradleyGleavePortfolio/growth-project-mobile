@@ -127,32 +127,37 @@ function Outline({ label, onPress, disabled, testID }: { label: string; onPress:
   );
 }
 
-/** The card on the Train tab (on the masthead with Train v2 on, under the header with it off). */
+/** The card on the Train tab (on the masthead with Train v2 on, under the header with it off); nothing when none. */
 export default function RefusedWorkoutCard() {
   const user = useCurrentUser();
-  const userId = user?.id;
+  const { items, reload } = useRefusedWorkouts(user?.id);
+  return user?.id && items.length ? (
+    <RefusedCards userId={user.id} coachId={user.coach_id} items={items} reload={reload} />
+  ) : null;
+}
+
+function RefusedCards({ userId, coachId, items, reload }: {
+  userId: string; coachId?: string | null; items: RefusedWorkout[]; reload: () => Promise<void>;
+}) {
   const coachless = useCoachlessClient();
-  const coaches = useMyCoaches(!coachless && !!userId).data;
-  const coachName = (coaches?.find((x) => x.coach_id === user?.coach_id) ?? coaches?.[0])?.name?.trim().split(/\s+/)[0];
+  const coaches = useMyCoaches(!coachless).data;
+  const coachName = (coaches?.find((x) => x.coach_id === coachId) ?? coaches?.[0])?.name?.trim().split(/\s+/)[0];
   const coach = coachless ? null : coachName || c.yourCoach;
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
-  const { items, reload } = useRefusedWorkouts(userId);
   const [openId, setOpenId] = useState<string | null>(null);
   const [again, setAgain] = useState<ReadonlySet<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [all, setAll] = useState(false);
   // The card fades in over 150 ms, at once with Reduce Motion (ctx#579 index.md, the styles' shared rules).
   const reduced = useReducedMotion();
-  const fade = useRef(new Animated.Value(1)).current;
-  const shown = items.length > 0;
+  const fade = useRef(new Animated.Value(reduced ? 1 : 0)).current;
   useEffect(() => {
-    if (!shown || reduced) return;
-    fade.setValue(0);
+    if (reduced) { fade.setValue(1); return; }
     Animated.timing(fade, { toValue: 1, duration: 150, useNativeDriver: true }).start();
-  }, [shown, reduced, fade]);
+  }, [reduced, fade]);
 
   const send = async (id: string) => {
-    if (!userId || busy) return;
+    if (busy) return;
     setBusy(id);
     try {
       const outcome = await sendRefusedWorkoutAgain(id, userId);
@@ -175,7 +180,7 @@ export default function RefusedWorkoutCard() {
       { text: c.cancel, style: 'cancel' },
       { text: c.confirmRemove, style: 'destructive', onPress: () => {
         setOpenId(null);
-        void (userId ? removeRefusedWorkout(item.id, userId) : Promise.resolve()).then(() => reload(), () => reload());
+        void removeRefusedWorkout(item.id, userId).then(() => reload(), () => reload());
       } },
     ]);
   };
@@ -184,7 +189,6 @@ export default function RefusedWorkoutCard() {
     navigation.navigate('Messages');
   };
 
-  if (!items.length) return null;
   const open = items.find((x) => x.id === openId) ?? null;
 
   const one = (item: RefusedWorkout) => {
@@ -244,6 +248,9 @@ export function RefusedWorkoutSheet({ item, coach, again, busy, onClose, onSend,
   const sc = useTheme().semanticColors;
   const insets = useSafeAreaInsets();
   const v = useMemo(() => refusedView(item.body), [item.body]);
+  // s2_R4b: refused again, the sheet opens at its end, where "Not accepted again." sits by Send again.
+  const scroll = useRef<ScrollView>(null);
+  const toEnd = () => { if (again) scroll.current?.scrollToEnd({ animated: false }); };
   const ink = { color: sc.textPrimary };
   const muted = { color: sc.textMuted };
   return (
@@ -254,7 +261,7 @@ export function RefusedWorkoutSheet({ item, coach, again, busy, onClose, onSend,
         <View style={[s.sheet, { backgroundColor: sc.bgSurface, paddingBottom: insets.bottom + 16 }]} accessibilityViewIsModal
           onAccessibilityEscape={onClose} testID="refused-sheet">
           <SheetGrip />
-          <ScrollView contentContainerStyle={s.sheetBody}>
+          <ScrollView ref={scroll} onContentSizeChange={toEnd} contentContainerStyle={s.sheetBody}>
             <Text maxFontSizeMultiplier={CAP} style={[typography.eyebrow, { color: Colors.offlineBanner }]}>{c.overline}</Text>
             <Text accessibilityRole="header" style={[typography.h1, ink]}>{v.name}</Text>
             <Text maxFontSizeMultiplier={CAP} style={[typography.bodySmall, muted, s.tabular]}>{v.meta}</Text>
@@ -298,9 +305,10 @@ const s = StyleSheet.create({
   sub: { fontFamily: 'Inter_400Regular', fontSize: 15, lineHeight: 21, color: colors.charcoal, marginTop: 2 },
   list: { fontFamily: 'Inter_400Regular', fontSize: 15, lineHeight: 21, color: colors.charcoal, marginTop: 2 },
   said: { fontFamily: 'Inter_400Regular', fontSize: 15, lineHeight: 21, color: colors.charcoal, marginTop: 8 },
-  actions: { flexDirection: 'row', gap: 10, marginTop: 14 },
+  // Side by side while both labels fit on one line; else each takes the full width (s2_R1 at 320 pt 130%).
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 14 },
   outline: {
-    flex: 1, minHeight: layout.touchMin, borderWidth: 1.5, borderRadius: radius.button, paddingHorizontal: 10,
+    flexGrow: 1, flexBasis: 'auto', minHeight: layout.touchMin, borderWidth: 1.5, borderRadius: radius.button, paddingHorizontal: 16,
     paddingVertical: 8, alignItems: 'center', justifyContent: 'center',
   },
   outlineText: { fontFamily: 'Inter_600SemiBold', fontSize: 16, lineHeight: 20, textAlign: 'center' },
