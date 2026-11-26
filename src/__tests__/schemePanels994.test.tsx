@@ -198,6 +198,9 @@ const MEMBERS: ReadonlyArray<readonly [string, string, string, string]> = [
   ['the builder stepper card', 'screens/coach/CoachWorkoutBuilderScreen.tsx', '[styles.stepperCard, schemeCardOutline, schemeCard]', 'PANEL'],
   ['the Direct messages entry row', 'screens/community/coach-dm/CoachDmEntryRow.tsx', 'borderRadius: radius.lg, ...schemeCard }', 'PANEL'],
   ['the card of the exercise in progress', 'screens/client/active-workout/ExerciseCard.tsx', 'borderWidth: 1,\n    ...schemeCardOutline,\n    ...schemeCard,', 'PANEL'],
+  // MERGEUP-994 (operator ruling, Almalfi): the two panels main added after this PR's base (m#986, m#989).
+  ['the Since week 1 tile on an exercise\'s history', 'screens/client/workouts/exerciseHistoryStyleC.tsx', '[s.tile, schemeCard]} testID="exercise-history-since"', 'PANEL'],
+  ["the client's check-in box on Roman's draft sheet", 'screens/coach/client-detail/CheckInDraftSheet.tsx', '...(light ? schemeCard : { backgroundColor: sem.bgSurface })', 'PANEL'],
   ['the completion toast', 'components/community/CompletionToast.tsx', 'backgroundColor: schemeBar.fill,', 'SUCCESS MESSAGE'],
   ['the completion toast words', 'components/community/CompletionToast.tsx', '{ color: schemeBar.text }', 'SUCCESS MESSAGE'],
   ['the saved state of the autosave pill', 'components/workout/AutosaveStatusPill.tsx', "icon: 'checkmark-circle-outline',\n          fg: schemeBar.text,\n          bg: schemeBar.fill,\n          border: schemeBar.border,", 'SUCCESS MESSAGE'],
@@ -357,7 +360,8 @@ describe('census of the pale green family under src/', () => {
     'screens/client/progress/ProgressV2.tsx', 'screens/coach/meals/mealUi.tsx',
     'screens/coach/meals/DayPlanBuilderScreen.tsx', 'screens/community/coach-dm/CoachDmEntryRow.tsx',
     'screens/client/active-workout/ExerciseCard.tsx', 'components/community/CompletionToast.tsx',
-    'components/workout/AutosaveStatusPill.tsx',
+    'components/workout/AutosaveStatusPill.tsx', 'screens/client/workouts/exerciseHistoryStyleC.tsx',
+    'screens/coach/client-detail/CheckInDraftSheet.tsx',
   ])('%s holds no family name at all', (file) => {
     expect(found.has(file)).toBe(false);
   });
