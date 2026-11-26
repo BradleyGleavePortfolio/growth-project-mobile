@@ -119,7 +119,7 @@ export async function chooseMealPhoto(mealType: string, source: MealPhotoSource)
     }
     // Only a re-encoded JPEG leaves the phone: a source the picker passes through (TIFF, AVIF, WEBP, BMP, an
     // untranscoded HEIC) or writes as PNG or GIF is refused here (R3 table), as is anything over the server's limits.
-    if (asset.mimeType !== 'image/jpeg' || !within(size, MEAL_PHOTO_MAX_BYTES)
+    if (!within(size, MEAL_PHOTO_MAX_BYTES)
       || !within(width, MEAL_PHOTO_MAX_SIDE) || !within(height, MEAL_PHOTO_MAX_SIDE)) {
       forget(asset.uri);
       notAdded("This photo can't be used. Take a new photo or choose another one.");
