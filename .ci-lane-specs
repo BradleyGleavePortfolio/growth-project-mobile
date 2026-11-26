@@ -1,0 +1,4 @@
+src/utils/log/__tests__/ls992r1.repeatKeepsPhoto.btest.test.ts
+src/components/log/__tests__/ls992r1.mealChangeKeepsPhoto.btest.test.tsx
+src/utils/log/__tests__/mealPhotoAttach.test.ts
+src/components/log/__tests__/FoodSearchView.mealPhoto.test.tsx
