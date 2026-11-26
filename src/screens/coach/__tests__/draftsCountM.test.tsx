@@ -115,7 +115,7 @@ function counts(view: View) {
   const home = view.queryByTestId('home-count');
   const card = view.queryByTestId('inbox-roman-drafts');
   const screen = view.queryByTestId('pending-ai-drafts-screen');
-  const head = screen ? within(screen).queryByText(/^Roman has \d+ drafts? ready$/) : null;
+  const head = screen ? within(screen).queryByText(/^\d+ drafts? to review$/) : null;
   return {
     home: home ? numberIn(String(home.props.children).split('|')[0]) : null,
     card: card ? numberIn(within(card).getByText(/^Roman has \d+ drafts? ready$/).props.children) : null,
