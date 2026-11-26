@@ -63,19 +63,19 @@ describe('QUOTE-STRIP-950: a quoted user turn in the history draws its strip rig
     return { strip, page };
   };
 
-  it('case 1: the strip sits at the right, no wider than the room\'s bubble', async () => {
+  it('case 1: the strip sits inside the room\'s bubble (at most 82%), with no place or width of its own', async () => {
     const { strip } = await historyStrip();
     const roomBubble = flat((await room()).getByTestId('u-bubble').props.style);
     expect(roomBubble.maxWidth).toBe('82%');
-    expect(strip.alignSelf).toBe('flex-end');
-    expect(strip.maxWidth).toBe(roomBubble.maxWidth);
+    expect(strip.alignSelf).toBeUndefined();
+    expect(strip.maxWidth).toBeUndefined();
   });
 
-  it('case 2: its fill differs from the page\'s colour', async () => {
+  it('case 2: its fill is the room\'s (bgPrimary), not the bubble\'s bgSurface', async () => {
     const { strip, page } = await historyStrip();
     expect(page).toBeTruthy();
-    expect(strip.backgroundColor).toBeTruthy();
-    expect(strip.backgroundColor).not.toBe(page);
+    expect(strip.backgroundColor).toBe(lightTokens.bgPrimary);
+    expect(strip.backgroundColor).not.toBe(lightTokens.bgSurface);
   });
 });
 

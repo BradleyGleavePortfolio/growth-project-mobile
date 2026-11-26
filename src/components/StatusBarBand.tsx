@@ -1,4 +1,4 @@
-import React, { useCallback, useSyncExternalStore } from 'react';
+import React, { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -39,6 +39,17 @@ export function useStatusBarBand(color: string) {
     setOwners([...owners, owner]);
     return () => setOwners(owners.filter((o) => o !== owner));
   }, [color]));
+}
+
+// ROUND-989: the same band for a screen that already reads its own focus (useIsFocused), Roman's drafts list: it owns
+// the band while focused and gives it back on blur or unmount, as useStatusBarBand's focus effect does.
+export function useStatusBarBandWhile(color: string, focused: boolean) {
+  useEffect(() => {
+    if (!focused) return undefined;
+    const owner = { color };
+    setOwners([...owners, owner]);
+    return () => setOwners(owners.filter((o) => o !== owner));
+  }, [color, focused]);
 }
 
 // K1-OVERVIEW: the coach's client file, whose deep-forest masthead runs to the top edge.
