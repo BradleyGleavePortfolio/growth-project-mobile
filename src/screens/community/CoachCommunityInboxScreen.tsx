@@ -247,8 +247,8 @@ export default function CoachCommunityInboxScreen({
 
   const openItem = useCallback(
     (item: CoachInboxItem) => {
-      // Post rows open the post. Message rows have no destination on main yet
-      // (the space chat screen ships separately), so they are not tappable.
+      // Post rows open the post. A message row opens from the row itself
+      // (InboxRowOrVoice: inboxMessageOpener).
       if (item.type === 'post') {
         navigation?.navigate('CoachCommunityPostDetail', { postId: item.id });
       }
@@ -638,16 +638,49 @@ function InboxAvatar({
 type InboxRowProps = React.ComponentProps<typeof InboxRow>;
 
 /**
+ * FIX-938 (LS-938 B2): where a message row opens. With the space chat on, a
+ * text or voice row opens its space chat at that message (a voice row's id is
+ * its message's: the backend's coach inbox sends note_id = id). Off, main's
+ * routes: a voice row opens its note and a text or photo row has nowhere to
+ * open. LS-938R2 B2: the chat draws photos, so a photo row (id = its message's,
+ * backend INBOX-PHOTO) opens there too.
+ */
+export function inboxMessageOpener(navigation: CoachCommunityNav, item: CoachInboxItem): (() => void) | undefined {
+  if (featureFlags.communitySpaceChat && (item.kind === 'text' || item.kind === 'voice' || item.kind === 'photo')) {
+    return () => navigation.navigate('CommunitySpaceChat', { cohortId: item.cohort_id, messageId: item.id });
+  }
+  const noteId = item.kind === 'voice' ? item.voice?.note_id : undefined;
+  return noteId ? () => openInboxVoiceNote(navigation, noteId) : undefined;
+}
+
+/**
+ * FIX-938: a row's navigation, or none outside a navigator (a screen rendered
+ * alone, as the inbox's flag tests do): a message row then has nowhere to
+ * open. useNavigation's context reads run on every render; only its throw is
+ * caught.
+ */
+function useRowNavigation(): CoachCommunityNav | undefined {
+  try {
+    return useNavigation<CoachCommunityNav>();
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * VOICE-INBOX (#167-4): a voice row (the API sends one only with
  * communityVoiceNotes on, and only with its note) reads "Voice note · 0:42"
- * and opens the note; every other row is the coach inbox row.
+ * and opens the note (FIX-938: with the space chat on, its space chat at
+ * that message); every other row is the coach inbox row.
  */
 function InboxRowOrVoice(props: InboxRowProps): React.ReactElement {
+  const navigation = useRowNavigation();
   const { voice } = props.item;
+  const onOpen = props.item.type !== 'message' ? props.onOpen : navigation && inboxMessageOpener(navigation, props.item);
   return props.item.kind === 'voice' && voice ? (
-    <VoiceInboxRow {...props} noteId={voice.note_id} durationMs={voice.duration_ms} />
+    <VoiceInboxRow {...props} onOpen={onOpen} durationMs={voice.duration_ms} />
   ) : (
-    <InboxRow {...props} />
+    <InboxRow {...props} onOpen={onOpen} />
   );
 }
 
@@ -656,23 +689,15 @@ function InboxRowOrVoice(props: InboxRowProps): React.ReactElement {
  * (no outer pressable around an accessible row: one element, one label).
  */
 function VoiceInboxRow({
-  noteId,
   durationMs,
   item,
   ...props
-}: InboxRowProps & { noteId: string; durationMs: number }): React.ReactElement {
-  const navigation = useNavigation<CoachCommunityNav>();
+}: InboxRowProps & { durationMs: number }): React.ReactElement {
   const labelled = { ...item, snippet: `Voice note · ${formatDuration(durationMs)}` };
-  return (
-    <InboxRow
-      {...props}
-      item={labelled}
-      onOpen={() => openInboxVoiceNote(navigation, noteId)}
-    />
-  );
+  return <InboxRow {...props} item={labelled} />;
 }
 
-/** Where a voice row opens: the voice note today; the space chat (#167-3) re-points this one line. */
+/** Where a voice row opens with the space chat off: its voice note. */
 export function openInboxVoiceNote(navigation: CoachCommunityNav, noteId: string): void {
   navigation.navigate('CommunityVoiceNoteDetail', { voiceNoteId: noteId });
 }
@@ -760,9 +785,9 @@ function InboxRow({
         <Text style={styles.rowCohort} numberOfLines={1}>
           {item.cohort_name}
         </Text>
-        {/* A row that opens (a post or a voice note) clamps to two lines; a
-            typed message row has nowhere to open yet, so it shows the whole
-            text (at most 200). */}
+        {/* A row that opens (a post, a voice note, or with the space chat on
+            a message) clamps to two lines; a typed message row with nowhere
+            to open shows the whole text (at most 200). */}
         {item.kind === 'voice' && item.voice ? (
           <VoiceRowCard id={item.id} durationMs={item.voice.duration_ms} />
         ) : (
@@ -783,6 +808,7 @@ function InboxRow({
     >
       {onOpen ? (
         <HapticPressable
+          ref={mainRef}
           intent="light"
           onPress={onOpen}
           accessibilityRole="button"

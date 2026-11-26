@@ -27,6 +27,8 @@ jest.mock('../../../config/featureFlags', () => {
       communityVoiceNotes: true,
       communityAcks: true,
       communityAiTriage: false,
+      // FIX-938: the space chat switch is stated here (main's routes); the on case flips it per test.
+      communitySpaceChat: false,
     },
   };
 });
@@ -181,6 +183,26 @@ describe('CoachCommunityInboxScreen — voice rows (flag on)', () => {
     const { getByTestId } = await render(<CoachCommunityInboxScreen />);
     await fireEvent.press(getByTestId(`coach-community-inbox-row-${TEXT_ID}`));
     expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  // FIX-938 (LS-938 B2): with the space chat on, a text or voice row opens its space chat at that message.
+  it.each([
+    ['text', TEXT_ID],
+    ['voice', VOICE_ID],
+  ])('with the space chat on, a %s row opens its space chat at that message', async (_kind, id) => {
+    const flags = jest.requireMock('../../../config/featureFlags').featureFlags;
+    flags.communitySpaceChat = true;
+    try {
+      const { getByTestId } = await render(<CoachCommunityInboxScreen />);
+      await fireEvent.press(getByTestId(`coach-community-inbox-row-${id}`));
+      expect(mockNavigate).toHaveBeenCalledTimes(1);
+      expect(mockNavigate).toHaveBeenCalledWith('CommunitySpaceChat', {
+        cohortId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        messageId: id,
+      });
+    } finally {
+      flags.communitySpaceChat = false;
+    }
   });
 });
 
