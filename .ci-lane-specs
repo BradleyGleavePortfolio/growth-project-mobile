@@ -1,0 +1,16 @@
+src/api/__tests__/mealPhotoApi.test.ts
+src/components/log/__tests__
+src/config/__tests__
+src/utils/log/__tests__
+src/utils/__tests__/food1m
+src/utils/__tests__/fr916r2
+src/utils/__tests__/lo916r2
+src/hooks/__tests__/fr916r2
+src/hooks/__tests__/lo916r2
+src/screens/client/__tests__/LogScreen
+src/services/__tests__/foodLogQueue
+src/services/__tests__/offlineFoodDay
+src/components/mealplan
+src/__tests__/keyboardSafeSheets.test.tsx
+src/components/__tests__/FoodImage.refine968.test.tsx
+scripts/__tests__/routeContract.test.js
