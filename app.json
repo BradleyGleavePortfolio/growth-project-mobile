@@ -265,8 +265,7 @@
       "blockedPermissions": [
         "android.permission.READ_CALENDAR",
         "android.permission.WRITE_CALENDAR",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.CAMERA"
+        "android.permission.RECORD_AUDIO"
       ],
       "intentFilters": [
         {
@@ -391,7 +390,7 @@
         "expo-image-picker",
         {
           "photosPermission": "TGP Fitness opens your photo library only when you choose a photo: a photo of a meal to keep with your food log, or a photo to send in a support chat.",
-          "cameraPermission": "TGP Fitness uses the camera only when you choose to take a photo: a photo of a meal to keep with your food log, or a photo to send in a support chat.",
+          "cameraPermission": false,
           "microphonePermission": false
         }
       ],
