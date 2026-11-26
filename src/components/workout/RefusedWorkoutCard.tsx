@@ -264,15 +264,15 @@ export function RefusedWorkoutSheet({ item, coach, again, busy, onClose, onSend,
           <ScrollView ref={scroll} onContentSizeChange={toEnd} contentContainerStyle={s.sheetBody}>
             <Text maxFontSizeMultiplier={CAP} style={[typography.eyebrow, { color: Colors.offlineBanner }]}>{c.overline}</Text>
             <Text accessibilityRole="header" style={[typography.h1, ink]}>{v.name}</Text>
-            <Text maxFontSizeMultiplier={CAP} style={[typography.bodySmall, muted, s.tabular]}>{v.meta}</Text>
+            <Text maxFontSizeMultiplier={CAP} style={[typography.bodySmall, muted, s.tabular, s.meta]}>{v.meta}</Text>
             <Text style={[s.why, ink]}>{c.why(coach)}</Text>
             <View style={[s.box, { borderLeftColor: Colors.offlineBanner }]} testID="refused-sheet-said">
               {refusalLines(item.refusal, c.said).map((line) => <Text key={line} style={s.said}>{line}</Text>)}
             </View>
             {v.rows.map((r, i) => (
               <View key={`${r.name}-${i}`} style={[s.setRow, { borderTopColor: sc.border }, i === v.rows.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: sc.border }]}>
-                <Text style={[typography.body, ink, s.flex]}>{r.name}</Text>
-                <Text style={[typography.body, muted, s.tabular]}>{r.line}</Text>
+                <Text style={[s.setText, ink, s.flex]}>{r.name}</Text>
+                <Text style={[s.setText, muted, s.tabular]}>{r.line}</Text>
               </View>
             ))}
             {again ? (
@@ -315,17 +315,20 @@ const s = StyleSheet.create({
   dim: { opacity: 0.6 },
   scrim: { flex: 1, justifyContent: 'flex-end' },
   sheet: { maxHeight: '92%', borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet },
-  sheetBody: { paddingHorizontal: layout.gutter, gap: 6 },
-  why: { fontFamily: 'Inter_400Regular', fontSize: 16, lineHeight: 22, marginTop: 8 },
+  // Spacing measured from s2_R4a at 390 pt: rows 37 pt, the reason box 22 pt under the lede, buttons 8 pt apart.
+  sheetBody: { paddingHorizontal: layout.gutter },
+  meta: { marginTop: 2 },
+  why: { fontFamily: 'Inter_400Regular', fontSize: 16, lineHeight: 22, marginTop: 12 },
   box: {
     backgroundColor: Colors.noticeWarningBg, borderLeftWidth: 4, borderRadius: radius.card, padding: 16, paddingTop: 8,
-    marginVertical: 12,
+    marginTop: 20, marginBottom: 12,
   },
-  setRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 37, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth },
+  setRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 37, paddingVertical: 7, borderTopWidth: StyleSheet.hairlineWidth },
+  setText: { fontFamily: 'Inter_400Regular', fontSize: 16, lineHeight: 22 },
   flex: { flex: 1, minWidth: 0 },
   tabular: { fontVariant: ['tabular-nums'] },
   again: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
   againText: { fontFamily: 'Inter_600SemiBold', fontSize: 16, lineHeight: 22, flexShrink: 1 },
-  buttons: { gap: 10, marginTop: 14 },
+  buttons: { gap: 8, marginTop: 13 },
   center: { textAlign: 'center' },
 });
