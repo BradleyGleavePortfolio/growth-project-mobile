@@ -1,7 +1,8 @@
 /**
  * RomanQuoteStrip: the quote on a client turn sent as a reply (ROMAN-HOLD-M), one copy for the
  * Roman room and the read-only history. The people's chat reply strip (MessageBubble replyStub)
- * and its label, reused. The history passes its own place and fill (QUOTE-STRIP-950); the room passes none.
+ * and its label, reused. Both draw it inside the room's bubble (ROMAN-HISTORY-LOOK-M) and pass no place or fill.
+ * Its text shrinks, never grows (LO-958R1 C1): a short quote's card is no wider than its words on a phone too.
  */
 import React from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
@@ -34,5 +35,5 @@ const styles = StyleSheet.create({
     paddingVertical: 6, paddingHorizontal: spacing.sm, marginBottom: 6,
   },
   quoteBar: { width: 2, alignSelf: 'stretch', borderRadius: radius.control },
-  quoteText: { ...typography.bodySmall, flex: 1, fontSize: 13 },
+  quoteText: { ...typography.bodySmall, flexShrink: 1, fontSize: 13 },
 });

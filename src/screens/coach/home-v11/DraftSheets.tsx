@@ -47,8 +47,11 @@ type Step =
 
 interface InvokeAnswer { enabled?: boolean; provider?: string; reply?: string; approval?: { required?: boolean; draft_id?: string | null } }
 
+/** CHECKIN-DRAFT-M (b#1234): a reply to one check-in; the server writes everything Roman reads from it. */
+export type CheckInDraftAsk = { capability: 'draft.coach_message'; subject_user_id: string; message: ''; check_in_id: string };
+
 /** Roman's written draft, or null when Roman is off or filed nothing: then nothing can be sent. */
-export async function askRomanToDraft(request: HomeWinDraft, churnedClientId?: string): Promise<{ draftId: string; reply: string } | null> {
+export async function askRomanToDraft(request: HomeWinDraft | CheckInDraftAsk, churnedClientId?: string): Promise<{ draftId: string; reply: string } | null> {
   const res = churnedClientId
     ? await api.post<InvokeAnswer>(`/v1/coach/churned-clients/${encodeURIComponent(churnedClientId)}/draft`, {})
     : await api.post<InvokeAnswer>('/ai/gateway/invoke', request);

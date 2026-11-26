@@ -27,7 +27,8 @@ jest.mock("../../../ui/haptics/haptics.service", () => ({
 jest.mock("../../../utils/idempotency", () => ({ generateIdempotencyKey: () => "key-1" }));
 jest.mock("@react-navigation/native", () => ({
   ...jest.requireActual("@react-navigation/native"),
-  useNavigation: () => ({ canGoBack: () => true, goBack: jest.fn(), getParent: () => undefined }),
+  // ALL-ON-GREEN-M: EXPO_PUBLIC_FF_COACH_TABS_V2: MoneyBack.tsx:28 reads the stack index (a pushed screen), as ClientPayments.test.tsx:39.
+  useNavigation: () => ({ canGoBack: () => true, getState: () => ({ index: 1, routes: [] }), goBack: jest.fn(), getParent: () => undefined }),
 }));
 jest.mock("../../../hooks/useCoachRoleType", () => ({
   useCoachTeamStatus: () => ({ role: "head_coach", hasSubCoaches: false }),
