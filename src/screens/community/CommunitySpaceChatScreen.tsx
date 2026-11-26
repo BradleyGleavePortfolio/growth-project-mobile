@@ -189,7 +189,13 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
     const index = items.findIndex((i) => (messageId ? i.key === messageId : i.type === 'new'));
     const v = visit.current;
     setTarget(index > 0 ? items[index].key : null);
-    if (index > 0) requestAnimationFrame(() => { if (visit.current === v) toRow(index); });
+    // FIX-945R5 (LS-945R5 B1): else at the newest rows, where a fresh open starts (the newest message asked for, one not
+    // held here, nothing unread), so a visit started over in the list on screen ends there too.
+    requestAnimationFrame(() => {
+      if (visit.current !== v) return;
+      if (index > 0) toRow(index);
+      else listRef.current?.scrollToOffset({ offset: 0, animated: false });
+    });
   }, [items, messageId, target, chat.readSettled, chat.readCursor, chat.messages, chat.list, toRow]);
   // In place once the row it opened at is on screen (or the person scrolls); only then do read marks count.
   useEffect(() => { if (!placed && (target === null || (!!target && seen.has(target)))) setPlaced(true); }, [placed, target, seen]);
