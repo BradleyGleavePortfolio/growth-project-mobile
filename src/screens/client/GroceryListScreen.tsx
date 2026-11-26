@@ -377,7 +377,7 @@ export default function GroceryListScreen() {
               testID="list-refresh"
               refreshing={pulling}
               onRefresh={onRefresh}
-              enabled={!isLoading && !isError && items.length > 0}
+              enabled={!isLoading && !isError && rows.length > 0}
               tintColor={colors.primary}
             />
           }
