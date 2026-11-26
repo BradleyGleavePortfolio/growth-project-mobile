@@ -4,7 +4,9 @@
  * same saved data from the Style C day (FoodDayView's first day, C_first): the portion typed in the search is the
  * one saved, to the day shown; an edit saves the new portion; delete removes the entry; Repeat from the add sheet
  * saves yesterday's portion; two foods go in without reopening ("Add another food" keeps the sheet, "Log food"
- * closes it, C2-S-33); water goes to the day; and the first meal hands off to the first-meal note once. Real
+ * closes it, C2-S-33); a food entered by hand is refused with no name, kept after a failed save and then saved
+ * once, with its grams, to the day and meal shown; water goes to the day; and the first meal hands off to the
+ * first-meal note once. Real
  * screen, store and portion math; only the network is mocked. The failure path is proven on the Style C day by
  * LogScreen.saveFailure.goal930.test.tsx (the card in the sheet, the portion kept, the same key once more).
  */
@@ -276,6 +278,56 @@ describe.each(['ios', 'android'] as const)('%s client food journey on the Style 
     expect(screen.queryByPlaceholderText('Search foods...')).toBeNull();
     await fireEvent.press(await mealRow('lunch'));
     expect(screen.queryByText('Added Rolled oats.')).toBeNull();
+  });
+
+  it('keeps browse tabs, retry, suggestions, clear, manual entry and close', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const onSaved = jest.fn();
+    await render(withQuery(<LogScreen onSaved={onSaved} />));
+    await fireEvent.press(await mealRow('breakfast'));
+    await fireEvent.press(screen.getByText('Frequent'));
+    expect(screen.getByRole('tab', { name: 'Frequent' }).props.accessibilityState.selected).toBe(true);
+    await fireEvent.press(screen.getByText('Recent'));
+    expect(screen.getByRole('tab', { name: 'Recent' }).props.accessibilityState.selected).toBe(true);
+    jest.mocked(foodApi.search).mockRejectedValueOnce(new Error('Network Error'));
+    await fireEvent.changeText(screen.getByPlaceholderText('Search foods...'), 'fruit');
+    await fireEvent.press(await screen.findByText(/^(Retry Search|Try again)$/));
+    await waitFor(() => expect(foodApi.search).toHaveBeenCalledTimes(2));
+    await fireEvent.press(screen.getByLabelText('Clear food search'));
+    jest.mocked(foodApi.search).mockResolvedValueOnce({ ...ok, data: { results: [], suggestions: [mockBanana] } });
+    await fireEvent.changeText(screen.getByPlaceholderText('Search foods...'), 'bananna');
+    await fireEvent.press(await screen.findByText('Banana'));
+    // The Style C portion sheet has no Cancel (Add another food takes its place, QuantityPickerModal.tsx:213-217):
+    // the sheet's close steps back to the search.
+    expect(screen.getByLabelText('Food quantity')).toBeTruthy();
+    await fireEvent(screen.getByTestId('food-search-sheet'), 'requestClose');
+    expect(screen.queryByLabelText('Food quantity')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Clear food search'));
+    await fireEvent.press(screen.getByText('Quick add'));
+    for (const input of screen.getAllByPlaceholderText('0')) await fireEvent.changeText(input, '0');
+    await fireEvent.press(screen.getByText('Log food'));
+    expect(alert).toHaveBeenCalledWith('Missing info', 'Enter at least a food name and calories.');
+    expect(logApi.logFood).not.toHaveBeenCalled();
+    expect(onSaved).not.toHaveBeenCalled();
+    await fireEvent.changeText(screen.getByPlaceholderText('Food name'), 'Lunch label');
+    await fireEvent.changeText(screen.getByPlaceholderText('1'), '2');
+    await fireEvent.changeText(screen.getByPlaceholderText('serving'), 'g');
+    jest.mocked(logApi.logFood).mockRejectedValueOnce(new Error('Network Error'));
+    await fireEvent.press(screen.getByText('Log food'));
+    expect(onSaved).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByText('Log food'));
+    expect(onSaved).toHaveBeenCalledTimes(1);
+    expect(foodApi.create).toHaveBeenCalledWith(expect.objectContaining({ name: 'Lunch label', serving_size_grams: 2 }));
+    // The food entered by hand goes to the day shown and the meal tapped, at the portion typed.
+    expect(logApi.logFood).toHaveBeenLastCalledWith(expect.objectContaining({
+      food_item_id: 'manual', date: mockDate, meal_type: 'breakfast', original_quantity: 2, original_unit: 'g',
+    }));
+    await fireEvent.press(await mealRow('lunch'));
+    await fireEvent.press(screen.getByText('Quick add'));
+    await fireEvent.press(screen.getByText('Back to search'));
+    await fireEvent.press(screen.getByRole('button', { name: 'Close food search' }));
+    expect(onSaved).toHaveBeenCalledTimes(1);
+    expect(screen.queryByPlaceholderText('Search foods...')).toBeNull();
   });
 
   it('keeps day selection, water, refresh and every meal entry point', async () => {
