@@ -83,6 +83,10 @@ export interface SafetyMenuProps {
   context?: { name: string; detail: string };
   /** What is being deleted, for the confirm copy, e.g. "win" or "voice note". */
   contentNoun?: string;
+  /** REFINE-985 (Voice B Studio 05b, B-05b-feed-1000_ios.html:130): the mark's colour and size where the caller draws it
+   * bare (the client's DM thread: light on its deep bar, 05b's #5A5A56 22 pt "•••" beside a message). Unset, as before. */
+  triggerColor?: string;
+  triggerSize?: number;
   testID?: string;
 }
 
@@ -102,6 +106,8 @@ export default function SafetyMenu({
   onRemove,
   context,
   contentNoun = 'post',
+  triggerColor,
+  triggerSize = 18,
   testID = 'safety-menu',
 }: SafetyMenuProps): React.ReactElement | null {
   const { semanticColors, colorScheme } = useTheme();
@@ -255,7 +261,7 @@ export default function SafetyMenu({
         style={styles.trigger}
         testID={testID}
       >
-        <Ionicons name="ellipsis-horizontal" size={18} color={semanticColors.textMuted} />
+        <Ionicons name="ellipsis-horizontal" size={triggerSize} color={triggerColor ?? semanticColors.textMuted} />
       </HapticPressable>
       <Modal visible={open} transparent animationType="slide" onRequestClose={close} onDismiss={runAfterClose}>
         <View style={[styles.backdrop, { backgroundColor: semanticColors.overlay }]}>

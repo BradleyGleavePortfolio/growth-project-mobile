@@ -8,13 +8,14 @@ import { bucketDateLocal, getTodayString } from '../../../utils/date';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
 import type { ClientProfile, FoodLog, WeightLog } from '../../../types';
 import {
+  type CheckInDraftFields,
   type TimelineEvent,
   type WeekSummary,
   type WorkoutSession,
 } from './types';
 import type { OpenSafetyAlert } from './SafetyAlertCard';
 import { mapCoachWorkoutSessions, newestWorkoutsFirst, workoutTimelineSubtitle, type CoachSessionRow } from '../../../utils/workout/workoutLogging';
-import { dayStart, instantDay, workoutDay } from '../../../utils/workout/workoutDay';
+import { calendarDay, dayStart, instantDay, workoutDay } from '../../../utils/workout/workoutDay';
 import { setVolume } from '../../../utils/workout/exerciseUnit';
 
 /** A workout's place on the timeline: when it was stored, or its recorded day when it synced on a later day. */
@@ -246,6 +247,7 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
             coachId: typeof c.coach_id === 'string' ? c.coach_id : null,
             reviewed: c.reviewed_by_coach === true,
           },
+          checkInDraft: checkInDraftFields(c),
         });
       }
 
@@ -426,6 +428,15 @@ export function useClientDetailData(clientId: string, colors: ThemeColors, coach
     loadWeeklySummaries,
     markCheckInReviewed,
   };
+}
+
+const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+/** CHECKIN-DRAFT-M: what Roman may reply to, as the server reads it (backend private-context.service.ts checkInSent). */
+export function checkInDraftFields(c: Record<string, unknown>): CheckInDraftFields {
+  const note = typeof c.notes === 'string' ? c.notes.trim() : '';
+  // A check-in's date is a server calendar date (that day at UTC midnight): the one day rule reads it.
+  return { day: calendarDay(c.date as string | null | undefined), note: note || null, mood: num(c.mood), energy: num(c.energy), sleepHours: num(c.sleep_hours) };
 }
 
 /** Coach timeline line for one check-in: the client's note, else the scores. */

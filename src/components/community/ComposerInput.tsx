@@ -18,7 +18,7 @@ import { useTheme } from '../../theme/useTheme';
 import { useChatDraft } from '../../lib/chatDrafts';
 import { failedSendKeepsKey } from '../../lib/sendOnce';
 import { generateIdempotencyKey } from '../../utils/idempotency';
-import { forestPop, neutral, spacing, radius } from '../../theme/tokens';
+import { forestPop, neutral, spacing, radius, voiceShades } from '../../theme/tokens';
 
 export interface ComposerInputProps {
   placeholder: string;
@@ -48,6 +48,13 @@ export interface ComposerInputProps {
    * unset, the box draws as before. A dark theme keeps its own colours.
    */
   studio?: boolean;
+  /**
+   * REFINE-985 (Voice B Studio 05b, B-05b-feed-1000_ios.html .comp :47, .field :48, .cbtn :49): a white dock with a 1 pt
+   * line on top, a pill box with a 1 pt line, and Send in C6CHAT-S-V2 c08's colours (pale sage with a brand 400 arrow
+   * until the box holds words, still disabled and said so; then forest). Only the client's DM thread passes it; unset, the
+   * box draws as before. A dark theme keeps its own colours.
+   */
+  voiceB?: boolean;
   testID?: string;
 }
 
@@ -60,11 +67,12 @@ export interface ComposerInputHandle {
 
 const ComposerInput = forwardRef<ComposerInputHandle, ComposerInputProps>(
   function ComposerInput(
-    { placeholder, maxLength, sending = false, onSubmit, draftKey, studio = false, testID },
+    { placeholder, maxLength, sending = false, onSubmit, draftKey, studio = false, voiceB = false, testID },
     ref,
   ): React.ReactElement {
   const { semanticColors, colorScheme } = useTheme();
   const studioLight = studio && colorScheme !== 'dark';
+  const voiceBLight = voiceB && colorScheme !== 'dark';
   const inputRef = useRef<TextInput>(null);
   useImperativeHandle(ref, () => ({
     focus: () => inputRef.current?.focus(),
@@ -143,6 +151,7 @@ const ComposerInput = forwardRef<ComposerInputHandle, ComposerInputProps>(
           borderTopColor: semanticColors.border,
         },
         studio ? [styles.studioBar, studioLight ? { borderTopColor: forestPop.sageLine } : null] : null,
+        voiceB ? [styles.voiceBBar, voiceBLight ? { backgroundColor: neutral[0], borderTopColor: voiceShades.hairline } : null] : null,
       ]}
       testID={testID}
     >
@@ -151,7 +160,7 @@ const ComposerInput = forwardRef<ComposerInputHandle, ComposerInputProps>(
         value={value}
         onChangeText={setField}
         placeholder={placeholder}
-        placeholderTextColor={studioLight ? forestPop.n700 : semanticColors.textMuted}
+        placeholderTextColor={studioLight || voiceBLight ? forestPop.n700 : semanticColors.textMuted}
         maxLength={maxLength}
         multiline
         accessibilityLabel={placeholder}
@@ -163,6 +172,7 @@ const ComposerInput = forwardRef<ComposerInputHandle, ComposerInputProps>(
             borderColor: semanticColors.border,
           },
           studio ? [styles.studioInput, studioLight ? { borderColor: forestPop.sageLine, backgroundColor: neutral[0] } : null] : null,
+          voiceB ? [styles.voiceBInput, voiceBLight ? { borderColor: voiceShades.track, backgroundColor: neutral[0] } : null] : null,
         ]}
       />
       <HapticPressable
@@ -181,7 +191,7 @@ const ComposerInput = forwardRef<ComposerInputHandle, ComposerInputProps>(
               : semanticColors.disabledBg,
           },
           studio ? styles.studioSend : null,
-          studioLight ? { backgroundColor: canSend ? forestPop.forest : forestPop.sage } : null,
+          studioLight || voiceBLight ? { backgroundColor: canSend ? forestPop.forest : forestPop.sage } : null,
         ]}
       >
         <Ionicons
@@ -189,6 +199,7 @@ const ComposerInput = forwardRef<ComposerInputHandle, ComposerInputProps>(
           size={20}
           color={studioLight
             ? (canSend ? forestPop.onDeep : forestPop.forest) // forest on sage 7.9:1 (KT-5)
+            : voiceBLight ? (canSend ? forestPop.onDeep : forestPop.brand400) // c08 .send.off: brand 400 on sage 4.55:1 (KT-5)
             : canSend ? semanticColors.textOnAccent : semanticColors.textOnDisabled}
         />
       </HapticPressable>
@@ -230,4 +241,9 @@ const styles = StyleSheet.create({
   studioBar: { alignItems: 'center', gap: 10, paddingTop: 12, paddingBottom: 8, paddingHorizontal: 14, borderTopWidth: 1 },
   studioInput: { minHeight: 46, borderRadius: 23, borderWidth: 1.5, paddingHorizontal: 18, paddingTop: 12, paddingBottom: 12, fontSize: 16 },
   studioSend: { width: 46, height: 46, borderRadius: 23 },
+  // REFINE-985 `voiceB`: 05b .comp padding 8px 10px 8px 6px, gap 6px, centred, a 1 px line; the left inset is 10, as the
+  // right, because 05b's 6 sits beside an Attach "+" this dock does not draw. .field min-height 44px, radius 22px, a 1 px
+  // line, padding 11px 16px, .9375rem/1.3.
+  voiceBBar: { alignItems: 'center', gap: 6, paddingTop: 8, paddingBottom: 8, paddingHorizontal: 10, borderTopWidth: 1 },
+  voiceBInput: { minHeight: 44, borderRadius: 22, borderWidth: 1, paddingHorizontal: 16, paddingTop: 11, paddingBottom: 11, fontSize: 15, lineHeight: 19.5 },
 });
