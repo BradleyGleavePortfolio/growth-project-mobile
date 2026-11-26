@@ -1,0 +1,5 @@
+src/__tests__/schemePanels994.test.tsx
+src/__tests__/boneSwapGuard.test.ts
+src/components/__tests__/offlineBannerFrame.test.tsx
+src/components/__tests__/offlineBannerC1S10.test.tsx
+src/components/__tests__/OfflineBanner.coachWords.test.tsx
