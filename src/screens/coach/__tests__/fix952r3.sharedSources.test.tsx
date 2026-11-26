@@ -77,7 +77,7 @@ const ui = (reader: Reader) => (reader === 'messages_card' ? <RomanDraftsHero />
 /** What a reader shows for `n` drafts, `nudges` of them nudges (the rest workouts). */
 const shows = (reader: Reader, n: number, nudges: number) => (reader === 'coach_home'
   ? `${n} waiting, ${nudges} nudges, ${n - nudges} workouts`
-  : `Roman has ${n} ${n === 1 ? 'draft' : 'drafts'} ready`);
+  : reader === 'drafts_screen' ? `${n} ${n === 1 ? 'draft' : 'drafts'} to review` : `Roman has ${n} ${n === 1 ? 'draft' : 'drafts'} ready`);
 type View = Awaited<ReturnType<typeof render>>;
 const sees = (view: View, reader: Reader, n: number, nudges: number) => (reader === 'coach_home'
   ? view.getByTestId('home-drafts').props.children === shows(reader, n, nudges)

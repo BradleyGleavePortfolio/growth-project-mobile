@@ -23,7 +23,7 @@
  * `useIsFocused`.
  */
 
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   FlatList,
   Pressable,
@@ -34,12 +34,15 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useIsFocused, useNavigation } from '@react-navigation/native';
+import { useIsFocused, useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTheme, type ThemeColors } from '../../theme/ThemeProvider';
-import { coachInboxB as B, typography, radius, spacing } from '../../theme/tokens';
+import { coachInboxB as B, forestPop, layout, typography, radius, spacing } from '../../theme/tokens';
+import { useStatusBarBandWhile } from '../../components/StatusBarBand';
 import ErrorBoundary from '../../components/ErrorBoundary';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { useCoachStore } from '../../store/coachStore';
+import { firstWord } from './home-v11/homeDay';
 import {
   usePendingAiDrafts,
   COACH_AI_PENDING_DRAFTS_QUERY_KEY,
@@ -57,6 +60,10 @@ import { PATH_DRAFTS_KEY, PathChangeDrafts, usePathChangeDrafts } from './copilo
 import { useScreenInsets } from '../../ui/layout/Screen';
 import { draftKinds } from './inboxStyleB';
 import { readStateOf, romanDraftsCount } from './romanDraftsCount';
+import { checkInDraftOf, type CheckInDraft } from './checkInDrafts';
+import { CheckInDraftCard } from './CheckInDraftCard';
+import { CheckInDraftSheet } from './client-detail/CheckInDraftSheet';
+import { RomanMark } from './home-v11/RomanMark';
 
 /** Roles allowed to see + decide AI drafts. Mirrors backend
  *  `@Roles('coach', 'owner')` on the gateway list/decide endpoints. */
@@ -66,7 +73,7 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(), []);
   const isFocused = useIsFocused();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const queryClient = useQueryClient();
   const user = useCurrentUser();
   // The stack draws no header here: the title clears the status bar itself.
@@ -85,6 +92,9 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
   const path = usePathChangeDrafts(allowed && isFocused);
   const hasPath = (path.data?.length ?? 0) > 0;
   const pathFailed = path.isError && !path.data;
+  // ROUND-989: the status band behind the clock is the head's deep with light icons while the list is focused (the
+  // client file's band, StatusBarBand.tsx); the restricted state keeps the app's bone band.
+  useStatusBarBandWhile(forestPop.deep, allowed && isFocused);
 
   const approveMutation = useMutation({
     mutationFn: (draftId: string) => coachAiExecutionApi.approveDraft(draftId),
@@ -107,6 +117,17 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
   const onReject = useCallback(
     (draftId: string) => rejectMutation.mutate(draftId),
     [rejectMutation],
+  );
+  // CHECKIN-DRAFT-M: the check-in draft whose sheet is open (layout B), and the coach's roster names for the cards.
+  const [reviewing, setReviewing] = useState<CheckInDraft | null>(null);
+  const stored = useCoachStore((s) => s.clients);
+  const roster = Array.isArray(stored) ? stored : NO_CLIENTS;
+  const clientNames = useMemo(
+    () => new Map(roster.flatMap((c) => {
+      const name = `${c.firstName ?? ''} ${c.lastName ?? ''}`.trim();
+      return name ? [[c.id, name] as const] : [];
+    })),
+    [roster],
   );
 
   if (!allowed) {
@@ -131,42 +152,51 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
   }
 
   const allRows = query.data?.drafts ?? [];
-  // Render only Stream 2 capabilities. Older draft.coach_message rows live
-  // in their own surface.
-  const renderable = allRows.filter((r) => isStream2Capability(r.capability));
+  // Render Stream 2 capabilities and (CHECKIN-DRAFT-M) Roman's replies to check-ins; every other draft.coach_message
+  // row lives in its own surface.
+  const renderable = allRows.filter((r) => isStream2Capability(r.capability) || checkInDraftOf(r) !== null);
   const isMutating = approveMutation.isPending || rejectMutation.isPending;
   const kinds = draftKinds(allRows);
   // LO-952 C1: the headline counts every card the list shows, the plan changes too; the tiles stay the drafts' kinds.
   // DRAFTS-COUNT-M: from the one count, as coach Home and the Messages card count it (the read is off with the switch off).
   const ready = romanDraftsCount(allRows, readStateOf(query), { n: path.data?.length, state: readStateOf(path) }).waiting;
   const bare = renderable.length === 0 && !query.isLoading && !path.isLoading && !hasPath && !pathFailed;
-  // LS-952 B1, LO-952 B1: the header and kind tiles scroll with the cards (a 320 pt screen at 130% text keeps room for
-  // them). The screen keeps insets.top so a scrolled card stops below the clock; the header adds 8 as before.
+  // ROUND-989 (owner #203-E74; ctx#503 B-list frame, CD-68, CD-69, CD-72): the deep head (Back, Roman's mark, "Roman"
+  // and its line), then on the page the queue line from the one count and, with a Stream 2 kind, the tiles. LS-952 B1,
+  // LO-952 B1: all of it scrolls with the cards (a 320 pt screen at 130% text keeps room for them). The status band is
+  // the head's deep while the list is focused (useStatusBarBandWhile above), and the screen keeps insets.top, so
+  // a scrolled card stops below the clock. The frame's Chat and Drafts labels are not drawn (v1.1, #203-E81).
   const header = (
-    <View style={[styles.header, bare && styles.headerSides]}>
-      {navigation.canGoBack() ? (
-        <Pressable onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Back" hitSlop={8} style={styles.back}>
-          <Ionicons name="chevron-back" size={26} color={B.ink} />
-        </Pressable>
-      ) : null}
-      <Text style={ready > 0 ? styles.eyebrow : styles.headerTitle}>Pending AI drafts</Text>
-      {ready > 0 ? (
-        <Text style={styles.headerTitle} maxFontSizeMultiplier={1.3}>{`Roman has ${ready} ${ready === 1 ? 'draft' : 'drafts'} ready`}</Text>
-      ) : null}
-      <Text style={styles.headerSubtitle}>
-        Review what the AI proposed before it reaches your clients.
-      </Text>
-      {kinds.kinds.length > 0 ? (
-        <View style={styles.kindRow} testID="pending-ai-drafts-kinds">
-          {kinds.kinds.map((k) => (
-            <View key={k.label} style={styles.kindTile} accessible accessibilityLabel={`${k.count} ${k.label}`}>
-              <Text style={styles.kindCount} maxFontSizeMultiplier={1.3}>{k.count}</Text>
-              <Text style={styles.kindLabel}>{k.label}</Text>
-            </View>
-          ))}
+    <>
+      <View style={[styles.head, !bare && styles.headBleed]} testID="pending-ai-drafts-head">
+        <View style={styles.bar}>
+          {navigation.canGoBack() ? (
+            <Pressable onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Back" hitSlop={8} style={styles.back} testID="pending-ai-drafts-back">
+              <Ionicons name="chevron-back" size={26} color={forestPop.onDeep} />
+            </Pressable>
+          ) : null}
+          <View style={styles.grow} />
+          <RomanMark size={24} r={14} testID="pending-ai-drafts-mark" />
         </View>
-      ) : null}
-    </View>
+        <Text style={styles.title} accessibilityRole="header" maxFontSizeMultiplier={1.3}>Roman</Text>
+        <Text style={styles.line}>Your drafts, ready when you are.</Text>
+      </View>
+      <View style={[styles.queueBlock, bare && styles.headerSides]}>
+        {ready > 0 ? (
+          <Text style={styles.queue} testID="pending-ai-drafts-queue">{`${ready} ${ready === 1 ? 'draft' : 'drafts'} to review`}</Text>
+        ) : null}
+        {kinds.kinds.length > 0 ? (
+          <View style={styles.kindRow} testID="pending-ai-drafts-kinds">
+            {kinds.kinds.map((k) => (
+              <View key={k.label} style={styles.kindTile} accessible accessibilityLabel={`${k.count} ${k.label}`}>
+                <Text style={styles.kindCount} maxFontSizeMultiplier={1.3}>{k.count}</Text>
+                <Text style={styles.kindLabel}>{k.label}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+      </View>
+    </>
   );
 
   return (
@@ -179,16 +209,26 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
           keyboardDismissMode="on-drag"
           automaticallyAdjustKeyboardInsets
           keyExtractor={(d) => d.id}
-          renderItem={({ item }) => (
-            <DraftCard
-              draft={item}
-              capability={item.capability as CoachAiDraftCapability}
-              styles={styles}
-              onApprove={onApprove}
-              onReject={onReject}
-              disabled={isMutating}
-            />
-          )}
+          renderItem={({ item }) => {
+            const reply = checkInDraftOf(item);
+            return reply ? (
+              <CheckInDraftCard
+                draft={reply}
+                name={clientNames.get(reply.clientId) ?? clientLabel(reply.clientId)}
+                onReview={() => setReviewing(reply)}
+                onBack={() => navigation.navigate('ClientDetail', { clientId: reply.clientId, clientName: clientNames.get(reply.clientId) ?? '', initialTab: 'timeline' })}
+              />
+            ) : (
+              <DraftCard
+                draft={item}
+                capability={item.capability as CoachAiDraftCapability}
+                styles={styles}
+                onApprove={onApprove}
+                onReject={onReject}
+                disabled={isMutating}
+              />
+            );
+          }}
           contentContainerStyle={bare ? styles.emptyContainer : styles.listContainer}
           refreshControl={
             <RefreshControl
@@ -223,6 +263,17 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
           }</View>}
           testID="pending-ai-drafts-list"
         />
+        {reviewing ? (
+          <CheckInDraftSheet
+            clientId={reviewing.clientId}
+            clientName={clientNames.get(reviewing.clientId) ?? clientLabel(reviewing.clientId)}
+            first={clientNames.has(reviewing.clientId) ? firstWord(clientNames.get(reviewing.clientId) as string) : clientLabel(reviewing.clientId)}
+            checkInId={reviewing.checkInId}
+            day={reviewing.day}
+            draft={{ draftId: reviewing.draftId, body: reviewing.body }}
+            onClose={() => setReviewing(null)}
+          />
+        ) : null}
       </View>
     </ErrorBoundary>
   );
@@ -239,6 +290,11 @@ interface DraftCardProps {
   disabled: boolean;
 }
 
+const NO_CLIENTS: never[] = [];
+
+/** The card's name for a client the roster does not name (main's label). */
+const clientLabel = (id: string | null | undefined) => (id ? `client ${id.slice(0, 8)}` : 'client');
+
 function DraftCard({
   draft,
   capability,
@@ -247,9 +303,7 @@ function DraftCard({
   onReject,
   disabled,
 }: DraftCardProps): React.ReactElement {
-  const subjectLabel = draft.subject_user_id
-    ? `client ${draft.subject_user_id.slice(0, 8)}`
-    : 'client';
+  const subjectLabel = clientLabel(draft.subject_user_id);
   const a11yBase = `${capabilityLabel(capability)} for ${subjectLabel}`;
   // FIX-952R1: with larger text the badge goes under the title, so a narrow phone never splits "suggestion" mid-word.
   const badgeBelow = useWindowDimensions().fontScale > 1;
@@ -358,12 +412,18 @@ function makeStyles() {
   return StyleSheet.create({
     // K2 Style B (owner #196-D10): the drawn tiles and cards on the app page (owner #197-E6), colours from coachInboxB.
     root: { flex: 1, backgroundColor: B.page },
-    header: { paddingTop: 8, paddingBottom: 16, gap: 6 },
+    // ROUND-989: the B-list frame's head, NeedsYouList's deep masthead (forestPop.deep, radius.sheet bottom corners),
+    // edge to edge over the list's gutter; the frame's queue line in the page's small muted type.
+    head: { backgroundColor: forestPop.deep, paddingHorizontal: layout.gutter, paddingBottom: spacing.xl, borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet },
+    headBleed: { marginHorizontal: -layout.gutter },
+    bar: { flexDirection: 'row', alignItems: 'center', minHeight: layout.touchMin },
+    grow: { flex: 1 },
+    title: { ...typography.h1, color: forestPop.onDeep, marginTop: spacing.sm },
+    line: { ...typography.bodySmall, color: forestPop.onDeepMuted, marginTop: spacing.md },
+    queueBlock: { paddingTop: spacing.lg, paddingBottom: spacing.md },
+    queue: { ...typography.bodySmall, color: B.muted },
     headerSides: { paddingHorizontal: 24 },
     back: { width: 44, height: 44, marginLeft: -10, alignItems: 'center', justifyContent: 'center' },
-    eyebrow: { fontFamily: 'Inter_600SemiBold', fontSize: 13, lineHeight: 18, fontWeight: '600', letterSpacing: 1.6, textTransform: 'uppercase', color: B.muted },
-    headerTitle: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 34, lineHeight: 43, fontWeight: '400', fontVariant: ['lining-nums'], color: B.ink },
-    headerSubtitle: { ...typography.body, color: B.muted },
     kindRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 10 },
     kindTile: { flexGrow: 1, flexShrink: 0, backgroundColor: B.tile, borderRadius: radius.card, paddingVertical: 14, paddingHorizontal: 14, gap: 2 },
     kindCount: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 38, lineHeight: 48, fontVariant: ['lining-nums'], color: B.deep },
