@@ -5,9 +5,10 @@
  * FR-871: the first time (the server's voice-consent answer), the 08a card comes first (SpaceVoiceFirstUse); a tap
  * before the answer is in waits for it rather than opening either sheet. On iOS the record sheet opens once the card has
  * gone (its onDismiss): iOS shows one Modal at a time (FR-871R5, m#879 Opus C5).
+ * LO-944R2 B1 = LS-944R2 B1 (FIX-944R2): the keyboard is put away as a tap opens either sheet, never over its foot.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { Platform, StyleSheet, TouchableOpacity } from 'react-native';
+import { Keyboard, Platform, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import VoiceRecordSheet from '../VoiceRecordSheet';
 import SpaceVoiceFirstUse, { useSpaceVoiceConsent } from './SpaceVoiceFirstUse';
@@ -35,6 +36,7 @@ export default function SpaceChatMic({ cohortName, userId, coach, onSend }: Spac
   useEffect(() => {
     if (!asked || !consent.known) return;
     setAsked(false);
+    Keyboard.dismiss();
     if (consent.needsCard) setCard(true);
     else { setUsed(true); setOpen(true); }
   }, [asked, consent.known, consent.needsCard]);
