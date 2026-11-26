@@ -1,0 +1,17 @@
+src/__tests__/memberContentAccess.test.tsx
+src/__tests__/rowRoutes.test.tsx
+src/components/community/__tests__/spaceChatVoice.test.tsx
+src/components/community/__tests__/spaceChatVoiceStates.test.tsx
+src/components/community/space-chat/__tests__/FIX944R1FirstUseSizes.test.tsx
+src/components/community/space-chat/__tests__/FIX944R2MicKeyboard.test.tsx
+src/components/community/space-chat/__tests__/LO943QuotePhoto.btest.test.tsx
+src/components/community/space-chat/__tests__/LO944R2KeyboardUnderSheet.btest.test.tsx
+src/components/community/space-chat/__tests__/LS944R1FirstUseFits.btest.test.tsx
+src/components/community/space-chat/__tests__/LS944R2MicKeyboard.btest.test.tsx
+src/components/community/space-chat/__tests__/SpaceInfoSheet.close.test.tsx
+src/components/community/space-chat/__tests__/SpaceInfoSheet.drawnLine.test.tsx
+src/components/community/space-chat/__tests__/spaceChatComposeKT2.test.tsx
+src/components/community/space-chat/__tests__/spaceMembersKT2.test.tsx
+src/screens/community/__tests__/CommunitySpaceChatScreen.test.tsx
+src/screens/community/__tests__/FIX945R4SpaceStates.test.tsx
+src/screens/community/__tests__/LS945RouteRetarget.btest.test.tsx
