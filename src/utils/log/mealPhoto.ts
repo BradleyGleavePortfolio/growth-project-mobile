@@ -170,7 +170,7 @@ async function attach(photo: Kept, entryId: string, mine: number): Promise<void>
     let link = await photo.link;
     if (!link) throw new Error('not uploaded');
     if (Date.now() >= link.expiresAt) link = await renew();
-    if (account !== mine) return;
+    // LO-992R1 RM6
     try {
       await send(link);
     } catch (err) {
