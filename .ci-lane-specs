@@ -1,0 +1,5 @@
+src/config/__tests__/mealPhotoPermissions.test.js
+src/config/__tests__/LO992R1.introspect.test.js
+src/config/__tests__/storeReviewPermissions.test.js
+src/config/__tests__/calendarPermissionsBlocked.test.js
+scripts/__tests__/validateAppConfig.test.js
