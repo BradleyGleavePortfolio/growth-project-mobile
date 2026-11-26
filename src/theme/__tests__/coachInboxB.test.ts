@@ -17,7 +17,7 @@ describe('coach inbox Style B colours', () => {
   it('holds the drawing shades', () => {
     expect(B).toEqual({
       page: '#F7FAF7', tile: '#F1E8D5', chip: '#FFFDF8', deep: '#2C4A36', onDeep: '#FBF7F0', onDeepMuted: '#B8CCBF',
-      ink: '#1A1A18', body: '#3D3D3A', muted: '#6B675F', goldEdge: '#8A6A2A', line: 'rgba(44,74,54,0.18)',
+      ink: '#1A1A18', body: '#3D3D3A', muted: '#6B675F', line: 'rgba(44,74,54,0.18)',
       ghost: '#E8DFCF', ghostHero: '#D9DED6',
     });
   });

@@ -9,7 +9,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useIsFocused, useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
-import { coachInboxB as B, radius } from '../../theme/tokens';
+import { coachInboxB as B, colors, radius } from '../../theme/tokens';
 import { usePendingAiDrafts } from '../../hooks/usePendingAiDrafts';
 import type { AiActionDraftRow } from '../../api/types/coachAiExecution';
 import { featureFlags } from '../../config/featureFlags';
@@ -171,7 +171,7 @@ const s = StyleSheet.create({
   hero: { backgroundColor: B.deep, borderRadius: radius.sheet, padding: 20, gap: 14 },
   heroTop: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   heroTopStacked: { flexDirection: 'column', alignItems: 'flex-start' },
-  ring: { flexShrink: 0, borderWidth: 2, borderColor: B.goldEdge, borderRadius: radius.chip, padding: 2 },
+  ring: { flexShrink: 0, borderWidth: 2, borderColor: colors.romanAccent, borderRadius: radius.chip, padding: 2 },
   heroTitle: { flexShrink: 1, fontFamily: SERIF, fontSize: 30, lineHeight: 38, fontWeight: '400', fontVariant: ['lining-nums'], color: B.onDeep },
   heroChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   heroChip: { borderRadius: radius.chip, borderWidth: 1, borderColor: B.onDeepMuted, paddingHorizontal: 12, paddingVertical: 6 },

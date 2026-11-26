@@ -552,7 +552,6 @@ export const coachInboxB = {
   ink: colors.ink,
   body: colors.charcoal,
   muted: lightTokens.textMuted,
-  goldEdge: gold[700],
   line: 'rgba(44,74,54,0.18)',
   ghost: '#E8DFCF',
   ghostHero: '#D9DED6',
