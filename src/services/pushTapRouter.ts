@@ -29,6 +29,8 @@ import { featureFlags } from '../config/featureFlags';
 import { creditPacksHidden } from '../config/purchaseSurfaces';
 import { incomingLinkPath, isPublicLinkPath, resolveAppLink, UUID } from '../navigation/incomingLinks';
 import { chatTarget, openTarget } from '../navigation/coachInbox';
+import { refreshMealPlanToday } from './mealPlanRefresh';
+import { refreshDmReads } from './dmRefresh';
 
 export interface PushNavigator {
   isReady(): boolean;
@@ -198,8 +200,6 @@ interface PendingTap {
   waitForSignIn?: boolean;
   /** The signed-in user the tap belongs to; null while bootstrap is unknown. */
   ownerUserId: string | null;
-  /** COACH-DM-M: `path` is followed only for this role; any other role gets `screen` (coachDmLink). */
-  linkFor?: PushRole;
 }
 
 let navigator: PushNavigator | null = null;
@@ -349,6 +349,57 @@ export function resolvePushTarget(role: PushRole, screen: string): Target {
   return t ?? (routes.NotificationCenter() as Target);
 }
 
+/**
+ * REFINE-966 (B1, read only): where a tap on this push would land now, for the role whose navigator is the mounted
+ * root (its ROLE_ANCHOR, as flushPendingPushTap checks it): the route it opens and the params it passes, following
+ * routePushTap's link rule, flushPendingPushTap and deliver without routing (no navigate, hold, dedupe or after()).
+ * null when the tap opens nothing. A root that keeps open work (pop) still answers its screen: no exact match there.
+ * MERGEUP-966: a community DM link is followed through coachDmLink, as flushPendingPushTap does (COACH-DM-CLIENT-M:
+ * for either role).
+ */
+export function pushTapLanding(
+  routeNames: readonly string[],
+  actionScreen?: string,
+  actionParams?: unknown,
+  deepLink?: string,
+): { name: string; params?: Record<string, string> } | null {
+  const roles = (['student', 'coach'] as const).filter((r) => routeNames.includes(ROLE_ANCHOR[r]));
+  if (roles.length !== 1) return null;
+  const role: PushRole = roles[0];
+  const land = (t: Target, params?: Record<string, string>) => (routeNames.includes(t.root)
+    ? { name: t.screen ?? t.root, params: t.screen || !t.params ? params : { ...params, ...t.params } }
+    : null);
+  const onScreen = (screen: string, params?: Record<string, string>) => {
+    let rest = params;
+    if (screen === 'Messages' && params && 'clientId' in params && 'clientName' in params) {
+      const { clientId, clientName, ...others } = params;
+      const chat = chatTarget(clientId, clientName);
+      if (role === 'coach' && UUID.test(clientId ?? '') && clientName?.trim() && routeNames.includes(chat.tab)) {
+        return { name: chat.params.screen, params: { clientId } };
+      }
+      rest = Object.keys(others).length > 0 ? others : undefined;
+    }
+    const target = resolvePushTarget(role, screen);
+    return land(routeNames.includes(target.root) ? target : resolvePushTarget(role, 'NotificationCenter'), rest);
+  };
+  if (deepLink !== undefined) {
+    const path = incomingLinkPath(deepLink);
+    if (path === null) return null;
+    if (!actionScreen || actionScreen === 'NotificationCenter') {
+      if (isPublicLinkPath(path)) return null;
+      const target = resolveAppLink(path, role);
+      return target ? land(target, target.params) : onScreen('NotificationCenter');
+    }
+  }
+  if (!actionScreen || !SCREEN_NAME.test(actionScreen)) return null;
+  const dm = coachDmLink(actionScreen, deepLink, sessionUserId(session));
+  if (dm.path !== undefined) {
+    const target = resolveAppLink(dm.path, role);
+    if (target) return land(target, target.params);
+  }
+  return onScreen(actionScreen, decodePushParams(actionParams));
+}
+
 /** Returns true when a pending tap was delivered. */
 export function flushPendingPushTap(): boolean {
   if (!pending || !navigator || !navigator.isReady()) return false;
@@ -362,14 +413,18 @@ export function flushPendingPushTap(): boolean {
   // frame between an auth-state change and the navigator commit).
   if (!routeNames.includes(ROLE_ANCHOR[session.role])) return false;
 
-  const { screen, params, path, linkFor } = pending;
+  const { screen, params, path } = pending;
   pending = null;
-  if (path !== undefined && (!linkFor || linkFor === session.role)) {
+  if (path !== undefined) {
     const target = resolveAppLink(path, session.role);
     // A trusted but unsupported push URL keeps its existing inbox fallback.
     // URL opens have no fallback, and untrusted origins never enter the queue.
     if (!target) return screen ? deliver(navigator, session.role, routeNames, screen, params) : false;
     if (!routeNames.includes(target.root)) return false;
+    // MEAL-PLAN-REFRESH-M: at delivery, after a cold start's cache restore, so the plan the tap opens is read anew.
+    if (target.screen === 'ClientDailyMealPlan') refreshMealPlanToday();
+    // REFINE-985 B1: a DM tap re-reads the thread, which may be the one already in front (the navigate keeps that route).
+    if (target.screen === 'CommunityDmThread') refreshDmReads();
     return deliverTarget(navigator, target, target.params);
   }
   // Unroutable target: dropped rather than crashing (deliver returns false).
@@ -474,14 +529,15 @@ export function __resetPushTapRouterForTests(): void {
 /**
  * COACH-DM-M (b#1243 CONTRACT 6763103674): a community DM row's link names the other person, tgp://community/dm/<id>.
  * Rows stored before b#1243 keep tgp://community/dms/<workspace>:<lo>:<hi>: read as the id that is not the signed-in
- * user's, and when neither is, nothing is guessed. Held for a coach only: a client's row keeps its kind's Community
- * screen (m#956 N2), as does a build whose switches cannot open the thread (resolveAppLink answers null).
+ * user's, and when neither is, nothing is guessed. COACH-DM-CLIENT-M: one rule for both roles; the role known at
+ * delivery picks the thread (resolveAppLink: a client's Community tab, a coach's Community stack). A build whose
+ * switches cannot open the thread (resolveAppLink answers null) keeps the kind's own screen.
  */
-function coachDmLink(screen: string, deepLink: string | undefined, userId: string | null): Pick<PendingTap, 'path' | 'linkFor'> {
+function coachDmLink(screen: string, deepLink: string | undefined, userId: string | null): Pick<PendingTap, 'path'> {
   const path = screen === 'Community' && deepLink !== undefined ? incomingLinkPath(deepLink)?.split(/[?#]/, 1)[0] : null;
   if (!path) return {};
-  if (/^community\/dm\/[^/]+$/.test(path)) return { path, linkFor: 'coach' };
+  if (/^community\/dm\/[^/]+$/.test(path)) return { path };
   const pair = /^community\/dms\/[^/:]+:([^/:]+):([^/:]+)$/.exec(path);
   const other = pair && userId ? (pair[1] === userId ? pair[2] : pair[2] === userId ? pair[1] : null) : null;
-  return other ? { path: `community/dm/${other}`, linkFor: 'coach' } : {};
+  return other ? { path: `community/dm/${other}` } : {};
 }

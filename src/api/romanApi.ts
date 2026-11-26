@@ -238,6 +238,11 @@ export class RomanApiError extends Error {
   readonly turnStored: boolean;
   /** Present only for `dailyCap`: when AI help resets. */
   readonly dailyCap?: AiDailyCap;
+  /**
+   * ROMAN-PENDING-WORDS-M: true only on the exact ROMAN_REPLY_PENDING frame (Roman is still writing the first answer),
+   * so a screen can say so instead of "could not answer". Kind, words and `turnStored` are those of any coded frame.
+   */
+  readonly replyPending?: true;
 
   constructor(
     kind: RomanErrorKind,
@@ -266,6 +271,11 @@ export class RomanApiError extends Error {
  */
 export class RomanKeySpentError extends RomanApiError {
   readonly sendOnceKeySpent = true;
+}
+
+/** ROMAN-PENDING-WORDS-M: the ROMAN_REPLY_PENDING frame's error; read by its field, `replyPending`. */
+class RomanReplyPendingError extends RomanApiError {
+  readonly replyPending = true as const;
 }
 
 /** Read a non-2xx body as JSON when it is JSON; never throws. */
@@ -686,9 +696,10 @@ export async function sendMessage(
         throw new RomanKeySpentError('poolEmpty', ROMAN_POOL_EMPTY_MESSAGE, undefined, undefined, true);
       }
       if (streamError.code === ROMAN_REPLY_PENDING_CODE) {
-        // FIX-953R3 (LS-953R2 B2): Roman is still writing the first answer. The same error as any other code, without
-        // the key-spent mark, so Send again replays the stored answer instead of storing the question a second time.
-        throw new RomanApiError('generic', streamError.message, undefined, undefined, true);
+        // FIX-953R3 (LS-953R2 B2): Roman is still writing the first answer. The same kind, words and turnStored as any
+        // other code, without the key-spent mark, so Send again replays the stored answer instead of storing the
+        // question a second time; `replyPending` lets the screens say so (ROMAN-PENDING-WORDS-M).
+        throw new RomanReplyPendingError('generic', streamError.message, undefined, undefined, true);
       }
       const kind: RomanErrorKind =
         streamError.code === 'ROMAN_UNAVAILABLE' ? 'unavailable' : 'generic';

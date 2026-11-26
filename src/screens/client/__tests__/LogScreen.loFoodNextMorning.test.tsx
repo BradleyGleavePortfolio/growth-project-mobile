@@ -35,6 +35,11 @@ jest.mock('../../../services/api', () => ({
 }));
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
 jest.mock('../../../components/FoodImage', () => ({ __esModule: true, default: () => null }));
+// ALL-ON-GREEN-M: the classic Food log's tests; EXPO_PUBLIC_FF_FOOD_PLAN_CHECKLIST draws the Style C day in its place (LogScreen.tsx:690).
+jest.mock('../../../config/featureFlags', () => {
+  const real = jest.requireActual('../../../config/featureFlags');
+  return { ...real, featureFlags: { ...real.featureFlags, foodPlanChecklist: false } };
+});
 
 const appStateListeners = new Set<(s: AppStateStatus) => void>();
 const ok: AxiosResponse = { data: {}, status: 200, statusText: 'OK', headers: {}, config: { headers: new AxiosHeaders() } };

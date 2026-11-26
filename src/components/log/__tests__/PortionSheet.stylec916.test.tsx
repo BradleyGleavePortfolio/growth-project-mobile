@@ -132,7 +132,7 @@ describe('STYLEC-916 add sheet rows', () => {
     expect(screen.getByText('100 g, 31 g protein')).toBeTruthy();
     expect(screen.getByText('165')).toBeTruthy();
     expect(screen.getAllByRole('tab').map((t) => within(t).getByText(/./).props.children)).toEqual(['Recent', 'Frequent']);
-    await fireEvent.press(screen.getByRole('button', { name: 'Enter manually' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Quick add, enter a food manually' }));
     expect(base.onEnterManualMode).toHaveBeenCalled();
   });
 });

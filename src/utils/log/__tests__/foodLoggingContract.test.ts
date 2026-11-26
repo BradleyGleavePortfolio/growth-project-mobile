@@ -148,13 +148,15 @@ describe('manual and packaged save payloads', () => {
     expect(foodApi.create).not.toHaveBeenCalled();
   });
 
-  it('creates a complete packaged food with its nutrient basis before logging', async () => {
+  // OFF-PHOTO-M: a packaged (Open Food Facts) pick is logged by its off_ id; the server imports its one shared
+  // food with the product's photo (backend food.service.ts:1060-1063, :1227-1276), so no private copy is made.
+  it('logs a packaged food by its off_ id with no private copy', async () => {
     await submitSearchLogOnline({
       food: { ...almonds, id: 'off_123' }, date: manual.date, mealType: 'snack',
       multiplier: 0.28, originalQuantity: 1, originalUnit: 'serving',
     });
-    expect(foodApi.create).toHaveBeenCalledWith(expect.objectContaining({ nutrient_basis: 'PER_100G' }));
-    expect(logApi.logFood).toHaveBeenCalledWith(expect.objectContaining({ quantity_multiplier: 0.28 }));
+    expect(foodApi.create).not.toHaveBeenCalled();
+    expect(logApi.logFood).toHaveBeenCalledWith(expect.objectContaining({ food_item_id: 'off_123', quantity_multiplier: 0.28 }));
   });
 });
 

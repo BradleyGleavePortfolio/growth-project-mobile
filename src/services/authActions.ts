@@ -23,7 +23,7 @@ import {
   deleteWorkoutLogsForUser,
   pushQueuedWorkouts,
 } from '../offline/sync/sync-engine';
-import { flush as flushFoodLogQueue, getQueueLength as foodQueueLength } from './foodLogQueue';
+import { countWaterWeight, flush as flushFoodLogQueue, getQueueLength as foodQueueLength } from './foodLogQueue';
 import { BROWSE_COPY_KEY_PREFIX } from '../utils/log/browseCache';
 import { OUTBOX_KEY_PREFIX, outboxLength, releaseOutbox, sendOutboxBeforeSignOut } from './messageOutbox';
 import { signOutQueues } from './signOutQueues';
@@ -338,23 +338,29 @@ export interface UnsyncedLogs {
    * account still on this phone (services/signOutQueues, FIX-942), including any the server refused.
    */
   messages: number;
+  /** OFFLINE-WATER-WEIGHT-M: glasses of water saved offline (the food queue), including any the server refused. */
+  water?: number;
+  /** OFFLINE-WATER-WEIGHT-M: weigh-ins saved offline (the food queue), including any the server refused. */
+  weighIns?: number;
 }
 
 /** Upper bound of the one send attempt before a sign-out (weak signal). */
 const SIGN_OUT_SEND_TIMEOUT_MS = 4000;
 
 async function readUnsynced(userId: string) {
-  const [[queued, open, foods, messages], others] = await Promise.all([
+  const [[queued, open, foods, messages, waterWeight], others] = await Promise.all([
     Promise.all([
       countQueuedWorkouts(userId, { includeParked: true }),
       AsyncStorage.getItem(activeWorkoutSessionKey(userId)),
       foodQueueLength({ includeParked: true }),
       outboxLength(userId),
+      // OFFLINE-WATER-WEIGHT-M (M4): the same queue's glasses and weigh-ins, named as such (never as foods).
+      Promise.resolve().then(() => countWaterWeight({ includeParked: true })).catch(() => ({ water: 0, weighIns: 0 })),
     ]),
     // FIX-942: the space texts and voice notes (services/signOutQueues); one that cannot be read counts none.
     Promise.all(signOutQueues().map(async (q) => ({ q, n: await q.count(userId).catch(() => 0) }))),
   ]);
-  return { queued, open: open ? 1 : 0, foods, messages, others };
+  return { queued, open: open ? 1 : 0, foods, messages, water: waterWeight.water, weighIns: waterWeight.weighIns, others };
 }
 
 /**
@@ -369,7 +375,8 @@ export async function sendUnsyncedLogs(userId?: string | null): Promise<Unsynced
     if (!id) return { workouts: 0, foods: 0, messages: 0 };
     let left = await readUnsynced(id);
     const sends: Array<Promise<unknown>> = [];
-    if (left.foods > 0) sends.push(flushFoodLogQueue());
+    // One flush sends the foods, glasses and weigh-ins of the one queue, in order.
+    if (left.foods + left.water + left.weighIns > 0) sends.push(flushFoodLogQueue());
     if (left.queued > 0) sends.push(pushQueuedWorkouts());
     if (left.messages > 0) sends.push(sendOutboxBeforeSignOut(id));
     for (const { q, n } of left.others) if (n > 0) sends.push(q.send(id));
@@ -384,21 +391,25 @@ export async function sendUnsyncedLogs(userId?: string | null): Promise<Unsynced
       clearTimeout(timer);
       left = await readUnsynced(id);
     }
-    return { workouts: left.queued + left.open, foods: left.foods, messages: left.others.reduce((sum, o) => sum + o.n, left.messages) };
+    return {
+      workouts: left.queued + left.open, foods: left.foods, messages: left.others.reduce((sum, o) => sum + o.n, left.messages),
+      water: left.water, weighIns: left.weighIns,
+    };
   } catch (err) {
     logger.warn('AuthActions', 'sendUnsyncedLogs: unsynced logs not read', err);
     return { workouts: 0, foods: 0, messages: 0 };
   }
 }
 
-/** "2 workouts, 1 food and 1 message have not synced yet and will be removed from this phone.", or null. */
-export function unsyncedLogsMessage({ workouts, foods, messages }: UnsyncedLogs): string | null {
-  const parts = ([[workouts, 'workout'], [foods, 'food'], [messages, 'message']] as const)
+/** "2 workouts, 1 food, 1 water entry, 1 weigh-in and 1 message have not synced yet and will be removed from this phone.", or null. */
+export function unsyncedLogsMessage({ workouts, foods, messages, water = 0, weighIns = 0 }: UnsyncedLogs): string | null {
+  const parts = ([[workouts, 'workout', 'workouts'], [foods, 'food', 'foods'], [water, 'water entry', 'water entries'],
+    [weighIns, 'weigh-in', 'weigh-ins'], [messages, 'message', 'messages']] as const)
     .filter(([n]) => n > 0)
-    .map(([n, word]) => `${n} ${word}${n === 1 ? '' : 's'}`);
+    .map(([n, one, many]) => `${n} ${n === 1 ? one : many}`);
   if (parts.length === 0) return null;
   const list = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}` : parts[0];
-  const verb = workouts + foods + messages === 1 ? 'has' : 'have';
+  const verb = workouts + foods + water + weighIns + messages === 1 ? 'has' : 'have';
   return `${list} ${verb} not synced yet and will be removed from this phone.`;
 }
 

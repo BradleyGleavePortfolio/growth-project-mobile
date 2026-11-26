@@ -17,6 +17,9 @@
  * out of analytics capture (`ph-no-capture`).
  * SAFETY-GOLD-M (owner #197-E3): the alert wears safety gold (src/theme/safetyGold.ts): the message sits on the
  * #FFF8EC card with the deep gold #6B4F1A edge, and the fixed line is in deep gold; Message stays forest.
+ * GOAL-937-M (owner #197-E3, 203-D20 op 1): one drawn card for every alert type (TAN-MOCK ctx#441, contrast.py:67,
+ * :94): the deep gold edge 2 pt all round holds the client's words (never for a crisis alert), the fixed line and
+ * the Safety tag (contrast.py:80). The words, what a screen reader says and every tap are unchanged.
  */
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -35,6 +38,7 @@ import { QuietLoading } from '../../ui/states/QuietStates';
 import { useTheme } from '../../theme/useTheme';
 import { radius, spacing, typography } from '../../theme/tokens';
 import { safetyGold } from '../../theme/safetyGold';
+import SafetyChip from '../../components/coach/SafetyChip';
 
 /** Owner 57, C6a, #ROMAN-CRISIS-ALERT: the one fixed line, word for word. */
 export const SAFETY_ALERT_SUMMARY: Record<SafetyAlertType, string> = {
@@ -145,19 +149,22 @@ export default function CoachSafetyAlertScreen({ route, navigation }: Props): Re
               {sent}
             </Text>
           ) : null}
-          {quote ? (
-            <View
-              style={[styles.quote, { backgroundColor: safetyGold.card, borderLeftColor: safetyGold.edge }]}
-              testID="coach-safety-alert-quote"
-            >
-              <Text style={[styles.quoteText, { color: sc.textPrimary }]} selectable>
-                {quote}
-              </Text>
-            </View>
-          ) : null}
-          <Text style={[styles.summary, { color: safetyGold.text }]} testID="coach-safety-alert-summary">
-            {SAFETY_ALERT_SUMMARY[alertType].replace('{first name}', first || clientName)}
-          </Text>
+          <View
+            style={[styles.card, { backgroundColor: safetyGold.card, borderColor: safetyGold.edge }]}
+            testID="coach-safety-alert-card"
+          >
+            {quote ? (
+              <View testID="coach-safety-alert-quote">
+                <Text style={[styles.quoteText, { color: sc.textPrimary }]} selectable>
+                  {quote}
+                </Text>
+              </View>
+            ) : null}
+            <Text style={[styles.summary, { color: safetyGold.text }]} testID="coach-safety-alert-summary">
+              {SAFETY_ALERT_SUMMARY[alertType].replace('{first name}', first || clientName)}
+            </Text>
+            <SafetyChip />
+          </View>
         </View>
       </Screen>
     </View>
@@ -172,11 +179,12 @@ const styles = StyleSheet.create({
   sent: {
     ...typography.bodySmall,
   },
-  quote: {
-    borderLeftWidth: 3,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+  // contrast.py:67 .card radius 16, padding 16, gap 12; :94 the 2 pt deep-gold edge on all four sides.
+  card: {
+    borderWidth: 2,
+    borderRadius: radius.card,
+    padding: 16,
+    gap: 12,
     marginTop: spacing.sm,
   },
   quoteText: {
@@ -184,6 +192,5 @@ const styles = StyleSheet.create({
   },
   summary: {
     ...typography.body,
-    marginTop: spacing.sm,
   },
 });

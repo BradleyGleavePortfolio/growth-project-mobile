@@ -18,16 +18,11 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AccessibilityInfo, ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import HapticPressable from '../../components/HapticPressable';
-import RomanAvatar from '../../components/roman/RomanAvatar';
-import { ROMAN_INTERRUPTED_NOTE } from '../../components/roman/romanVoice';
-import RomanCrisisActions from '../../components/roman/RomanCrisisActions';
-import RomanQuoteStrip from '../../components/roman/RomanQuoteStrip';
-import { splitRomanQuote } from '../../components/roman/romanReply';
-import { featureFlags } from '../../config/featureFlags';
-import { typography } from '../../theme/tokens';
+import RomanMessageBubble from '../../components/roman/RomanMessageBubble';
+import { Headline, Screen, ScreenTopBar } from '../../ui';
+import { spacing } from '../../theme/tokens';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { romanChatsApi as defaultApi, type RomanChatsApi } from '../../api/romanChatsApi';
 import type { RomanMessage } from '../../api/romanApi';
@@ -314,36 +309,13 @@ export default function RomanConversationScreen({
       <FlatList
         data={messages}
         keyExtractor={(m) => m.id}
-        renderItem={({ item }) => {
-          // LO-950R3 B1: a person's turn sent as a reply reads as in the room. Roman's turns are never split.
-          const quoted = item.role === 'user' ? splitRomanQuote(item.content) : null;
-          const said = quoted ? quoted.body : item.content;
-          return (
-            <View style={styles.turn} testID={`roman-transcript-message-${item.id}`} role="listitem">
-              <View style={[styles.speaker, item.role === 'user' && styles.userTurn]}>
-                {item.role === 'assistant' ? <RomanAvatar crop="neutral" size={24} testID="roman-bubble-avatar" /> : null}
-                <Text style={styles.speakerLabel}>{item.role === 'user' ? 'YOU' : 'ROMAN'}</Text>
-              </View>
-              {/* QUOTE-STRIP-950: at the right with the words it quotes, at the room bubble's width, on its surface. */}
-              {quoted ? (
-                <RomanQuoteStrip quote={quoted.quote} fill={semanticColors.bgSurface} style={styles.userQuote}
-                  testID={`roman-transcript-message-${item.id}-quote`} />
-              ) : null}
-              <Text style={[styles.body, item.role === 'user' && styles.userText]}
-                accessibilityLabel={`${item.role === 'user' ? 'You' : 'Roman'} said: ${said}`}>{said}</Text>
-              {item.interrupted && item.role === 'assistant' ? <Text style={styles.caption}>{ROMAN_INTERRUPTED_NOTE}</Text> : null}
-              {/* CRISIS-BTN: the server-marked crisis reply keeps its actions here too (coachless: the two 988s). */}
-              {featureFlags.crisisActions && item.role === 'assistant' && item.safetyActions ? (
-                <RomanCrisisActions actions={item.safetyActions} testID={`roman-transcript-crisis-${item.id}`} />
-              ) : null}
-            </View>
-          );
-        }}
+        // ROMAN-HISTORY-LOOK-M (203-D17 op 1): each turn is the room's own turn, read only (no hold, no reveal).
+        renderItem={({ item }) => <RomanMessageBubble message={item} testID={`roman-transcript-message-${item.id}`} />}
         role="list"
         contentContainerStyle={styles.list}
         testID="roman-chat-transcript-list"
         ListHeaderComponent={
-          <View style={styles.header}>
+          <View style={styles.listHeader}>
             <Text style={styles.caption}>{ROMAN_CHATS_COPY.readOnlyNote}</Text>
             {loadingEarlier ? (
               <ActivityIndicator color={colors.primary} accessibilityLabel={ROMAN_CHATS_COPY.loadingEarlier} />
@@ -367,24 +339,22 @@ export default function RomanConversationScreen({
     );
   }
 
+  // ROMAN-HISTORY-LOOK-M: the room's header (RomanChatScreen) with this conversation's title. The root View keeps the
+  // capture opt-out over the turns and the title (KT-13) and the screen's testID; Screen takes neither.
+  const header = (
+    <View style={[styles.header, { borderBottomColor: semanticColors.border }]}>
+      <ScreenTopBar onBack={() => navigation.goBack()} backLabel={ROMAN_CHATS_COPY.back} />
+      <View style={styles.titleBlock}>
+        <Headline level="h1">{ROMAN_CHATS_COPY.transcriptTitle(when)}</Headline>
+      </View>
+    </View>
+  );
+
   return (
     <View style={styles.container} testID="roman-chat-transcript-screen" ph-no-capture>
-      <View style={styles.topBar}>
-        <HapticPressable
-          intent="light"
-          onPress={() => navigation.goBack()}
-          style={styles.backBtn}
-          accessibilityRole="button"
-          accessibilityLabel={ROMAN_CHATS_COPY.back}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </HapticPressable>
-        <Text style={styles.topTitle} accessibilityRole="header" numberOfLines={2}>
-          {ROMAN_CHATS_COPY.transcriptTitle(when)}
-        </Text>
-        <View style={styles.backBtn} />
-      </View>
-      {body()}
+      <Screen edges={['top']} scroll={false} header={header} contentStyle={styles.screenBody}>
+        {body()}
+      </Screen>
       <RomanChatsConfirmSheet
         visible={confirm && phase.kind !== 'other_account' && isOwner()}
         title={ROMAN_CHATS_COPY.confirmOneTitle}
@@ -404,19 +374,13 @@ export default function RomanConversationScreen({
 function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    topBar: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 16,
-      paddingTop: 56,
-      paddingBottom: 12,
-    },
-    backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-    topTitle: { ...typography.h2, flex: 1, textAlign: 'center', color: colors.textPrimary },
+    // The room's header and title block (RomanChatScreen.tsx styles header and titleBlock); rows carry their own gutter.
+    header: { borderBottomWidth: StyleSheet.hairlineWidth },
+    titleBlock: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: spacing.lg },
+    screenBody: { paddingHorizontal: 0, paddingBottom: 0 },
     content: { padding: 24, paddingBottom: 48, gap: 16 },
     list: { paddingVertical: 16, paddingBottom: 48 },
-    header: { gap: 12, paddingHorizontal: 24, paddingBottom: 8 },
+    listHeader: { gap: 12, paddingHorizontal: 24, paddingBottom: 8 },
     footer: { gap: 12, paddingHorizontal: 24, paddingTop: 16 },
     card: {
       borderTopWidth: StyleSheet.hairlineWidth,
@@ -426,12 +390,6 @@ function makeStyles(colors: ThemeColors) {
       gap: 12,
     },
     body: { fontFamily: 'Inter_400Regular', fontSize: 15, lineHeight: 22, color: colors.textPrimary },
-    turn: { marginHorizontal: 24, paddingVertical: 24, gap: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
-    speaker: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    speakerLabel: { ...typography.eyebrow, color: colors.textSecondary },
-    userTurn: { justifyContent: 'flex-end' },
-    userText: { textAlign: 'right' },
-    userQuote: { alignSelf: 'flex-end', maxWidth: '82%' },
     caption: { fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 19, color: colors.textSecondary },
     notice: { gap: 8 },
     noticeText: { fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20, color: colors.textPrimary },

@@ -80,22 +80,25 @@ describe('LS-FOOD B3: online retry after an acknowledgement is lost', () => {
       if (path === 'recent') {
         await fireEvent.press(await screen.findByText('Banana'));
       } else {
-        await fireEvent.press(await screen.findByText('Enter manually'));
+        await fireEvent.press(await screen.findByText('Quick add'));
         await fireEvent.changeText(screen.getByPlaceholderText('Food name'), 'Breakfast bowl');
         for (const [index, value] of ['400', '25', '45', '13'].entries()) {
           await fireEvent.changeText(screen.getAllByPlaceholderText('0')[index], value);
         }
       }
     }
-    const pressLog = async () => {
+    // GOAL-930-M (D4, C_error): the portion sheet's failure is the card in the sheet and its primary reads "Try again";
+    // the manual form and the plan meal keep their alerts.
+    const pressLog = async (again = false) => {
       await fireEvent.press(path === 'plan'
         ? screen.getByText('Ate it as planned')
-        : screen.getByRole('button', { name: 'Log food' }));
+        : screen.getByRole('button', { name: again && path === 'recent' ? 'Try again' : 'Log food' }));
     };
     await pressLog();
-    await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
+    if (path === 'recent') await screen.findByTestId('portion-save-failure');
+    else await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
     expect(mockRows).toHaveLength(1); // The server did save before the response was lost.
-    await pressLog(); // The screen's own error leaves this action available for retry.
+    await pressLog(true); // The screen's own error leaves this action available for retry.
     await waitFor(() => expect(logApi.logFood).toHaveBeenCalledTimes(2));
     expect(mockRows).toHaveLength(1);
   });

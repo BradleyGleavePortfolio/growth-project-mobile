@@ -54,7 +54,7 @@ it('keeps the expanding draft summary and kind tiles inside the draft scroller',
   );
   try {
     const scroller = within(view.getByTestId('pending-ai-drafts-list'));
-    expect(scroller.getByText('Roman has 3 drafts ready')).toBeTruthy();
+    expect(scroller.getByText('3 drafts to review')).toBeTruthy();
     expect(scroller.getByTestId('pending-ai-drafts-kinds')).toBeTruthy();
   } finally {
     view.unmount();

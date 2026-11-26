@@ -50,7 +50,7 @@ it('keeps search, every facet toggle, detail navigation and actual equipment rea
   await view.findByRole('button', { name: 'Open Squat' });
   expect(view.getByText('quads · barbell · legs · beginner')).toBeTruthy();
   const search = view.getByLabelText('Search exercises');
-  expect(StyleSheet.flatten(search.props.style)).toMatchObject({ minHeight: 44, borderBottomColor: lightTokens.border });
+  expect(StyleSheet.flatten(search.props.style)).toMatchObject({ minHeight: 44, color: lightTokens.textOnAccent });
   await fireEvent.changeText(search, ' squat ');
   await fireEvent(search, 'submitEditing');
   await waitFor(() => expect(list).toHaveBeenLastCalledWith(expect.objectContaining({ q: 'squat' })));
@@ -64,7 +64,7 @@ it('keeps search, every facet toggle, detail navigation and actual equipment rea
       await fireEvent.press(chip);
       await waitFor(() => expect(list).toHaveBeenLastCalledWith(expect.objectContaining({ [param]: value })));
       expect(view.getByRole('button', { name: value }).props.accessibilityState.selected).toBe(true);
-      expect(StyleSheet.flatten(view.getByText(value).props.style).color).toBe(lightTokens.textPrimary);
+      expect(StyleSheet.flatten(view.getByText(value).props.style).color).toBe(lightTokens.surface.masthead);
       await fireEvent.press(chip);
       await waitFor(() => expect(list).toHaveBeenLastCalledWith(expect.objectContaining({ [param]: undefined })));
     }

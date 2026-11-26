@@ -8,10 +8,13 @@ import { View, Text, StyleSheet, Platform, StatusBar } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNetworkStatus, isEffectivelyOnline } from '../hooks/useNetworkStatus';
 import { Colors } from '../constants/colors';
+import { colors, layout, typography } from '../theme/tokens';
 import { readUserCacheSync } from '../lib/userCache';
 import { isCoachLikeRole } from '../lib/roleSelectionGate';
 
-const CLIENT_LINE = "You're offline — food logs will sync when you reconnect.";
+// C1-S-10 (MOCK-C1 index.md:245, drawn in C1 Style C v2 C2_offline_*; WORKOUT-SUMMARY-M): workouts are queued on the
+// phone too (the whole-workout queue), so a client is told both are safe.
+const CLIENT_LINE = 'You are offline. Workouts and food logs are saved on this phone and sync when you reconnect.';
 // FIN-868R5 C6: a coach has no food logs, and nothing of theirs waits to sync.
 // Opens as the K2 offline banner and the inbox's offline card do.
 const COACH_LINE = 'You are offline. Reconnect to see the latest.';
@@ -24,28 +27,32 @@ export default function OfflineBanner() {
 
   return (
     <View style={styles.banner} accessibilityRole="alert" accessibilityLiveRegion="polite">
-      <Ionicons name="cloud-offline-outline" size={14} color={Colors.textOnPrimary} />
-      <Text style={styles.text}>{coach ? COACH_LINE : CLIENT_LINE}</Text>
+      <Ionicons name="cloud-offline-outline" size={12} color={Colors.textOnPrimary} />
+      <Text style={styles.text} maxFontSizeMultiplier={1.3}>{coach ? COACH_LINE : CLIENT_LINE}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  // C2_offline (FIX-974R1, LS-974R1 B3; measured on C2_offline_ios390_100 and _android360_100): a dark ink band under
+  // the status bar, a 12 pt icon 6 pt from the words, the app's Inter Medium 13 on an 18 line, 9 pt above and below,
+  // left aligned at the 24 pt gutter. C1-S-10 takes two lines at 390 pt and three at 360 pt, as the frames draw it.
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 6,
-    backgroundColor: Colors.offlineBanner,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    backgroundColor: colors.ink,
+    paddingVertical: 9,
+    paddingHorizontal: layout.gutter,
     // Sit below the status bar on Android; iOS is handled by the SafeAreaView in
     // the root navigator so this only adds its own vertical padding.
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 6 : 6,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 9 : 9,
   },
   text: {
+    flex: 1,
     color: Colors.textOnPrimary,
-    fontSize: 12,
-    fontWeight: '600',
+    fontFamily: typography.bodyMd.fontFamily,
+    fontSize: 13,
+    lineHeight: 18,
   },
 });

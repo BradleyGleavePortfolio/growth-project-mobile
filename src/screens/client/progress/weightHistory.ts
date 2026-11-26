@@ -1,5 +1,7 @@
 import { WeightLog } from '../../../types';
 import { bucketDateLocal } from '../../../utils/date';
+import { featureFlags } from '../../../config/featureFlags';
+import type { PendingWaterWeightLog, SentWaterWeightLog } from '../../../services/foodLogQueue';
 
 /**
  * Typed parser for one weight-history row from the API. The server response is
@@ -41,7 +43,35 @@ export function parseWeightLogRow(row: unknown, fallbackUserId: string): WeightL
     unit: 'lbs',
     notes: typeof r.notes === 'string' ? r.notes : '',
     createdAt,
+    ...(typeof r.client_uuid === 'string' && r.client_uuid ? { clientUuid: r.client_uuid } : {}),
   };
+}
+
+/**
+ * OFFLINE-WATER-WEIGHT-M (191-S5): the parsed history rows with this phone's weigh-ins added (featureFlags.offlineFoodInDay
+ * on): a waiting one, or a sent one no row holds yet, counts once; a row that carries its key (client_uuid) is that
+ * weigh-in, shown once from the server. Never joined by number or day. A refused weigh-in counts nowhere.
+ */
+export function withQueuedWeighIns(
+  rows: WeightLog[],
+  phone: (PendingWaterWeightLog | SentWaterWeightLog)[],
+  userId: string,
+): WeightLog[] {
+  if (!featureFlags.offlineFoodInDay) return rows;
+  const onServer = new Set(rows.map((r) => r.clientUuid).filter((k): k is string => !!k));
+  // REFINE-972 (B1): one the server accepted (in the sent list) is a plain weigh-in; one still waiting is marked.
+  const sent = new Set(phone.filter((p) => p && 'sentAt' in p).map((p) => p.id));
+  const added: WeightLog[] = [];
+  for (const item of phone) {
+    if (!item || item.kind !== 'weight' || !item.log || item.parkedAt || onServer.has(item.id)) continue;
+    if (added.some((a) => a.id === item.id)) continue;
+    added.push({
+      id: item.id, clientUuid: item.id, userId, coachId: '', date: item.log.date, weight: item.log.weight_lbs, unit: 'lbs',
+      notes: item.log.notes ?? '', createdAt: new Date(item.createdAt || Date.now()).toISOString(),
+      ...(sent.has(item.id) ? {} : { pending: true }),
+    });
+  }
+  return added.length ? [...rows, ...added] : rows;
 }
 
 /**

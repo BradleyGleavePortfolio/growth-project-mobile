@@ -5,7 +5,10 @@ import { useTheme, ThemeColors } from '../../../theme/ThemeProvider';
 import { errorMessage } from '../../../types/common';
 import { successTap, warningTap } from '../../../utils/haptics';
 import { QuietError, QuietLoading } from '../../../ui/states/QuietStates';
-import type { TimelineEvent } from './types';
+import { RomanMark } from '../home-v11/RomanMark';
+import { CheckInDraftSheet } from './CheckInDraftSheet';
+import { firstOf } from './StyleCFile';
+import type { CheckInDraftFields, TimelineEvent } from './types';
 
 /**
  * A check-in row offers "Mark reviewed" only when it is unreviewed and is
@@ -15,6 +18,15 @@ import type { TimelineEvent } from './types';
 export function canMarkReviewed(event: TimelineEvent, viewerId: string | null | undefined): boolean {
   const c = event.checkIn;
   return !!c && !c.reviewed && !!viewerId && c.coachId === viewerId;
+}
+
+/**
+ * CHECKIN-DRAFT-M: "Draft a reply" shows on a check-in Roman can reply to: a note that is not blank, or a mood, energy
+ * or sleep number (0 counts). That is the server's own rule (backend checkInSent), so the action never offers a
+ * check-in the server would refuse for having nothing in it.
+ */
+export function canDraftReply(c: TimelineEvent['checkInDraft']): c is CheckInDraftFields {
+  return !!c && !!c.day && (!!c.note || c.mood !== null || c.energy !== null || c.sleepHours !== null);
 }
 
 /** "Reviewed" tick, or the "Mark reviewed" action with its own busy/error state. */
@@ -91,6 +103,8 @@ export function TimelineTab({
   onMarkReviewed,
   loading = false,
   error = null,
+  clientId,
+  clientName = '',
 }: {
   events: TimelineEvent[];
   onLoad: () => void;
@@ -100,9 +114,15 @@ export function TimelineTab({
   onMarkReviewed?: (checkInId: string) => Promise<void>;
   loading?: boolean;
   error?: string | null;
+  /** CHECKIN-DRAFT-M: the file's client; with it, a check-in Roman can reply to offers "Draft a reply". */
+  clientId?: string;
+  clientName?: string;
 }) {
   const { colors } = useTheme();
   const tlStyles = useMemo(() => makeTlStyles(colors), [colors]);
+  // The one check-in whose reply sheet is open; it lives in this file only (ClientDetailScreen keys the file by client).
+  const [drafting, setDrafting] = useState<{ id: string; fields: CheckInDraftFields } | null>(null);
+  const first = firstOf(clientName);
   React.useEffect(() => {
     onLoad();
   }, [days]);
@@ -158,9 +178,28 @@ export function TimelineTab({
                 onMarkReviewed={onMarkReviewed}
               />
             ) : null}
+            {clientId && event.checkIn && canDraftReply(event.checkInDraft) ? (
+              <TouchableOpacity
+                style={tlStyles.draftBtn}
+                onPress={() => setDrafting(event.checkIn && event.checkInDraft ? { id: event.checkIn.id, fields: event.checkInDraft } : null)}
+                accessibilityRole="button"
+                accessibilityLabel={`Draft a reply to ${first}'s check-in with Roman`}
+                testID={`timeline-checkin-draft-${event.checkIn.id}`}
+              >
+                <RomanMark size={22} r={13} />
+                <Text style={tlStyles.draftBtnText}>Draft a reply</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         </View>
       ))}
+      {clientId && drafting ? (
+        <CheckInDraftSheet
+          clientId={clientId} clientName={clientName} first={first}
+          checkInId={drafting.id} day={drafting.fields.day} source={drafting.fields}
+          onClose={() => setDrafting(null)}
+        />
+      ) : null}
     </View>
   );
 }
@@ -273,6 +312,24 @@ export const makeTlStyles = (colors: ThemeColors) =>
     fontSize: 12,
     color: colors.error,
     marginTop: 4,
+  },
+  // CHECKIN-DRAFT-M (ctx#503 A-entry): the outlined row action with Roman's mark, under Mark reviewed.
+  draftBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    minHeight: 48,
+    marginTop: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12, // radius.button
+    borderWidth: 1,
+    borderColor: colors.primaryDark,
+  },
+  draftBtnText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 15,
+    color: colors.textPrimary,
   },
 
   });

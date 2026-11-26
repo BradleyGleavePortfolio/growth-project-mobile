@@ -6,7 +6,6 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { listsApi } from '../../../services/api';
 import GroceryListScreen from '../GroceryListScreen';
-import ShoppingListScreen from '../ShoppingListScreen';
 
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: jest.fn(), navigate: jest.fn() }) }));
 jest.mock('../../../components/StatusBarBand', () => ({ useStatusBarBand: () => undefined }));
@@ -29,7 +28,6 @@ afterEach(() => { clients.splice(0).forEach((c) => c.clear()); jest.clearAllMock
 
 const cases: Array<[string, 'a tick' | 'a remove' | 'an add', React.ComponentType]> = [
   ['Grocery', 'a tick', GroceryListScreen], ['Grocery', 'a remove', GroceryListScreen], ['Grocery', 'an add', GroceryListScreen],
-  ['Shopping', 'a tick', ShoppingListScreen], ['Shopping', 'a remove', ShoppingListScreen], ['Shopping', 'an add', ShoppingListScreen],
 ];
 
 it.each(cases)('B1 LO-954R2: on the %s list, %s does not turn the pull spinner on while the list reloads', async (_name, action, Screen) => {

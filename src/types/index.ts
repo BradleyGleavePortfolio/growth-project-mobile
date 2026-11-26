@@ -106,6 +106,10 @@ export interface WeightLog {
   unit: 'lbs' | 'kg';
   notes?: string;
   createdAt: string;
+  /** OFFLINE-WATER-WEIGHT-M: the save's key (client_uuid) when the server row carries one, or a queued weigh-in's id. */
+  clientUuid?: string;
+  /** REFINE-972: a weigh-in waiting on this phone (queued, not sent yet): the chart's dashed hollow ring. */
+  pending?: boolean;
 }
 
 export interface MealPlan {

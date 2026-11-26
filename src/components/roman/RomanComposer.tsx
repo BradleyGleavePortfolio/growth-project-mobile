@@ -58,6 +58,11 @@ export interface RomanComposerProps {
   accessory?: React.ReactNode;
   /** One quiet line under the field (prototype 69 footer). */
   footer?: string | null;
+  /**
+   * ROMAN-RETRY-B-M (#203-E41): while Roman's held card shows, the box keeps to this many lines and scrolls inside, so
+   * the card and the words both stay in view at iPhone 320 with 130% text. Unset: main's ceiling.
+   */
+  maxLines?: number;
   testID?: string;
 }
 
@@ -69,6 +74,7 @@ export default function RomanComposer({
   disabled = false,
   accessory,
   footer,
+  maxLines,
   testID,
 }: RomanComposerProps): React.ReactElement {
   const { semanticColors: c, colors: themeColors } = useTheme();
@@ -76,11 +82,15 @@ export default function RomanComposer({
   const overCap = value.length > ROMAN_MESSAGE_MAX_LENGTH;
   const canSend = !disabled && !sending && trimmed.length > 0 && !overCap;
 
-  const { height: windowHeight } = useWindowDimensions();
-  const maxHeight = Math.max(
+  const { height: windowHeight, fontScale } = useWindowDimensions();
+  const windowCeiling = Math.max(
     COMPOSER_MAX_HEIGHT_FLOOR,
     Math.round(windowHeight * COMPOSER_MAX_HEIGHT_FRACTION),
   );
+  // `maxLines` lines of body text at the person's text size, plus the input's own padding (styles.input).
+  const maxHeight = maxLines
+    ? Math.min(windowCeiling, Math.round(maxLines * typography.body.lineHeight * fontScale) + 2 * spacing.md)
+    : windowCeiling;
   const [contentHeight, setContentHeight] = useState(COMPOSER_MIN_HEIGHT);
   const inputHeight = Math.min(
     Math.max(COMPOSER_MIN_HEIGHT, contentHeight),

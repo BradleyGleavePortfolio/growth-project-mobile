@@ -31,7 +31,7 @@ it('preserves meal add, tap-to-edit and long-press-to-delete', async () => {
 it('preserves search, clear, both tabs, food selection, repeat and manual entry', async () => {
   const { rerender } = await render(<FoodSearchView {...search} repeatMealTitle="Last breakfast" repeatMeal={{ date: '2026-10-06', calories: 300, entries: [{ foodItemId: 'oats', name: 'Oats', calories: 300, quantityMultiplier: 1 }] }} onRepeatMeal={action} />);
   await press('Add all', action); await press('Recent', search.onRecentTabChange, 'recent'); await press('Frequent', search.onRecentTabChange, 'frequent');
-  await press('Oats', search.onSelectFood, food); await press('Enter manually', search.onEnterManualMode); fonts();
+  await press('Oats', search.onSelectFood, food); await press('Quick add', search.onEnterManualMode); fonts();
   await fireEvent.changeText(screen.getByPlaceholderText('Search foods...'), 'oat'); expect(search.onSearchChange).toHaveBeenLastCalledWith('oat');
   await rerender(<FoodSearchView {...search} searchQuery="zz" searchError="Food search could not load" />);
   expect(StyleSheet.flatten(screen.getByTestId('food-search-error').props.style)).toMatchObject({

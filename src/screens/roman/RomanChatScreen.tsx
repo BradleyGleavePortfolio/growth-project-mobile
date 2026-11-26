@@ -42,9 +42,9 @@ import {
   Alert,
   FlatList,
   Keyboard,
+  ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
   type ListRenderItemInfo,
 } from 'react-native';
@@ -62,13 +62,15 @@ import RomanConsentGate from '../../components/roman/RomanConsentGate';
 import RomanLoadingSkeleton from '../../components/roman/RomanLoadingSkeleton';
 import { aiRefusalCopy } from '../../lib/ai/aiRefusal';
 import { useRomanReveal } from '../../components/roman/useRomanReveal';
+import RomanHeldCard from '../../components/roman/RomanHeldCard';
 import {
   romanPoolEmpty,
   romanRateLimited,
   ROMAN_LOADING_OLDER,
   ROMAN_REPLY_ANNOUNCE_PREFIX,
-  ROMAN_SEND_FAILED,
-  ROMAN_STORED_NO_REPLY,
+  ROMAN_HELD_NOT_SENT,
+  ROMAN_HELD_NO_ANSWER,
+  ROMAN_HELD_NOT_READY,
   ROMAN_AI_ON_ASK_AGAIN,
   ROMAN_ROOM_FOOTER,
   romanRoomOverline,
@@ -83,7 +85,7 @@ import type { ReportReason } from '../../api/messagesApi';
 import MessageActionSheet from '../../components/messaging/MessageActionSheet';
 import ReportMessageSheet from '../../components/messaging/ReportMessageSheet';
 import ReplyComposer from '../../components/messaging/ReplyComposer';
-import { isLocalRomanId, romanQuoteExcerpt, withRomanQuote } from '../../components/roman/romanReply';
+import { isLocalRomanId, romanQuoteExcerpt, splitRomanQuote, withRomanQuote } from '../../components/roman/romanReply';
 import { spacing, typography } from '../../theme/tokens';
 import RomanConversationsButton from '../../components/roman/RomanConversationsButton';
 import JoinCoachState, { ROMAN_LOCK_BODY, ROMAN_LOCK_TITLE, useClientNeedsCoach } from '../../components/coachless/JoinCoachState';
@@ -182,7 +184,7 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
     clearSendError,
   } = useRomanChat(surface);
   // CHAT-DISCARD (owner 10-21): half-typed text stays with this chat on the device (src/lib/chatDrafts.ts).
-  const [draft, setDraft, { keyFor, keepFailed, keepAside, dropFailed }] = useChatDraft('roman');
+  const [draft, setDraft, { keyFor, keepFailed, keptSend, keepAside, dropFailed }] = useChatDraft('roman');
   // Shown after AI help is allowed for a message the server already stored.
   const [askAgainHint, setAskAgainHint] = useState(false);
   // The quick-start chip last sent (forest outline, prototype 70).
@@ -206,6 +208,45 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
     chatNow.current = chat;
   }, [chat]);
 
+  // QUOTE-KEY-REOPEN-M: a quoted send whose key is kept (still out, or "not ready yet") keeps its quote with that key
+  // (lib/chatDrafts), so after Back, a reopen or a restart the strip comes back over the same words, and Send rebuilds
+  // the exact words the key was filed under. Only in the session it was picked in (R2: another drops the quote, the key
+  // stays), and only while the box rebuilds those words byte for byte; otherwise nothing is drawn, as before. Runs once
+  // the session's chat key is known: useChatBound (above, so its effect runs first) drops a pick filed before it.
+  // Never after a sign-out, sign-in or re-bootstrap while the room is open (KT-13: the pick's sign-in is gone).
+  const sessionId = session?.id ?? null;
+  const openEpoch = useRef(authEpoch());
+  const restoredFor = useRef<string | null>(null);
+  useEffect(() => {
+    const kept = keptSend();
+    const q = kept?.quote;
+    // The client room only (canHold), its session open, no strip up, a quote kept, the sign-in it opened under.
+    if (surface !== 'client' || !sessionId || replyTarget || !kept || !q) return;
+    // LS-988R1 C3: decided once per chat, when the kept words first reach the box; never on a later keystroke.
+    if (restoredFor.current === chat) return;
+    restoredFor.current = chat;
+    if (authEpoch() !== openEpoch.current) return;
+    if (q.session !== sessionId) {
+      keepFailed(kept.text, kept.key);
+      return;
+    }
+    if (withRomanQuote(q.excerpt, draft).trim() !== kept.text) return;
+    setReplyTarget({ id: q.id, role: 'assistant', content: q.excerpt, interrupted: false, createdAt: '' });
+  }, [chat, sessionId, draft, replyTarget, surface, keptSend, keepFailed, setReplyTarget]);
+  // LS-988R1 C1: the strip this room shows now (none once the room has closed), for a send that ends later.
+  const stripNow = useRef(replyTarget);
+  stripNow.current = replyTarget;
+  const roomOpen = useRef(true);
+  useEffect(() => {
+    roomOpen.current = true;
+    return () => { roomOpen.current = false; };
+  }, []);
+  // R3: Cancel reply, or another reply picked, drops the kept quote (not the key), so a reopen never brings it back.
+  const dropKeptQuote = useCallback((unless?: string) => {
+    const kept = keptSend();
+    if (kept?.quote && kept.quote.id !== unless) keepFailed(kept.text, kept.key);
+  }, [keptSend, keepFailed]);
+
   const listRef = useRef<FlatList<RomanMessage>>(null);
   // Last assistant message id we announced to assistive tech, so a re-render
   // does not re-announce the same reply (U4).
@@ -213,6 +254,8 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
   // Last send-error message we announced, so a re-render does not re-announce
   // the same failure (R3 P1-2).
   const lastAnnouncedError = useRef<string | null>(null);
+  // ROMAN-RETRY-B-M: the empty room's scroll, drawn only while Roman's card sits under the greeting.
+  const emptyScrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -296,8 +339,8 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
           : sendError.kind === 'rateLimited'
             ? romanRateLimited(sendError.retryAfterSeconds)
             : sendError.turnStored
-              ? ROMAN_STORED_NO_REPLY
-              : ROMAN_SEND_FAILED;
+              ? (sendError.replyPending ? ROMAN_HELD_NOT_READY : ROMAN_HELD_NO_ANSWER)
+              : ROMAN_HELD_NOT_SENT;
 
   // Announce a send failure (and its remedy) to assistive tech the moment it
   // appears. The optimistic user turn was rolled back in useRomanChat, so the
@@ -328,11 +371,14 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
       const words = body.trim();
       const held = keyFor(words);
       const key = held ?? generateIdempotencyKey();
+      // QUOTE-KEY-REOPEN-M: the quote as it went in these words travels with their key.
+      const excerpt = quoted && sessionId && words !== text.trim() ? splitRomanQuote(words)?.quote : undefined;
+      const quote = quoted && sessionId && excerpt ? { id: quoted.id, excerpt, session: sessionId } : undefined;
       // The key goes with these words before the request (LS-953R2 B1): a Back, a reopen or a restart before this
       // send ends finds it and sends it again. Only the answer that ends this send drops it (below).
       if (!held && words !== '') {
         if (fromChip) keepAside(words, key);
-        else keepFailed(words, key);
+        else keepFailed(words, key, quote);
       }
       let kept = false;
       const outcome = await send(body, { key, keep: () => { kept = true; } });
@@ -367,13 +413,18 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
       if (outcome !== 'sent' && kept) {
         if (inBox) {
           if (fromChip) dropFailed(words); // the chip's words are in the box now: its key moves from aside to the box
-          keepFailed(words, key);
+          // LS-988R1 C1: a quote removed while this send was out (Cancel reply, another reply, here or in a reopened
+          // room) stays removed: it is filed again only while the kept send still carries it or this room's strip is it.
+          const still = keptSend();
+          const shown = roomOpen.current && stripNow.current?.id === quote?.id;
+          const carried = (still?.key === key && still.quote?.id === quote?.id) || shown;
+          keepFailed(words, key, quote && carried ? quote : undefined);
         } else keepAside(words, key);
       } else if (keyFor(words) === key) {
         dropFailed(words);
       }
     },
-    [send, replyTarget, setDraft, keyFor, keepFailed, keepAside, dropFailed],
+    [send, replyTarget, sessionId, setDraft, keyFor, keepFailed, keptSend, keepAside, dropFailed],
   );
 
   const onSend = useCallback(async () => {
@@ -423,9 +474,12 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
   }, []);
 
   const onReply = useCallback(() => {
-    if (actionTarget) setReplyTarget(actionTarget);
+    if (actionTarget) {
+      dropKeptQuote(actionTarget.id);
+      setReplyTarget(actionTarget);
+    }
     setActionTarget(null);
-  }, [actionTarget]);
+  }, [actionTarget, dropKeptQuote]);
 
   const onCopy = useCallback(async () => {
     const held = actionTarget;
@@ -471,6 +525,29 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
     ),
     [freshId, reduceMotion, onHold, canHold],
   );
+
+  // ROMAN-RETRY-B-M (#203-E41, "Roman's place, held"): the line that sat in a row under the list is Roman's card at
+  // the end of the conversation (the list's footer, or under the greeting on an empty thread), so it scrolls with the
+  // turns. Today's triggers bring it into view: the send's end (sending -> false, above) and the list's content size.
+  const held =
+    sendErrorCopy != null && !refusal ? (
+      <RomanHeldCard
+        testID="roman-send-error"
+        accessibilityRole="alert"
+        accessibilityLiveRegion="assertive"
+        line={sendErrorCopy}
+        pending={sendErrorCopy === ROMAN_HELD_NOT_READY}
+        onSendAgain={sendError?.kind !== 'rateLimited' && sendError?.kind !== 'poolEmpty' ? onRetrySend : undefined}
+        sending={sending}
+      />
+    ) : askAgainHint && sendError == null ? (
+      <RomanHeldCard testID="roman-ask-again" accessibilityLiveRegion="polite" line={ROMAN_AI_ON_ASK_AGAIN} />
+    ) : null;
+  // CREDITBUILD: the approved buy links under the coach's used-up line (flag off), unchanged, now under the card.
+  const buyLinks =
+    featureFlags.coachAiCredits && surface === 'coach' && sendError?.kind === 'poolEmpty' ? (
+      <CreditPoolEmptyLinks inset={spacing.xl + 28 + spacing.sm} />
+    ) : null;
 
   const header = (
     <View style={[styles.header, { borderBottomColor: sc.border }]}>
@@ -520,13 +597,17 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
         replyTarget ? (
           <ReplyComposer
             target={{ id: replyTarget.id, body: romanQuoteExcerpt(replyTarget.content), authorLabel: 'Roman' }}
-            onCancel={() => setReplyTarget(null)}
+            onCancel={() => {
+              dropKeptQuote();
+              setReplyTarget(null);
+            }}
           />
         ) : surface === 'client' ? (
           <RomanQuickStarts onPick={onPickChip} selected={pickedChip} disabled={sending} />
         ) : null
       }
       footer={surface === 'client' ? ROMAN_ROOM_FOOTER : null}
+      maxLines={held ? 2 : undefined}
       testID="roman-composer"
     />
   );
@@ -541,7 +622,7 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
       testID="roman-chat-screen"
     >
       <View style={styles.flex}>
-        {isEmpty ? (
+        {isEmpty && held == null ? (
           <View style={styles.flex}>
             <RomanGreeting
               surface={surface}
@@ -550,6 +631,24 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
               testID="roman-empty-greeting"
             />
           </View>
+        ) : isEmpty ? (
+          // ROMAN-RETRY-B-M: the first send never stored, so the card sits under the greeting; at iPhone 320 with 130%
+          // text the greeting alone fills the room, so they scroll, and the card's arrival brings it into view.
+          <ScrollView
+            ref={emptyScrollRef}
+            style={styles.flex}
+            onContentSizeChange={() => emptyScrollRef.current?.scrollToEnd({ animated: !reduceMotion })}
+            testID="roman-empty-scroll"
+          >
+            <RomanGreeting
+              surface={surface}
+              isFirstOpen={isFirstOpen}
+              firstName={user?.firstName}
+              testID="roman-empty-greeting"
+            />
+            {held}
+            {buyLinks}
+          </ScrollView>
         ) : (
           <FlatList
             ref={listRef}
@@ -570,21 +669,25 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
             // "listitem" while the `role` union types both list + listitem.
             role="list"
             ListFooterComponent={
-              loadingOlder ? (
-                <View
-                  style={styles.olderNote}
-                  testID="roman-loading-older"
-                  accessibilityRole="progressbar"
-                  accessibilityLabel={ROMAN_LOADING_OLDER}
-                  accessibilityLiveRegion="polite"
-                  accessibilityState={{ busy: true }}
-                >
-                  <RomanAvatar crop="neutral" size={24} />
-                  <Text style={[styles.olderNoteText, { color: sc.textMuted }]} accessibilityRole="text">
-                    {ROMAN_LOADING_OLDER}
-                  </Text>
-                </View>
-              ) : null
+              <>
+                {held}
+                {buyLinks}
+                {loadingOlder ? (
+                  <View
+                    style={styles.olderNote}
+                    testID="roman-loading-older"
+                    accessibilityRole="progressbar"
+                    accessibilityLabel={ROMAN_LOADING_OLDER}
+                    accessibilityLiveRegion="polite"
+                    accessibilityState={{ busy: true }}
+                  >
+                    <RomanAvatar crop="neutral" size={24} />
+                    <Text style={[styles.olderNoteText, { color: sc.textMuted }]} accessibilityRole="text">
+                      {ROMAN_LOADING_OLDER}
+                    </Text>
+                  </View>
+                ) : null}
+              </>
             }
             testID="roman-message-list"
           />
@@ -612,45 +715,7 @@ function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactEleme
         {/* B32 (prototype 68): consent before Roman's first answer. */}
         {surface === 'client' ? <RomanConsentGate surface="client" /> : null}
 
-        {askAgainHint && sendError == null ? (
-          <View style={styles.sendError} testID="roman-ask-again" accessibilityLiveRegion="polite">
-            <RomanAvatar crop="neutral" size={28} />
-            <Text style={[styles.sendErrorText, { color: sc.textPrimary }]} accessibilityRole="text">
-              {ROMAN_AI_ON_ASK_AGAIN}
-            </Text>
-          </View>
-        ) : null}
-
-        {sendErrorCopy != null && !refusal ? (
-          <View
-            style={styles.sendError}
-            testID="roman-send-error"
-            accessibilityRole="alert"
-            accessibilityLiveRegion="assertive"
-          >
-            <RomanAvatar crop="neutral" size={28} />
-            <Text style={[styles.sendErrorText, { color: sc.textPrimary }]} accessibilityRole="text">
-              {sendErrorCopy}
-            </Text>
-            {sendError?.kind !== 'rateLimited' && sendError?.kind !== 'poolEmpty' ? (
-              <TouchableOpacity
-                style={styles.retryButton}
-                onPress={onRetrySend}
-                disabled={sending}
-                accessibilityRole="button"
-                accessibilityLabel="Send again"
-                accessibilityState={{ disabled: sending }}
-                testID="roman-send-retry"
-              >
-                <Text style={[styles.retryLabel, { color: sc.accentText }]}>Send again</Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
-        ) : null}
-        {/* CREDITBUILD: the approved buy links under the coach's used-up line (flag off). */}
-        {featureFlags.coachAiCredits && surface === 'coach' && sendError?.kind === 'poolEmpty' ? (
-          <CreditPoolEmptyLinks inset={spacing.xl + 28 + spacing.sm} />
-        ) : null}
+        {/* ROMAN-RETRY-B-M: the send-error row and the buy links under it are Roman's card in the conversation (held). */}
 
         {/* ROMAN-HOLD-M: the people's chat hold menu and report sheet; REFINE-950: drawn as their GOAL frames draw them
             (dm-menu P3 b05, mobile-879-05) through look="roman", which only this room passes. */}
@@ -712,27 +777,5 @@ const styles = StyleSheet.create({
   },
   olderNoteText: {
     ...typography.bodySmall,
-  },
-  sendError: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm,
-  },
-  sendErrorText: {
-    ...typography.bodySmall,
-    flex: 1,
-  },
-  retryButton: {
-    minHeight: 48,
-    minWidth: 48,
-    paddingHorizontal: spacing.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  retryLabel: {
-    ...typography.bodyMd,
-    textDecorationLine: 'underline',
   },
 });

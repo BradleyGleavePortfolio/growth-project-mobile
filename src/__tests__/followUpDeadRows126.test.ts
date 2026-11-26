@@ -20,7 +20,7 @@ describe('FU-COPY-126 dead rows and action-specific alerts', () => {
     expect(src).toContain('Water goal (fl oz)');
   });
 
-  it.each(['GroceryListScreen', 'ShoppingListScreen', 'PrepGuideScreen', 'RecipeDetailScreen'])(
+  it.each(['GroceryListScreen', 'PrepGuideScreen', 'RecipeDetailScreen'])(
     '%s names the failed action instead of using an Error title',
     (name) => {
       const src = read(`screens/client/${name}.tsx`);

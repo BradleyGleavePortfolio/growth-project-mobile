@@ -9,7 +9,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { listsApi, prepGuideApi, recipesApi } from '../../../services/api';
 import { lightTokens } from '../../../theme/tokens';
 import GroceryListScreen from '../GroceryListScreen';
-import ShoppingListScreen from '../ShoppingListScreen';
 import PrepGuideScreen from '../PrepGuideScreen';
 import RecipeDetailScreen from '../RecipeDetailScreen';
 
@@ -73,7 +72,6 @@ beforeEach(() => {
 
 it.each([
   ['Grocery list', GroceryListScreen],
-  ['Shopping list', ShoppingListScreen],
 ])('%s keeps the count, every amount and every control at 130%%', async (title, Screen) => {
   const ui = await mount(Screen);
   await waitFor(() => expect(ui.getByText('2 to get.')).toBeTruthy());

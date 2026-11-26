@@ -48,7 +48,9 @@ jest.mock('../../../components/roman/RomanConsentGate', () => ({ children }: { c
 
 const RomanChatScreen = require('../RomanChatScreen').default;
 const { authEvents } = require('../../../utils/authEvents');
-const { ROMAN_STORED_NO_REPLY } = require('../../../components/roman/romanVoice');
+// m#963 (ROMAN-RETRY-B-M): the ROMAN_REPLY_PENDING frame is Roman's held card saying "not ready yet",
+// ROMAN_HELD_NOT_READY (was ROMAN_STORED_NO_REPLY). FIX-963R2.
+const { ROMAN_HELD_NOT_READY } = require('../../../components/roman/romanVoice');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 type Wire = { throws: Error } | { status: number; text?: string | Error };
@@ -138,7 +140,7 @@ it('MERGEUP-950C N7 (a) at the wire: a quoted reply answered "not ready yet" kee
   const first = sent(0);
   expect(first.content).toBe(QUOTED);
   await waitFor(() => expect(r.getByTestId('roman-send-retry')).toBeTruthy());
-  expect(r.getByText(ROMAN_STORED_NO_REPLY)).toBeTruthy();
+  expect(r.getByText(ROMAN_HELD_NOT_READY)).toBeTruthy();
   expect(quoting(r)).toBe(true);
   expect(boxOf(r)).toBe(WORDS);
   await act(async () => { fireEvent.press(r.getByTestId('roman-send-retry')); });

@@ -94,19 +94,19 @@ it('UI-3b: a coached client with no plan and no usual meal gets the Style C firs
   expect(screen.getByTestId('food-day')).toBeTruthy();
   // A meal row with nothing logged opens the add sheet on that meal.
   await fireEvent.press(screen.getByTestId('food-day-first-dinner'));
-  expect(await screen.findByText('Add to Dinner')).toBeTruthy();
+  expect(await screen.findByTestId('food-search-meal')).toHaveTextContent('Dinner');
 });
 
 it('UI-3d: Extras Add opens on the meal up next with the four meals, and files the food under the meal picked', async () => {
   usualSnack();
   await show();
   await fireEvent.press(await screen.findByTestId('food-day-add'));
-  expect(await screen.findByText('Add to Snacks')).toBeTruthy();
+  expect(await screen.findByTestId('food-search-meal')).toHaveTextContent('Snacks');
   expect(meal('Snacks').props.accessibilityState.checked).toBe(true);
   expect(within(screen.getByTestId('food-search-meals')).getAllByRole('radio').map((m) => m.props.accessibilityLabel))
     .toEqual(['Breakfast', 'Lunch', 'Dinner', 'Snacks']);
   await fireEvent.press(meal('Lunch'));
-  expect(screen.getByText('Add to Lunch')).toBeTruthy();
+  expect(screen.getByTestId('food-search-meal')).toHaveTextContent('Lunch');
   expect(meal('Lunch').props.accessibilityState.checked).toBe(true);
   expect(meal('Snacks').props.accessibilityState.checked).toBe(false);
   await fireEvent.press(await screen.findByText('Rolled oats'));
@@ -120,7 +120,7 @@ it('UI-3d: Extras Add opens on the meal up next with the four meals, and files t
   // While the sheet stays open the choice holds: the next food goes to Lunch too.
   expect(await screen.findByText('Added Rolled oats.')).toBeTruthy();
   expect(meal('Lunch').props.accessibilityState.checked).toBe(true);
-  expect(screen.getByText('Add to Lunch')).toBeTruthy();
+  expect(screen.getByTestId('food-search-meal')).toHaveTextContent('Lunch');
   await fireEvent.press(await screen.findByText('Rolled oats'));
   await fireEvent.press(await screen.findByTestId('quantity-log-food'));
   await waitFor(() => expect(logApi.logFood).toHaveBeenCalledTimes(2));
@@ -132,9 +132,9 @@ it('UI-3d: the meal choice also works on a coached plan day, and a manual entry 
     meal_template: { name: 'Greek yogurt bowl', calories_kcal: 210, protein_g: 30, carbs_g: 20, fats_g: 5, items: [] } }] } }] };
   await show();
   await fireEvent.press(await screen.findByTestId('food-day-add'));
-  expect(await screen.findByText('Add to Snacks')).toBeTruthy();
+  expect(await screen.findByTestId('food-search-meal')).toHaveTextContent('Snacks');
   await fireEvent.press(meal('Dinner'));
-  await fireEvent.press(await screen.findByText('Enter manually'));
+  await fireEvent.press(await screen.findByText('Quick add'));
   expect(meal('Dinner').props.accessibilityState.checked).toBe(true);
   await fireEvent.changeText(screen.getByPlaceholderText('Food name'), 'Toast');
   for (const input of screen.getAllByPlaceholderText('0')) await fireEvent.changeText(input, '5');
@@ -148,7 +148,7 @@ it('UI-3d: Something else keeps the plan meal and shows no meal choice, and the 
     meal_template: { name: 'Greek yogurt bowl', calories_kcal: 210, protein_g: 30, carbs_g: 20, fats_g: 5, items: [] } }] } }] };
   await show();
   await fireEvent.press(await screen.findByText('Something else'));
-  expect(await screen.findByText('Add to Snacks')).toBeTruthy();
+  expect(await screen.findByTestId('food-search-meal')).toHaveTextContent('Snacks');
   expect(screen.queryByTestId('food-search-meals')).toBeNull();
   await fireEvent.press(screen.getByLabelText('Close food search'));
   await fireEvent.press(await screen.findByTestId('food-day-add'));
@@ -161,8 +161,8 @@ it('UI-3d: a sheet reopened from Extras starts again on the meal up next, not th
   await show();
   await fireEvent.press(await screen.findByTestId('food-day-add'));
   await fireEvent.press(meal('Breakfast'));
-  expect(screen.getByText('Add to Breakfast')).toBeTruthy();
+  expect(screen.getByTestId('food-search-meal')).toHaveTextContent('Breakfast');
   await fireEvent.press(screen.getByLabelText('Close food search'));
   await fireEvent.press(await screen.findByTestId('food-day-add'));
-  expect(await screen.findByText('Add to Snacks')).toBeTruthy();
+  expect(await screen.findByTestId('food-search-meal')).toHaveTextContent('Snacks');
 });

@@ -1,6 +1,6 @@
 /**
- * CF-ONE-LIST-128 (owner 10-07: "merge them / cut one and keep one"): Grocery is the one list.
- * Rows a client saved on the retired Shopping list show here and keep every Grocery action.
+ * CF-ONE-LIST-128, then SHOP-SWITCH-M (owner 203-D16 op 1): the grocery screen reads both lists once and shows one at
+ * a time. Rows a client saved on the Shopping list show on its Shopping tab and keep every action.
  */
 import React from 'react';
 import { AxiosHeaders, type AxiosResponse } from 'axios';
@@ -74,24 +74,28 @@ beforeEach(() => {
   }
 });
 
-describe('Grocery is the one list (CF-ONE-LIST-128)', () => {
-  it('shows rows saved on the shopping list next to grocery rows, counted once, with one quiet note', async () => {
+describe('One read, two lists on the grocery screen (CF-ONE-LIST-128, SHOP-SWITCH-M)', () => {
+  it('shows the grocery rows on the Grocery tab, each counted once, beside each list\'s own count; no note', async () => {
     const view = await mount();
-    await view.findByText('Paper towels');
-    for (const name of ['Milk', 'Oats', 'Paper towels', 'Soap']) expect(view.getAllByText(name)).toHaveLength(1);
-    expect(view.getByText('2 to get.')).toBeTruthy();
-    expect(view.getByText('To get (2)')).toBeTruthy();
-    expect(view.getByText('Checked (2)')).toBeTruthy();
-    // REFINE-929: the note sits on the forest masthead under the summary (ctx#457), in its muted light words.
-    expect(view.getByText(NOTE)).toHaveStyle({ color: lightTokens.textOnMastheadMuted, fontFamily: 'Inter_400Regular' });
+    await view.findByText('Milk');
+    for (const name of ['Milk', 'Oats']) expect(view.getAllByText(name)).toHaveLength(1);
+    for (const name of ['Paper towels', 'Soap']) expect(view.queryByText(name)).toBeNull();
+    expect(view.getByText('1 to get.')).toBeTruthy();
+    expect(view.getByText('To get (1)')).toBeTruthy();
+    expect(view.getByText('Checked (1)')).toBeTruthy();
+    // SHOP-SWITCH-M (ctx#527 style 1): the switch says which list shows (W14 removes the note); the chosen tab is bone.
+    expect(view.queryByText(NOTE)).toBeNull();
+    expect(view.getByRole('tab', { name: 'Grocery, 1 to get' })).toHaveStyle({ backgroundColor: lightTokens.textOnAccent });
+    expect(view.getByRole('tab', { name: 'Shopping, 1 to get' })).toBeTruthy();
     expect(view.getByText('Grocery list')).toBeTruthy();
     expect(listsApi.getList).toHaveBeenCalledWith('grocery');
     expect(listsApi.getList).toHaveBeenCalledWith('shopping');
   });
 
-  it('checks, unchecks and removes a row that came from the shopping list', async () => {
+  it('checks, unchecks and removes a row that came from the shopping list, on the Shopping tab', async () => {
     const view = await mount();
-    await view.findByText('Paper towels');
+    await view.findByText('Milk');
+    await fireEvent.press(view.getByRole('tab', { name: 'Shopping, 1 to get' }));
     await fireEvent.press(view.getByLabelText('Check Paper towels'));
     await waitFor(() => expect(listsApi.updateItem).toHaveBeenCalledWith('towels', { is_checked: true }));
     await fireEvent.press(view.getByLabelText('Uncheck Soap'));
@@ -100,21 +104,21 @@ describe('Grocery is the one list (CF-ONE-LIST-128)', () => {
     await waitFor(() => expect(listsApi.deleteItem).toHaveBeenCalledWith('towels'));
   });
 
-  it('Clear checked clears both lists when a checked row came from the shopping list', async () => {
+  it('Clear checked clears only the list on show, even when the other list has a checked row', async () => {
     const view = await mount();
-    await view.findByText('Soap');
+    await view.findByText('Oats');
     await fireEvent.press(view.getByText('Clear checked'));
-    expect(jest.mocked(Alert.alert).mock.calls.at(-1)?.[1]).toBe('Remove 2 checked items?');
+    expect(jest.mocked(Alert.alert).mock.calls.at(-1)?.[1]).toBe('Remove 1 checked item?');
     await confirm('Clear');
-    await waitFor(() => expect(listsApi.clearChecked).toHaveBeenCalledTimes(2));
-    expect(listsApi.clearChecked).toHaveBeenCalledWith('grocery');
-    expect(listsApi.clearChecked).toHaveBeenCalledWith('shopping');
+    await waitFor(() => expect(listsApi.clearChecked).toHaveBeenCalledWith('grocery'));
+    expect(listsApi.clearChecked).toHaveBeenCalledTimes(1);
+    expect(listsApi.clearChecked).not.toHaveBeenCalledWith('shopping');
   });
 
   it('Clear checked touches only the grocery list when no checked row came from the shopping list', async () => {
     serve({ grocery, shopping: [shopping[0]] });
     const view = await mount();
-    await view.findByText('Paper towels');
+    await view.findByText('Milk');
     await fireEvent.press(view.getByText('Clear checked'));
     await confirm('Clear');
     await waitFor(() => expect(listsApi.clearChecked).toHaveBeenCalledWith('grocery'));
@@ -138,12 +142,12 @@ describe('Grocery is the one list (CF-ONE-LIST-128)', () => {
     expect(view.queryByText(NOTE)).toBeNull();
   });
 
-  it('shows shopping rows even when the grocery list is empty, and the empty state only when both are', async () => {
+  it('an empty grocery list shows its empty words beside the Shopping count, also when both lists are empty', async () => {
     serve({ grocery: [], shopping: [shopping[0]] });
     const view = await mount();
-    await view.findByText('Paper towels');
-    expect(view.getByText('1 to get.')).toBeTruthy();
-    expect(view.queryByText('Your grocery list is empty')).toBeNull();
+    await view.findByText('Your grocery list is empty');
+    expect(view.getByRole('tab', { name: 'Shopping, 1 to get' })).toBeTruthy();
+    expect(view.queryByText('Paper towels')).toBeNull();
     await view.unmount();
     serve({ grocery: [], shopping: [] });
     const empty = await mount();
@@ -158,7 +162,7 @@ describe('Grocery is the one list (CF-ONE-LIST-128)', () => {
     expect(view.queryByText('Milk')).toBeNull();
     serve({ grocery, shopping });
     await fireEvent.press(view.getByText('Try again'));
-    await view.findByText('Paper towels');
+    await view.findByText('Milk');
     expect(readsOf('grocery')).toBe(2);
     expect(readsOf('shopping')).toBe(2);
   });
