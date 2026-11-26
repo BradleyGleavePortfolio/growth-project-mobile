@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { motion, typography } from '../../../theme/tokens';
+import { layout, motion, typography } from '../../../theme/tokens';
+import { HapticService } from '../../../ui/haptics/haptics.service';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { Overline } from '../../../ui';
 import { featureFlags } from '../../../config/featureFlags';
@@ -10,17 +12,23 @@ import { bestCard } from '../../../components/share/shareCards';
 import { getTodayString } from '../../../utils/date';
 import type { ActiveWorkoutStyles } from './styles';
 import type { workoutSummary } from './sessionQuality';
+import WorkoutSummaryC5, { type WorkoutSummaryC5Props } from './WorkoutSummaryC5';
 
 // DES-R-127: the quiet finish. One fade of at most 300 ms, no scale, no
 // particles (QUIET_LUXURY_DOCTRINE section 3).
 const FADE_MS = 300;
 
-export default function WorkoutFinishSummary({ summary, styles, historyState, elapsed }: {
+export default function WorkoutFinishSummary({ summary, styles, historyState, elapsed, c5 }: {
   summary: ReturnType<typeof workoutSummary>;
   styles: ActiveWorkoutStyles;
   historyState: 'loading' | 'loaded' | 'unavailable';
   /** Workout time as the top bar shows it. */
   elapsed: string;
+  /**
+   * WORKOUT-SUMMARY-M: the C1 Style C v2 summary page (frame C5), for a coach-set workout with
+   * featureFlags.clientTrainV2 on (ActiveWorkoutScreen decides). Without it, main's card below.
+   */
+  c5?: Omit<WorkoutSummaryC5Props, 'recordAction'>;
 }) {
   const { semanticColors: sc } = useTheme();
   const reduceMotion = useReducedMotion();
@@ -34,6 +42,28 @@ export default function WorkoutFinishSummary({ summary, styles, historyState, el
     fade.start();
     return () => fade.stop();
   }, [opacity, reduceMotion]);
+
+  if (c5) {
+    // FIX-974R2 (LS-974R2 B1): the SHARE-A action stays on each record line, as the share glyph at the line's end (a 44 pt
+    // button, the same spoken name and the same sheet as main's link), so it takes no row of its own: C2_summary draws
+    // the record as one line and the meter and the note above Send.
+    return <Animated.View style={[local.page, { opacity }]}>
+      <WorkoutSummaryC5
+        {...c5}
+        recordAction={featureFlags.shareSheetV2 ? (line) => line.weight == null ? null : (
+          <Pressable
+            testID="summary-share" accessibilityRole="button"
+            accessibilityLabel={`Share ${line.exercise} at ${line.weight.toLocaleString()} lb`}
+            onPress={() => { void HapticService.softImpact(); setShareCard(bestCard(line.exercise, line.weight ?? 0, getTodayString())); }}
+            style={({ pressed }) => [local.share, pressed && local.pressed]}
+          >
+            <Ionicons name="share-outline" size={20} color={sc.accentText} />
+          </Pressable>
+        ) : undefined}
+      />
+      {featureFlags.shareSheetV2 ? <ShareSheet card={shareCard} onClose={() => setShareCard(null)} /> : null}
+    </Animated.View>;
+  }
 
   const cells = [
     { label: 'Time', value: elapsed },
@@ -82,6 +112,9 @@ export default function WorkoutFinishSummary({ summary, styles, historyState, el
 }
 
 const local = StyleSheet.create({
+  page: { flex: 1 },
+  share: { width: layout.touchMin, height: layout.touchMin, alignItems: 'center', justifyContent: 'center' },
+  pressed: { opacity: 0.6 },
   row: { flexDirection: 'row', marginTop: 8 },
   cell: { flex: 1, alignItems: 'center', paddingVertical: 4 },
   value: { ...typography.h2, fontVariant: ['tabular-nums'] },

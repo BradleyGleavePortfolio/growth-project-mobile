@@ -10,6 +10,7 @@ import {
   FlatList,
   AppState,
   AppStateStatus,
+  BackHandler,
   type AlertButton,
 } from 'react-native';
 import HapticPressable from '../../components/HapticPressable';
@@ -60,7 +61,9 @@ import {
   settleQueuedWorkout,
   releaseQueuedWorkout,
   triggerSync,
+  workoutSyncEvents,
 } from '../../offline';
+import { getDatabase } from '../../offline/database';
 
 // NB: the local exercise_logs SQLite table (logExerciseWithVolume) is
 // no longer written to. Volume aggregation now happens on the server
@@ -86,6 +89,8 @@ import { blockLetter } from './active-workout/blockLetter';
 import WorkoutFinishSummary from './active-workout/WorkoutFinishSummary';
 import { workoutApi } from '../../services/api';
 import { completedExercisePayload, moveExercise, newSessionExercise, previousSets, swapExercise, workoutSummary, type LoggedWorkout } from './active-workout/sessionQuality';
+import { coachRatingInput, whatMoved, type CoachRating } from './active-workout/summaryC5';
+import { getTodayString } from '../../utils/date';
 import { featureFlags } from '../../config/featureFlags';
 import { logger } from '../../utils/logger';
 import { buildCompletionLogBase, normalizeError } from './_completionLogging';
@@ -233,6 +238,26 @@ export default function ActiveWorkoutScreen() {
   // The Finish save sends the session's queue key, as the queued retry does.
   const createWorkout = useCreateWorkout(() => queueKeyRef.current);
   const summary = useMemo(() => workoutSummary(sessionExercises, history), [sessionExercises, history]);
+  // WORKOUT-SUMMARY-M (C1 Style C v2, frame C5): with clientTrainV2 on, a coach-set workout of a client with a coach
+  // opens the summary page at Finish workout; nothing is saved until Send to {coach}, which runs the Finish body below
+  // with the client's How hard and note in its one completion. Self-started or coachless: main's finish.
+  const summaryFirst = featureFlags.clientTrainV2 && !!assignmentId && !romanLocked;
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const summaryOpenRef = useRef(false);
+  summaryOpenRef.current = summaryOpen;
+  const [effort, setEffort] = useState<number | null>(null);
+  const [coachNote, setCoachNote] = useState('');
+  // Queued on the phone, the server did not answer (the drawn not-sent state, C2_error).
+  const [notSent, setNotSent] = useState(false);
+  // FIX-974R1 (LS-974R1 B2): the sync engine sent it while the not-sent page was open; the page leaves as Send does.
+  const [sentByPhone, setSentByPhone] = useState(false);
+  // FIX-974R1 (LO-974R1 C2, LS-974R1 C4): the workout's minutes at Finish workout. The summary shows them and Send
+  // saves them, so they do not tick on while the client rates the workout.
+  const [summaryMinutes, setSummaryMinutes] = useState<number | null>(null);
+  // From the first Send tap the rating and note are fixed: Try again resends exactly these.
+  const sentRatingRef = useRef<CoachRating>({});
+  const sendTapRef = useRef(false);
+  useEffect(() => { if (!saving) sendTapRef.current = false; }, [saving]);
 
   useEffect(() => {
     if (!userId) return;
@@ -732,11 +757,22 @@ export default function ActiveWorkoutScreen() {
     ]);
   };
 
-  const finishWorkout = (confirmed = false) => {
+  const finishWorkout = (confirmed = false, rating?: CoachRating) => {
     if (saving) return;
     const completedSets = sessionExercises.reduce((sum, ex) => sum + ex.sets.filter((s) => s.completed).length, 0);
     if (completedSets === 0) {
       Alert.alert('No sets completed', 'Complete at least one set before finishing.');
+      return;
+    }
+    // C5: Finish workout and "Finish and log" open the summary; only its Send (with `rating`) saves.
+    if (summaryFirst && !rating) {
+      setSummaryMinutes(Math.round(timer / 60));
+      // FIX-974R1 (LS-974R1 C2): a rest still running ends here, so no rest-over buzz or alert comes under the summary.
+      if (restIntervalRef.current) clearInterval(restIntervalRef.current);
+      restIntervalRef.current = null;
+      setRestActive(false);
+      cancelRestAlert();
+      setSummaryOpen(true);
       return;
     }
     const recordLines = summary.records.map((r) => `Recent best: ${r.name} · ${r.weight} lb`).join('\n');
@@ -772,7 +808,7 @@ export default function ActiveWorkoutScreen() {
           }
           pendingPersistPayloadRef.current = null;
           if (timerRef.current) clearInterval(timerRef.current);
-          const durationMinutes = Math.round(timer / 60);
+          const durationMinutes = rating && summaryMinutes != null ? summaryMinutes : Math.round(timer / 60);
           const completedExercises = sessionExercises.filter((e) =>
             e.sets.some((s) => s.completed),
           );
@@ -864,6 +900,8 @@ export default function ActiveWorkoutScreen() {
                       completion_payload: completionPayload,
                       idempotency_key: idempotencyKeyRef.current,
                       started_at: sessionStartTimeRef.current.toISOString(),
+                      // C5: How hard and the note, only when given (the server writes them on this first completion only).
+                      ...rating,
                     },
                   }
                 : null,
@@ -1001,6 +1039,7 @@ export default function ActiveWorkoutScreen() {
                     completion_payload: completionPayload,
                     idempotency_key: idempotencyKeyRef.current,
                     started_at: sessionStartTimeRef.current.toISOString(),
+                    ...rating,
                   }).then(refreshAssignments).catch((error: unknown) => {
                     // Non-fatal: generic workout already saved above.
                     logger.warn('mwb.completion.assignment-sync', {
@@ -1050,6 +1089,12 @@ export default function ActiveWorkoutScreen() {
                   Promise.resolve()
                     .then(() => releaseQueuedWorkout(queueKey, err))
                     .catch(() => undefined);
+                  // C5: from the summary the page stays and draws the not-sent card (C2_error; its haptic is error).
+                  if (rating) {
+                    HapticService.error();
+                    setNotSent(true);
+                    return;
+                  }
                   HapticService.success();
                   navigation.goBack();
                   Alert.alert(
@@ -1108,6 +1153,8 @@ export default function ActiveWorkoutScreen() {
                 const reason = (err as { response?: unknown } | null)?.response
                   ? errorMessage(err, 'The server did not accept the workout.')
                   : 'No connection.';
+                // C5: a refusal (or no local copy) goes back to the logger, where "tap Finish again" is true.
+                if (rating) setSummaryOpen(false);
                 Alert.alert(
                   'Workout not saved yet',
                   `${reason.replace(/\.?$/, '.')} The sets stay on this screen. Check the connection, then tap Finish again.`,
@@ -1211,12 +1258,67 @@ export default function ActiveWorkoutScreen() {
       navigation.addListener('beforeRemove', (e) => {
         if (finishingRef.current) return;
         e.preventDefault();
+        // C5: back from the summary (Android back) is back to the logger, nothing saved.
+        if (summaryOpenRef.current) {
+          setSummaryOpen(false);
+          return;
+        }
         askBeforeLeavingRef.current(() => navigation.dispatch(e.data.action), true);
       }),
     [navigation],
   );
   // A press on another tab asks the same question (ClientNavigator).
   useEffect(() => setWorkoutLeaveGuard((leave) => askBeforeLeavingRef.current(leave, false)), []);
+
+  // FIX-974R1 (LS-974R1 B1): the summary is the whole screen (C2_summary_*); ClientNavigator hides the tab bar while
+  // this route says summary (navigation/workoutSummaryTabBar).
+  const summaryParamRef = useRef((route.params as { summary?: boolean }).summary === true);
+  useEffect(() => {
+    if (summaryParamRef.current === summaryOpen) return;
+    summaryParamRef.current = summaryOpen;
+    navigation.setParams({ summary: summaryOpen });
+  }, [summaryOpen, navigation]);
+
+  // FIX-974R1 (LS-974R1 B2): on the not-sent page the sync engine may send the queued workout and its completion (the
+  // signal is back). Once the row is sent with no completion left to send, the page leaves as a sent workout does.
+  useEffect(() => {
+    if (!notSent) return undefined;
+    const key = queueKeyRef.current;
+    let active = true;
+    const onSynced = () => {
+      void (async () => {
+        try {
+          const db = await getDatabase();
+          const row = await db.getFirstAsync<{ sync_status: string; assignment_json: string | null }>(
+            'SELECT sync_status, assignment_json FROM workout_logs WHERE client_key = ? LIMIT 1',
+            [key],
+          );
+          if (!active || row?.sync_status !== 'synced' || row.assignment_json != null) return;
+          active = false;
+          finishingRef.current = true;
+          setNotSent(false);
+          setSentByPhone(true);
+          HapticService.success();
+          navigation.goBack();
+        } catch (error) {
+          logger.warn('workout.summary.sent-by-phone', { error: normalizeError(error) });
+        }
+      })();
+    };
+    workoutSyncEvents.on('synced', onSynced);
+    return () => {
+      active = false;
+      workoutSyncEvents.off('synced', onSynced);
+    };
+  }, [notSent, navigation]);
+
+  // FIX-974R1 (LO-974R1 C3): Android back while Send is saving does nothing; the save's answer leaves or comes back.
+  const summaryBusy = summaryOpen && (saving || sentByPhone);
+  useEffect(() => {
+    if (!summaryBusy) return undefined;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => true);
+    return () => sub.remove();
+  }, [summaryBusy]);
 
   const totalSets = sessionExercises.reduce((sum, ex) => sum + ex.sets.length, 0);
   const completedSets = sessionExercises.reduce((sum, ex) => sum + ex.sets.filter((s) => s.completed).length, 0);
@@ -1284,6 +1386,37 @@ export default function ActiveWorkoutScreen() {
   // The header's block line: the block in progress, else the last block.
   const blockCount = sessionExercises.length;
   const heroBlock = activeExercise >= 0 ? activeExercise : blockCount - 1;
+
+  // C5: Send runs main's Finish body once (a second tap before it starts does nothing); Try again resends the same.
+  const sendFromSummary = (again: boolean) => {
+    if (sendTapRef.current || saving) return;
+    sendTapRef.current = true;
+    if (!again) sentRatingRef.current = coachRatingInput(effort, coachNote);
+    setNotSent(false);
+    finishWorkout(true, sentRatingRef.current);
+  };
+  if (summaryOpen && assignmentId) {
+    return (
+      <WorkoutFinishSummary
+        summary={summary} styles={styles} historyState={historyState} elapsed={formatTime(timer)}
+        c5={{
+          assignmentId, today: getTodayString(), minutes: summaryMinutes ?? Math.round(timer / 60), sets: summary.sets, volume: summary.volume,
+          lines: whatMoved(sessionExercises, history, summary.records, bodyWeight),
+          effort, note: coachNote, onEffort: setEffort, onNote: setCoachNote,
+          status: notSent ? 'notSent' : saving || sentByPhone ? 'sending' : 'open',
+          // LO-974R1 B1: today's segment and day draw in on a Send that is on its way or sent; not sent keeps the read.
+          sentKey: saving || sentByPhone ? queueKeyRef.current || null : null,
+          onSend: () => sendFromSummary(false), onTryAgain: () => sendFromSummary(true),
+          // Not sent: leaving goes where main's "Saved on this phone" went; else back to the logger.
+          onBack: () => {
+            if (summaryBusy) return; // LO-974R1 C3: not while Send is saving.
+            if (notSent) navigation.goBack();
+            else setSummaryOpen(false);
+          },
+        }}
+      />
+    );
+  }
 
   return (
     <>
