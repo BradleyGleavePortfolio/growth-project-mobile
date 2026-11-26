@@ -117,12 +117,13 @@ const SMALL_NAME = { ...MEDIUM, fontSize: 24, lineHeight: 30 };
 describe('GOAL-935-M M1 and H1: the coach name in the drawn face', () => {
   // B_inbox.html:77 `.b-hero .big{font:500 2rem/1.15 'Cormorant',serif;margin:4px 0}`; B_inbox_ios390_100.png rows 390-432
   // ("Sam" caps 21 pt tall = 32 pt Cormorant). H1 (REC): 32 pt wherever a 12-letter one-word name keeps whole (window
-  // width / font scale >= 300), else typography.h2's 24/30 in the same 500 face; never numberOfLines or adjustsFontSizeToFit.
+  // width / font scale >= 320 since operator ruling (2), LO-982R3 B1; was 300), else typography.h2's 24/30 in the same 500
+  // face; never numberOfLines or adjustsFontSizeToFit. 390 pt at 130% is 300, so it now takes 24/30 (FIX-982R3's one rewrite).
   it.each([
     [390, 844, 1, BIG_NAME],
     [360, 800, 1, BIG_NAME],
     [320, 568, 1, BIG_NAME],
-    [390, 844, 1.3, BIG_NAME],
+    [390, 844, 1.3, SMALL_NAME],
     [360, 800, 1.3, SMALL_NAME],
     [320, 568, 1.3, SMALL_NAME],
   ] as Array<[number, number, number, Style]>)('at %d x %d pt and fontScale %d the name is set %j', async (w, h, fs, want) => {
