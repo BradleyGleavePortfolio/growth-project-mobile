@@ -483,8 +483,9 @@ describe('SHOP-SWITCH-M: the switch itself', () => {
   });
 });
 
-// SHOPPING-CUT-M (owner 203-D44): the old Shopping list screen's one proof that nothing on main makes on this page,
-// carried here when that screen is deleted (KitchenRefine201's 'shopping' row: a failed reload keeps no Clear checked).
+// SHOPPING-CUT-M (owner 203-D44): the old Shopping list screen's proofs that nothing else on main makes on this page
+// with Shopping chosen, carried here when that screen is deleted: p (KitchenRefine201's 'shopping' row: a failed reload
+// keeps no Clear checked) and q (FIX-997R1, LS-997R1 B1: KitchenListsHoldStill954 C1's Shopping lane, pull to refresh).
 describe('SHOPPING-CUT-M: carried from the retired Shopping list screen', () => {
   it('p. on Shopping, a failed reload shows the shopping error words, and cached checked rows do not expose Clear checked', async () => {
     const ui = await mount(SIZES[1]);
@@ -495,5 +496,24 @@ describe('SHOPPING-CUT-M: carried from the retired Shopping list screen', () => 
     await act(async () => { await clients[clients.length - 1].refetchQueries(); });
     await waitFor(() => expect(ui.getByText("Couldn't load shopping list.")).toBeTruthy());
     expect(ui.queryByRole('button', { name: 'Clear checked' })).toBeNull();
+  });
+
+  it('q. on Shopping, pull to refresh is on only while the shopping list has rows (carried from KitchenListsHoldStill954 C1)', async () => {
+    const control = (ui: Ui) => ui.getByTestId('list-scroll').props.refreshControl.props as { enabled?: boolean };
+    serve({ grocery: GROCERY, shopping: [] });
+    const first = await mount();
+    await first.findByText('Salmon fillet');
+    expect(control(first).enabled).toBe(true);
+    await press(first, 'Shopping, 0 to get');
+    expect(first.getByText('Your shopping list is empty')).toBeTruthy();
+    expect(control(first).enabled).toBe(false);
+    await first.unmount();
+    serve({ grocery: [], shopping: SHOPPING });
+    const second = await mount();
+    await second.findByText('Your grocery list is empty');
+    expect(control(second).enabled).toBe(false);
+    await press(second, 'Shopping, 2 to get');
+    await second.findByText('Dish sponges');
+    expect(control(second).enabled).toBe(true);
   });
 });
