@@ -1,0 +1,4 @@
+src/screens/client/__tests__/MessagesInboxScreen
+src/__tests__/memberContentAccess.test.tsx
+src/__tests__/rowRoutes.test.tsx
+src/screens/auth/__tests__
