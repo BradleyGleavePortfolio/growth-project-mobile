@@ -1,0 +1,12 @@
+src/__tests__/schemePanels994.test.tsx
+src/__tests__/boneSwapGuard.test.ts
+src/components/__tests__/offlineBannerFrame.test.tsx
+src/components/__tests__/offlineBannerC1S10.test.tsx
+src/components/__tests__/OfflineBanner.coachWords.test.tsx
+src/__tests__/workoutDetailM.screen.test.tsx
+src/__tests__/refine986.screen.test.tsx
+src/screens/coach/__tests__/checkInDraftM.list.test.tsx
+src/screens/coach/client-detail/__tests__/checkInDraftM.timeline.test.tsx
+src/screens/coach/__tests__/round989.draftsHead.test.tsx
+src/__tests__/rootNavigatorCoachResumeOffline135.test.tsx
+src/theme/__tests__/safetyGold.test.tsx
