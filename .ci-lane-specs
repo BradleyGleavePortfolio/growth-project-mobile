@@ -1,0 +1,4 @@
+--
+--maxWorkers=2
+src/__tests__/fr917DayDiscovery.test.ts
+src/components/roman/__tests__/romanVoiceReaders.fix963r2.test.ts
