@@ -21,7 +21,7 @@ export type MealPhotoSource = 'camera' | 'library';
 export const MEAL_PHOTO_OPTIONS: ImagePicker.ImagePickerOptions = {
   mediaTypes: ['images'],
   allowsEditing: false,
-  quality: 0.8,
+  quality: 1,
   exif: false,
   preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
 };
