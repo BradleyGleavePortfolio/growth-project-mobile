@@ -49,6 +49,8 @@ interface AlertRowProps {
    */
   quote?: string | null;
   hideClientName?: boolean;
+  /** GOAL-937-M: drawn under the client's words, inside the content column (Actions' Safety tag). Absent: as before. */
+  tag?: React.ReactNode;
   testID?: string;
   style?: ViewStyle;
 }
@@ -63,6 +65,7 @@ export default function AlertRow({
   actionLabel,
   quote,
   hideClientName = false,
+  tag,
   testID,
   style,
 }: AlertRowProps) {
@@ -117,6 +120,7 @@ export default function AlertRow({
             {quoteLine}
           </Text>
         ) : null}
+        {tag}
         {actionLabel ? (
           <Text style={styles.actionLabel}>{actionLabel}</Text>
         ) : null}

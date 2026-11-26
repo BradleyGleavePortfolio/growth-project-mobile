@@ -25,17 +25,19 @@ import {
   View,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 import { exerciseCatalogApi } from '../../api/exerciseCatalog';
 import type {
   Exercise,
   ExerciseListParams,
   ExerciseListResponse,
 } from '../../types/exerciseCatalog';
-import { spacing, typography } from '../../theme/tokens';
+import { layout, radius, spacing, typography } from '../../theme/tokens';
 import type { SemanticTokens } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import HapticPressable from '../../components/HapticPressable';
 import type { WorkoutStackParamList } from '../../navigation/ClientNavigator';
+import { MastheadBand, mast, wsc } from './workouts/workoutStyleC';
 
 // ── Filter facets ────────────────────────────────────────────────────────────
 // Body part and equipment values the ExerciseDB proxy filters on.
@@ -142,6 +144,7 @@ export default function ExerciseLibraryScreen({ navigation }: Props) {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          style={styles.chipScroll}
           contentContainerStyle={styles.chipScrollContent}
         >
           {values.map((v) => {
@@ -151,18 +154,20 @@ export default function ExerciseLibraryScreen({ navigation }: Props) {
                 disableAnimation
                 key={v}
                 onPress={() => setSelected(active ? null : v)}
-                style={[styles.chip, active && styles.chipActive]}
+                style={styles.chip}
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
               >
-                <Text
-                  style={[
-                    styles.chipText,
-                    active && styles.chipTextActive,
-                  ]}
-                >
-                  {v}
-                </Text>
+                <View style={[styles.pill, active && styles.pillActive]}>
+                  <Text
+                    style={[
+                      styles.chipText,
+                      active && styles.chipTextActive,
+                    ]}
+                  >
+                    {v}
+                  </Text>
+                </View>
               </HapticPressable>
             );
           })}
@@ -183,33 +188,40 @@ export default function ExerciseLibraryScreen({ navigation }: Props) {
         accessibilityRole="button"
         accessibilityLabel={`Open ${item.name}`}
       >
-        <Text style={styles.rowName}>{item.name}</Text>
-        <Text style={styles.rowMeta}>
-          {[item.primaryMuscle, item.equipment.join(', '), item.category, item.difficulty]
-            .filter(Boolean)
-            .join(' · ')}
-        </Text>
+        <View style={styles.rowText}>
+          <Text style={styles.rowName}>{item.name}</Text>
+          <Text style={styles.rowMeta}>
+            {[item.primaryMuscle, item.equipment.join(', '), item.category, item.difficulty]
+              .filter(Boolean)
+              .join(' · ')}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={sc.textPrimary} accessibilityElementsHidden importantForAccessibility="no" />
       </HapticPressable>
     ),
-    [navigation, styles],
+    [navigation, styles, sc],
   );
 
   return (
     <View style={styles.screen} testID="exercise-library-screen">
+      <MastheadBand color={mast.ground} />
       <View style={styles.header}>
         <Text style={styles.title}>Exercise library</Text>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search exercises"
-          placeholderTextColor={sc.textMuted}
-          value={search}
-          onChangeText={setSearch}
-          returnKeyType="search"
-          onSubmitEditing={onSubmitSearch}
-          autoCorrect={false}
-          autoCapitalize="none"
-          accessibilityLabel="Search exercises"
-        />
+        <View style={styles.searchField}>
+          <Ionicons name="search" size={20} color={mast.muted} accessibilityElementsHidden importantForAccessibility="no" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search exercises"
+            placeholderTextColor={mast.muted}
+            value={search}
+            onChangeText={setSearch}
+            returnKeyType="search"
+            onSubmitEditing={onSubmitSearch}
+            autoCorrect={false}
+            autoCapitalize="none"
+            accessibilityLabel="Search exercises"
+          />
+        </View>
         {renderChipRow('Body part', BODY_PART_CHIPS, category, setCategory)}
         {renderChipRow(
           'Equipment',
@@ -261,66 +273,100 @@ function makeStyles(sc: SemanticTokens) {
       flex: 1,
       backgroundColor: sc.bgPrimary,
     },
+    // C1 v2 masthead (nearest picked drawing K3 C_picker, rows 0-433): deep forest, 24 pt bottom corners, 24 pt
+    // gutter. The route's bar above takes the same ground (ClientNavigator) and MastheadBand paints the status bar.
     header: {
-      paddingHorizontal: spacing.lg,
-      paddingTop: spacing.lg,
-      paddingBottom: spacing.sm,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: sc.border,
+      backgroundColor: mast.ground,
+      borderBottomLeftRadius: radius.sheet,
+      borderBottomRightRadius: radius.sheet,
+      paddingHorizontal: layout.gutter,
+      paddingTop: spacing.sm,
+      // rows 392-433: 20 pt under the pill, 6 of them inside its 44 pt target.
+      paddingBottom: 14,
     },
     title: {
       ...typography.h1,
-      color: sc.textPrimary,
+      color: mast.ink,
       marginBottom: spacing.md,
+    },
+    // C_picker rows 204-295: forest field, 1 pt frame line, 12 pt corners, the search glyph at cols 84-112.
+    searchField: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      minHeight: wsc.searchHeight,
+      paddingHorizontal: spacing.lg,
+      borderRadius: radius.input,
+      borderWidth: 1,
+      borderColor: mast.line,
+      backgroundColor: mast.field,
+      marginBottom: spacing.xs,
     },
     searchInput: {
       ...typography.body,
-      color: sc.textPrimary,
+      flex: 1,
+      color: mast.ink,
       minHeight: 44,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: sc.border,
       paddingVertical: spacing.sm,
-      marginBottom: spacing.sm,
     },
     chipRow: {
       marginTop: spacing.sm,
     },
     chipRowLabel: {
       ...typography.eyebrow,
-      color: sc.textMuted,
-      marginBottom: spacing.xs,
+      color: mast.muted,
+    },
+    // The chip rows scroll to the masthead's edges; the first chip starts on the 24 pt gutter.
+    chipScroll: {
+      marginHorizontal: -layout.gutter,
     },
     chipScrollContent: {
       gap: spacing.sm,
+      paddingHorizontal: layout.gutter,
     },
+    // A 44 pt target holding C_picker's 32 pt pill (rows 331-392).
     chip: {
-      minHeight: 44,
-      minWidth: 44,
+      minHeight: layout.touchMin,
+      minWidth: layout.touchMin,
       justifyContent: 'center',
-      paddingHorizontal: spacing.sm,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: sc.border,
     },
-    chipActive: {
-      borderBottomWidth: 2,
-      borderBottomColor: sc.textPrimary,
+    pill: {
+      minHeight: wsc.pillHeight,
+      justifyContent: 'center',
+      paddingHorizontal: spacing.lg,
+      borderRadius: radius.chip,
+      borderWidth: 1,
+      borderColor: mast.line,
+    },
+    // The chosen chip is filled leaf with deep text (C_picker rows 332-391).
+    pillActive: {
+      backgroundColor: mast.chosen,
+      borderColor: mast.chosen,
     },
     chipText: {
       ...typography.bodySmall,
-      color: sc.textMuted,
+      color: mast.ink,
     },
     chipTextActive: {
-      color: sc.textPrimary,
+      color: mast.ground,
     },
     listContent: {
+      paddingTop: spacing.sm,
       paddingBottom: spacing.xl,
     },
+    // C_picker rows 766-879: 56 pt rows from col 48, name over meta, hairline; C2_swap's chevron at cols 715-726.
     row: {
-      minHeight: 44,
-      paddingHorizontal: spacing.lg,
-      paddingVertical: spacing.md,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      minHeight: layout.rowMinHeight,
+      paddingHorizontal: layout.gutter,
+      paddingVertical: spacing.xs,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: sc.border,
+    },
+    rowText: {
+      flex: 1,
     },
     rowName: {
       ...typography.h4,
@@ -351,6 +397,7 @@ function makeStyles(sc: SemanticTokens) {
       paddingHorizontal: spacing.lg,
       alignItems: 'center',
       justifyContent: 'center',
+      borderRadius: radius.button,
       backgroundColor: sc.accent,
     },
     retryText: {

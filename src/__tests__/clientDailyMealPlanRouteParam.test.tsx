@@ -25,6 +25,9 @@ jest.mock('@react-navigation/native', () => ({
   useRoute: () => ({ params: mockRouteParams }),
 }));
 
+// GOAL-927-M (RULING 3): the meal plan's two new reads with no target and no log, so main's screen draws.
+jest.mock('../hooks/useApi', () => ({ ...jest.requireActual('../hooks/useApi'), useTodayLog: () => ({ data: undefined, isLoading: false, isError: false, refetch: jest.fn() }) }));
+jest.mock('../hooks/useMacros', () => ({ ...jest.requireActual('../hooks/useMacros'), useCurrentMacrosForSelf: () => ({ data: undefined, isLoading: false, isError: false, refetch: jest.fn() }) }));
 jest.mock('../hooks/useMealTemplates', () => ({
   useMealPlanToday: (dateIso?: string) => {
     mockUseMealPlanToday(dateIso);

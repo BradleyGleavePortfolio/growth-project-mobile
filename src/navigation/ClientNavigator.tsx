@@ -533,10 +533,18 @@ function WorkoutStackNavigator() {
       <WorkoutStackNav.Screen name="RoutineBuilder"  component={ProtectedRoutineBuilderScreen} />
       <WorkoutStackNav.Screen name="CoachGuidelines" component={featureFlags.learnHub ? LearnGuidelinesScreen : CoachGuidelinesScreen} />
       {/* Mux video + exercise library v1. */}
+      {/* STYLE-WORKOUTS-M: the library starts on the C1 v2 deep forest masthead (nearest drawing K3 C_picker), so
+          its bar takes the masthead's ground and light tint with no rule (LO-927 B1). Title and back label as before. */}
       <WorkoutStackNav.Screen
         name="ExerciseLibrary"
         component={ExerciseLibraryScreen}
-        options={{ headerShown: true, title: 'Exercise Library' }}
+        options={{
+          headerShown: true,
+          title: 'Exercise Library',
+          headerShadowVisible: false,
+          headerStyle: { backgroundColor: lightTokens.surface.masthead },
+          headerTintColor: lightTokens.textOnAccent,
+        }}
       />
       <WorkoutStackNav.Screen
         name="ExerciseDetail"
@@ -544,6 +552,8 @@ function WorkoutStackNavigator() {
         options={{
           headerShown: true,
           title: 'Exercise',
+          // C2_detail: the back sits on the page ground with no rule under the bar.
+          headerShadowVisible: false,
           // Modal presentation makes this screen usable both as a push
           // from the library AND as an in-workout overlay from
           // ActiveWorkoutScreen without re-registering it elsewhere.
@@ -655,7 +665,7 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
           Reachable via deep-link and from MoreScreen entries (added
           in a follow-up; route registration first so deep-links
           work today). */}
-      <MoreStackNav.Screen name="ClientMacros"        component={ProtectedClientMacrosScreen} options={backOnlyHeader('Macro targets', PLAN_BAND)} />
+      <MoreStackNav.Screen name="ClientMacros"        component={ProtectedClientMacrosScreen} options={backOnlyHeader('Macro targets', lightTokens.surface.masthead)} />
       <MoreStackNav.Screen name="ClientDailyMealPlan" component={ProtectedClientDailyMealPlanScreen} options={backOnlyHeader('', PLAN_BAND)} />
       <MoreStackNav.Screen name="ClientWorkoutViewer" component={ProtectedClientWorkoutViewerScreen} />
       <MoreStackNav.Screen name="WorkoutAssignmentDetail" component={ProtectedWorkoutAssignmentDetailScreen} />
