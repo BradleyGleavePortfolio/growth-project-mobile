@@ -165,6 +165,8 @@ export interface AiActionDraftRow {
   decision_note?: string | null;
   materialised_ref?: string | null;
   payload: Record<string, unknown>;
+  /** CHECKIN-DRAFT-M: what the draft was written from (b#1234: a check-in draft carries {source: 'check_in', ref, date}). */
+  provenance?: unknown;
 }
 
 export interface ListPendingResponse {
@@ -174,6 +176,17 @@ export interface ListPendingResponse {
 export interface DecideRequest {
   decision: 'approved' | 'rejected';
   note?: string;
+  /** CHECKIN-DRAFT-M (b#1234): the coach's saved edit of a check-in draft, sent only when he saved one. */
+  payload?: { body: string };
+}
+
+/** CHECKIN-DRAFT-M (b#1234): the reasons the draft report takes, the DM report's wire reasons (messagesApi ReportWireReason). */
+export type ReportDraftReason = 'spam' | 'harassment' | 'sexual' | 'self_harm' | 'other';
+
+/** CHECKIN-DRAFT-M (b#1234): POST /ai/gateway/drafts/:id/report answers this; the draft stays pending. */
+export interface ReportDraftResponse {
+  reportId: string;
+  status: 'received' | 'already_reported';
 }
 
 /** Decide returns the updated row. */

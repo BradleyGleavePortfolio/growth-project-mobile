@@ -65,7 +65,7 @@ const ui = (reader: Reader) => (reader === 'messages_card' ? <RomanDraftsHero />
 type View = Awaited<ReturnType<typeof render>>;
 const sees = (view: View, reader: Reader, n: number) => (reader === 'coach_home'
   ? view.getByTestId('home-drafts').props.children === `${n} waiting, ${n / 2} nudges, ${n / 2} workouts`
-  : view.queryByText(`Roman has ${n} drafts ready`) !== null);
+  : view.queryByText(reader === 'drafts_screen' ? `${n} drafts to review` : `Roman has ${n} drafts ready`) !== null);
 
 // 45 clients, a nudge and a workout each (90 drafts), oldest first, among 40 rows the server leaves out of its answer.
 const queue = Array.from({ length: 45 }, (_, i) => [

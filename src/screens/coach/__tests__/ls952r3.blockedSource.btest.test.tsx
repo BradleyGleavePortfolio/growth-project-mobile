@@ -64,7 +64,7 @@ it('B4: blocking a client removes the cached workout quoting their chat, but kee
     expect(view.queryByText(/Quoted chat: I prefer the outdoor walk/)).toBeNull();
     expect(view.getByTestId('ai-draft-approve-w-plain')).toBeTruthy();
     expect(view.getByTestId('ai-draft-approve-n-open')).toBeTruthy();
-    expect(view.getByText('Roman has 2 drafts ready')).toBeTruthy();
+    expect(view.getByText('2 drafts to review')).toBeTruthy();
   } finally {
     await view.unmount();
     qc.clear();

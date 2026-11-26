@@ -26,10 +26,10 @@
  * Copy: plain words, no exclamation marks, no emojis. Failures say what
  * happened and what to do next (describeCommunityFailure).
  */
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, type InfiniteData, type QueryClient } from '@tanstack/react-query';
 import HapticPressable from '../HapticPressable';
 import VoiceNotePlayer from './VoiceNotePlayer';
 import VoiceRecordSheet from './VoiceRecordSheet';
@@ -43,8 +43,9 @@ import { featureFlags } from '../../config/featureFlags';
 import { useVoiceFeed } from '../../hooks/useVoiceFeed';
 import { useVoiceOutbox, type VoiceOutboxItem } from '../../hooks/useVoiceOutbox';
 import { voiceKeys } from '../../hooks/voiceQueryKeys';
-import { communityVoiceApi, type VoiceNoteView } from '../../api/communityVoiceApi';
-import { describeCommunityFailure } from '../../api/communityErrors';
+import { communityVoiceApi, type VoiceNoteFeedPage, type VoiceNoteView } from '../../api/communityVoiceApi';
+import { describeCommunityFailure, type CommunityFailure } from '../../api/communityErrors';
+import { isClosedRefusal } from '../messaging/closedRefusal';
 import { useCommunityMe } from '../../hooks/useCommunity';
 import VoiceRemovedPlaceholder, { voiceRemovedLine } from './removed/VoiceRemovedPlaceholder';
 
@@ -55,6 +56,31 @@ export interface VoiceNotesSectionProps {
   /** Not used: Style B records in a sheet over this feed (caller not VOICE-M's). */
   onRecord?: () => void;
   testID?: string;
+}
+
+/**
+ * ROUND-990 rule e: a failure that may pass (no answer, 429, 5xx) keeps the last answer's notes on screen. Every other
+ * one drops them: a 4xx, a closed answer, the switch-off 503 (community-feature-flag.guard), a failure that is not a request.
+ */
+function mayPass(failure: CommunityFailure, err: unknown): boolean {
+  const s = failure.status ?? -1;
+  const body = (err as { response?: { data?: { disabled?: unknown } } } | null)?.response?.data
+    ?? (err as { cause?: { response?: { data?: { disabled?: unknown } } } } | null)?.cause?.response?.data;
+  return (s === 0 || s === 429 || (s >= 500 && s <= 599)) && body?.disabled !== true && !isClosedRefusal(err);
+}
+
+/**
+ * Rules f and g: the one copy of the notes is the feed's cached pages. Take notes out of a feed whose last read failed, in
+ * place (status and error kept, so the line stays and nothing reads again); `drop` true empties it, so an answer older
+ * than a dropping failure is gone from the cache itself (remounts, later failures and the 10-minute gcTime included).
+ */
+function forgetKept(qc: QueryClient, workspaceId: string, drop: true | ((n: VoiceNoteView) => boolean)): void {
+  for (const q of qc.getQueryCache().findAll({ queryKey: voiceKeys.feedRoot(workspaceId) })) {
+    const data = q.state.data as InfiniteData<VoiceNoteFeedPage> | undefined;
+    if (q.state.status !== 'error' || !data) continue;
+    q.setState({ data: drop === true ? undefined
+      : { ...data, pages: data.pages.map((p) => ({ ...p, voice_notes: p.voice_notes.filter((n) => !drop(n)) })) } });
+  }
 }
 
 export default function VoiceNotesSection({
@@ -76,11 +102,44 @@ export default function VoiceNotesSection({
     if (!workspaceId) return;
     await qc.invalidateQueries({ queryKey: voiceKeys.feedRoot(workspaceId) });
   }, [qc, workspaceId]);
+  // Rule g: once the server said yes, a re-read that failed keeps no note this viewer blocked, deleted or removed.
+  const forget = (drop: (n: VoiceNoteView) => boolean) => { if (workspaceId) forgetKept(qc, workspaceId, drop); };
+
+  // Owner #203-E74: described once per error (an unexpected one reaches Sentry once, with its reference), never shown.
+  const failure = useMemo(
+    () => (feed.isError ? describeCommunityFailure(feed.error, 'load_voice_notes') : null),
+    [feed.isError, feed.error],
+  );
+  const dropped = !!failure && !mayPass(failure, feed.error);
+  const held = !!feed.data;
+  useEffect(() => {
+    if (dropped && held && workspaceId) forgetKept(qc, workspaceId, true);
+  }, [dropped, held, qc, workspaceId]);
 
   if (!featureFlags.communityVoiceNotes || !workspaceId) return null;
 
-  const notes: VoiceNoteView[] = feed.data?.pages.flatMap((p) => p.voice_notes) ?? [];
-  const failure = feed.isError ? describeCommunityFailure(feed.error, 'load_voice') : null;
+  const notes: VoiceNoteView[] = dropped ? [] : (feed.data?.pages.flatMap((p) => p.voice_notes) ?? []);
+  // Rule d: a failed Show older is told above that control, which is its retry; any other failure under the heading.
+  const olderFailed = !!failure && !dropped && feed.isFetchNextPageError && feed.hasNextPage;
+  const notice = failure ? (
+    <View style={styles.notice} testID={`${testID}-error`}>
+      <Text style={[styles.muted, { color: semanticColors.textMuted }]} accessibilityRole="alert">
+        Could not load voice notes.
+      </Text>
+      {olderFailed ? null : (
+        <HapticPressable
+          intent="light"
+          onPress={() => void feed.refetch()}
+          accessibilityRole="button"
+          accessibilityLabel="Try again"
+          testID={`${testID}-retry`}
+          style={styles.more}
+        >
+          <Text style={[styles.recordLabel, { color: semanticColors.accentText }]}>Try again</Text>
+        </HapticPressable>
+      )}
+    </View>
+  ) : null;
 
   return (
     <View style={styles.wrap} testID={testID}>
@@ -120,23 +179,8 @@ export default function VoiceNotesSection({
           accessibilityLabel="Loading voice notes"
           testID={`${testID}-loading`}
         />
-      ) : failure ? (
-        <View style={styles.state} testID={`${testID}-error`}>
-          <Text style={[styles.muted, { color: semanticColors.textMuted }]}>{failure.message}</Text>
-          <HapticPressable
-            intent="light"
-            onPress={() => void feed.refetch()}
-            accessibilityRole="button"
-            accessibilityLabel="Try again"
-            testID={`${testID}-retry`}
-            style={[styles.record, { borderColor: semanticColors.accent }]}
-          >
-            <Text style={[styles.recordLabel, { color: semanticColors.accentText }]}>
-              Try again
-            </Text>
-          </HapticPressable>
-        </View>
-      ) : notes.length === 0 && outbox.items.length === 0 ? (
+      ) : olderFailed ? null : notice}
+      {feed.isLoading ? null : !failure && notes.length === 0 && outbox.items.length === 0 ? (
         <Text
           style={[styles.muted, { color: semanticColors.textMuted }]}
           testID={`${testID}-empty`}
@@ -154,7 +198,10 @@ export default function VoiceNotesSection({
           const removedLine = voiceRemovedLine(note, viewerUserId);
           const remove = async () => {
             await communityVoiceApi.remove(note.id);
+            const gone = (n: VoiceNoteView) => n.id === note.id;
+            forget(gone);
             await refresh();
+            forget(gone);
           };
           return (
             <View key={note.id} style={styles.note} testID={`${testID}-note-${note.id}`}>
@@ -179,8 +226,10 @@ export default function VoiceNotesSection({
                     onDelete={mine ? remove : undefined}
                     onRemove={!mine && viewerModerates ? remove : undefined}
                     onReported={() => markVoiceNoteReported(note.id)}
-                    onBlocked={() => {
-                      void refresh();
+                    onBlocked={(userId) => {
+                      const theirs = (n: VoiceNoteView) => n.author_id === userId;
+                      forget(theirs);
+                      void refresh().then(() => forget(theirs));
                     }}
                     testID={`${testID}-menu-${note.id}`}
                   />
@@ -206,7 +255,8 @@ export default function VoiceNotesSection({
         })
       )}
 
-      {feed.hasNextPage ? (
+      {olderFailed ? notice : null}
+      {feed.hasNextPage && !dropped ? (
         <HapticPressable
           intent="light"
           onPress={() => void feed.fetchNextPage()}
@@ -362,7 +412,8 @@ const styles = StyleSheet.create({
   },
   recordLabel: { fontFamily: voiceFaces.semibold, fontSize: 14, fontWeight: '600' },
   retryLabel: { fontSize: 15 }, // GOAL .btn.sm 0.9375rem
-  state: { gap: spacing.sm, alignItems: 'flex-start' },
+  // Owner #203-E74: the sentence, then Try again on its row; Try again wraps under it where the row is too narrow.
+  notice: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: spacing.md },
   muted: { fontFamily: voiceFaces.regular, fontSize: 14, lineHeight: 20 },
   note: { gap: spacing.sm },
   noteMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 44 },
