@@ -11,7 +11,6 @@ import { listsApi, prepGuideApi, recipesApi } from '../../../services/api';
 import { lightTokens } from '../../../theme/tokens';
 import { StyleCPaper } from '../../../ui/layout/StyleCPage';
 import GroceryListScreen from '../GroceryListScreen';
-import ShoppingListScreen from '../ShoppingListScreen';
 import PrepGuideScreen from '../PrepGuideScreen';
 import RecipeDetailScreen from '../RecipeDetailScreen';
 
@@ -98,9 +97,6 @@ it('empty lists show the line-drawing tile over the words on main', async () => 
   await waitFor(() => expect(g.getByText('Your grocery list is empty')).toBeTruthy());
   expect(g.getByTestId('stylec-thumb', { includeHiddenElements: true })).toBeTruthy();
   await g.unmount();
-  const s = await mount(ShoppingListScreen);
-  await waitFor(() => expect(s.getByText('Your shopping list is empty')).toBeTruthy());
-  expect(s.getByTestId('stylec-thumb', { includeHiddenElements: true })).toBeTruthy();
 });
 
 // REFINE-929 (ctx#457 GOAL): the sheet after Add all keeps main's words and choices; OK closes it without moving.

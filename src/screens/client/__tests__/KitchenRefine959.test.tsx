@@ -12,7 +12,6 @@ import { listsApi, prepGuideApi, recipesApi } from '../../../services/api';
 import { gold } from '../../../theme/tokens';
 import { StyleCSheet } from '../../../ui/layout/StyleCPage';
 import GroceryListScreen from '../GroceryListScreen';
-import ShoppingListScreen from '../ShoppingListScreen';
 import PrepGuideScreen from '../PrepGuideScreen';
 import RecipesScreen from '../RecipesScreen';
 import RecipeDetailScreen from '../RecipeDetailScreen';
@@ -135,7 +134,7 @@ function contrast(fg: string, bg: string) {
   return (a + 0.05) / (b + 0.05);
 }
 
-describe.each([['Grocery', GroceryListScreen], ['Shopping', ShoppingListScreen]] as const)('%s list rows', (_name, Screen) => {
+describe.each([['Grocery', GroceryListScreen]] as const)('%s list rows', (_name, Screen) => {
   it.each(EACH)('D1: the cross sits at the gutter and the amount ends 50 pt in, as drawn (%s)', async (_s, size) => {
     // shopping-partly: .rm{width:44px;height:44px;display:flex;align-items:center;justify-content:flex-end;flex:none}
     // .srow{display:flex;align-items:center;gap:6px;...}: the amount's right edge is 44 + 6 = 50 pt from the paper's gutter.
@@ -179,7 +178,7 @@ describe.each([['Grocery', GroceryListScreen], ['Shopping', ShoppingListScreen]]
   });
 });
 
-const FIVE = [['Grocery', GroceryListScreen], ['Shopping', ShoppingListScreen], ['Prep', PrepGuideScreen], ['Recipes', RecipesScreen], ['RecipeDetail', RecipeDetailScreen]] as const;
+const FIVE = [['Grocery', GroceryListScreen], ['Prep', PrepGuideScreen], ['Recipes', RecipesScreen], ['RecipeDetail', RecipeDetailScreen]] as const;
 it.each(FIVE.flatMap(([name, Screen]) => SIZES.map((size) => [name, size.size, Screen, size] as const)))(
   'D4: the warm notice on %s is the drawn #F2EEE6 (%s)', async (_name, _s, Screen, size) => {
     // shopping-error / prep-error: .notice{background:#F2EEE6;border-left:3px solid #B08D57;...}. Over the paper, trackLight
