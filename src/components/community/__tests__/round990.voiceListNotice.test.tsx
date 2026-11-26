@@ -344,6 +344,10 @@ describe('dropped stays dropped (rule f)', () => {
     script(answered(503));
     await fireEvent.press(v.getByTestId('vn-retry'));
     await waitFor(() => expect(mockListFeed).toHaveBeenCalled());
+    // Wait for the 503 itself to land (not only the 403 still on screen while it is asked for).
+    await waitFor(() =>
+      expect(qc.getQueryCache().findAll({ queryKey: voiceKeys.feedRoot('ws-1') })[0]?.state.fetchStatus).toBe('idle'),
+    );
     await v.findByTestId('vn-error');
     expect(drawnNotes(v)).toEqual([]);
     expect(players(v)).toEqual([]);
