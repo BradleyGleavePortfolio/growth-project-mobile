@@ -6,7 +6,7 @@
  * saves yesterday's portion; two foods go in without reopening ("Add another food" keeps the sheet, "Log food"
  * closes it, C2-S-33); a food entered by hand is refused with no name, kept after a failed save and then saved
  * once, with its grams, to the day and meal shown; water goes to the day; and the first meal hands off to the
- * first-meal note once. Real
+ * first-meal note once, and a manual or repeated meal keeps its added-to line, sent once, after the note. Real
  * screen, store and portion math; only the network is mocked. The failure path is proven on the Style C day by
  * LogScreen.saveFailure.goal930.test.tsx (the card in the sheet, the portion kept, the same key once more).
  */
@@ -189,6 +189,35 @@ describe.each(['ios', 'android'] as const)('%s client food journey on the Style 
       expect(screen.queryByPlaceholderText('Search foods...')).toBeNull();
     },
   );
+
+  it.each(['manual', 'repeat'])('%s keeps its added-to line after the note is dismissed', async (flow) => {
+    const onSaved = jest.fn();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const ui = (suspended: boolean) => (
+      <QueryClientProvider client={client}><LogScreen onSaved={onSaved} suspended={suspended} /></QueryClientProvider>
+    );
+    const view = await render(ui(false));
+    if (flow === 'manual') {
+      // C_first's Enter manually opens the add sheet on its manual form (FoodDayView.tsx:338).
+      await fireEvent.press(await screen.findByTestId('food-day-first-manual'));
+      await fireEvent.changeText(await screen.findByPlaceholderText('Food name'), 'Rolled oats');
+      for (const [index, value] of ['379', '13', '68', '6.5'].entries()) {
+        await fireEvent.changeText(screen.getAllByPlaceholderText('0')[index], value);
+      }
+      expect(screen.getByRole('button', { name: 'Log food' })).toBeEnabled();
+      await fireEvent.press(screen.getByRole('button', { name: 'Log food' }));
+    } else {
+      await fireEvent.press(await mealRow('breakfast'));
+      await fireEvent.press(await screen.findByRole('button', { name: /Repeat .*breakfast: add all 1 food/ }));
+    }
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    await view.rerender(ui(true));
+    await view.rerender(ui(false));
+    expect(screen.getByText(flow === 'manual' ? 'Rolled oats added to Breakfast.' : '1 food added to Breakfast.')).toBeTruthy();
+    expect(logApi.logFood).toHaveBeenCalledTimes(1);
+    expect(logApi.logFood).toHaveBeenCalledWith(expect.objectContaining({ date: mockDate, meal_type: 'breakfast' }));
+    expect(onSaved).toHaveBeenCalledTimes(1);
+  });
 
   it('searches, picks a portion in one sheet, steps back, adds, edits, deletes and repeats', async () => {
     const onSaved = jest.fn();
