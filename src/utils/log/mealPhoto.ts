@@ -183,6 +183,6 @@ async function attach(photo: Kept, entryId: string, mine: number): Promise<void>
   } catch {
     if (account === mine) Alert.alert('Photo not saved', 'Your food was added, but its photo was not saved.');
   } finally {
-    forget(photo.uri);
+    // LO-992R1 RM7
   }
 }
