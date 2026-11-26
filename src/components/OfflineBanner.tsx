@@ -41,7 +41,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: colors.ink,
+    backgroundColor: colors.bone,
     paddingVertical: 9,
     paddingHorizontal: layout.gutter,
     // Sit below the status bar on Android; iOS is handled by the SafeAreaView in
