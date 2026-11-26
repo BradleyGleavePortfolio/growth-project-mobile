@@ -9,8 +9,8 @@
  * at 130% text, which put its title and the line saying who can hear the note above the screen. So the sheet is capped
  * at the window's height (useWindowDimensions) less the top inset, read like the bottom one, and only the lines scroll,
  * between the title and the buttons. Where the card fits, the scroll is as tall as its lines, with no indicator and no
- * bounce, so it draws as before. On Android this Modal is not statusBarTranslucent, so it sits between the system bars
- * and can be shorter than that cap: the sheet may also shrink to it (flexShrink).
+ * bounce, so it draws as before. On Android, if React Native's edge-to-edge flag is on, this Modal fills the screen and
+ * the cap keeps the grab under the status bar; if off, the Modal sits between the bars and the sheet shrinks to fit.
  */
 import React, { useCallback, useContext } from 'react';
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
