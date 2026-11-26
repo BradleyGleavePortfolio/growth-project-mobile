@@ -424,7 +424,7 @@ describe('text and ground pairs on Sunlit sand (owner #203-E86)', () => {
 
   it.each([
     ['the recipe step numerals read gold[800]', 'screens/client/RecipeDetailScreen.tsx', 'stepNumberText: { ...typography.h3, color: gold[800] }', 'color: gold[700]'],
-    ["the offline banner's icon is the light words token", 'components/OfflineBanner.tsx', 'size={14} color={lightTokens.textOnAccent}', 'Colors.textOnPrimary'],
+    ["the offline banner's icon is the light words token", 'components/OfflineBanner.tsx', 'size={12} color={lightTokens.textOnAccent}', 'Colors.textOnPrimary'],
     ["the offline banner's words are the light words token", 'components/OfflineBanner.tsx', 'color: lightTokens.textOnAccent,', 'Colors.textOnPrimary'],
     ["the template button's icon is the light words token", 'screens/coach/ProgramTemplatesScreen.tsx', 'size={18} color={lightTokens.textOnAccent}', 'size={18} color={colors.textOnPrimary}'],
     ["the template button's words are the light words token", 'screens/coach/ProgramTemplatesScreen.tsx', "applyBtnText: {\n    // The warm near-white: 4.51:1 on the mobility template's fill (the Sunlit sand page colour would be 4.17:1).\n    color: lightTokens.textOnAccent,", 'applyBtnText: {\n    color: colors.textOnPrimary'],
