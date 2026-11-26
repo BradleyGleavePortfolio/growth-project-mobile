@@ -1,0 +1,9 @@
+src/__tests__/dayGuardPrivateCopy.test.ts
+src/__tests__/fr917DayDiscovery.test.ts
+src/__tests__/fr917r2DayDiscovery.test.ts
+src/__tests__/fr917r3DayTree.test.ts
+src/__tests__/ls917DayDiscovery.test.ts
+src/__tests__/ls917r2ListedDayDiscovery.test.ts
+src/__tests__/ls917r3DaySyntax.test.ts
+src/__tests__/workoutDayRule.test.ts
+src/components/roman/__tests__/romanVoiceReaders.fix963r2.test.ts
