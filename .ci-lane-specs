@@ -1,0 +1,5 @@
+src/components/log/__tests__/mealPhotoNeverSilent.fix992r2.test.tsx
+src/utils/log/__tests__/mealPhotoAttach.test.ts
+src/utils/log/__tests__/mealPhotoRepeat.lo992r1.test.ts
+src/utils/log/__tests__/ls992r1.repeatKeepsPhoto.btest.test.ts
+src/components/log/__tests__/ls992r1.mealChangeKeepsPhoto.btest.test.tsx
