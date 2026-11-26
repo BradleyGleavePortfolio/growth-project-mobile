@@ -152,7 +152,7 @@ const codeOf = (err: unknown): unknown =>
  */
 export function mealPhotoAfterSave(log: { date: string; meal_type: string }, entryId: string | null): void {
   const photo = kept;
-  if (!photo || !entryId || photo.date !== log.date || photo.mealType !== log.meal_type) return;
+  if (!photo || !entryId || photo.mealType !== log.meal_type) return;
   kept = null;
   void attach(photo, entryId, account);
 }
