@@ -1,0 +1,12 @@
+src/navigation/__tests__/reachabilityGates.test.ts
+src/screens/client/__tests__/ShopSwitch.test.tsx
+src/screens/client/__tests__/GroceryOneList.test.tsx
+src/screens/client/__tests__/MoreScreen.reach.test.tsx
+src/__tests__/followUpDeadRows126.test.ts
+src/screens/client/__tests__/GroceryPrep.parity.test.tsx
+src/screens/client/__tests__/KitchenListsHoldStill954.test.tsx
+src/screens/client/__tests__/KitchenRefine201.test.tsx
+src/navigation/__tests__/clientNavigator.test.ts
+src/navigation/__tests__/linkingConfig.test.ts
+src/__tests__/clientDeadTaps126.test.ts
+src/__tests__/rowRoutes.test.tsx
