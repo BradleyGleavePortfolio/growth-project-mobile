@@ -1,0 +1,14 @@
+src/screens/community/
+src/components/community/
+src/navigation/
+src/components/messaging/
+src/hooks/__tests__/LS938VoiceTarget.btest.test.ts
+src/config/__tests__/declaredDependencies.test.ts
+src/__tests__/memberContentAccess
+src/__tests__/keyboardSafeSheets.test.tsx
+src/__tests__/rowRoutes.test.tsx
+src/components/__tests__/ForegroundNotificationBanner
+src/services/__tests__/LS942SpaceSignOut.btest.test.ts
+src/services/__tests__/LO942SignOutSpaceQueue.btest.test.ts
+src/services/__tests__/LS938TextOutboxAccount.btest.test.ts
+src/services/__tests__/pushTapRouter.test.ts
