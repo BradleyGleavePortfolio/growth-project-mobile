@@ -34,7 +34,7 @@ import {
   type MacroDisplayMode,
 } from '../../macros/macroDisplay';
 import { reportMacroDisplay, useMacroDisplayMode } from '../../macros/macroDisplayStore';
-import { lightTokens, radius, typography, spacing } from '../../theme/tokens';
+import { lightTokens, radius, schemeCard, typography, spacing } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { SemanticTokens } from '../../theme/tokens';
 import { useQuery } from '@tanstack/react-query';
@@ -150,7 +150,7 @@ function targetValue(target: MacroTarget, k: keyof typeof CELL_LABEL): number | 
 /**
  * Under the masthead (K5 Style C cards on the paper): the macro lines in one
  * card, full width so the eaten / target line fits; the coach's note in the
- * sage note card; then the date it took effect.
+ * cream note card; then the date it took effect.
  */
 function TargetCard({
   target,
@@ -193,7 +193,7 @@ function TargetCard({
       </View>
 
       {target.notes ? (
-        <View style={[styles.note, { backgroundColor: sc.surface.sage }]} testID="macros-note">
+        <View style={[styles.note, schemeCard]} testID="macros-note">
           <Text style={[planStyleC.eyebrow, { color: sc.accentText, marginBottom: spacing.sm }]}>
             {coachName ? 'Note from your coach' : 'Target note'}
           </Text>

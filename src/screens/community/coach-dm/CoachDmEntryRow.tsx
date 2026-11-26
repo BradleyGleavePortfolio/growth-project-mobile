@@ -10,7 +10,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../../../components/HapticPressable';
 import { featureFlags } from '../../../config/featureFlags';
-import { colors, forestPop as fp, radius } from '../../../theme/tokens';
+import { colors, forestPop as fp, radius, schemeCard } from '../../../theme/tokens';
 import type { CoachCommunityNav } from '../coachCommunityNavTypes';
 import { COACH_DM_LIMIT, useCoachDms } from './coachDm';
 
@@ -37,10 +37,10 @@ function EntryRow(): React.ReactElement {
   );
 }
 
-// Studio's Direct messages row (S_entry_ios.html .row :56 on #E0EBE4, .nm :57, .meta :58; operator ruling "962 entry row
-// as built", #203-E31), inside today's home column, which keeps its corners (01:2x). One light palette in both themes.
+// Studio's Direct messages row (S_entry_ios.html .row :56, .nm :57, .meta :58; operator ruling "962 entry row
+// as built", #203-E31; the fill is the scheme's cream card since owner #203-E91), inside today's home column, which keeps its corners (01:2x). One light palette in both themes.
 const styles = StyleSheet.create({
-  card: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 8, paddingHorizontal: 18, borderRadius: radius.lg, backgroundColor: fp.sage },
+  card: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 8, paddingHorizontal: 18, borderRadius: radius.lg, ...schemeCard },
   text: { flex: 1, gap: 2 },
   title: { fontFamily: 'Inter_600SemiBold', fontSize: 16.5, fontWeight: '600', color: colors.ink },
   sub: { fontFamily: 'Inter_400Regular', fontSize: 13.5, color: fp.n700 },

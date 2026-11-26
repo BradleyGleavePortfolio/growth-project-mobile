@@ -12,7 +12,7 @@ import { useCoachlessClient } from '../../../hooks/useCoachlessClient';
 import { useMyCoaches } from '../../../hooks/useCalendar';
 import { ForestStatusBar } from '../../../components/StatusBarBand';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { colors, radius, typography } from '../../../theme/tokens';
+import { colors, radius, schemeCard, typography } from '../../../theme/tokens';
 import { Screen, useScreenInsets } from '../../../ui';
 import { QuietError, QuietLoading, loadFailureMessage } from '../../../ui/states/QuietStates';
 import { getTodayString } from '../../../utils/date';
@@ -104,7 +104,7 @@ function WeekReviewPage({ userId, unit, initial, navigation }: { userId?: string
           {data ? (
             <>
               {data.empty ? <Text style={[typography.body, { color: sc.textMuted }]} testID="week-empty">No logs for this week.</Text> : null}
-              <View style={[s.summary, { backgroundColor: sc.surface.sage }, fontScale > 1.15 && s.stack]}>
+              <View style={[s.summary, schemeCard, fontScale > 1.15 && s.stack]}>
                 {count?.planned ? <View style={s.ring} accessible accessibilityRole="image" accessibilityLabel={`Habits this week, ${count.done} of ${count.planned} done`}>
                   <Svg width={88} height={88} style={StyleSheet.absoluteFill} accessible={false}>
                     <Circle cx={44} cy={44} r={38} fill="none" stroke={sc.data.planned} strokeWidth={2} />
