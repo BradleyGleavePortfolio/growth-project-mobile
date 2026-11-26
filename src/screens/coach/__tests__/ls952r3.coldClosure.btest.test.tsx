@@ -91,7 +91,7 @@ it.each(['home', 'drafts'] as const)(
         expect(view.getByTestId('ai-draft-approve-w-closed')).toBeTruthy();
         expect(view.getByTestId('ai-draft-approve-n-open')).toBeTruthy();
         expect(view.queryByTestId('ai-draft-approve-n-closed')).toBeNull();
-        expect(view.getByText('Roman has 2 drafts ready')).toBeTruthy();
+        expect(view.getByText('2 drafts to review')).toBeTruthy();
       }
     } finally {
       await view.unmount();

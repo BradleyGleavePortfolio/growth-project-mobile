@@ -293,7 +293,10 @@ describe('ExerciseLibraryScreen', () => {
     await fireEvent.press(await screen.findByRole('button', { name: 'Open Barbell bench press' }));
     await screen.findByText('Lie on the bench.');
     expect(mockedGet).toHaveBeenCalledWith('/exercise-catalog/0025');
-    expect(mockedGet).toHaveBeenLastCalledWith('/exercises/0025');
+    // WORKOUT-DETAIL-M: the fallback is still the page's last catalog read; the only read after it is the client's own
+    // history of this exercise, by the name the fallback gave.
+    expect(mockedGet.mock.calls.slice(-2))
+      .toEqual([['/exercises/0025'], ['/workouts/exercise-history?name=Barbell%20bench%20press']]);
   });
 });
 
