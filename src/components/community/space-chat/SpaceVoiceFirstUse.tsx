@@ -9,7 +9,8 @@
  * at 130% text, which put its title and the line saying who can hear the note above the screen. So the sheet is capped
  * at the window's height (useWindowDimensions) less the top inset, read like the bottom one, and only the lines scroll,
  * between the title and the buttons. Where the card fits, the scroll is as tall as its lines, with no indicator and no
- * bounce, so it draws as before.
+ * bounce, so it draws as before. On Android this Modal is not statusBarTranslucent, so it sits between the system bars
+ * and can be shorter than that cap: the sheet may also shrink to it (flexShrink).
  */
 import React, { useCallback, useContext } from 'react';
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
@@ -66,7 +67,7 @@ export default function SpaceVoiceFirstUse({ visible, cohortName, coach, onRecor
   return (
     <Modal visible={visible} transparent animationType={useReducedMotion() ? 'none' : 'slide'} onRequestClose={onClose} onDismiss={onDismiss}>
       <View style={s.scrim}>
-        <View style={[s.sheet, { paddingBottom: Math.max(bottomInset, 12), maxHeight }]} accessibilityViewIsModal testID="space-chat-voice-first-use">
+        <View style={[s.sheet, { paddingBottom: Math.max(bottomInset, 12), maxHeight, flexShrink: 1 }]} accessibilityViewIsModal testID="space-chat-voice-first-use">
           <View style={s.grab} />
           <Text style={s.title} accessibilityRole="header">Voice notes</Text>
           <ScrollView style={s.scroll} showsVerticalScrollIndicator={false} alwaysBounceVertical={false}>
