@@ -1,0 +1,119 @@
+/**
+ * ALL-ON-GREEN-M (R1, R3): the switch-on proof of LogScreen.lastPortion.test.tsx (B-403-1). That file pins
+ * featureFlags.foodPlanChecklist off and proves the classic Food log; this file pins it on: logging a food again
+ * from Recent at the prefilled last portion, from the Style C day's add sheet, saves the same nutrition as the
+ * entry it came from. Real browse hook, real LogScreen, real quantity picker and portion math, real search-log
+ * submitter; only the network is mocked.
+ */
+import React from 'react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react-native';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { AxiosHeaders, type AxiosResponse } from 'axios';
+import LogScreen from '../LogScreen';
+import { logApi } from '../../../services/api';
+import { addDays, getTodayString } from '../../../utils/date';
+
+// A fixed clock, never the real date (FIX-930R2 LO-930R2 B1 class). Only Date is faked (and keeps ticking).
+jest.useFakeTimers({ now: new Date('2026-11-05T12:00:00'), advanceTimers: true, doNotFake: ['nextTick', 'setImmediate',
+  'clearImmediate', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'queueMicrotask', 'hrtime',
+  'performance', 'requestAnimationFrame', 'cancelAnimationFrame', 'requestIdleCallback', 'cancelIdleCallback'] });
+afterAll(() => jest.useRealTimers());
+const mockToday = getTodayString();
+const mockYesterday = addDays(mockToday, -1);
+
+// A manual food: 400 kcal for the whole "2 serving" portion, saved with
+// multiplier 1 and the description 2 serving (the manual submit contract).
+const customLunch = {
+  id: 'food-custom-lunch', name: 'Custom lunch', calories: 400, protein_g: 12, carbs_g: 60, fat_g: 12,
+  serving_size_grams: 0, serving_description: '2 serving', nutrient_basis: 'PER_SERVING', supports_volume_units: false,
+};
+// A catalog food weighed in grams.
+const oats = {
+  id: 'food-oats', name: 'Rolled oats', calories: 379, protein_g: 13, carbs_g: 68, fat_g: 6.5,
+  serving_size_grams: 40, nutrient_basis: 'PER_100G', supports_volume_units: false,
+};
+// One day only, so no meal is "usual" (two days, foodDay.ts:177-178): today draws the Style C first day.
+const mockDays: Record<string, unknown[]> = {
+  [mockYesterday]: [
+    { id: 'y1', food_item_id: oats.id, meal_type: 'breakfast', quantity_multiplier: 0.6, original_quantity: 60, original_unit: 'g', food_item: oats },
+    { id: 'y2', food_item_id: customLunch.id, meal_type: 'lunch', quantity_multiplier: 1, original_quantity: 2, original_unit: 'serving', food_item: customLunch },
+  ],
+};
+
+const mockStore = {
+  selectedDate: mockToday, foodLogs: [], hasLoadedDay: true,
+  dailyTotals: { calories: 0, protein: 0, carbs: 0, fat: 0 }, waterOz: 0,
+  isLoading: false, loadError: null,
+  setSelectedDate: jest.fn(), loadDayData: jest.fn().mockResolvedValue(undefined),
+  // Like the store: reads the day again only while it is the day on screen.
+  refreshShownDay: jest.fn((u: string, d: string): Promise<void> => (d === mockStore.selectedDate ? mockStore.loadDayData(u, d) : Promise.resolve())),
+  logWater: jest.fn(),
+  removeFoodLogLocally: jest.fn(),
+};
+jest.mock('../../../config/featureFlags', () => {
+  const real = jest.requireActual('../../../config/featureFlags');
+  return { ...real, featureFlags: { ...real.featureFlags, foodPlanChecklist: true } };
+});
+jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate: jest.fn() }), useFocusEffect: jest.fn() }));
+jest.mock('../../../store/clientStore', () => ({ useClientStore: () => mockStore }));
+jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'user' }) }));
+jest.mock('../../../hooks/useMacroTargets', () => ({ useMacroTargets: () => null }));
+jest.mock('../../../hooks/useNetworkStatus', () => ({
+  useNetworkStatus: () => ({}), isEffectivelyOnline: () => true,
+}));
+jest.mock('../../../macros/macroDisplayStore', () => ({ useMacroDisplayMode: () => 'full' }));
+jest.mock('../../../services/api', () => ({
+  __esModule: true,
+  // The Style C day's own read: the day's workout from Train (none here).
+  default: { get: jest.fn(async () => ({ data: { items: [], nextCursor: null } })) },
+  foodApi: { search: jest.fn(), create: jest.fn() },
+  logApi: { getDaily: jest.fn(), logFood: jest.fn(), updateEntry: jest.fn(), deleteEntry: jest.fn() },
+}));
+jest.mock('../../../services/foodLogQueue', () => ({ flush: jest.fn(), enqueue: jest.fn() }));
+jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
+jest.mock('../../../components/FoodImage', () => ({ __esModule: true, default: () => null }));
+
+const ok: AxiosResponse = { data: {}, status: 200, statusText: 'OK', headers: {}, config: { headers: new AxiosHeaders() } };
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  jest.mocked(logApi.getDaily).mockImplementation(async (date: string) => ({ ...ok, data: { entries: mockDays[date] ?? [] } }));
+  jest.mocked(logApi.logFood).mockResolvedValue(ok);
+});
+
+async function logFromRecent(name: string) {
+  await render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <LogScreen />
+    </QueryClientProvider>,
+  );
+  // C_first's Breakfast row opens the add sheet on Breakfast (FoodDayView.tsx:296-299).
+  await act(async () => {
+    fireEvent.press(await screen.findByTestId('food-day-first-breakfast'));
+  });
+  await waitFor(() => expect(screen.getByText(name)).toBeTruthy());
+  await act(async () => {
+    fireEvent.press(screen.getByText(name));
+  });
+  await act(async () => {
+    fireEvent.press(screen.getByRole('button', { name: 'Log food' }));
+  });
+  await waitFor(() => expect(logApi.logFood).toHaveBeenCalledTimes(1));
+  return jest.mocked(logApi.logFood).mock.calls[0][0];
+}
+
+describe('logging again from Recent on the Style C day saves the same nutrition as last time', () => {
+  it('a custom whole-portion food saves one portion (400 kcal), not two', async () => {
+    const payload = await logFromRecent('Custom lunch');
+    expect(payload).toMatchObject({ food_item_id: 'food-custom-lunch', meal_type: 'breakfast', date: mockToday });
+    expect(payload.quantity_multiplier).toBe(1);
+    expect(Math.round(customLunch.calories * (payload.quantity_multiplier as number))).toBe(400);
+    expect((payload.quantity_multiplier as number) * customLunch.protein_g).toBe(12);
+  });
+
+  it('a gram-weighed food saves the same grams and multiplier as last time', async () => {
+    const payload = await logFromRecent('Rolled oats');
+    expect(payload).toMatchObject({ food_item_id: 'food-oats', original_quantity: 60, original_unit: 'g' });
+    expect(payload.quantity_multiplier).toBeCloseTo(0.6, 10);
+  });
+});

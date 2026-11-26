@@ -55,7 +55,7 @@ async function fetchOneList(): Promise<ListItem[]> {
 }
 const fromShopping = (item: ListItem) => item.list_type === 'shopping';
 
-// Each list's words, all main's: the grocery ones from this screen, the shopping ones from ShoppingListScreen.tsx.
+// Each list's words, all main's: the grocery ones from this screen, the shopping ones from the old Shopping list screen.
 const LISTS = {
   grocery: {
     tab: 'Grocery', title: 'Grocery list', loading: 'Loading grocery list…', failed: "Couldn't load grocery list.",
@@ -514,7 +514,7 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
 
   });
 
-/** The same rows and fields on the Shopping list (one look for both lists). */
+/** The list styles, read by the kitchen style tests (one look for both lists, drawn by this screen). */
 export const makeListStyles = makeStyles;
 
 // ctx#527 style 1 (src/build.py:120-123, :199-206): 16 pt under the title, 4 pt inset and gap, radius.card outside and

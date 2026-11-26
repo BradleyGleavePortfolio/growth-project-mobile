@@ -37,6 +37,9 @@ export interface CommunityEmptyStateProps {
   onAction?: () => void;
   /** Optional seed override for the deterministic dry-quip selector. */
   quipSeed?: string;
+  /** REFINE-985 (Voice B Studio 05b .btn.p, B-05b-feed-1000_ios.html .btn :54, .btn.p :55): the action at 54 pt, Inter 600 16/20, padding
+   * 14 20. Only the client's DM thread passes it; unset, as before (the DM list's empty state waits for DM-LIST-MOCK). */
+  voiceB?: boolean;
   testID?: string;
 }
 
@@ -47,6 +50,7 @@ export default function CommunityEmptyState({
   actionLabel,
   onAction,
   quipSeed,
+  voiceB = false,
   testID,
 }: CommunityEmptyStateProps): React.ReactElement {
   const { semanticColors } = useTheme();
@@ -68,9 +72,9 @@ export default function CommunityEmptyState({
           accessibilityRole="button"
           accessibilityLabel={actionLabel}
           testID={`${testID ?? 'community-empty'}-action`}
-          style={[styles.cta, { backgroundColor: semanticColors.accent }]}
+          style={[styles.cta, { backgroundColor: semanticColors.accent }, voiceB ? styles.voiceBCta : null]}
         >
-          <Text style={[styles.ctaLabel, { color: semanticColors.textOnAccent }]}>
+          <Text style={[styles.ctaLabel, { color: semanticColors.textOnAccent }, voiceB ? styles.voiceBLabel : null]}>
             {actionLabel}
           </Text>
         </HapticPressable>
@@ -109,4 +113,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
+  // REFINE-985 `voiceB`: 05b .btn.p min-height 54px, radius 12px, padding 14px 20px, Inter 600 1rem/1.25.
+  voiceBCta: { minHeight: 54, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 14 },
+  voiceBLabel: { fontFamily: 'Inter_600SemiBold', fontSize: 16, lineHeight: 20 },
 });

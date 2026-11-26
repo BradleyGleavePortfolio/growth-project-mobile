@@ -17,9 +17,9 @@ jest.mock('../../../storage/mmkv', () => ({
     getAllKeys: async () => [],
   },
 }));
-jest.mock('../../../components/community/SafetyMenu', () => (p: { testID?: string }) => {
+jest.mock('../../../components/community/SafetyMenu', () => (p: { testID?: string; triggerColor?: string }) => {
   const { View } = jest.requireActual('react-native');
-  return jest.requireActual('react').createElement(View, { testID: p.testID, style: { minWidth: 44, minHeight: 44 } });
+  return jest.requireActual('react').createElement(View, { testID: p.testID, triggerColor: p.triggerColor, style: { minWidth: 44, minHeight: 44 } });
 });
 jest.mock('../../../theme/useTheme', () => {
   const { lightTokens } = jest.requireActual('../../../theme/tokens');
@@ -157,7 +157,8 @@ describe('frame 05b header', () => {
     expect(forestPop.deep).toBe('#1C3023');
     const title = u.getByRole('header');
     expect(title.props.children).toBe('Jordan');
-    expect(StyleSheet.flatten(title.props.style)).toMatchObject({ color: forestPop.onDeep, fontSize: 20 });
+    // REFINE-985: 05b .mtt :23's 19 pt on a 23.75 line (was 20).
+    expect(StyleSheet.flatten(title.props.style)).toMatchObject({ color: forestPop.onDeep, fontSize: 19, lineHeight: 23.75 });
     expect(u.queryByText(/member/i)).toBeNull();
     await fireEvent.press(u.getByLabelText('Back'));
     expect(mockGoBack).toHaveBeenCalledTimes(1);
@@ -167,7 +168,8 @@ describe('frame 05b header', () => {
     }
   });
 
-  it('open, with a message from them: Report / Block keeps a 44 pt slot on the deep bar (the bone circle sits behind it)', async () => {
+  // REFINE-985 (05b's info button, bare on the bar): the bone circle is gone; the menu's mark is light and its slot 44 pt.
+  it('open, with a message from them: Report / Block keeps a 44 pt slot on the deep bar, its mark light and bare', async () => {
     mockGetMe.mockResolvedValue(ME);
     mockList.mockResolvedValue([{ id: 'm1', sender_user_id: 'member-2', body: 'See you Saturday?', created_at: '2026-10-25T12:00:00Z', deleted: false }]);
     const u = await show();
@@ -176,7 +178,7 @@ describe('frame 05b header', () => {
     while (at && StyleSheet.flatten(at.props.style)?.width !== 44) at = at.parent;
     expect(StyleSheet.flatten(at.props.style)).toMatchObject({ width: 44, height: 44 });
     const chip = (at.children as any[]).find((n) => typeof n !== 'string' && StyleSheet.flatten(n.props?.style)?.borderRadius === 18);
-    expect(StyleSheet.flatten(chip.props.style)).toMatchObject({ position: 'absolute', width: 36, backgroundColor: forestPop.onDeep });
-    expect(chip.props.pointerEvents).toBe('none');
+    expect(chip).toBeUndefined();
+    expect(menu.props.triggerColor).toBe(forestPop.onDeep);
   });
 });

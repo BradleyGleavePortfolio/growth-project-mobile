@@ -103,7 +103,7 @@ const legacyAnswer = (closed: boolean) => ({ data: { by_client: {}, closed_clien
 const SHOWS: Record<Reader, readonly [string, string]> = {
   messages_card: ['Roman has 3 drafts ready', 'Roman has 2 drafts ready'],
   coach_home: ['3 waiting, 2 nudges, 1 workouts', '2 waiting, 1 nudges, 1 workouts'],
-  drafts_screen: ['Roman has 3 drafts ready', 'Roman has 2 drafts ready'],
+  drafts_screen: ['3 drafts to review', '2 drafts to review'],
 };
 const CLOSURES: Closure[] = ['closed_client_ids', 'closed_thread', 'later_page', 'legacy_closed_client_ids'];
 const READERS: Reader[] = ['messages_card', 'coach_home', 'drafts_screen'];
