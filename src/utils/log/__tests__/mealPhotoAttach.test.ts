@@ -45,7 +45,7 @@ jest.mock('../../logger', () => ({ logger: { info: jest.fn(), warn: jest.fn(), e
 jest.mock('../../../services/sentry', () => ({ captureError: jest.fn(), captureErrorWithoutPii: jest.fn(), setSentryUser: jest.fn() }));
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
 
-import { chooseMealPhoto, dropMealPhoto, mealPhotoAfterSave, MEAL_PHOTO_OPTIONS } from '../mealPhoto';
+import { chooseMealPhoto, dropMealPhoto, mealPhotoAfterSave, mealPhotoFollows, MEAL_PHOTO_OPTIONS } from '../mealPhoto';
 import { submitManualLogOnlineWithId, submitSearchLogOffline, submitSearchLogOnline } from '../logSubmit';
 import { repeatPastMeal } from '../quickLog';
 import { authEvents } from '../../authEvents';
@@ -430,16 +430,27 @@ describe('case 11: saves that never take the photo', () => {
     expect(attachCalls()).toHaveLength(1);
   });
 
-  it('Repeat (quickLog) saves as before and does not attach', async () => {
+  // FIX-992R2 (operator ruling (b)): the two cases that held the old drop, Repeat and another meal, turned around.
+  it('Repeat (quickLog) saves as before and its first saved food takes the photo (LO-992R1 B1, LS-992R1 B1)', async () => {
     await keep();
     await repeatPastMeal({ date: '2026-11-12', calories: 300, entries: [{ foodItemId: 'gy', name: 'Greek yoghurt', calories: 118, quantityMultiplier: 2 }] }, DAY, 'lunch');
     await settle();
     expect(mockLogFood).toHaveBeenCalledTimes(1);
+    expect(attachCalls()).toEqual([['/log/food/entry-1/photo', { key: 'meal/made-up-user/k1.jpg', width: 3024, height: 4032 }]]);
+  });
+
+  it('another meal (the meal choice moved after the photo): the food then logged to the meal the sheet shows takes it (LS-992R1 B2)', async () => {
+    await keep();
+    await submitSearchLogOnline(search({ mealType: 'dinner' })); // a meal the sheet does not show: no attach
+    await settle();
     expect(attachCalls()).toHaveLength(0);
+    mealPhotoFollows('dinner'); // the sheet's meal row moved to Dinner (FoodSearchModal)
+    await submitManualLogOnlineWithId(manual({ mealType: 'dinner' }));
+    await settle();
+    expect(attachCalls()).toEqual([['/log/food/entry-1/photo', { key: 'meal/made-up-user/k1.jpg', width: 3024, height: 4032 }]]);
   });
 
   it.each([
-    ['another meal (the Extras meal choice)', { mealType: 'dinner' }],
     ['another day', { date: '2026-11-12' }],
   ])('%s: saved as before, no attach, the photo stays kept', async (_n, over) => {
     await keep();
