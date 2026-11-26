@@ -1,0 +1,4 @@
+src/screens/client/__tests__/FIX987R4.plansRowEveryState.test.tsx
+src/screens/client/__tests__/LO987R3.b1.plansRow.test.tsx
+src/screens/client/__tests__/LS987R3.b1.workoutPlansReach.test.tsx
+src/screens/client/__tests__/WorkoutScreen.calm130.test.tsx
