@@ -152,7 +152,7 @@ describe('Train tab: one forest action and every route kept (TRAIN-TAB-FIN-130)'
     expect(mockNavigate).toHaveBeenLastCalledWith(...QUICK);
   });
 
-  it('two pending: the one forest action opens the list, with no second row to the same place', async () => {
+  it('two pending: the one forest action opens the list, and the Workout plans row opens it too (owner #203-E80)', async () => {
     mockUser = { ...mockUser, coach_id: 'coach' };
     mockAssignments = [pending('a1', 'Upper body A'), pending('a2', 'Lower body B'), done('a0')];
     const view = await render(<WorkoutScreen />);
@@ -160,7 +160,8 @@ describe('Train tab: one forest action and every route kept (TRAIN-TAB-FIN-130)'
     expect(forestButtons(view)).toEqual(['View 2 coach-assigned workouts']);
     await fireEvent.press(view.getByLabelText('View 2 coach-assigned workouts'));
     expect(mockNavigate).toHaveBeenLastCalledWith('MoreTab', { screen: 'ClientWorkoutViewer', initial: false });
-    expect(view.queryByLabelText('Workout plans')).toBeNull();
+    await fireEvent.press(view.getByLabelText('Workout plans'));
+    expect(mockNavigate).toHaveBeenLastCalledWith('MoreTab', { screen: 'ClientWorkoutViewer', initial: false });
   });
 
   it('nothing pending but some completed: Quick workout leads and the completed list stays reachable', async () => {
