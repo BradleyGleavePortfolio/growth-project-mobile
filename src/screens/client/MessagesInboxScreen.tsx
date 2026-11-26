@@ -184,7 +184,9 @@ function Rise({ index, children }: { index: number; children: React.ReactNode })
 export default function MessagesInboxScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }): React.ReactElement {
   const { semanticColors: sc } = useTheme();
   const { width } = useWindowDimensions();
-  const coachNameStyle = width / PixelRatio.getFontScale() >= 300 ? s.coachName : s.title;
+  // PLAN H1 as ruled, moved to 320 by operator ruling (2) (LO-982R3 B1): 32 pt only where window width / text size is at
+  // least 320, so a 6.3 em one-word first name stays whole at 390 and 393 pt with xxLarge text; 320 pt at 100% keeps 32.
+  const coachNameStyle = width / PixelRatio.getFontScale() >= 320 ? s.coachName : s.title;
   const needsCoach = useClientNeedsCoach();
   const { coach, left, closed } = useInbox(!needsCoach);
   const { messageCoach } = useEntitlement();
