@@ -5,9 +5,14 @@
  * `seen: false`, or no answer at all, shows the card; Record stores it (POST) and opens the record sheet, where the
  * phone asks for the microphone; Not now closes it with no phone ask (design training 5.5 anti-pattern 1). A coach's
  * card leaves out the report line (VN-C1, needs owner). Metrics are 08a's CSS (.sheet, .bpts, .bico, .btn).
+ * LS-944R1 B1 (m#944 fix round 1, FIX-944R1): with 08a's 130 pt buttons the card is taller than a 320 x 568 pt window
+ * at 130% text, which put its title and the line saying who can hear the note above the screen. So the sheet is capped
+ * at the window's height (useWindowDimensions) less the top inset, read like the bottom one, and only the lines scroll,
+ * between the title and the buttons. Where the card fits, the scroll is as tall as its lines, with no indicator and no
+ * bounce, so it draws as before.
  */
 import React, { useCallback, useContext } from 'react';
-import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -49,7 +54,9 @@ type Icon = React.ComponentProps<typeof Ionicons>['name'];
 
 export default function SpaceVoiceFirstUse({ visible, cohortName, coach, onRecord, onClose, onDismiss }: SpaceVoiceFirstUseProps): React.ReactElement {
   // As Screen (src/ui) does: read the context, so a tree with no provider gets 0, not a throw.
-  const bottomInset = useContext(SafeAreaInsetsContext)?.bottom ?? 0;
+  const insets = useContext(SafeAreaInsetsContext);
+  const bottomInset = insets?.bottom ?? 0;
+  const maxHeight = useWindowDimensions().height - (insets?.top ?? 0);
   const lines: [Icon, string][] = [
     ['lock-closed-outline', describeVoiceAudience({ kind: 'cohort', cohortName })],
     ['flag-outline', 'If someone reports a voice note, your coach and the TGP Fitness team can listen to it.'],
@@ -59,17 +66,19 @@ export default function SpaceVoiceFirstUse({ visible, cohortName, coach, onRecor
   return (
     <Modal visible={visible} transparent animationType={useReducedMotion() ? 'none' : 'slide'} onRequestClose={onClose} onDismiss={onDismiss}>
       <View style={s.scrim}>
-        <View style={[s.sheet, { paddingBottom: Math.max(bottomInset, 12) }]} accessibilityViewIsModal testID="space-chat-voice-first-use">
+        <View style={[s.sheet, { paddingBottom: Math.max(bottomInset, 12), maxHeight }]} accessibilityViewIsModal testID="space-chat-voice-first-use">
           <View style={s.grab} />
           <Text style={s.title} accessibilityRole="header">Voice notes</Text>
-          <View style={s.points}>
-            {lines.map(([icon, line]) => (
-              <View key={icon} style={s.point}>
-                <View style={s.wash}><Ionicons name={icon} size={20} color={fp.forest} /></View>
-                <Text style={s.text}>{line}</Text>
-              </View>
-            ))}
-          </View>
+          <ScrollView style={s.scroll} showsVerticalScrollIndicator={false} alwaysBounceVertical={false}>
+            <View style={s.points}>
+              {lines.map(([icon, line]) => (
+                <View key={icon} style={s.point}>
+                  <View style={s.wash}><Ionicons name={icon} size={20} color={fp.forest} /></View>
+                  <Text style={s.text}>{line}</Text>
+                </View>
+              ))}
+            </View>
+          </ScrollView>
           <View style={s.buttons}>
             <TouchableOpacity onPress={onRecord} accessibilityRole="button" accessibilityLabel="Record" style={s.record} testID="space-chat-voice-first-use-record">
               <Ionicons name="mic-outline" size={20} color={fp.onDeep} />
@@ -90,6 +99,7 @@ const s = StyleSheet.create({
   sheet: { backgroundColor: neutral[0], borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 8, paddingHorizontal: 20 },
   grab: { alignSelf: 'center', width: 36, height: 5, borderRadius: 3, backgroundColor: voiceShades.track, marginBottom: 10 },
   title: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 22, lineHeight: 29, color: fp.ink, marginTop: 8, marginBottom: 6 },
+  scroll: { flexGrow: 0 },
   points: { gap: 12, marginTop: 10, marginBottom: 6 },
   point: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   wash: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center',
