@@ -8,7 +8,7 @@
  * WORKOUT_NOT_FOUND (the workout is gone from the server) offers no Send again: its next step is Remove.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Animated, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NavigationProp, ParamListBase, useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,6 +16,7 @@ import { Colors } from '../../constants/colors';
 import { useMyCoaches } from '../../hooks/useCalendar';
 import { useCoachlessClient } from '../../hooks/useCoachlessClient';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import {
   deadLetterEvents,
   listRefusedWorkouts,
@@ -140,6 +141,15 @@ export default function RefusedWorkoutCard() {
   const [again, setAgain] = useState<ReadonlySet<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [all, setAll] = useState(false);
+  // The card fades in over 150 ms, at once with Reduce Motion (ctx#579 index.md, the styles' shared rules).
+  const reduced = useReducedMotion();
+  const fade = useRef(new Animated.Value(1)).current;
+  const shown = items.length > 0;
+  useEffect(() => {
+    if (!shown || reduced) return;
+    fade.setValue(0);
+    Animated.timing(fade, { toValue: 1, duration: 150, useNativeDriver: true }).start();
+  }, [shown, reduced, fade]);
 
   const send = async (id: string) => {
     if (!userId || busy) return;
@@ -205,7 +215,7 @@ export default function RefusedWorkoutCard() {
   };
 
   return (
-    <>
+    <Animated.View style={{ opacity: reduced ? 1 : fade }} testID="refused-workouts">
       {items.length > 1 && !all ? (
         <View style={[s.card, { borderColor: Colors.offlineBanner }]} accessibilityLiveRegion="polite" testID="refused-count-card">
           <Text maxFontSizeMultiplier={CAP} style={s.title}>{c.count(items.length)}</Text>
@@ -222,7 +232,7 @@ export default function RefusedWorkoutCard() {
         <RefusedWorkoutSheet item={open} coach={coach} again={again.has(open.id)} busy={busy === open.id}
           onClose={() => setOpenId(null)} onSend={() => void send(open.id)} onTell={tell} onRemove={() => remove(open)} />
       ) : null}
-    </>
+    </Animated.View>
   );
 }
 
