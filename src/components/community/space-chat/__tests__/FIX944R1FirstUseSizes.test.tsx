@@ -6,8 +6,9 @@
  *   a. the B-TEST's two cells with a top inset: the member's card is too tall for 568 pt and must scroll under a cap of
  *      the window less the inset; the coach's two-line card fits;
  *   b. 320 x 568, 360 x 640, 375 x 667 and 390 x 844, at 100%, 130% and 200% text, with insets 20/0, 24/0 and 47/34,
- *      member and coach: the sheet's maxHeight is the window's height (useWindowDimensions) less the top inset, and a
- *      ScrollView holds the lines;
+ *      member and coach: the sheet's maxHeight is the window's height (useWindowDimensions) less the top inset, it may
+ *      shrink to its Modal (flexShrink 1: an Android Modal that is not statusBarTranslucent sits between the system bars,
+ *      so it can be shorter than that cap), and a ScrollView holds the lines;
  *   c. 390 x 844 at 100% and 130%, where the card fits: every style it drew before this round, in the same order;
  *   d. what it does: Record, Not now, the hardware back, onDismiss, the header first, the modal view; the grab, the
  *      title and both buttons outside the scroll, which shows no indicator and does not bounce while the lines fit;
@@ -129,18 +130,18 @@ const INSETS: Insets[] = [{ top: 20, bottom: 0 }, { top: 24, bottom: 0 }, { top:
 const CELLS = [false, true].flatMap((coach) => WINDOWS.flatMap(([w, h]) => SCALES.flatMap((fs) => INSETS.map((inset) =>
   ({ who: coach ? 'coach' : 'member', coach, w, h, fs, inset })))));
 
-describe('FIX-944R1 b: capped at the window less the top inset, the lines scrolling, in every window', () => {
+describe('FIX-944R1 b: capped at the window less the top inset, shrinking to its Modal, the lines scrolling, in every window', () => {
   it.each(CELLS)('$who, $w x $h at $fs x text, insets $inset.top/$inset.bottom', async ({ coach, w, h, fs, inset }) => {
     const c = await draw({ coach, w, h, fs, insets: inset });
-    expect({ maxHeight: c.box.maxHeight, linesScroll: c.lines.map((l) => Boolean(scrollOf(l, c.sheet))) })
-      .toEqual({ maxHeight: h - inset.top, linesScroll: c.lines.map(() => true) });
+    expect({ maxHeight: c.box.maxHeight, shrinks: c.box.flexShrink, linesScroll: c.lines.map((l) => Boolean(scrollOf(l, c.sheet))) })
+      .toEqual({ maxHeight: h - inset.top, shrinks: 1, linesScroll: c.lines.map(() => true) });
   });
 });
 
 describe('FIX-944R1 c: where it fits (390 x 844), the card draws as before this round', () => {
   it.each([1, 1.3])('at %s x text: the same styles and the same order', async (fs) => {
     const c = await draw({ w: 390, h: 844, fs, insets: { top: 47, bottom: 34 } });
-    const { maxHeight: _cap, paddingBottom, ...sheet } = c.box;
+    const { maxHeight: _cap, flexShrink: _shrink, paddingBottom, ...sheet } = c.box;
     const row = up(c.lines[0]);
     const { opacity: _r, ...record } = flat(c.record);
     const { opacity: _q, ...quiet } = flat(c.notNow);
