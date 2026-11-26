@@ -87,14 +87,15 @@ const live = (m: SpaceMessage) =>
 const drawable = (m: SpaceMessage) => live(m) || (kindDrawn(m) && isCoachRemoved(m));
 
 export default function CommunitySpaceChatScreen(): React.ReactElement {
-  const { cohortId, messageId } = useRoute<RouteProp<Params, 'CommunitySpaceChat'>>().params;
+  const link = useRoute<RouteProp<Params, 'CommunitySpaceChat'>>().params;
+  const { cohortId, messageId } = link;
   // FIX-945R4 (LS-945 B1): a push or a link into the chat already on screen keeps its stack key and changes only these
   // params. Another space is a new mount of everything below, as a fresh open: its own place, read marks, pill, sheets,
   // box, mic and stream. A new message asked for in the same space opens again at that row (the visit, below).
-  return <SpaceChat key={cohortId} cohortId={cohortId} messageId={messageId} />;
+  return <SpaceChat key={cohortId} cohortId={cohortId} messageId={messageId} link={link} />;
 }
 
-function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React.ReactElement {
+function SpaceChat({ cohortId, messageId, link }: Params['CommunitySpaceChat'] & { link: object }): React.ReactElement {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   // The coach's stack has the space's member page; the member stack has the space drawer.
   const coachStack = !!navigation.getState?.()?.routeNames?.includes('CoachCommunityCohortDetail');
@@ -159,7 +160,7 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
   // The row to open at, tried again (a few frames at most) while the rows around it have not measured yet; SC-M3: the
   // row a quote scrolls to, while that scroll is on its way. FIX-945R4 (LS-945 B1): both are this visit's, the link the
   // page opened at; a new message asked for here starts the visit over, and a timer of the last one moves nothing.
-  const visit = useRef({ messageId, tries: 0, jumping: null as number | null });
+  const visit = useRef({ link, messageId, tries: 0, jumping: null as number | null });
   const placedRef = useRef(false);
   placedRef.current = placed;
   const toRow = useCallback((index: number) => listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: false }), []);
@@ -188,13 +189,14 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
     }
     const index = items.findIndex((i) => (messageId ? i.key === messageId : i.type === 'new'));
     const v = visit.current;
+    const dragged = placedRef.current;
     setTarget(index > 0 ? items[index].key : null);
     // FIX-945R5 (LS-945R5 B1): else at the newest rows, where a fresh open starts (the newest message asked for, one not
     // held here, nothing unread), so a visit started over in the list on screen ends there too.
     requestAnimationFrame(() => {
       if (visit.current !== v) return;
       if (index > 0) toRow(index);
-      else listRef.current?.scrollToOffset({ offset: 0, animated: false });
+      else if (!dragged) listRef.current?.scrollToOffset({ offset: 0, animated: false });
     });
   }, [items, messageId, target, chat.readSettled, chat.readCursor, chat.messages, chat.list, toRow]);
   // In place once the row it opened at is on screen (or the person scrolls); only then do read marks count.
@@ -238,12 +240,12 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
   // its retries, a quote's scroll on its way and the row it lit start over. What the space holds (its rows on screen,
   // read marks, pill, sheets, reply) stays: it is the same space.
   useEffect(() => {
-    if (visit.current.messageId === messageId) return;
-    visit.current = { messageId, tries: 0, jumping: null };
+    if (visit.current.link === link) return;
+    visit.current = { link, messageId, tries: 0, jumping: null };
     setTarget(undefined);
     setPlaced(false);
     setLit(null);
-  }, [messageId]);
+  }, [link, messageId]);
   // What Reply answers: the row, or on a reply the first message of its thread (the server keeps one level, as a Slack
   // thread does). None where the server would refuse it: a message gone, a space this person is not let into, and in a
   // space only the coach posts in, a member's own top-level row (members answer the coach's posts there).
