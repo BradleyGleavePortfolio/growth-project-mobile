@@ -23,11 +23,18 @@ import Day1WinScreen from '../Day1WinScreen';
 import { firstWinApi } from '../../../services/firstWinApi';
 import { addDays, getTodayString } from '../../../utils/date';
 
-// A fixed clock, never the real date (FIX-930R2 LO-930R2 B1 class). Only Date is faked (and keeps ticking).
+// A fixed clock, never the real date (FIX-930R2 LO-930R2 B1 class). Only Date is faked (and keeps ticking) while the
+// file loads, so mockDate below is that day; each journey then holds the whole clock on the same day (next hooks).
 jest.useFakeTimers({ now: new Date('2026-11-05T12:00:00'), advanceTimers: true, doNotFake: ['nextTick', 'setImmediate',
   'clearImmediate', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'queueMicrotask', 'hrtime',
   'performance', 'requestAnimationFrame', 'cancelAnimationFrame', 'requestIdleCallback', 'cancelIdleCallback'] });
 afterAll(() => jest.useRealTimers());
+// LogScreen searches 600 ms after the last keystroke (its search debounce), and each wait after typing gave that
+// search 1,000 ms of real time: a stall over both ends let the wait end first (LS-FOOD-JOURNEY-WAITS-M-1 N2). Every
+// journey holds jest's clock (timers too) on the fixed day from before the store resets (its reset reads the day,
+// clientStore.ts:166), so those waits spend held time only and the search always lands inside them.
+beforeEach(() => jest.useFakeTimers({ now: new Date('2026-11-05T12:00:00') }));
+afterEach(() => jest.useRealTimers());
 
 const mockUser: { id: string; coach_id?: string } = { id: 'client' };
 jest.mock('../../../config/featureFlags', () => {
