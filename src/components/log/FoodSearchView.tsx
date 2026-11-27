@@ -17,6 +17,7 @@ import { TextLink } from '../../ui';
 import { QuietText as Text } from '../../ui/progress/QuietBar';
 import FoodImage from '../FoodImage';
 import { SearchResult } from '../../utils/log/types';
+import { drawingFor } from '../../utils/log/foodDrawing';
 import type { PastMeal } from '../../hooks/useFoodBrowse';
 import { formatPortion } from '../../utils/log/quickLog';
 import { calcMacros } from '../../utils/log/macros';
@@ -48,6 +49,8 @@ interface Props {
   repeatMealTitle?: string;
   onRepeatMeal?: () => void;
   saving?: boolean;
+  /** MEAL-PHOTO-M: opens the photo chooser; absent (Android, R3), column 2 stays empty as before. */
+  onMealPhoto?: () => void;
 }
 
 const shownNumber = (value: number) => Number.isFinite(value) ? String(Math.round(value)) : '—';
@@ -69,17 +72,22 @@ export function foodRowFacts(item: SearchResult): { line: string; kcal: string }
 
 function FoodThumb({ item }: { item: SearchResult }) {
   const styles = makeStyles(useTheme().semanticColors);
-  if (item.image_url) {
+  // FOOD-IMAGES-M R6: the photo that failed on this row; a new image_url on the row shows again.
+  const [failedUri, setFailedUri] = React.useState<string | null>(null);
+  if (item.image_url && item.image_url !== failedUri) {
+    const uri = item.image_url;
     return (
       <Image
-        source={{ uri: item.image_url }}
+        source={{ uri }}
         style={styles.foodThumb}
         resizeMode="cover"
+        onError={() => setFailedUri(uri)}
       />
     );
   }
-  // REFINE-968 (ruling 6): with no photo, the C_add cream tile with its bowl.
-  return <FoodImage name={item.name || '?'} size={48} drawn />;
+  // REFINE-968 (ruling 6), FOOD-IMAGES-M (#192-E6): with no photo, the stock photo, else the C_add cream tile with the
+  // food group's drawing (the bowl with no group).
+  return <FoodImage name={item.name || '?'} size={48} drawn drawing={drawingFor(item.name, item.food_group)} />;
 }
 
 function FoodRow({ item, onPress }: { item: SearchResult; onPress: () => void }) {
@@ -124,11 +132,14 @@ export default function FoodSearchView({
   repeatMealTitle,
   onRepeatMeal,
   saving,
+  onMealPhoto,
 }: Props) {
   const { semanticColors: sc } = useTheme();
   const styles = makeStyles(sc);
-  // Past 100% text the manual tile takes two shares (REFINE-968's rule, kept), so its words stay inside the tile.
-  const wideTile = useWindowDimensions().fontScale > 1;
+  // Past 100% text the manual tile takes two shares (REFINE-968's rule), so its words stay inside the tile. With Photo of
+  // a meal in column 2 the row keeps the drawing's three equal columns: a quarter of 320 pt cannot hold "Photo" at 130%
+  // (MEAL-PHOTO-M R1), and a third holds "Quick" and "Photo" both.
+  const wideTile = useWindowDimensions().fontScale > 1 && !onMealPhoto;
   const browseList = recentTab === 'recent' ? recentFoods : frequentFoods;
   const showList = searchQuery.length >= 2 ? searchResults : browseList;
   const showEmpty =
@@ -139,8 +150,8 @@ export default function FoodSearchView({
     <View style={styles.modalBody}>
       {!searchingNow ? (
         // REFINE-968 (C_add.html :121 .c-big2): the drawn three columns, main's manual entry in the first with the drawn
-        // "Quick add" words and bolt (QUICKADD-968; the drawing has it third, working tiles fill from the left);
-        // columns 2 and 3 hold their place for MEAL-PHOTO-M's Photo of a meal and a later barcode tile (never a dead tile).
+        // "Quick add" words and bolt (QUICKADD-968; the drawing has it third, working tiles fill from the left); column 2
+        // MEAL-PHOTO-M's Photo of a meal (iOS), column 3 holds its place for a later barcode tile (never a dead tile).
         <View style={styles.toolsRow} testID="food-tools">
           <HapticPressable
             intent="light"
@@ -153,7 +164,20 @@ export default function FoodSearchView({
             <SheetGlyph name="bolt" size={24} color={sc.accentText} />
             <Text style={styles.toolTileText}>Quick add</Text>
           </HapticPressable>
-          <View style={styles.toolCell} />
+          {onMealPhoto ? (
+            <HapticPressable
+              intent="light"
+              containerStyle={styles.toolCell}
+              style={styles.toolTile}
+              onPress={onMealPhoto}
+              accessibilityRole="button"
+              accessibilityLabel="Photo of a meal"
+              accessibilityHint="Take or choose a photo to keep with the next food you add"
+            >
+              <SheetGlyph name="camera" size={24} color={sc.accentText} />
+              <Text style={styles.toolTileText}>Photo of a meal</Text>
+            </HapticPressable>
+          ) : <View style={styles.toolCell} />}
           <View style={styles.toolCell} />
         </View>
       ) : null}
@@ -323,6 +347,8 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   toolCell: { flex: 1 },
   toolCellWide: { flex: 2 },
   toolTile: {
+    // MEAL-PHOTO-M: with two working tiles each fills the row's height, as the drawn grid's tiles do.
+    flexGrow: 1,
     minHeight: 72,
     paddingHorizontal: 12,
     paddingVertical: 8,

@@ -36,6 +36,8 @@ import {
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useBodyWeightExercises } from '../../hooks/useBodyWeightExercises';
 import { errorMessage } from '../../types/common';
+import { refusalLines, refusalOf } from '../../offline/sync/refusal';
+import { REFUSAL_COPY } from '../../components/workout/RefusedWorkoutCard';
 import { randomUuid } from '../../utils/idempotency';
 import { toServerMuscleGroup } from '../../utils/workout/muscleGroup';
 import {
@@ -201,6 +203,9 @@ export default function ActiveWorkoutScreen() {
   // Offline queue key for this workout session. Fixed at the first Finish so
   // tapping Finish again updates the one queued copy instead of adding one.
   const queueKeyRef = useRef<string>('');
+  // ALM-D8 (OPERATOR RULING 7209272454, owner #ALM-E15 "op 1"): the last Finish was refused with a coded reason and the
+  // workout is parked on this phone with it, so the leave question may offer Leave. Each new Finish clears it.
+  const refusedParkedRef = useRef(false);
   // Gates the persistence effect until we've decided whether we are
   // creating a fresh session or restoring a stored one. Without this
   // gate the initial empty `sessionExercises` value would overwrite a
@@ -885,6 +890,7 @@ export default function ActiveWorkoutScreen() {
           }
           const queueKey = queueKeyRef.current;
           let queued = false;
+          refusedParkedRef.current = false;
 
           try {
             const result = await queueWorkout({
@@ -1155,6 +1161,14 @@ export default function ActiveWorkoutScreen() {
                   : 'No connection.';
                 // C5: a refusal (or no local copy) goes back to the logger, where "tap Finish again" is true.
                 if (rating) setSummaryOpen(false);
+                // WORKOUT-REFUSAL-M (Style 2): a coded refusal says what the server said and its next step.
+                const refusal = refusalOf(err);
+                if (refusal) {
+                  // ALM-D8: parked with its reason (the engine keeps it with the queued row), so she may now leave.
+                  refusedParkedRef.current = queued;
+                  Alert.alert(REFUSAL_COPY.title, refusalLines(refusal, REFUSAL_COPY).join('\n\n'));
+                  return;
+                }
                 Alert.alert(
                   'Workout not saved yet',
                   `${reason.replace(/\.?$/, '.')} The sets stay on this screen. Check the connection, then tap Finish again.`,
@@ -1216,7 +1230,8 @@ export default function ActiveWorkoutScreen() {
       if (timerRef.current) clearInterval(timerRef.current);
   };
 
-  const askBeforeLeaving = (leave: () => void, releaseIfEmpty: boolean) => {
+  // `leaveRefused`: how Leave (ALM-D8) leaves; a tab press also closes the logger, which a tab switch keeps open.
+  const askBeforeLeaving = (leave: () => void, releaseIfEmpty: boolean, leaveRefused: () => void = leave) => {
     if (finishingRef.current) {
       leave();
       return;
@@ -1245,6 +1260,10 @@ export default function ActiveWorkoutScreen() {
       [
         { text: 'Keep training', style: 'cancel' },
         { text: 'Finish and log', onPress: () => finishWorkout(true) },
+        // ALM-D8 (OPERATOR RULING 7209272454): after a coded refusal parked on this phone, Leave closes the logger and
+        // ends the live session (its saved copy, timers and writes, as for an empty one); nothing is sent and the parked
+        // workout stays for the Train tab's card. Before a refusal the question is main's.
+        ...(refusedParkedRef.current ? [{ text: REFUSAL_COPY.leave, onPress: () => void releaseEmptySession().then(leaveRefused) }] : []),
       ],
     );
   };
@@ -1268,7 +1287,10 @@ export default function ActiveWorkoutScreen() {
     [navigation],
   );
   // A press on another tab asks the same question (ClientNavigator).
-  useEffect(() => setWorkoutLeaveGuard((leave) => askBeforeLeavingRef.current(leave, false)), []);
+  useEffect(() => setWorkoutLeaveGuard((leave) => askBeforeLeavingRef.current(leave, false, () => {
+    navigation.goBack(); // ALM-D8: Leave closes the logger (finishingRef is set, so beforeRemove lets it go), then the tab opens
+    leave();
+  })), [navigation]);
 
   // FIX-974R1 (LS-974R1 B1): the summary is the whole screen (C2_summary_*); ClientNavigator hides the tab bar while
   // this route says summary (navigation/workoutSummaryTabBar).

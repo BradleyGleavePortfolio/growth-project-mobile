@@ -21,6 +21,7 @@ import {
   StyleProp,
   ViewStyle,
   GestureResponderEvent,
+  type View,
 } from 'react-native';
 import { HapticService } from '../ui/haptics/haptics.service';
 import { useReduceMotion } from '../screens/client/wearables/components/useReduceMotion';
@@ -30,6 +31,8 @@ import { useReduceMotion } from '../screens/client/wearables/components/useReduc
 export type HapticIntent = 'light' | 'medium' | 'heavy' | 'success' | 'warning' | 'error';
 
 export interface HapticPressableProps extends Omit<PressableProps, 'style'> {
+  /** React 19: reaches the Pressable through `rest` (FIX-938: an inbox row's screen-reader focus). */
+  ref?: React.Ref<View>;
   /** Haptic + visual weight of the interaction */
   intent?: HapticIntent;
   /** Static or function style — same shape as Pressable style prop */

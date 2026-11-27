@@ -128,7 +128,7 @@ export function installForegroundHandler(): () => void {
     foregroundBannerStore.getState().showBanner({
       title: title ?? '',
       body: body ?? '',
-      notificationId: notification.request.identifier,
+      notificationId: tapIdOf(notification) ?? notification.request.identifier,
       ...pushTapOf(notification.request.content.data),
       // REFINE-966: the banner's mark only, beside the tap and never inside it.
       ...(kind !== undefined ? { kind } : {}),
@@ -212,6 +212,22 @@ export function pushTapOf(data: Record<string, unknown> | undefined): PushTap {
   };
 }
 
+/**
+ * PUSH-REPEAT-TAP-M (LS-945R6 F2): the id the tap router dedupes a tap on, one per delivery. Every unread push of a
+ * space comes under one identifier (the server's collapse id and tag; Android expo-notifications 56.0.18 takes
+ * data.tag as the identifier, FirebaseMessagingDelegate.kt:128-129), so the identifier alone opened only the first of
+ * them while the app lived. Each delivery has its own date (Android the message's sent time in ms, :120 and
+ * NotificationSerializer.java:52, :216; iOS the notification's date in s, NotificationRecords.swift:441), and one
+ * delivery handed over twice (the listener and getLastNotificationResponseAsync on a cold start) is the one stored
+ * response with one date (NotificationsEmitter.kt:68-71; EmitterModule.swift:36-38). So the identifier with the date
+ * opens each delivery once. No date (or Android's 0 for a missing sent time): the identifier alone, as before.
+ */
+function tapIdOf(notification: { date?: unknown; request?: { identifier?: string } } | null | undefined): string | undefined {
+  const id = notification?.request?.identifier;
+  const date = notification?.date;
+  return id && typeof date === 'number' && date > 0 ? `${id}@${date}` : id;
+}
+
 function dispatchResponse(
   response: Notifications.NotificationResponse | null | undefined,
   onResponse: NotificationResponseCallback,
@@ -219,18 +235,19 @@ function dispatchResponse(
   if (!response) return;
   const request = response.notification?.request;
   const { actionScreen, actionParams, deepLink } = pushTapOf(request?.content?.data);
+  const id = tapIdOf(response.notification);
   if (deepLink !== undefined) {
-    onResponse(actionScreen, actionParams, request?.identifier, deepLink);
+    onResponse(actionScreen, actionParams, id, deepLink);
   } else {
-    onResponse(actionScreen, actionParams, request?.identifier);
+    onResponse(actionScreen, actionParams, id);
   }
 }
 
 /**
  * Install ONCE at the app root (App.tsx). Routes taps on background pushes
  * and, via getLastNotificationResponseAsync, the tap that cold-started the
- * app. The callback receives the notification id so callers can dedupe the
- * cold-start replay against the live listener.
+ * app. The callback receives the delivery's id (tapIdOf) so callers can dedupe
+ * the cold-start replay against the live listener.
  */
 export function installNotificationResponseHandler(
   onResponse: NotificationResponseCallback,

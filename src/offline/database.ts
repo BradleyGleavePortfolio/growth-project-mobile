@@ -25,6 +25,8 @@
  *       failures stop hammering the server forever (Hunt P1-1).
  *   v4: add payload / client_key / assignment_json TEXT so a finished workout
  *       is queued as one row and reaches the server exactly once.
+ *   v5: add refusal TEXT: the server's coded reason and next step for a
+ *       parked workout (WORKOUT-REFUSAL-M; null when the server sent none).
  *
  * @see docs/offline-architecture.md
  */
@@ -97,7 +99,7 @@ async function bootstrap(db: SQLite.SQLiteDatabase): Promise<void> {
   // (unique, so tapping Finish again updates the same row instead of queueing
   // a second copy) and `assignment_json` is the coach-assignment completion
   // still to send once the workout itself is on the server.
-  for (const column of ['payload', 'client_key', 'assignment_json']) {
+  for (const column of ['payload', 'client_key', 'assignment_json', 'refusal']) {
     if (!(await tableHasColumn(db, 'workout_logs', column))) {
       await db.execAsync(`ALTER TABLE workout_logs ADD COLUMN ${column} TEXT;`);
     }

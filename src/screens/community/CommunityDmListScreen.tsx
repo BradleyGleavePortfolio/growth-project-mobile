@@ -10,6 +10,9 @@
  * forest card at the top (DmCoachCard), with or without a thread, then "Conversations" over every other thread in the
  * server's order (DmRow's Studio row: a blank tile, a chevron, no name the phone was not given). With no thread at all
  * the card is followed by the action, the title and Roman's line, in the drawing's order.
+ * COMMUNITY-DM-FORMER-REACH-M (owner ALM-P1, #ALM-E12, Style 3 "Coaches first"): her one former coach (GET /community/me
+ * former_coach_dms[0]) is the cream card right under her coach's card, in row 1b's form (FormerCoach.tsx). That thread
+ * is in her old coach's community, so "No conversations yet" is not drawn while the card is.
  *
  * Empty inbox → Roman-voiced empty state with a primary action ("Send your
  * coach a message"). Standardized on semanticColors / tokens.ts.
@@ -35,12 +38,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
 import { brand, colors, forestPop as fp, spacing, radius } from '../../theme/tokens';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import { useDmThreads, useMyCoachName } from '../../hooks/useCommunity';
+import { useCommunityMe, useDmThreads, useMyCoachName } from '../../hooks/useCommunity';
 import {
   CommunityEmptyState,
   DmRow,
 } from '../../components/community';
 import DmCoachCard from '../../components/community/DmCoachCard';
+import { FormerCoachEntry, useFormerCoach } from '../../components/community/FormerCoach';
 import { romanCopy } from '../../components/community/romanVoice';
 import HapticPressable from '../../components/HapticPressable';
 import type { CommunityDmThread } from '../../api/communityApi';
@@ -86,6 +90,7 @@ export default function CommunityDmListScreen({
   const threads = useDmThreads(workspaceId);
   const coachId = client?.coach_id ?? null;
   const coachName = useMyCoachName(coachId).name;
+  const listedFormer = useFormerCoach(useCommunityMe().data, coachId);
 
   // The workspace prerequisite must SUCCEED before we can decide "no
   // conversations". The parent threads the real `me.isLoading`/`me.isError`
@@ -123,6 +128,7 @@ export default function CommunityDmListScreen({
   const others = coachFirst ? data.filter((t) => t.other_user_id !== coachId) : data;
   const openCoach = () =>
     (coachThread ? openThread(coachThread) : navigation.navigate('CommunityDmThread', { recipientId: coachId as string }));
+  const former = coachFirst ? listedFormer : null;
 
   const Container: React.ComponentType<{ children: React.ReactNode }> = embedded
     ? ({ children }) => <View style={styles.flex}>{children}</View>
@@ -227,7 +233,10 @@ export default function CommunityDmListScreen({
         onPress={openCoach}
         testID={coachThread ? `dm-row-${coachThread.thread_id}` : 'dm-coach-card'}
       />
-      {isEmpty ? (
+      {former ? (
+        <FormerCoachEntry former={former} onPress={() => navigation.navigate('CommunityDmThread', { recipientId: former.coachId })} />
+      ) : null}
+      {isEmpty && !former ? (
         // Style 1 L4 (.empty :57-60, .btn :40): the action, the title, then Roman's line.
         <View style={styles.empty} testID="community-dmlist-empty">
           <HapticPressable
