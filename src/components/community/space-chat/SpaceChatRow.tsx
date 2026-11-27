@@ -3,8 +3,9 @@
  * (members on the Studio greens, the coach deep with a gold initial), the name exactly as the server sends it, the Coach
  * mark (VN-M1) on the coach's rows, the time, then the content under the name. Each message kind draws in one place
  * (MessageBody): text unboxed, voice on m#848's player via SpaceVoiceNote (New / Played, SC-M2); a later kind adds a case.
- * Rows the viewer sent carry the send state beside the name (mockup 03 / 04): Sending... and Waiting to send (with a
- * clock) keep the text at full contrast (FR-871 Sol B4: no fade); Not sent has Try again (the same Idempotency-Key)
+ * Rows the viewer sent carry the send state beside the name (mockup 03 / 04): Sending..., and waiting offline the voice
+ * card's two marks, the small circle and the struck wifi (owner 7 A, TEXT-PENDING-M), keep the text at full contrast
+ * (FR-871 Sol B4: no fade); Not sent has Try again (the same Idempotency-Key)
  * and Delete. Report / Block / Delete go through SafetyMenu; a row still on the phone has its own ••• that only deletes
  * it from the phone (FR-871R5, m#879 Opus B3 / Sol B4), and a row on its way or already taken by the server has none
  * until the server row takes its place (FR-871R7, Sol B879-3). Metrics are 05b's CSS (FR-871 Sol B3 / Opus B1).
@@ -15,7 +16,7 @@
  * message as the row's actions, and hear the quote first in its one label.
  */
 import React, { useState } from 'react';
-import { Alert, Image, Pressable, StyleSheet, Text, TouchableOpacity, View, type AccessibilityActionEvent } from 'react-native';
+import { ActivityIndicator, Alert, Image, Pressable, StyleSheet, Text, TouchableOpacity, View, type AccessibilityActionEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import SafetyMenu from '../SafetyMenu';
 import VoiceReportedFold, { markVoiceNoteReported, useReportedVoiceNotes } from '../VoiceReportedFold';
@@ -112,6 +113,7 @@ function MessageBody(p: SpaceChatRowProps & { folded: boolean }): React.ReactEle
   );
 }
 
+// TEXT-PENDING-M: "Waiting to send" is now spoken only (the head's label); a waiting text row draws the two marks instead.
 const STATE_WORD: Record<'sending' | 'waiting' | 'failed', string> = { sending: 'Sending…', waiting: 'Waiting to send', failed: 'Not sent' };
 
 export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
@@ -159,8 +161,18 @@ export default function SpaceChatRow(p: SpaceChatRowProps): React.ReactElement {
           onAccessibilityAction={act} onLayout={(e) => setWrapped(e.nativeEvent.layout.height > 24)}>
           <Text style={s.name}>{p.name}</Text>
           {p.isCoach ? <Text style={s.mark}>Coach</Text> : null}
-          {shown === 'waiting' && !p.voice ? <Ionicons name="time-outline" size={14} color={SMALL_GREY} /> : null}
-          <Text style={s.time} testID={shown ? `space-chat-${shown}-${p.id}` : undefined}>{time}</Text>
+          {shown === 'waiting' && !p.voice ? (
+            // The voice card's marks to the point (SpaceVoiceNote.tsx s.played, s.wifiOff, s.strike), hidden: the label says them.
+            <View style={s.waiting} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden testID={`space-chat-waiting-${p.id}`}>
+              <ActivityIndicator size="small" color={SMALL_GREY} testID={`space-chat-waiting-circle-${p.id}`} />
+              <View style={s.wifiOff} testID={`space-chat-waiting-wifi-off-${p.id}`}>
+                <Ionicons name="wifi-outline" size={18} color={SMALL_GREY} />
+                <View style={s.strike} />
+              </View>
+            </View>
+          ) : (
+            <Text style={s.time} testID={shown ? `space-chat-${shown}-${p.id}` : undefined}>{time}</Text>
+          )}
         </View>
         {/* FR-871R6 (m#879 Opus B3 / Sol B879-3): no Delete while a row reads Sending…: its send cannot be called back.
             FR-871R7 (Sol B879-3): nor once the server took it (sent, the list not refreshed yet): it is on the server for
@@ -265,6 +277,10 @@ const s = StyleSheet.create({
   name: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 15, lineHeight: 20, color: fp.ink, flexShrink: 1 },
   mark: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 11, lineHeight: 13, letterSpacing: 0.22, color: fp.gold, backgroundColor: fp.deep, borderRadius: radius.chip, paddingHorizontal: spacing.sm, paddingVertical: 3, overflow: 'hidden' },
   time: { fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18, color: SMALL_GREY },
+  // TEXT-PENDING-M: a text waiting offline, the voice card's marks (SpaceVoiceNote.tsx :155, :165-166) in SMALL_GREY.
+  waiting: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  wifiOff: { width: 20, height: 20, alignItems: 'center', justifyContent: 'center' },
+  strike: { position: 'absolute', width: 22, height: 2, borderRadius: 1, transform: [{ rotate: '-45deg' }], backgroundColor: SMALL_GREY },
   // Text: up under the name, 2 pt below it, as in 05b (the head row stays 44 pt for the menu's touch target).
   content: { marginLeft: AVATAR + GAP, marginRight: spacing.md, marginTop: -10, gap: spacing.xs },
   voiceCard: { marginLeft: 46, marginRight: spacing.sm, marginTop: 6 },

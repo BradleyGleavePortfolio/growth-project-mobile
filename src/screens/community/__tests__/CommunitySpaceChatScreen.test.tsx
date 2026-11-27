@@ -462,7 +462,7 @@ it.each([['no connection', false, null], ['connected, internet not reachable', t
   await r.findByTestId('space-chat-row-m3');
   await fireEvent.changeText(r.getByTestId('space-chat-composer-field'), 'On the train');
   await fireEvent.press(r.getByTestId('space-chat-composer-send'));
-  expect(await r.findByText('Waiting to send')).toBeTruthy();
+  expect(await r.findByLabelText(/, Waiting to send\. On the train$/)).toBeTruthy(); expect(r.queryByText('Waiting to send', { includeHiddenElements: true })).toBeNull();
   expect(mockApi.post.mock.calls.filter(([u]) => String(u).endsWith('/messages'))).toHaveLength(0);
   mockNet.isOnline = true;
   mockNet.reachable = true;
@@ -953,7 +953,7 @@ describe('FR-871R6 (m#879): the bottom inset, rows on their way, the report card
     await b.findByTestId('space-chat-row-m3');
     await fireEvent.changeText(b.getByTestId('space-chat-composer-field'), 'On the train');
     await fireEvent.press(b.getByTestId('space-chat-composer-send'));
-    expect(await b.findByText('Waiting to send')).toBeTruthy();
+    expect(await b.findByLabelText(/, Waiting to send\. On the train$/)).toBeTruthy(); expect(b.queryByText('Waiting to send', { includeHiddenElements: true })).toBeNull();
     expect(b.getAllByTestId(/^space-chat-local-menu-/).map((x) => x.props.accessibilityLabel)).toEqual(['Delete this message']);
   });
 
