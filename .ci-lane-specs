@@ -1,0 +1,4 @@
+src/components/__tests__/offlineBannerIphoneInset.test.tsx
+src/components/__tests__/offlineBannerFrame.test.tsx
+src/components/__tests__/offlineBannerC1S10.test.tsx
+src/components/__tests__/OfflineBanner.coachWords.test.tsx
