@@ -1,0 +1,15 @@
+src/screens/client/foodweek
+src/navigation/__tests__
+src/screens/client/__tests__
+src/screens/client/copilot
+src/screens/client/learn
+src/screens/client/progress
+src/components/log/__tests__
+src/__tests__/boneSwapGuard
+src/__tests__/schemePanels994
+src/__tests__/coachlessNeverGated134
+src/__tests__/clientDeadTaps126
+src/__tests__/rowRoutes
+src/__tests__/workoutSessionReachability124
+src/screenshots/__tests__
+scripts/__tests__/routeContract
