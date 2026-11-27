@@ -115,6 +115,30 @@ describe('FIX-KM-1: the sheet keeps its one send tied to the save she asked for'
     expect(screen.getByText("Added to today's breakfast.")).toBeTruthy();
   });
 
+  it('C1c. a lost answer, then Try again with no connection: KK-9 shows, the choice and Try again hold, and the next send carries the same key', async () => {
+    const net = NetInfo as unknown as { __setState: (s: object) => void };
+    await mount();
+    await open('m1');
+    mockPost.mockImplementationOnce(lost);
+    await fireEvent.press(screen.getByTestId('kitchen-add'));
+    // Try again with no connection: nothing is sent, and the lost send's key is still kept, so nothing lets the choice go.
+    net.__setState({ isConnected: false, isInternetReachable: false });
+    await fireEvent.press(screen.getByTestId('kitchen-add'));
+    expect(screen.getByText('Adding a saved meal needs a connection. Nothing was added.')).toBeTruthy();
+    expect(posts()).toHaveLength(1);
+    expect(within(screen.getByTestId('kitchen-add')).getByText('Try again')).toBeTruthy();
+    await fireEvent.press(choice('Lunch'));
+    expect(checked('Breakfast')).toBe(true);
+    expect(checked('Lunch')).toBe(false);
+    // Back online, Try again resends the same save with the same key.
+    net.__setState({ isConnected: true, isInternetReachable: true });
+    mockPost.mockImplementationOnce(() => Promise.resolve({ data: [{ id: 'n1' }] }));
+    await fireEvent.press(screen.getByTestId('kitchen-add'));
+    expect(posts().map((c) => c[1].meal_type)).toEqual(['breakfast', 'breakfast']);
+    expect(posts()[1][1].client_uuid).toBe(posts()[0][1].client_uuid);
+    expect(screen.getByText("Added to today's breakfast.")).toBeTruthy();
+  });
+
   it('C1b. once an answer lets the key go (a 404 or another refusal), the choice is free again', async () => {
     await mount();
     await open('m1');
