@@ -73,7 +73,7 @@ export function useSavedMealWrites(onSaved?: () => void) {
       try {
         await savedFoodsApi.remove(id);
       } catch (err) {
-        if (failureKind(err) !== 'gone') throw err;
+        throw err; // MUTATION M4: a 404 is a failure
       }
     },
     onSuccess: (_none, { id, name }) => {
