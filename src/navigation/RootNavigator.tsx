@@ -1141,10 +1141,10 @@ export default function RootNavigator() {
           </DunningLockoutProvider>
         </EntitlementProvider>
       )}
-      </ScreenArea>
       {/* FOREGROUND-BANNER-M: a push received while open, over the client or coach app only (the states where
           the router delivers a tap), and inside the gate so not while a user's cache restores. */}
       {pushSessionFor(authState, sessionUserId).kind === 'app' ? <ForegroundNotificationBanner /> : null}
+      </ScreenArea>
       </PersistedQueryCacheGate>
     </NavigationContainer>
     </View>
