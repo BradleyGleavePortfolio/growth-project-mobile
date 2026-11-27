@@ -254,6 +254,17 @@ const CASES: Case[] = [
       tap(response(k, undefined, 2));
     },
   },
+  {
+    // Android reads a missing sent time as 0 (NotificationSerializer.java:216, getLong's default): no date either.
+    name: 'a response dated 0 (Android, no sent time) keeps the old rule: its id opens once',
+    opens: 1,
+    run: async (k) => {
+      attach(k);
+      const tap = await installTaps();
+      tap(response(k, 0, 1));
+      tap(response(k, 0, 2));
+    },
+  },
 ];
 
 beforeEach(() => {
