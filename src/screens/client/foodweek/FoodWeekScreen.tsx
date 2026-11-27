@@ -108,7 +108,6 @@ function FoodWeekPage({ coached }: { coached: boolean }) {
     if (withDots) [...daily, ...plans.filter((q) => q.data === undefined)].forEach((q) => { if (!q.isFetching) void q.refetch(); });
   };
   useEffect(() => navigation?.addListener?.('focus', () => onReturn.current()), [navigation]);
-  useEffect(() => { if (!weekly.isFetching) setPulled(false); }, [weekly.isFetching]);
 
   // C1 (operator ruling): a re-read that fails keeps the last good answer; S8 and S9 only for a read with no answer.
   const totals = weekly.data !== undefined ? weeklyTotals(weekly.data, range.days) : null;
