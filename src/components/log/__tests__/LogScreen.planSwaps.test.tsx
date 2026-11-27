@@ -157,8 +157,12 @@ describe('case 6: S5 and S6, a swap logged as one food for its plan meal', () =>
     expect(screen.getByLabelText('Portion unit serving')).toBeTruthy();
     expect(screen.queryByLabelText('Portion unit g')).toBeNull();
     expect(screen.getByTestId('portion-summary')).toHaveTextContent('240 kcal, 26 g protein, 30 g carbs, 2 g fat.');
+    // A second tap while the save is still in flight sends nothing more (main's foodSaving guard).
+    let release: () => void = () => undefined;
+    (foodApi.create as jest.Mock).mockImplementation(() => new Promise((done) => { release = () => done({ data: { id: 'f-new' } }); }));
     await fireEvent.press(screen.getByTestId('quantity-log-food'));
     await fireEvent.press(screen.getByTestId('quantity-log-food'));
+    release();
     await waitFor(() => expect(logApi.logFood).toHaveBeenCalledTimes(1));
     expect(foodApi.create).toHaveBeenCalledTimes(1);
     expect(foodApi.create).toHaveBeenCalledWith(expect.objectContaining({
