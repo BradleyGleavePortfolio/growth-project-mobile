@@ -311,6 +311,7 @@ describe('KITCHEN-M: the Kitchen page (Style 2 Menu)', () => {
     expect(within(row).queryByText(/kcal/)).toBeNull();
     const sheet = await openSheet('Gone lunch');
     expect(within(sheet).getByText('Its foods were removed, so there is nothing to add.')).toBeTruthy();
+    expect(within(sheet).queryByText(/0 foods|No total/)).toBeNull();
     expect(screen.queryByTestId('kitchen-add')).toBeNull();
     expect(posts()).toHaveLength(0);
     await fireEvent.press(screen.getByTestId('kitchen-sheet-close'));
