@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import StepTransitionView from './onboarding/StepTransitionView';
 import { featureFlags } from '../config/featureFlags';
+import { useScreenAreaKeyboardOffset } from '../ui/layout/ScreenArea';
 
 interface Props {
   step: number;
@@ -37,6 +38,7 @@ export default function OnboardingLayout({
   continueLabel = 'Continue',
   children,
 }: Props) {
+  const keyboardOffset = useScreenAreaKeyboardOffset();
   const progressAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -54,6 +56,7 @@ export default function OnboardingLayout({
 
   return (
     <KeyboardAvoidingView
+      keyboardVerticalOffset={keyboardOffset}
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
