@@ -18,6 +18,7 @@ import * as fixtures from '../fixtures';
 import {
   DEMO_COMMUNITY_FEED,
   DEMO_DAILY_TOTAL_ML,
+  DEMO_EXERCISES,
   DEMO_FASTING_HISTORY,
   DEMO_FOOD_LOGS,
   DEMO_HABITS,
@@ -28,12 +29,28 @@ import {
   DEMO_ROMAN_SESSION,
   DEMO_USER,
   DEMO_WEIGHT_HISTORY,
+  DEMO_WORKOUT_PARAMS,
+  DEMO_MESSAGES_INBOX,
+  DEMO_MESSAGES_PINS,
+  DEMO_WEARABLE_CONNECTIONS,
+  DEMO_WORKOUT_HISTORY,
+  demoWearableSamples,
 } from '../fixtures';
 import type { ApiHabit } from '../../hooks/useApi';
 import type { CurrentUser } from '../../hooks/useCurrentUser';
 import type { ClientTodayResponse } from '../../api/mealTemplatesApi';
 import type { HabitRow } from '../../components/home/rings/homeTiles';
 import { RomanSessionSchema, RomanWireMessagePageSchema } from '../../api/romanApi';
+import type { Exercise } from '../../api/exerciseLibraryApi';
+import { isBodyWeightEquipment } from '../../utils/workout/bodyWeight';
+import { z } from 'zod';
+import { InboxResponseSchema, PinsResponseSchema } from '../../api/messagingV2Api';
+import { safeWearableConnectionSchema } from '../../api/wearablesConnectionsApi';
+import { samplesResponseSchema } from '../../api/wearablesSamplesApi';
+import { previousSets } from '../../screens/client/active-workout/sessionQuality';
+import { seriesPoints } from '../../screens/client/wearables/seriesSummary';
+import { lastNightSleep } from '../../components/home/rings/homeRings';
+import { isWorkoutDoneToday } from '../../utils/workout/workoutDoneToday';
 import { parseWeightLogRow, weightHistoryRows } from '../../screens/client/progress/weightHistory';
 import { getTodayString } from '../../utils/date';
 import HomeScreen from '../../screens/client/HomeScreen';
@@ -157,9 +174,10 @@ describe('DEMO_ fixtures match the phone API types', () => {
   it('every DEMO_ export is listed here, so a new fixture gets a check', () => {
     const demo = Object.keys(fixtures).filter((k) => k.startsWith('DEMO_')).sort();
     expect(demo).toEqual([
-      'DEMO_AUTH_ME', 'DEMO_COMMUNITY_FEED', 'DEMO_DAILY_TOTAL_ML', 'DEMO_FASTING_HISTORY', 'DEMO_FOOD_LOGS',
-      'DEMO_HABITS', 'DEMO_MEAL_PLAN_TODAY', 'DEMO_MESSAGES', 'DEMO_RECIPES', 'DEMO_ROMAN_MESSAGES',
-      'DEMO_ROMAN_SESSION', 'DEMO_USER', 'DEMO_WEIGHT_HISTORY', 'DEMO_WORKOUT_PARAMS',
+      'DEMO_AUTH_ME', 'DEMO_COMMUNITY_FEED', 'DEMO_DAILY_TOTAL_ML', 'DEMO_EXERCISES', 'DEMO_FASTING_HISTORY', 'DEMO_FOOD_LOGS',
+      'DEMO_HABITS', 'DEMO_MEAL_PLAN_TODAY', 'DEMO_MESSAGES', 'DEMO_MESSAGES_INBOX', 'DEMO_MESSAGES_PINS', 'DEMO_RECIPES',
+      'DEMO_ROMAN_MESSAGES', 'DEMO_ROMAN_SESSION', 'DEMO_USER', 'DEMO_WEARABLE_CONNECTIONS', 'DEMO_WEIGHT_HISTORY',
+      'DEMO_WORKOUT_HISTORY', 'DEMO_WORKOUT_PARAMS',
     ]);
   });
 
@@ -179,6 +197,49 @@ describe('DEMO_ fixtures match the phone API types', () => {
     expect(fixtures.DEMO_AUTH_ME.user.id).toBe(DEMO_USER.id);
     expect(fixtures.DEMO_AUTH_ME.profile).toBe(DEMO_USER.profile);
     expect((DEMO_MEAL_PLAN_TODAY satisfies ClientTodayResponse).assignments.length).toBeGreaterThan(0);
+  });
+
+  it('DEMO_EXERCISES is the GET /exercises/:id row (Exercise) of every exercise the workout frame opens with', () => {
+    // STORE-CAPTURE-ROUTES-M: the live workout reads each exercise id once for its equipment (FIX-928-BW).
+    const rows: Record<string, Exercise> = DEMO_EXERCISES;
+    const opened = JSON.parse(DEMO_WORKOUT_PARAMS.exercises) as { exerciseId: string; exerciseName: string }[];
+    expect(Object.keys(rows).sort()).toEqual(opened.map((e) => e.exerciseId).sort());
+    for (const e of opened) {
+      expect(rows[e.exerciseId]).toEqual(expect.objectContaining({ id: e.exerciseId, name: e.exerciseName }));
+      // Loaded lifts: the frame's sets read in lb, never "BW".
+      expect(isBodyWeightEquipment(rows[e.exerciseId].equipment)).toBe(false);
+    }
+  });
+
+  it('DEMO_WORKOUT_HISTORY gives each opened exercise its previous sets, logged before today', () => {
+    // STORE-CAPTURE-ROUTES-M: "Every set builds on the last." The workout frame reads GET /workouts (last 50).
+    const opened = JSON.parse(DEMO_WORKOUT_PARAMS.exercises) as { exerciseName: string; weightLbs: number }[];
+    for (const e of opened) {
+      const previous = previousSets(DEMO_WORKOUT_HISTORY, e.exerciseName);
+      expect(previous).toHaveLength(3);
+      for (const set of previous) expect(set.weight).toBeLessThan(e.weightLbs);
+    }
+    // Home reads the same list: no workout today, so its progress line is unchanged.
+    expect(isWorkoutDoneToday(DEMO_WORKOUT_HISTORY, getTodayString())).toBe(false);
+  });
+
+  it('the wearables fixtures parse with the strict wire schemas, and Home reads steps and sleep from them', () => {
+    expect(z.array(safeWearableConnectionSchema).parse(DEMO_WEARABLE_CONNECTIONS)).toHaveLength(1);
+    const now = new Date();
+    const range = { from: new Date(now.getTime() - 7 * 86_400_000).toISOString(), to: now.toISOString() };
+    const fitness = samplesResponseSchema.parse(demoWearableSamples({ bucket: 'HEALTH_FITNESS', ...range }, now));
+    const steps = seriesPoints(fitness.series.find((s) => s.metric === 'STEPS'))
+      .filter((p) => new Date(p.x).toISOString().slice(0, 10) === getTodayString());
+    expect(steps.map((p) => p.y)).toEqual([8412]);
+    const sleep = samplesResponseSchema.parse(demoWearableSamples({ bucket: 'SLEEP_RECOVERY', ...range }, now));
+    const zone = new Intl.DateTimeFormat().resolvedOptions().timeZone;
+    expect(lastNightSleep(sleep, now, zone).asleepMin).toBe(440);
+  });
+
+  it('the messaging v2 fixtures parse with the schemas the inbox and pins reads use', () => {
+    const inbox = InboxResponseSchema.parse(DEMO_MESSAGES_INBOX);
+    expect(inbox.items[0].last_message?.preview).toBe(DEMO_MESSAGES[1].body);
+    expect(PinsResponseSchema.parse(DEMO_MESSAGES_PINS).items).toEqual([]);
   });
 
   it('the Roman fixtures parse with the strict wire schemas the Roman API uses', () => {

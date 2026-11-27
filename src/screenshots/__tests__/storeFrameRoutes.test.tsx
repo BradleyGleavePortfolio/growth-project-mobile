@@ -132,7 +132,8 @@ describe('App Store frames in screenshot mode', () => {
         </QueryClientProvider>,
       );
       // The capture waits for the frame's ready text, then lets it settle before it checks the console.
-      expect((await screen.findAllByText(new RegExp(target.readyText), {}, { timeout: 15000 })).length).toBeGreaterThan(0);
+      const ready = new RegExp([target.readyText, target.readyTextSwitchOn].filter(Boolean).join('|'));
+      expect((await screen.findAllByText(ready, {}, { timeout: 15000 })).length).toBeGreaterThan(0);
       await act(async () => { await new Promise((resolve) => setTimeout(resolve, 1500)); });
       expect(warnings.filter((w) => w.includes(MISS))).toEqual([]);
       // Then every read the frame started has answered (a read that starts after another answers is checked too).

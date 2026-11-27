@@ -14,6 +14,12 @@
  */
 
 import type { ClientTodayResponse } from '../api/mealTemplatesApi';
+import type { Exercise } from '../api/exerciseLibraryApi';
+import type { InboxResponse, PinsResponse } from '../api/messagingV2Api';
+import type { WearableConnection } from '../api/wearablesConnectionsApi';
+import type { SamplesResponse } from '../api/wearablesSamplesApi';
+import type { LoggedWorkout } from '../screens/client/active-workout/sessionQuality';
+import type { WorkoutRowLike } from '../utils/workout/workoutDoneToday';
 import type { CurrentUser } from '../hooks/useCurrentUser';
 import type { ApiHabitLog } from '../hooks/useApi';
 import { bucketDateLocal } from '../utils/date';
@@ -389,6 +395,103 @@ export const DEMO_WORKOUT_PARAMS = {
     { exerciseId: 'row', exerciseName: 'Seated row', sets: 3, reps: 10, weightLbs: 100, restSec: 90 },
   ]),
 };
+
+// ─── GET /exercises/:id ──────────────────────────────────────────────────────
+// The catalog row of each exercise the workout frame opens with (the ids in
+// DEMO_WORKOUT_PARAMS). The live workout reads each id once for its equipment
+// (FIX-928-BW: a body-weight exercise reads "BW"); both are loaded lifts, so
+// their sets read in lb as before. Seed-style rows: no GIF, no instructions.
+
+export const DEMO_EXERCISES = {
+  bench: {
+    id: 'bench', name: 'Bench press', bodyPart: 'chest', equipment: 'barbell', target: 'pectorals',
+    secondaryMuscles: ['triceps', 'delts'], instructions: [], gifUrl: '',
+  },
+  row: {
+    id: 'row', name: 'Seated row', bodyPart: 'back', equipment: 'cable', target: 'upper back',
+    secondaryMuscles: ['lats', 'biceps'], instructions: [], gifUrl: '',
+  },
+} satisfies Record<string, Exercise>;
+
+// ─── GET /workouts ───────────────────────────────────────────────────────────
+// The client's last saved session of the same routine, three days ago (newest
+// first, as the API answers). The workout frame's "previous" sets come from it
+// (previousSets), so today's 135 lb bench reads against last time's 130 lb.
+// Home reads the same list: nothing was logged today, so its line is unchanged.
+
+export const DEMO_WORKOUT_HISTORY = (() => {
+  const d = new Date();
+  d.setDate(d.getDate() - 3);
+  d.setHours(17, 30, 0, 0);
+  return [{
+    id: 'demo-workout-1', workout_name: 'Upper body', notes: null, duration_minutes: 48,
+    date: bucketDateLocal(d), created_at: d.toISOString(), completed: true,
+    exercises: [
+      { exercise_name: 'Bench press', muscle_group: 'chest', sets_completed: 3,
+        reps_per_set: [8, 8, 7], weight_per_set: [130, 130, 130] },
+      { exercise_name: 'Seated row', muscle_group: 'back', sets_completed: 3,
+        reps_per_set: [10, 10, 10], weight_per_set: [95, 95, 95] },
+    ],
+  }] satisfies Array<LoggedWorkout & WorkoutRowLike>;
+})();
+
+// ─── GET /v1/wearables/connections and /v1/wearables/samples ────────────────
+// Read by Home's rings layout (clientHomeRings) for the Steps tile and the Sleep
+// dial. One Apple Health connection (the store frames are iPhone frames), with
+// today's steps and last night's sleep, so neither reads "Connect".
+
+export const DEMO_WEARABLE_CONNECTIONS = [{
+  id: 'demo-healthkit', user_id: DEMO_USER_ID, provider: 'APPLE_HEALTHKIT', external_account_id: null,
+  access_token_expires_at: null, scopes: [], webhook_subscription_id: null, channel_expires_at: null,
+  status: 'connected', last_error: null, last_synced_at: '2026-05-02T07:40:00Z', backfilled_until: null,
+  disconnected_at: null, created_at: '2026-04-15T09:00:00Z', updated_at: '2026-05-02T07:40:00Z',
+}] satisfies WearableConnection[];
+
+/** The samples read for one bucket and window (Home asks day buckets, preferred source only). */
+export function demoWearableSamples(
+  query: { bucket?: string; from?: string; to?: string },
+  now: Date = new Date(),
+): SamplesResponse {
+  const provider = 'APPLE_HEALTHKIT' as const;
+  // Day buckets are calendar days in UTC (as Home's Steps tile reads them).
+  const today = bucketDateLocal(now);
+  const wake = new Date(now);
+  wake.setHours(6, 25, 0, 0);
+  const bed = new Date(wake.getTime() - 440 * 60_000); // 7 h 20 min asleep
+  const fitness = query.bucket !== 'SLEEP_RECOVERY';
+  const series: SamplesResponse['series'] = fitness
+    ? [{ metric: 'STEPS', unit: 'count', provider_used: provider, sample_count: 1,
+      samples: [{ start_at: `${today}T00:00:00.000Z`, end_at: `${today}T23:59:59.999Z`, value: 8412, provider }] }]
+    : [{ metric: 'SLEEP_TOTAL_MIN', unit: 'min', provider_used: provider, sample_count: 1,
+      samples: [{ start_at: bed.toISOString(), end_at: wake.toISOString(), value: 440, provider }] }];
+  return {
+    version: 1, user_id: DEMO_USER_ID, bucket: fitness ? 'HEALTH_FITNESS' : 'SLEEP_RECOVERY',
+    window: { from: query.from ?? now.toISOString(), to: query.to ?? now.toISOString() },
+    series,
+    freshness: { providers: [{ provider, last_synced_at: now.toISOString(), status: 'current' }] },
+  };
+}
+
+// ─── GET /messages/inbox, /messages/pins, /messages/coach-review ────────────
+// Messaging v2 (server messaging_core_v2): the client's one coach thread, whose
+// last message is the frame's own last message (DEMO_MESSAGES), nothing unread,
+// nothing pinned, and no coach-review marker yet.
+
+export const DEMO_MESSAGES_INBOX = {
+  items: [{
+    thread_id: 'demo-thread', kind: 'coach_client', coach_id: DEMO_COACH_ID, client_id: DEMO_USER_ID,
+    counterpart: { user_id: DEMO_COACH_ID, display_name: 'Sam Carter' },
+    last_message: {
+      id: DEMO_MESSAGES[1].id, sender_id: DEMO_USER_ID, is_mine: true, kind: 'text',
+      preview: DEMO_MESSAGES[1].body, created_at: DEMO_MESSAGES[1].created_at, edited: false,
+    },
+    unread_count: 0, muted: false, muted_until: null, pinned: false, blocked_by_me: false, closed: false,
+    last_activity_at: DEMO_MESSAGES[1].created_at,
+  }],
+  next_cursor: null, total_unread: 0,
+} satisfies InboxResponse;
+
+export const DEMO_MESSAGES_PINS = { items: [] } satisfies PinsResponse;
 
 export const DEMO_ROMAN_SESSION = {
   id: 'demo-roman', surface: 'client', messageCount: 2,
