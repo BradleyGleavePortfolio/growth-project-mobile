@@ -23,6 +23,7 @@ import OnboardingNavigator from './OnboardingNavigator';
 // client gets the consultation. LEAN-CUT-133 deletes the lean files.
 import ConsultationOnboardingNavigator from './ConsultationOnboardingNavigator';
 import OfflineBanner from '../components/OfflineBanner';
+import { ScreenArea } from '../ui/layout/ScreenArea';
 import ForegroundNotificationBanner from '../components/ForegroundNotificationBanner';
 import { authEvents } from '../utils/authEvents';
 import { secureStorage } from '../services/secureStorage';
@@ -1063,6 +1064,9 @@ export default function RootNavigator() {
         userId={sessionUserId}
         renderRestoring={() => <StartupPending testID="persisted-cache-pending" onRetry={() => void bootstrapAuth()} />}
       >
+      {/* OFFLINE-BAND-ROOT-M: every navigator draws in the screen area, under the band, with the area's own insets;
+          the band, the restoring view and the push slip draw from the window's top and stay outside it. */}
+      <ScreenArea>
       {authState === 'unauthenticated' ? (
         <AuthNavigator />
       ) : authState === 'onboarding' ? (
@@ -1137,6 +1141,7 @@ export default function RootNavigator() {
           </DunningLockoutProvider>
         </EntitlementProvider>
       )}
+      </ScreenArea>
       {/* FOREGROUND-BANNER-M: a push received while open, over the client or coach app only (the states where
           the router delivers a tap), and inside the gate so not while a user's cache restores. */}
       {pushSessionFor(authState, sessionUserId).kind === 'app' ? <ForegroundNotificationBanner /> : null}
