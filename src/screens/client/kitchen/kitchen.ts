@@ -101,7 +101,7 @@ function asLogged(item: SavedMealItem): KitchenFood {
 export function mealView(meal: SavedMeal): MealView {
   const foods = itemsOf(meal).map(asLogged);
   const held = foods.filter((f) => !f.ok).map((f) => f.name);
-  const total = foods.length > 0 && held.length === 0
+  const total = foods.length > 0
     ? foods.reduce((t, f) => ({ kcal: t.kcal + f.kcal, protein: t.protein + f.protein }), { kcal: 0, protein: 0 })
     : null;
   return { foods, held, total };
