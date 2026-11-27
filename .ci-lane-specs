@@ -1,0 +1,12 @@
+src/utils/log
+src/components/log
+src/screens/client/__tests__/LogScreen
+quickLog
+LogPlannedMealButton
+ClientNavigator
+RootNavigator
+rootNavigator
+FoodDay
+src/api/__tests__/mealPhotoApi.test.ts
+src/config/__tests__
+scripts/__tests__/routeContract.test.js
