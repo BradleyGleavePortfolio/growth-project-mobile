@@ -150,8 +150,8 @@ function KitchenPage({ coachId }: { coachId: string | null }) {
           )}
 
           {/* The owner's addition (#ALM-E26): the page's primary action under her meals; off while offline. */}
-          <View style={s.logFood}>
-            <PrimaryButton wrap label={WORDS.logFood} accessibilityHint={WORDS.logFoodHint} onPress={openToday} disabled={!online}
+          <View style={s.logButton}>
+            <PrimaryButton wrap label={WORDS.logButton} accessibilityHint={WORDS.logButtonHint} onPress={openToday} disabled={!online}
               testID="kitchen-log-food" />
           </View>
 
@@ -260,7 +260,7 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   boneName: { flex: 1, maxWidth: '55%' },
   boneKcal: { width: 56, marginLeft: 'auto' },
   error: { gap: 14, marginBottom: 20 },
-  logFood: { marginTop: -4, marginBottom: 26 },
+  logButton: { marginTop: -4, marginBottom: 26 },
   planCard: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 64, paddingHorizontal: 16, paddingVertical: 14 },
   menuLabel: { ...typography.h4, fontSize: 17, lineHeight: 24, letterSpacing: 0, color: sc.textPrimary },
   detail: { ...typography.bodySmall, fontSize: 15, lineHeight: 21, color: sc.textMuted, fontVariant: ['tabular-nums'], flexShrink: 1, textAlign: 'right' },

@@ -46,8 +46,8 @@ export const WORDS = {
   grocery: 'Grocery list', // main
   prep: 'Prep guide', // main
   week: 'Food this week', // KITCHEN-WEEK-M
-  logFood: 'Log food', // the owner's (#ALM-E26)
-  logFoodHint: 'Opens today on the Food tab', // new (operator, #203-E15): the add sheet opens from the Food tab only
+  logButton: 'Log food', // the owner's (#ALM-E26)
+  logButtonHint: 'Opens today on the Food tab', // new (operator, #203-E15): the add sheet opens from the Food tab only
 } as const;
 
 export const fromCoach = (first: string | null): string => (first ? `From ${first}` : WORDS.fromYourCoach); // C2-S-83
