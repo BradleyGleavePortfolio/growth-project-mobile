@@ -120,7 +120,8 @@ export default function SavedMealSheet({ meal, onClose, onAdded, onStale }: {
     sending.current = true;
     setBusy(true);
     setLine(null);
-    setRetry(false);
+    // C1's class: Try again stays (and the choice stays held) until an answer lets the kept key go; no connection
+    // sends nothing, so it changes neither.
     try {
       // R7: no queue; with no connection nothing is sent or stored.
       const net = await NetInfo.fetch();
