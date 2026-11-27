@@ -57,6 +57,7 @@ import { featureFlags } from '../../config/featureFlags';
 import { getTodayString } from '../../utils/date';
 // C1-TRAIN-TAB (featureFlags.clientTrainV2, off): the Style C v2 top of the tab.
 import { TrainDay, TrainHead, featuredWorkout, type StartParams } from './train/TrainToday';
+import TrainMessageCoach from './train/TrainMessageCoach';
 // §2.8 Workout complete — Roman speaks beside his face (the card co-locates
 // <RomanAvatar />). Gated behind featureFlags.romanChat (default OFF), the
 // dedicated Roman flag. TRAIN-TAB-FIN-130: a load failure shows CoachErrorState
@@ -789,6 +790,11 @@ export default function WorkoutScreen() {
               <Text style={styles.primaryLabel}>Quick workout</Text>
             </HapticPressable>
             <Text style={styles.heroNote}>Start an empty session</Text>
+            {/* WORKOUT-STATES-M (C2_first, R3): a coached client with no workout from the coach yet; the link shows only
+                while the coaching chat is known open. */}
+            {trainV2 && !coachless && currentUser?.coach_id && trainState === 'ready' && assignmentRows.length === 0 ? (
+              <TrainMessageCoach coachId={currentUser.coach_id} />
+            ) : null}
           </View>
         ) : null}
         {showAllCoachRow || !quickLeads ? (
