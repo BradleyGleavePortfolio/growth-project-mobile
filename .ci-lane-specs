@@ -1,0 +1,2 @@
+src/__tests__/exerciseHistoryUnit.screen.test.tsx
+src/screens/client/progress/__tests__/progressStrengthUnit.test.tsx
