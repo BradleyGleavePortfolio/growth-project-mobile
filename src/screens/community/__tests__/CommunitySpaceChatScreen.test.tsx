@@ -14,7 +14,7 @@ import { act, fireEvent, render, waitFor, within } from '@testing-library/react-
 import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import NetInfo from '@react-native-community/netinfo';
 import { authEvents } from '../../../utils/authEvents';
-import { forestPop as fp, schemeCard, schemeCardOutline, spacing, voiceShades } from '../../../theme/tokens';
+import { colors, forestPop as fp, schemeCard, schemeCardOutline, spacing, voiceShades } from '../../../theme/tokens';
 import * as Clipboard from 'expo-clipboard';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 
@@ -371,7 +371,8 @@ it('Sol B4: a row being sent keeps its text at 4.5:1 or better on bone (every op
   for (let n = body as { props: { style?: unknown }; parent: unknown } | null; n; n = n.parent as typeof n) alpha *= (StyleSheet.flatten(n.props.style as object) as { opacity?: number } | undefined)?.opacity ?? 1;
   const rgb = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
   const lum = (c: number[]) => c.map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)).reduce((t, v, i) => t + v * [0.2126, 0.7152, 0.0722][i], 0);
-  const bone = rgb('#F7FAF7');
+  // MERGEUP-945: the page the screen paints (s.flex, colors.bone), now main's Sunlit sand (m#994), not the old literal.
+  const bone = rgb(colors.bone);
   const seen = rgb(StyleSheet.flatten(body.props.style).color).map((v, i) => v * alpha + bone[i] * (1 - alpha));
   expect((lum(bone) + 0.05) / (lum(seen) + 0.05)).toBeGreaterThanOrEqual(4.5);
 });
