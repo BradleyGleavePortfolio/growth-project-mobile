@@ -293,8 +293,9 @@ it('7 size: at 320 x 568 nothing under the history clamps or shrinks text, and e
   expect(textProblems(history)).toEqual([]);
   expect(oneText(view.getByTestId('exercise-history-best'), `30 lb × 40${NBSP}sec`)).toHaveLength(1);
   HOLD_ROWS.forEach((t, i) => expect(oneText(view.getByTestId(`exercise-history-value-${i}`), t)).toHaveLength(1));
-  // "sec" never starts a line of its own: no plain space before it anywhere.
-  expect(words(history).join('\n')).not.toMatch(/ sec/);
+  // "sec" never starts a line of its own: no shown word has a plain space before it (the spoken labels say
+  // "by 40 seconds" with plain spaces, as the job's words have them).
+  expect(words(history).filter((w) => w.startsWith('text ')).join('\n')).not.toMatch(/ sec/);
 });
 
 it('8 the request is main\'s: one read of /workouts/exercise-history by the page\'s name, nothing else', async () => {
