@@ -36,10 +36,10 @@ type IconName = React.ComponentProps<typeof Ionicons>['name'];
 export default function KitchenScreen() {
   const user = useCurrentUser();
   // Remount on identity change, so no meal, count or late answer crosses accounts.
-  return <KitchenPage key={user?.id ?? 'signed-out'} coachId={user?.coach_id ?? null} />;
+  return <KitchenPage key={user?.id ?? 'signed-out'} userId={user?.id ?? ''} coachId={user?.coach_id ?? null} />;
 }
 
-function KitchenPage({ coachId }: { coachId: string | null }) {
+function KitchenPage({ userId, coachId }: { userId: string; coachId: string | null }) {
   const page = useStyleCScreen();
   const { semanticColors: sc } = useTheme();
   const s = useMemo(() => makeStyles(sc), [sc]);
@@ -110,8 +110,10 @@ function KitchenPage({ coachId }: { coachId: string | null }) {
     : null;
   const groceryCount = grocery.isSuccess && Array.isArray(grocery.data) ? toGetWords(toGet(grocery.data, 'grocery')) : null;
 
+  // LO-KITCHEN-M-1 B1: set AND read today, as Home does (loadDayData sets the day, then reads it); the setter alone left
+  // the Food tab on an unread today whenever it was showing another day.
   const openToday = () => {
-    useClientStore.getState().setSelectedDate(getTodayString());
+    void useClientStore.getState().loadDayData(userId, getTodayString());
     (navigation.getParent() ?? navigation).navigate('Log');
   };
   const openMeal = (meal: SavedMeal) => { setAdded(null); setSheetMeal(meal); };
