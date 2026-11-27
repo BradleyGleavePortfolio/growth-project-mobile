@@ -1,0 +1,15 @@
+src/screens/client/foodweek
+MoreScreen
+YouScreen
+Goal927
+Kitchen
+ClientDailyMealPlan
+LogScreen
+src/components/log
+src/components/mealplan
+src/navigation/__tests__
+src/entitlements/dunning
+src/utils/log
+boneSwapGuard
+schemePanels994
+routeContract
