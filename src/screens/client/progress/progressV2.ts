@@ -90,7 +90,7 @@ export function latestBest(sessions: Session[], today: string): BestSet | null {
     const top = (e.weight_per_set ?? []).map((w, i) => ({ w, r: e.reps_per_set?.[i] ?? 0 }))
       .filter((x) => x.w > 0 && x.r > 0).sort((a, b) => b.w - a.w || b.r - a.r)[0];
     const timed = isTimedRow({ unit: e.asked_unit });
-    const lift = `${timed ? 'seconds' : 'reps'} ${e.exercise_name}`;
+    const lift = e.exercise_name; // MUTATION: keyed by exercise only
     const prev = best.get(lift);
     if (!top || (prev && (top.w < prev.weight || (top.w === prev.weight && top.r <= prev.reps)))) return;
     const set = { name: e.exercise_name, weight: top.w, reps: top.r, date: workoutDay(s), isNew: !!prev && whole && dayX(workoutDay(s)) > dayX(today) - 30 * DAY, timed };
