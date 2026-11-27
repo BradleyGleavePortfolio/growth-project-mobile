@@ -9,8 +9,12 @@
  *
  * The Android rule is read when the band's module loads (StyleSheet.create), so each platform gets its own copy of the
  * band, React, the renderer and the safe-area context, loaded after Platform.OS and StatusBar.currentHeight are set
- * (jest.isolateModules). The real SafeAreaInsetsContext.Provider gives the inset; the package is not mocked.
+ * (jest.isolateModules). A module loaded that way still reads React Native's lazy exports from the test's own registry
+ * when it renders (after isolateModules returns), so that registry's Platform.OS and StatusBar.currentHeight answer for
+ * the same phone while it renders, as one phone's do at load and at render. The real SafeAreaInsetsContext.Provider
+ * gives the inset; the package is not mocked.
  */
+import { Platform, StatusBar } from 'react-native';
 import { colors, layout } from '../../theme/tokens';
 
 // As the real hook (src/hooks/useNetworkStatus.ts): a hook of its own, so the band's hooks run on every render.
@@ -42,6 +46,14 @@ type Kit = {
   flatten: (style: unknown) => Style;
   SafeAreaInsetsContext: typeof import('react-native-safe-area-context').SafeAreaInsetsContext;
   Band: () => unknown;
+  /** Makes the test's own registry answer as this phone while the band renders. */
+  phone: () => void;
+};
+const realOS = Platform.OS;
+const realHeight = StatusBar.currentHeight;
+const answerAs = (os: string, height: number | null | undefined) => {
+  Object.defineProperty(Platform, 'OS', { configurable: true, get: () => os });
+  Object.defineProperty(StatusBar, 'currentHeight', { configurable: true, value: height });
 };
 
 function loadBand(os: 'ios' | 'android', statusBarHeight: number | null | undefined): Kit {
@@ -57,6 +69,7 @@ function loadBand(os: 'ios' | 'android', statusBarHeight: number | null | undefi
       flatten: (style) => RN.StyleSheet.flatten(style as never) as Style,
       SafeAreaInsetsContext: require('react-native-safe-area-context').SafeAreaInsetsContext,
       Band: require('../OfflineBanner').default,
+      phone: () => answerAs(os, statusBarHeight),
     };
   });
   return kit!;
@@ -74,7 +87,10 @@ const tree = (kit: Kit, top: number | null) => {
     ? band
     : kit.React.createElement(kit.SafeAreaInsetsContext.Provider, { value: { top, bottom: 34, left: 0, right: 0 } }, band);
 };
-const mount = (kit: Kit, top: number | null) => kit.RNTL.render(tree(kit, top));
+const mount = (kit: Kit, top: number | null) => {
+  kit.phone();
+  return kit.RNTL.render(tree(kit, top));
+};
 type View = Awaited<ReturnType<typeof mount>>;
 const bandOf = (view: View, words: string) => {
   let node = view.getByText(words) as unknown as HostNode | null;
@@ -92,6 +108,7 @@ afterEach(async () => {
   for (const kit of [IPHONE, ANDROID, ANDROID_NO_HEIGHT]) await kit.RNTL.cleanup();
   mockNet.offline = true;
   mockUser.current = { role: 'client' };
+  answerAs(realOS, realHeight);
 });
 
 describe('on iPhone the band starts where the top strip ends: top padding = the top inset + 9', () => {
