@@ -87,8 +87,10 @@ describe('a new commit on a pull request cancels that pull request older runs', 
   });
 
   it('no two workflows share a group, so one workflow never cancels another', () => {
-    const groups = FILES.map((f) => (load(f).concurrency || {}).group).filter(Boolean);
-    expect(groups.length).toBe(RULED.length + Object.keys(KEPT).length);
+    // Every workflow file counts, whatever their number: the CI lane adds its own ci-lane.yml to the tree it tests.
+    const groupOf = (f) => (load(f).concurrency || {}).group;
+    for (const f of [...RULED, ...Object.keys(KEPT)]) expect(groupOf(f)).toEqual(expect.any(String));
+    const groups = FILES.map(groupOf).filter(Boolean);
     expect(new Set(groups).size).toBe(groups.length);
   });
 });
