@@ -152,7 +152,7 @@ export default function PlanMealScreen() {
           {note ? (
             <Text style={[styles.note, italic]} accessibilityLabel={`${who ? `${who}'s` : "Your coach's"} note: ${note}`}>{quoted(note)}</Text>
           ) : null}
-          <MastLine style={styles.perServing} testID="plan-meal-per-serving">{perServingLine(t)}</MastLine>
+          <MastLine style={styles.perServing} testID="plan-meal-per-serving">{perServingLine(shownRecipe ? { calories_kcal: (shownRecipe as any).calories, protein_g: (shownRecipe as any).protein, carbs_g: (shownRecipe as any).carbs, fats_g: (shownRecipe as any).fat } : t)}</MastLine>
         </PlanMasthead>
         <PaperPage bg={sc.bgPrimary}>
           {recipeId && recipe.isLoading ? (
