@@ -74,7 +74,7 @@ function pickMacro(
 
 // FOOD-IMAGES-M (R3): the food group as its own key, left out when there is none; food_category is never touched.
 function withGroup(item: RawFoodItem): Pick<SearchResult, 'food_group'> {
-  const group = foodGroupOf(item);
+  const group = foodGroupOf({ category: item.category });
   return group ? { food_group: group } : {};
 }
 
