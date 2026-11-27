@@ -201,7 +201,7 @@ function CoachlessLockWithFormer({ title, body, testID = 'join-coach-state', tap
   // read failed, on the copy the card is drawn from; a restored copy or a restored error alone waits, un-spent. It opens
   // only the card's coach, by the card's own step, while the tab is in front (read live: the mirror lags a router tap);
   // a tap for anyone else, or one the tab is no longer in front for, is spent and opens nothing, now or later.
-  const decided = (me.isSuccess && (me.isFetchedAfterMount || !me.isStale)) || (me.isError && me.isFetchedAfterMount);
+  const decided = (me.isSuccess && (me.isFetchedAfterMount || !me.isStale)) || me.isError;
   const listed = former?.coachId ?? null;
   const { params, recipientId, spend } = tap;
   useEffect(() => {
