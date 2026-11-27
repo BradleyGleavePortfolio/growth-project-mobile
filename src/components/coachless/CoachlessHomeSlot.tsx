@@ -142,7 +142,7 @@ export default function CoachlessHomeSlot({ part }: { part?: 'join' | 'roman' })
             // B-386-OPUS-1: iOS sells a client plan only on the labelled 1:1
             // coaching screen (store package P0); Android keeps the Day 1 sheet.
             if (nonP2PPurchasesHidden()) {
-              navigation.navigate('MoreTab', { screen: 'ClientPackages' });
+              navigation.navigate('MoreTab', { screen: 'ClientPackages', initial: false });
               return;
             }
             planTimer.current = setTimeout(() => setPlan({ packageId }), PLAN_SHEET_DELAY_MS);

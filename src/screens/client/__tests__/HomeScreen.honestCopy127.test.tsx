@@ -138,7 +138,7 @@ it.each([false, true])('profile copy reflects coach plan presence: %s', async (h
   await screen.findByLabelText('Log a meal');
   expect(screen.getByText(hasPlan ? /so your plan reflects you/ : /to set daily targets/)).toBeTruthy();
   await fireEvent.press(screen.getByLabelText(/^Complete your profile/));
-  expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'EditProfile' });
+  expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'EditProfile', initial: false });
 });
 // B29 (SHOTS-134B e): every answer saved except the named ones; the sentence says what they change.
 const savedProfile = {
@@ -163,7 +163,7 @@ it.each([
   const row = screen.getByLabelText(`Complete your profile. Missing ${missing}.`);
   expect(screen.getByText('91% complete')).toBeTruthy();
   await fireEvent.press(row);
-  expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'EditProfile' });
+  expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'EditProfile', initial: false });
 });
 it.each([['simple', 0], ['full', 24]] as const)('keeps coachless actions in %s mode with %s oz', async (mode, oz) => {
   mockUser.coach_id = ''; mockMacroMode = mode;
