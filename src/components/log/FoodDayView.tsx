@@ -205,12 +205,20 @@ export default function FoodDayView(p: FoodDayViewProps) {
   // target: main's over line keeps it). A status region, said once on iOS (Android reads the live region); no haptic.
   const changeText = isToday && plans.length > 0 && !dayLeft(p.targets, p.eaten)?.over
     ? changeNote(plan.data?.changes_today, firstName(coach.data?.name)) : null;
+  // LO C1: said once per change (its rows, not its words, so the coach's name arriving later says nothing new), once
+  // the coach read settles, and only while the Food day is in focus (a refresh while she is on another tab waits).
+  const changes = plan.data?.changes_today ?? [];
+  const changeKey = `${changes.length}|${changes.reduce((m, c) => (c.changed_at > m ? c.changed_at : m), '')}`;
+  const nav = React.useContext((Navigation.NavigationContext as React.Context<unknown> | undefined) ?? NO_NAVIGATION) as
+    { isFocused?: () => boolean; addListener?: (event: 'focus', cb: () => void) => () => void } | undefined;
+  const [focusTick, setFocusTick] = useState(0);
+  useEffect(() => nav?.addListener?.('focus', () => setFocusTick((t) => t + 1)), [nav]);
   const said = useRef<string | null>(null);
   useEffect(() => {
-    if (!changeText || said.current === changeText) return;
-    said.current = changeText;
+    if (!changeText || coach.isLoading || said.current === changeKey || nav?.isFocused?.() === false) return;
+    said.current = changeKey;
     if (Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility(changeText);
-  }, [changeText]);
+  }, [changeText, changeKey, coach.isLoading, nav, focusTick]);
   const workout = useMemo(() => {
     const row = (workouts.data ?? []).find((w) => assignmentDay(w) === p.selectedDate && !(w as { skipped_at?: string | null }).skipped_at);
     const name = row ? (row.snapshot?.plan_name ?? row.workout_plan?.name ?? '').trim() : '';
@@ -393,10 +401,11 @@ export default function FoodDayView(p: FoodDayViewProps) {
   const recipeLink = (x: DaySlot, inCard = false) => (isPlan && p.onOpenPlanMeal && recipeOf.get(x.key) ? (
     <View key={`recipe-${x.key}`} style={inCard ? undefined : s.linkRow}>
       {inCard ? null : <View style={[s.rail, s.nowRail]}><View style={s.line} /></View>}
-      <Pressable onPress={() => p.onOpenPlanMeal?.(x.key)} accessibilityRole="button" accessibilityLabel={`Recipe and grocery list for ${x.name}`}
-        testID={`food-day-recipe-${x.key}`} style={[s.link, !inCard && s.linkStart]}>
+      <HapticPressable intent="light" disableAnimation onPress={() => p.onOpenPlanMeal?.(x.key)} accessibilityRole="button"
+        accessibilityLabel={`Recipe and grocery list for ${x.name}`} testID={`food-day-recipe-${x.key}`}
+        containerStyle={inCard ? undefined : s.linkStart} style={[s.link, !inCard && s.linkStart]}>
         <Text style={s.linkText}>Recipe and grocery list</Text>
-      </Pressable>
+      </HapticPressable>
     </View>
   ) : null);
   const tag = (x: DaySlot) => (x.plan ? (
@@ -405,9 +414,10 @@ export default function FoodDayView(p: FoodDayViewProps) {
       <Text style={s.tagText}>{x.plan}</Text>
     </View>
   ) : null);
-  const head = (label: string, kcal: number | null, marked?: string) => (marked ? (
+  // LS C1: the up-next card's head is its own stop; a row's head sits in the row's pressable, whose label says it.
+  const head = (label: string, kcal: number | null, marked?: string, own = false) => (marked ? (
     // C_changed (style_c.py :85, :153): the gold "Updated" pill after the meal's label, before its calories.
-    <View style={s.headRow} accessible accessibilityLabel={`${label}, updated${kcal != null ? `, ${n(kcal)} kcal` : ''}`}>
+    <View style={s.headRow} accessible={own} accessibilityLabel={own ? `${label}, updated${kcal != null ? `, ${n(kcal)} kcal` : ''}` : undefined}>
       <Text style={s.eyebrow}>{label.toUpperCase()}</Text>
       <View style={s.pill} testID={`food-day-updated-${marked}`}><Text style={s.pillText}>UPDATED</Text></View>
       {kcal != null ? <Text style={s.kcal}>{`${n(kcal)} KCAL`}</Text> : null}
@@ -457,7 +467,7 @@ export default function FoodDayView(p: FoodDayViewProps) {
       <Text style={s.time}>{min != null ? clockOf(min) : ''}</Text>
       <View style={s.rail}><View style={s.line} /><View style={s.halo}><View style={s.ring} /></View></View>
       <View style={s.body}>
-        {head(x.usual ? `Up next, your usual ${x.mealType}` : `Up next, ${x.label}`, x.kcal, updated.has(x.key) ? x.key : undefined)}
+        {head(x.usual ? `Up next, your usual ${x.mealType}` : `Up next, ${x.label}`, x.kcal, updated.has(x.key) ? x.key : undefined, true)}
         <Text style={s.serifName}>{x.name}</Text>
         {tag(x)}
         <View style={s.card}>

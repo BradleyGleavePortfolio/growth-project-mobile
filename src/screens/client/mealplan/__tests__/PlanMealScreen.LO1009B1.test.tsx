@@ -9,7 +9,12 @@ import { Alert, StyleSheet } from 'react-native';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import PlanMealScreen from '../PlanMealScreen';
-import { StackRouter, CommonActions } from '@react-navigation/routers';
+import type * as Navigation from '@react-navigation/native';
+
+// The router proof reads StackRouter and CommonActions through @react-navigation/native, which re-exports
+// @react-navigation/core and with it the routers. package.json declares native, not routers
+// (src/config/__tests__/declaredDependencies.test.ts). This file mocks native, so it loads the real one.
+const { StackRouter, CommonActions } = jest.requireActual<typeof Navigation>('@react-navigation/native');
 
 jest.mock('../../../../config/featureFlags', () => {
   const actual = jest.requireActual('../../../../config/featureFlags');
