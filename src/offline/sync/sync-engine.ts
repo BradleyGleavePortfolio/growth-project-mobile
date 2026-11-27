@@ -44,6 +44,7 @@ import type { CompleteAssignmentInput } from '../../api/workoutBuilderApi';
 import { generateId } from '../../utils/date';
 import { readUserCache, readUserCacheSync } from '../../lib/userCache';
 import { isHeld, isRetryLater, retryAfterMs } from './retryLater';
+import { readRefusal, refusalOf, type WorkoutRefusal } from './refusal';
 import { createWorkoutOnce, updateWorkoutOnce } from './workoutSaveKey';
 import { queryClient } from '../../services/queryClient';
 import { captureErrorWithoutPii } from '../../services/sentry';
@@ -67,7 +68,8 @@ export const conflictToastEvents = new EventEmitter();
 export const deadLetterEvents = new EventEmitter();
 
 // Emitted after queued workouts reach the server so open screens (the
-// Workouts tab, the "From your coach" card) can refresh.
+// Workouts tab, the "From your coach" card) can refresh. 'queued': a refused
+// workout sent again went back to the queue unanswered (the waiting row counts it).
 export const workoutSyncEvents = new EventEmitter();
 
 // ---------------------------------------------------------------------------
@@ -274,7 +276,7 @@ async function queueOnce(
     // A sent row keeps its server_id, so pushQueuedRow sends a PUT.
     await db.runAsync(
       `UPDATE workout_logs
-          SET payload = ?, assignment_json = ?, sync_status = 'pending',
+          SET payload = ?, assignment_json = ?, sync_status = 'pending', refusal = NULL,
               duration_minutes = ?, user_id = ?
         WHERE id = ?`,
       [payloadJson, assignmentJson, input.durationMinutes ?? null, userId, existing.id],
@@ -356,6 +358,7 @@ export async function releaseQueuedWorkout(clientKey: string, error?: unknown): 
         `UPDATE workout_logs SET sync_status = 'dead_letter' WHERE client_key = ? AND sync_status = 'pending'`,
         [clientKey],
       );
+      await keepRefusal(error, `client_key = ? AND sync_status = 'dead_letter'`, clientKey);
     }
   } finally {
     heldKeys.delete(clientKey);
@@ -401,11 +404,87 @@ async function markConflict(id: string): Promise<void> {
   );
 }
 
-async function markDeadLetter(id: string): Promise<void> {
+async function markDeadLetter(id: string, err?: unknown): Promise<void> {
   const db = await getDatabase();
   await db.runAsync(
     `UPDATE workout_logs SET sync_status = 'dead_letter' WHERE id = ?`,
     [id],
+  );
+  await keepRefusal(err, 'id = ?', id);
+}
+
+/**
+ * WORKOUT-REFUSAL-M: the server's coded reason is kept with the parked row. An
+ * answer without a code writes nothing (today's behaviour); every way back to
+ * 'pending' clears the column (queueOnce, sendRefusedWorkoutAgain).
+ */
+async function keepRefusal(err: unknown, where: string, value: string): Promise<void> {
+  const refusal = refusalOf(err);
+  if (!refusal) return;
+  const db = await getDatabase();
+  await db.runAsync(`UPDATE workout_logs SET refusal = ? WHERE ${where}`, [JSON.stringify(refusal), value]);
+}
+
+// ---------------------------------------------------------------------------
+// Refused workouts the server gave a reason for (WORKOUT-REFUSAL-M, Style 2)
+// ---------------------------------------------------------------------------
+
+export interface RefusedWorkout {
+  id: string;
+  refusal: WorkoutRefusal;
+  /** The stored POST /workouts body: name, date, duration and sets for the card and sheet. */
+  body: Record<string, unknown>;
+}
+
+/** The signed-in client's parked workouts that carry the server's code and next step, oldest first. */
+export async function listRefusedWorkouts(userId: string): Promise<RefusedWorkout[]> {
+  if (!userId) return [];
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<{ id: string; payload: string; refusal: string | null }>(
+    `SELECT id, payload, refusal FROM workout_logs
+      WHERE sync_status = 'dead_letter' AND payload IS NOT NULL AND refusal IS NOT NULL AND user_id = ?
+      ORDER BY logged_at`,
+    [userId],
+  );
+  return rows.flatMap((row) => {
+    const refusal = readRefusal(row.refusal);
+    try {
+      const body = JSON.parse(row.payload) as Record<string, unknown> | null;
+      return refusal && body && typeof body === 'object' ? [{ id: row.id, refusal, body }] : [];
+    } catch {
+      return [];
+    }
+  });
+}
+
+/**
+ * Send again: the parked row goes back to the queue and is sent now through the
+ * same sender as every queued workout. 'dead_letter' when refused again,
+ * 'kept' when there was no answer (it waits in the queue and the waiting row counts it).
+ */
+export async function sendRefusedWorkoutAgain(id: string, userId: string): Promise<PushOutcome> {
+  const db = await getDatabase();
+  await db.runAsync(
+    `UPDATE workout_logs SET sync_status = 'pending', refusal = NULL WHERE id = ? AND user_id = ? AND sync_status = 'dead_letter'`,
+    [id, userId],
+  );
+  const row = await db.getFirstAsync<QueuedRow>(
+    `SELECT id, exercise_id, sets_data, sync_status, logged_at, server_id, session_name, duration_minutes, user_id,
+            payload, client_key, assignment_json
+       FROM workout_logs WHERE id = ? AND user_id = ? AND sync_status = 'pending'`,
+    [id, userId],
+  );
+  const outcome: PushOutcome = row && !waitingOutRetryAfter() ? await pushQueuedRow(row) : 'kept';
+  workoutSyncEvents.emit(outcome === 'sent' ? 'synced' : 'queued', { count: 1 });
+  return outcome;
+}
+
+/** Remove from this phone: deletes one parked workout of the signed-in client. */
+export async function removeRefusedWorkout(id: string, userId: string): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    `DELETE FROM workout_logs WHERE id = ? AND user_id = ? AND sync_status = 'dead_letter'`,
+    [id, userId],
   );
 }
 
@@ -640,7 +719,7 @@ async function sendQueuedRow(row: QueuedRow, key: string): Promise<PushOutcome> 
     const errorClass = classifyPushError(err);
     if (errorClass === 'transient') return 'kept';
     // A queued workout is created fresh, so a 409 is a refusal too.
-    await markDeadLetter(row.id);
+    await markDeadLetter(row.id, err);
     logRefusal('queued workout refused', err);
     return 'dead_letter';
   }

@@ -48,7 +48,7 @@ jest.mock('../../../hooks/useApi', () => ({
 }));
 jest.mock('../../../db/workoutDb', () => ({ getAllExercises: async () => [{ id: 'long', name: LONG, muscle: 'legs', equipment: 'Dumbbell' }] }));
 jest.mock('../../../api/exerciseCatalog', () => ({ exerciseCatalogApi: { libraryId: async () => null } }));
-jest.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({ setQueryData: jest.fn(), invalidateQueries: jest.fn() }) }));
+jest.mock('@tanstack/react-query', () => ({ QueryClient: jest.requireActual('@tanstack/react-query').QueryClient, useQueryClient: () => ({ setQueryData: jest.fn(), invalidateQueries: jest.fn() }) }));
 jest.mock('../../../services/api', () => ({ __esModule: true, default: {}, coachApi: {} }));
 jest.mock('../../../hooks/usePrograms', () => ({
   useProgram: () => ({ data: { id: 'p1', name: LONG }, isLoading: false }),

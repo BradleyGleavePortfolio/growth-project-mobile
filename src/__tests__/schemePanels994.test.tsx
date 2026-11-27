@@ -201,6 +201,8 @@ const MEMBERS: ReadonlyArray<readonly [string, string, string, string]> = [
   // MERGEUP-994 (operator ruling, Almalfi): the two panels main added after this PR's base (m#986, m#989).
   ['the Since week 1 tile on an exercise\'s history', 'screens/client/workouts/exerciseHistoryStyleC.tsx', '[s.tile, schemeCard]} testID="exercise-history-since"', 'PANEL'],
   ["the client's check-in box on Roman's draft sheet", 'screens/coach/client-detail/CheckInDraftSheet.tsx', '...(light ? schemeCard : { backgroundColor: sem.bgSurface })', 'PANEL'],
+  // MERGEUP-945 (operator ruling, Almalfi): part 4's coach-only band ("Only your coach posts here.") is a panel.
+  ['the coach-only band in a space chat', 'screens/community/CommunitySpaceChatScreen.tsx', 'borderTopWidth: 1, ...schemeCardOutline, ...schemeCard,', 'PANEL'],
   ['the completion toast', 'components/community/CompletionToast.tsx', 'backgroundColor: schemeBar.fill,', 'SUCCESS MESSAGE'],
   ['the completion toast words', 'components/community/CompletionToast.tsx', '{ color: schemeBar.text }', 'SUCCESS MESSAGE'],
   ['the saved state of the autosave pill', 'components/workout/AutosaveStatusPill.tsx', "icon: 'checkmark-circle-outline',\n          fg: schemeBar.text,\n          bg: schemeBar.fill,\n          border: schemeBar.border,", 'SUCCESS MESSAGE'],
@@ -267,6 +269,7 @@ const CENSUS: ReadonlyArray<readonly [string, number, string]> = [
   ['components/community/MessageBubble.tsx', 4, 'hairline on a white bubble, comment'],
   ['components/community/SpaceTree.tsx', 1, 'chip'],
   ['components/community/ThreadHeader.tsx', 2, 'avatar tile, comment'],
+  ['components/community/space-chat/SpaceInfoSheet.tsx', 1, 'sheet grab (m#944, Space info)'],
   ['components/community/space-chat/SpaceMessageSheet.tsx', 1, 'sheet grab'],
   ['components/log/FoodDayView.tsx', 1, 'icon circle'],
   ['components/messaging/ConversationClosed.tsx', 2, 'hairline, comment'],
@@ -307,6 +310,7 @@ const CENSUS: ReadonlyArray<readonly [string, number, string]> = [
   ['screens/coach/programs/ProgramAssignScreen.tsx', 3, 'avatar tile, comment'],
   ['screens/coach/programs/ProgramEditorScreen.tsx', 1, 'state tint (a day cell that holds a workout)'],
   ['screens/community/CommunityHomeScreen.tsx', 3, 'icon tile, skeleton'],
+  ['screens/community/CommunitySpaceChatScreen.tsx', 2, "icon circle (the closed note's ring), hairline (the closed bar's top line)"],
   ['screens/community/coach-dm/CoachDmListScreen.tsx', 4, 'skeleton, comment'],
   ['screens/community/coach-dm/CoachDmNewScreen.tsx', 1, 'avatar tile'],
   ['screens/community/coach-dm/coachDm.tsx', 1, 'hairline'],

@@ -1,4 +1,5 @@
 import { NutrientBasis, SearchResult } from './types';
+import { foodGroupOf } from './foodDrawing';
 
 // Server payload shape (loose — backend has historically sent at least three
 // schemas for food items so each field is optional and we normalise here).
@@ -29,6 +30,8 @@ export interface RawFoodItem {
   tsp_grams?: number;
   food_category?: string;
   category?: string;
+  // FOOD-IMAGES-M: read only by foodGroupOf (the category:<group> tag of a stored row).
+  tags?: string[] | null;
 }
 
 export interface RawLogEntry {
@@ -69,6 +72,12 @@ function pickMacro(
   return null;
 }
 
+// FOOD-IMAGES-M (R3): the food group as its own key, left out when there is none; food_category is never touched.
+function withGroup(item: RawFoodItem): Pick<SearchResult, 'food_group'> {
+  const group = foodGroupOf(item);
+  return group ? { food_group: group } : {};
+}
+
 export const mapFoodItem = (item: RawFoodItem): SearchResult => {
   const basis = inferNutrientBasis(item);
   // B4: do NOT silently default to 0 — leave NaN so calcMacros + the saving
@@ -96,6 +105,7 @@ export const mapFoodItem = (item: RawFoodItem): SearchResult => {
     tbsp_grams: item.tbsp_grams,
     tsp_grams: item.tsp_grams,
     food_category: item.food_category ?? item.category,
+    ...withGroup(item),
   };
 };
 
@@ -126,5 +136,6 @@ export const mapLogEntryToFood = (e: RawLogEntry): SearchResult | null => {
     tbsp_grams: fi?.tbsp_grams,
     tsp_grams: fi?.tsp_grams,
     food_category: fi?.food_category ?? fi?.category,
+    ...(fi ? withGroup(fi) : {}),
   };
 };
