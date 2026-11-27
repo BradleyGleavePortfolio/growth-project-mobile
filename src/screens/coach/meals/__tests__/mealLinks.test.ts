@@ -1,15 +1,10 @@
 /**
- * PLAN-SWAPS-COACH-M: the pure part of the coach's meal page and the builder's times (mealLinks.ts). Red at the base
- * because the module does not exist there. Every slot write is one table (R9); time order (R10); the wheel's
- * wall-clock time in two zones and on a clock-change day (R8); the options list, the picker list and his own recipes.
+ * PLAN-SWAPS-COACH-M: the pure part of the coach's meal page (mealLinks.ts). Red at the base because the module does
+ * not exist there: the options list, the picker list, his own recipes and the save refusals. (The builder's slot
+ * writes, time order and wheel cases go with the builder to PLAN-SWAPS-COACH-M2, Size split.)
  */
-import { spawnSync } from 'child_process';
-import type { DailyMealPlanSlot, MealTemplate } from '../../../../api/mealTemplatesApi';
+import type { MealTemplate } from '../../../../api/mealTemplatesApi';
 import * as L from '../mealLinks';
-
-// R8 (PLAN 4): Node reads TZ only when a process starts (src/utils/__tests__/date.test.ts), so each zone runs this
-// file again in a child jest with TZ set, before any Date is made there; the child asserts that its zone took.
-const PROBE = process.env.PSC_TZ_PROBE; // "<zone> <offset>", set only in the child run
 
 const links = () => L;
 
@@ -17,10 +12,6 @@ const meal = (id: string, name: string, k = 200, p = 20, c = 20, f = 5): MealTem
   id, coach_id: 'coach', name, description: null, calories_kcal: k, protein_g: p, carbs_g: c, fats_g: f,
   fiber_g: null, items: null, created_at: '2026-11-01T00:00:00.000Z', archived_at: null,
 });
-const slot = (id: string, meal_template_id: string, slot_label: DailyMealPlanSlot['slot_label'], order: number, time_of_day: string | null = null) =>
-  ({ id, daily_meal_plan_id: 'p1', meal_template_id, slot_label, order, time_of_day, meal_template: meal(meal_template_id, meal_template_id) }) as DailyMealPlanSlot;
-const sent = (rows: { meal_template_id: string; slot_label: string; order?: number; time_of_day?: string | null }[]) =>
-  rows.map((r) => `${r.meal_template_id} ${r.slot_label} ${r.order} ${r.time_of_day ?? '-'}`);
 
 describe('options for clients', () => {
   const live = [meal('a', 'Rice cakes, honey and whey'), meal('b', 'Greek yoghurt and granola'), meal('self', 'Banana and whey shake')];
@@ -73,84 +64,6 @@ describe('his own recipes (R7)', () => {
     expect(declaresAllergen({ allergens: null } as never)).toBe(false);
   });
 });
-
-describe('slot writes (R9): every slot the coach did not tap is sent as stored', () => {
-  const stored = [slot('s1', 'm8', 'dinner', 0, '19:30'), slot('s2', 'm7', 'breakfast', 1, '07:40'), slot('s3', 'm5', 'snack', 3, null)];
-  const full = Array.from({ length: 20 }, (_, i) => slot(`f${i}`, `m${i}`, 'snack', i === 0 ? 0 : i + 1, i % 2 ? '12:00' : null));
-  it.each<[string, DailyMealPlanSlot[], Parameters<ReturnType<typeof links>['slotWrite']>[1], string[]]>([
-    ['Swap keeps its order and time', stored, { kind: 'swap', id: 's2', meal: 'm9', label: 'breakfast' },
-      ['m8 dinner 0 19:30', 'm9 breakfast 1 07:40', 'm5 snack 3 -']],
-    ['Swap with a new label is his change, order and time kept', stored, { kind: 'swap', id: 's2', meal: 'm9', label: 'lunch' },
-      ['m8 dinner 0 19:30', 'm9 lunch 1 07:40', 'm5 snack 3 -']],
-    ['Add takes the next order after the highest and no time', stored, { kind: 'add', meal: 'm2', label: 'lunch' },
-      ['m8 dinner 0 19:30', 'm7 breakfast 1 07:40', 'm5 snack 3 -', 'm2 lunch 4 -']],
-    ['Remove of the first meal keeps every other order and time', stored, { kind: 'remove', id: 's1' },
-      ['m7 breakfast 1 07:40', 'm5 snack 3 -']],
-    ['Remove of the middle meal leaves a gap', stored, { kind: 'remove', id: 's2' }, ['m8 dinner 0 19:30', 'm5 snack 3 -']],
-    ['A time touches only its slot', stored, { kind: 'time', id: 's1', time: '18:45' }, ['m8 dinner 0 18:45', 'm7 breakfast 1 07:40', 'm5 snack 3 -']],
-    ['No time sends null for its slot only', stored, { kind: 'time', id: 's2', time: null }, ['m8 dinner 0 19:30', 'm7 breakfast 1 -', 'm5 snack 3 -']],
-    ['Add when the highest order is 20 takes the lowest free order, never 21', full, { kind: 'add', meal: 'mx', label: 'dinner' },
-      [...full.map((s) => `${s.meal_template_id} snack ${s.order} ${s.time_of_day ?? '-'}`), 'mx dinner 1 -']],
-  ])('%s', (_, slots, change, want) => {
-    const out = links().slotWrite(slots, change);
-    expect(sent(out)).toEqual(want);
-    expect(out.every((s) => 'time_of_day' in s && 'order' in s)).toBe(true);
-  });
-  it('the 20-order cap: with 0 to 20 all used, Add sends the others as stored (the server refuses 21, as main)', () => {
-    const all = Array.from({ length: 21 }, (_, i) => slot(`g${i}`, `m${i}`, 'snack', i));
-    const out = links().slotWrite(all, { kind: 'add', meal: 'mx', label: 'dinner' });
-    expect(out.slice(0, 21).map((s) => s.order)).toEqual(all.map((s) => s.order));
-    expect(out[21]).toMatchObject({ meal_template_id: 'mx', order: 21 });
-  });
-});
-
-describe('time order on the builder (R10)', () => {
-  it('a timed meal at its minutes; an untimed one right after the meal before it in saved order; ties keep saved order', () => {
-    const { byTime } = links();
-    const plan = [slot('d', 'm8', 'dinner', 0, '19:30'), slot('b', 'm7', 'breakfast', 1, '07:40'), slot('s', 'm5', 'snack', 2, null)];
-    expect(byTime(plan).map(({ slot: x, index }) => `${x.id} ${index}`)).toEqual(['b 1', 's 2', 'd 0']);
-    const first = [slot('x', 'm1', 'snack', 0, null), slot('y', 'm2', 'lunch', 1, '12:00'), slot('z', 'm3', 'dinner', 2, '12:00')];
-    expect(byTime(first).map(({ slot: x }) => x.id)).toEqual(['x', 'y', 'z']);
-    // The index is into the saved order (sortedSlots), whatever order the server listed the rows in.
-    expect(byTime([plan[2], plan[0], plan[1]]).map(({ index }) => index)).toEqual([1, 2, 0]);
-  });
-});
-
-const zoneCases = (tz: string, offset: number) => {
-  it('its zone took: a non-zero offset on an ordinary day', () => {
-    expect([process.env.TZ, new Date(2026, 0, 15, 12).getTimezoneOffset()]).toEqual([tz, offset]);
-  });
-  it('"HH:MM" goes to the wheel and back on 15 January 2024, local hours and minutes; label hours; a stored time stays', () => {
-    const { toWheel, fromWheel, openingTime } = links();
-    for (const t of ['00:00', '07:40', '12:35', '19:30', '23:55', '12:37']) expect(fromWheel(toWheel(t))).toBe(t);
-    const d = toWheel('07:40');
-    expect([d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes()]).toEqual([2024, 0, 15, 7, 40]);
-    expect([openingTime(null, 'breakfast'), openingTime(null, 'lunch'), openingTime(null, 'snack'), openingTime(null, 'preworkout'),
-      openingTime(null, 'dinner'), openingTime(null, 'postworkout'), openingTime('06:05', 'dinner')])
-      .toEqual(['07:30', '12:30', '15:30', '17:30', '19:30', '19:00', '06:05']);
-  });
-  if (tz.startsWith('America/')) {
-    it('a time inside the skipped hour of a clock-change day survives (the fixed day is not today)', () => {
-      const { toWheel, fromWheel } = links();
-      expect(new Date(2026, 2, 8, 2, 30).getHours()).toBe(3); // 02:30 does not exist on 2026-03-08 here
-      expect(fromWheel(toWheel('02:30'))).toBe('02:30');
-    });
-  }
-};
-
-if (PROBE) {
-  const [tz, offset] = PROBE.split(' ');
-  describe(`the wheel in ${tz}`, () => zoneCases(tz, Number(offset)));
-} else {
-  describe('the wheel is wall-clock local time on a fixed ordinary day (R8), one zone east and two west of UTC', () => {
-    it.each([['Asia/Tokyo', -540], ['America/Los_Angeles', 480], ['America/New_York', 300]])('%s (a child jest with TZ set)', (tz, offset) => {
-      const run = spawnSync(process.execPath, [require.resolve('jest/bin/jest'), '-i', '--ci', '--runTestsByPath', __filename, '-t', 'the wheel in'],
-        { env: { ...process.env, TZ: tz, PSC_TZ_PROBE: `${tz} ${offset}` }, encoding: 'utf8', timeout: 150_000 });
-      const tests = /Tests:\s+(.*)/.exec(`${run.stderr}`)?.[1] ?? `${run.stderr}`.slice(-2000);
-      expect([run.status, tests]).toEqual([0, tz.startsWith('America/') ? expect.stringMatching(/^\d+ skipped, 3 passed/) : expect.stringMatching(/^\d+ skipped, 2 passed/)]);
-    }, 160_000);
-  });
-}
 
 describe('the save refusals by code (R4, F10)', () => {
   const err = (code: string) => ({ response: { status: 400, data: { code, error: code, message: 'Something from the server' } } });

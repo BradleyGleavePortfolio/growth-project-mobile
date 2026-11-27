@@ -1,9 +1,9 @@
 /**
  * PLAN-SWAPS-COACH-M (Style 1 "Meal page", PICK #ALM-P3): the coach's meal page with options for clients and a recipe
- * link, the two pickers, and a time on each meal of a day plan. Real screens and hooks against a fake of backend main's
- * routes (mealPlansV2's, extended to store swap_template_ids, recipe_id and time_of_day and to answer GET /recipes).
- * The pickers and the time sheet are new files: they load with require() inside the cases that mount them, so at the
- * base those cases are red for "no screen" and every other case is red on its own assertion.
+ * link, and the two pickers. Real screens and hooks against a fake of backend main's routes (mealPlansV2's, extended to
+ * store swap_template_ids and recipe_id and to answer GET /recipes). The pickers are new files: they load with
+ * require() inside the cases that mount them, so at the base those cases are red for "no screen" and every other case
+ * is red on its own assertion. (The builder's cases, 9 to 12, go with the builder to PLAN-SWAPS-COACH-M2: Size split.)
  */
 import React from 'react';
 import { Dimensions, StyleSheet } from 'react-native';
@@ -15,7 +15,6 @@ const mockDb = { meals: [] as Row[], plans: [] as Row[], recipes: [] as Row[], f
   hold: {} as Record<string, Promise<void>>, log: [] as string[], bodies: [] as Row[] };
 const mockNav = { navigate: jest.fn(), goBack: jest.fn(), setParams: jest.fn(), popTo: jest.fn(), dispatch: jest.fn(), push: jest.fn() };
 let mockUser: { id: string } | null = { id: 'coach' };
-let mockPick = new Date(2024, 0, 15, 19, 30);
 
 /** Backend main's coach meal routes, own rows only, archived rows hidden from the list; GET /recipes is his own
  *  recipes plus his head coach's shared ones, newest first (recipe-access.ts). */
@@ -60,13 +59,8 @@ jest.mock('../../../../theme/ThemeProvider', () => ({ useTheme: () => ({ colors:
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => mockNav, useRoute: () => ({}), useFocusEffect: jest.fn(), usePreventRemove: jest.fn() }));
 jest.mock('../../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
 jest.mock('react-native-safe-area-context', () => ({ ...jest.requireActual('react-native-safe-area-context'), SafeAreaView: require('react-native').View }));
-jest.mock('@react-native-community/datetimepicker', () => ({ __esModule: true, default: ({ testID, onChange, value }: Row) =>
-  require('react').createElement(require('react-native').Pressable, { testID, onPress: () => onChange({ type: 'set' }, mockPick) },
-    require('react').createElement(require('react-native').Text, null, `wheel ${value.getHours()}:${String(value.getMinutes()).padStart(2, '0')}`)) }));
 
 import MealEditor from '../../CoachMealTemplatesScreen';
-import DayPlanBuilder from '../DayPlanBuilderScreen';
-import MealPicker from '../MealPickerScreen';
 import { HapticService } from '../../../../ui/haptics/haptics.service';
 
 const meal = (id: string, name: string, k: number, p: number, c: number, f: number, more: Row = {}) =>
@@ -74,8 +68,6 @@ const meal = (id: string, name: string, k: number, p: number, c: number, f: numb
     swap_template_ids: [], recipe_id: null, ...more });
 const recipe = (id: string, title: string, by: string, pub: boolean, allergens: string[], k: number, p: number, c: number, f: number) =>
   ({ id, title, servings: 1, calories: k, protein: p, carbs: c, fat: f, is_public: pub, created_by_id: by, allergens, allergens_declared: true });
-const slot = (id: string, meal_template_id: string, slot_label: string, order: number, time_of_day: string | null) =>
-  ({ id, meal_template_id, slot_label, order, time_of_day });
 const haptic = (k: 'selection' | 'success' | 'error' | 'mediumImpact') => HapticService[k] as jest.Mock;
 const writes = () => mockDb.bodies.filter((b) => !b.key.startsWith('GET'));
 let qc: QueryClient;
@@ -86,7 +78,6 @@ const rerenderEditor = (s: Mounted, params?: Row) =>
   s.rerender(<QueryClientProvider client={qc}><MealEditor {...({ route: { params }, navigation: mockNav } as any)} /></QueryClientProvider>);
 const open = (C: React.ComponentType<any>, params?: Row) => mount(<C route={{ params }} navigation={mockNav} />);
 const screen = (name: 'MealOptionsPickerScreen' | 'MealRecipePickerScreen') => require(`../${name}`).default as React.ComponentType<any>;
-const plan = () => mockDb.plans[0].slots.map((x: Row) => `${x.meal_template_id} ${x.slot_label} ${x.order} ${x.time_of_day ?? '-'}`);
 const SIZES = [{ width: 390, height: 844, fontScale: 1 }, { width: 320, height: 568, fontScale: 1.3 }];
 const size = (z: (typeof SIZES)[number]) => Dimensions.set({ window: { ...z, scale: 2 }, screen: { ...z, scale: 2 } });
 
@@ -94,7 +85,6 @@ beforeEach(() => {
   jest.clearAllMocks();
   size(SIZES[0]);
   mockUser = { id: 'coach' };
-  mockPick = new Date(2024, 0, 15, 19, 30);
   for (const k of ['selection', 'success', 'error', 'mediumImpact'] as const) jest.spyOn(HapticService, k).mockResolvedValue();
   qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   mockDb.meals = [
@@ -110,8 +100,7 @@ beforeEach(() => {
     recipe('r2', 'Protein Smoothie Bowl', 'coach', true, ['dairy', 'tree_nuts'], 440, 38, 48, 9),
     recipe('r3', 'Overnight protein oats', 'coach', false, ['soy'], 320, 24, 38, 5),
   ];
-  mockDb.plans = [{ id: 'p1', coach_id: 'coach', name: 'Foundations', notes: null, archived_at: null,
-    slots: [slot('s1', 'm8', 'dinner', 0, '19:30'), slot('s2', 'm7', 'breakfast', 1, '07:40'), slot('s3', 'm5', 'snack', 2, null)] }];
+  mockDb.plans = [];
   Object.assign(mockDb, { fail: {}, hold: {}, log: [], bodies: [] });
 });
 afterEach(() => jest.restoreAllMocks());
@@ -392,132 +381,19 @@ it.each<[string, unknown, string]>([
     .toEqual(['Banana shake', expect.anything(), 0, 1]);
 });
 
-it('case 9: the builder shows time order and keeps saved order; Swap and Remove act on the saved meal; a card opens its meal; an archived card is not a button', async () => {
-  const b = await open(DayPlanBuilder, { planId: 'p1' });
-  await b.findByDisplayValue('Foundations');
-  const names = b.getAllByLabelText(/^Open /).map((x) => x.props.accessibilityLabel);
-  expect(names).toEqual(['Open Breakfast: Greek yoghurt, oats and berries, 420 kcal, P 35, C 48, F 9',
-    'Open Snack: Apple and peanut butter, 270 kcal, P 7, C 30, F 16', 'Open Dinner: Salmon, potatoes and green beans, 620 kcal, P 42, C 55, F 22']);
-  await fireEvent.press(b.getAllByLabelText(/^Swap /)[0]);
-  expect(mockNav.navigate).toHaveBeenLastCalledWith('MealPicker', { planId: 'p1', index: 1 });
-  await fireEvent.press(b.getByLabelText(names[0]));
-  expect(mockNav.navigate).toHaveBeenLastCalledWith('MealEditor', { mealId: 'm7' });
-  await b.unmount();
-  let s = await open(MealPicker, { planId: 'p1', index: 1 });
-  expect(await s.findByText('Swap breakfast')).toBeTruthy();
-  await fireEvent.press(await s.findByTestId('pick-m6'));
-  await waitFor(() => expect(plan()).toEqual(['m8 dinner 0 19:30', 'm6 breakfast 1 07:40', 'm5 snack 2 -']));
-  await s.unmount();
-  s = await open(MealPicker, { planId: 'p1', index: 1 });
-  await fireEvent.press(await s.findByText('Remove breakfast'));
-  await waitFor(() => expect(plan()).toEqual(['m8 dinner 0 19:30', 'm5 snack 2 -']));
-  await s.unmount();
-  mockDb.meals[7].archived_at = '2026-10-16T00:00:00.000Z';
-  qc.clear();
-  const a = await open(DayPlanBuilder, { planId: 'p1' });
-  expect(await a.findByText('Archived meal. Clients see it until you swap it.')).toBeTruthy();
-  expect(a.queryByLabelText(/^Open Dinner/)).toBeNull();
-  expect(a.getAllByLabelText(/^Open /).map((x) => x.props.accessibilityLabel)).toEqual(['Open Snack: Apple and peanut butter, 270 kcal, P 7, C 30, F 16']);
-});
-
-it('case 10: the time sheet opens at the stored time or the label hour; Set sends one PATCH changing only that time; No time sends null or nothing; Close, scrim and back send nothing; a failure closes it with the alert line', async () => {
-  const b = await open(DayPlanBuilder, { planId: 'p1' });
-  const dinner = await b.findByLabelText('7:30 pm');
-  expect(dinner.props.accessibilityHint).toBe('Set the dinner time');
-  expect(b.getByLabelText('Add a time').props.accessibilityHint).toBe('Set the snack time');
-  await fireEvent.press(dinner);
-  expect([b.getByText('Dinner time'), b.getByText('Salmon, potatoes and green beans · Foundations'), b.getByText('wheel 19:30'),
-    b.getByText('Clients see this time on their own clock.'), b.getByLabelText('Set 7:30 pm')]).toBeTruthy();
-  mockPick = new Date(2024, 0, 15, 18, 45);
-  await fireEvent.press(b.getByTestId('time-wheel'));
-  expect(b.getByLabelText('Set 6:45 pm')).toBeTruthy();
-  await fireEvent.press(b.getByTestId('time-set'));
-  await waitFor(() => expect(plan()).toEqual(['m8 dinner 0 18:45', 'm7 breakfast 1 07:40', 'm5 snack 2 -']));
-  expect(writes()).toHaveLength(1);
-  await waitFor(() => expect(b.queryByText('Dinner time')).toBeNull());
-  await fireEvent.press(await b.findByLabelText('Add a time'));
-  expect(b.getByText('wheel 15:30')).toBeTruthy();
-  await fireEvent.press(b.getByTestId('time-none'));
-  await waitFor(() => expect(b.queryByText('Snack time')).toBeNull());
-  expect(writes()).toHaveLength(1);
-  await fireEvent.press(await b.findByLabelText('7:40 am'));
-  await fireEvent.press(b.getByTestId('time-close'));
-  await fireEvent.press(await b.findByLabelText('7:40 am'));
-  await fireEvent.press(b.getByTestId('time-scrim', { includeHiddenElements: true })); // hidden from VoiceOver by the modal sheet
-  await fireEvent.press(await b.findByLabelText('7:40 am'));
-  await act(async () => b.container.queryAll((n) => typeof n.props.onRequestClose === 'function')[0].props.onRequestClose());
-  expect(writes()).toHaveLength(1);
-  await fireEvent.press(await b.findByLabelText('7:40 am'));
-  await fireEvent.press(b.getByTestId('time-none'));
-  await waitFor(() => expect(plan()).toEqual(['m8 dinner 0 18:45', 'm7 breakfast 1 -', 'm5 snack 2 -']));
-  mockDb.fail['PATCH /coach/daily-meal-plans/p1'] = { message: 'Network Error', isAxiosError: true };
-  await fireEvent.press(await b.findByLabelText('6:45 pm'));
-  await fireEvent.press(b.getByTestId('time-set'));
-  expect(await b.findByText('That did not save. Check your connection, then try again.')).toBeTruthy();
-  expect([b.queryByText('Dinner time'), haptic('error').mock.calls.length]).toEqual([null, 1]);
-});
-
-it('case 10b: a stored time off the 5-minute grid is sent back unchanged when Set is tapped without moving the wheel', async () => {
-  mockDb.plans[0].slots[0].time_of_day = '12:37';
-  const b = await open(DayPlanBuilder, { planId: 'p1' });
-  await fireEvent.press(await b.findByLabelText('12:37 pm'));
-  await fireEvent.press(b.getByTestId('time-set'));
-  await waitFor(() => expect(writes()).toHaveLength(1));
-  expect(writes()[0].body.slots.map((x: Row) => x.time_of_day)).toEqual(['12:37', '07:40', null]);
-});
-
-it('case 11: Swap keeps its order and time; Add a meal keeps every time and takes the next order with none; Remove keeps the others as stored', async () => {
-  mockDb.plans[0].slots = [slot('s1', 'm7', 'breakfast', 0, '07:40'), slot('s2', 'm9', 'lunch', 1, '12:35'), slot('s3', 'm8', 'dinner', 2, '19:30')];
-  let s = await open(MealPicker, { planId: 'p1', index: 1 });
-  await fireEvent.press(await s.findByTestId('pick-m3'));
-  await waitFor(() => expect(plan()).toEqual(['m7 breakfast 0 07:40', 'm3 lunch 1 12:35', 'm8 dinner 2 19:30']));
-  await s.unmount();
-  s = await open(MealPicker, { planId: 'p1' });
-  await fireEvent.press(await s.findByLabelText('Snack'));
-  await fireEvent.press(await s.findByTestId('pick-m5'));
-  await waitFor(() => expect(plan()).toEqual(['m7 breakfast 0 07:40', 'm3 lunch 1 12:35', 'm8 dinner 2 19:30', 'm5 snack 3 -']));
-  await s.unmount();
-  s = await open(MealPicker, { planId: 'p1', index: 0 });
-  await fireEvent.press(await s.findByText('Remove breakfast'));
-  await waitFor(() => expect(plan()).toEqual(['m3 lunch 1 12:35', 'm8 dinner 2 19:30', 'm5 snack 3 -']));
-});
-
-it('case 12: while a slot write is pending, and while the plan re-reads, the time lines, Swap and Add a meal are off', async () => {
-  const b = await open(DayPlanBuilder, { planId: 'p1' });
-  await fireEvent.press(await b.findByLabelText('7:30 pm'));
-  mockDb.fail['PATCH /coach/daily-meal-plans/p1'] = 'hang';
-  await fireEvent.press(b.getByTestId('time-set'));
-  const off = () => [b.getByLabelText('7:40 am'), b.getByLabelText('Add a time'), ...b.getAllByLabelText(/^Swap /), b.getByTestId('plan-add')]
-    .map((x) => x.props.accessibilityState?.disabled);
-  await waitFor(() => expect(off()).toEqual([true, true, true, true, true, true]));
-  await b.unmount();
-  delete mockDb.fail['PATCH /coach/daily-meal-plans/p1'];
-  qc.clear();
-  const c = await open(DayPlanBuilder, { planId: 'p1' });
-  await c.findByLabelText('7:40 am');
-  mockDb.hold['GET /coach/daily-meal-plans/p1'] = new Promise(() => {});
-  await act(async () => { void qc.invalidateQueries({ queryKey: ['daily-meal-plans', 'p1'] }); });
-  const offC = () => [c.getByLabelText('7:40 am'), c.getByLabelText('Add a time'), ...c.getAllByLabelText(/^Swap /), c.getByTestId('plan-add')]
-    .map((x) => x.props.accessibilityState?.disabled);
-  await waitFor(() => expect(offC()).toEqual([true, true, true, true, true, true]));
-});
-
-it('case 13: at 320 pt with 130% text no text is cut, every control is at least 44 pt, the footer row and the sheet are whole', async () => {
+it('case 13: at 320 pt with 130% text no text is cut, every control is at least 44 pt, and the footer row is whole', async () => {
   size(SIZES[1]);
   const all = [await editor({ mealId: 'm1' })];
   await all[0].findByText('Banana protein shake');
   await fireEvent.press(all[0].getByLabelText('More for Rice cakes, honey and whey'));
   all.push(await open(screen('MealOptionsPickerScreen'), { mealId: 'm1', mealName: 'Banana and whey shake', chosen: ['m2'] }));
   all.push(await open(screen('MealRecipePickerScreen'), { mealId: 'm1', mealName: 'Banana and whey shake', recipeId: 'r1' }));
-  const b = await open(DayPlanBuilder, { planId: 'p1' });
-  all.push(b);
-  await fireEvent.press(await b.findByLabelText('7:30 pm'));
   await all[1].findByText('Your meals, A to Z');
   await all[2].findByText('Your recipes, newest first');
   for (const s of all) {
     // PrimaryButton (shared, approved) caps its own label at one line, or two with wrap; every one this job adds wraps.
     expect(s.container.queryAll((t) => t.props.numberOfLines != null && !(t.props.maxFontSizeMultiplier === 1.6 && t.props.numberOfLines === 2))
-      .map((t) => `${t.type} ${t.props.children}`)).toEqual(s === b ? ['Text Assign to a client'] : []);
+      .map((t) => `${t.type} ${t.props.children}`)).toEqual([]);
     for (const c of [...s.queryAllByRole('button'), ...s.queryAllByRole('checkbox')]) {
       const st = StyleSheet.flatten(c.props.style) ?? {};
       const tall = Math.max(st.minHeight ?? 0, st.height ?? 0) + 2 * (c.props.hitSlop?.top ?? c.props.hitSlop ?? 0);
@@ -525,7 +401,6 @@ it('case 13: at 320 pt with 130% text no text is cut, every control is at least 
     }
   }
   expect(all[0].getByTestId('meal-footer-row')).toBeTruthy();
-  expect(b.getByTestId('time-sheet')).toBeTruthy();
 });
 
 it('case 15: the form survives its list (R5 latch): a stale flag, a re-read after a New meal and a failed background re-read keep the typed name, the picks and the note', async () => {

@@ -266,19 +266,19 @@ it('Swap, Add a meal and Remove save the slots; a meal archived after the list l
   await s.unmount();
   s = await open(MealPicker, { planId: 'p1', index: 0 });
   await fireEvent.press(await s.findByText('Remove breakfast'));
-  await waitFor(() => expect(slots()).toEqual(['m3 lunch 1', 'm2 snack 2']));
+  await waitFor(() => expect(slots()).toEqual(['m3 lunch 0', 'm2 snack 1']));
   await s.unmount();
   s = await open(MealPicker, { planId: 'p1' });
   await s.findByTestId('pick-m1');
   archive('m1');
   await fireEvent.press(s.getByTestId('pick-m1'));
   expect(await s.findByText('A meal in this plan was archived. Swap it, then try again.')).toBeTruthy();
-  expect([slots(), mockNav.goBack.mock.calls.length, haptic('error').mock.calls.length]).toEqual([['m3 lunch 1', 'm2 snack 2'], 3, 1]);
+  expect([slots(), mockNav.goBack.mock.calls.length, haptic('error').mock.calls.length]).toEqual([['m3 lunch 0', 'm2 snack 1'], 3, 1]);
 });
 
 it.each<[string, string[], number, 'swap' | 'remove', string[]]>([
   ['one archived meal, Swap', ['m1'], 0, 'swap', ['m3 breakfast 0', 'm2 lunch 1']],
-  ['one archived meal, Remove', ['m1'], 0, 'remove', ['m2 lunch 1']],
+  ['one archived meal, Remove', ['m1'], 0, 'remove', ['m2 lunch 0']],
   ['two archived meals, Swap one', ['m1', 'm2'], 0, 'swap', ['m3 breakfast 0', 'm2 lunch 1']],
   ['two archived meals, Remove one', ['m1', 'm2'], 1, 'remove', ['m1 breakfast 0']],
 ])('%s: the builder says clients still see it, and the save keeps every other meal', async (_, gone, index, how, after) => {

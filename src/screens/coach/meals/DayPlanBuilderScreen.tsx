@@ -3,12 +3,9 @@
  * coach/daily-meal-plans. A new plan is named first (POST); after that every
  * change saves at once (PATCH), so clients on the plan see it right away.
  * The name and note save when a field ends, before Swap, Add or Assign, and on leaving, which waits for the save.
- * PLAN-SWAPS-COACH-M (Style 1, frames S1_F11 and F12): meals show in time order with a time line each (R10); Swap and
- * the picker act on the saved-order index; a card opens its meal; every slot write goes through slotWrite (R9); while
- * a write is pending or the plan re-reads, the time lines, Swap and Add a meal wait (R11).
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { usePreventRemove, type NavigationAction } from '@react-navigation/native';
 import { useTheme } from '../../../theme/ThemeProvider';
@@ -20,15 +17,12 @@ import { HapticService } from '../../../ui/haptics/haptics.service';
 import {
   useCreateDailyMealPlan, useDailyMealPlan, useMealPlanRuns, useUpdateDailyMealPlan,
 } from '../../../hooks/useMealTemplates';
-import type { DailyMealPlanSlot, UpdateDailyMealPlanInput } from '../../../api/mealTemplatesApi';
-import { clockOf, minutesOf } from '../../../utils/log/foodTimeline';
+import type { UpdateDailyMealPlanInput } from '../../../api/mealTemplatesApi';
 import type { ProgramsScreenProps } from '../programs/types';
 import {
   LoadFailed, Loading, Masthead, SLOT_NAMES, clientsOn, count, dayTotals, macroLine, mealStyles as ms, num, planSaveFailed,
   saveFailed, sortedSlots,
 } from './mealUi';
-import { byTime, slotWrite } from './mealLinks';
-import { MealTimeSheet } from './MealTimeSheet';
 
 export default function DayPlanBuilderScreen({ route, navigation }: ProgramsScreenProps<'DayPlanBuilder'>) {
   const { semanticColors: sc } = useTheme();
@@ -39,7 +33,6 @@ export default function DayPlanBuilderScreen({ route, navigation }: ProgramsScre
   const { runs } = useMealPlanRuns();
   const [name, setName] = useState<string>();
   const [note, setNote] = useState<string>();
-  const [timing, setTiming] = useState<DailyMealPlanSlot | null>(null);
   const p = plan.data;
   const sent = useRef<{ key: string; done: Promise<boolean> }>(undefined);
   // The typed name and note not yet saved. Back with the keyboard up can come before onEndEditing lands, so leaving
@@ -102,15 +95,6 @@ export default function DayPlanBuilderScreen({ route, navigation }: ProgramsScre
   const slots = sortedSlots(p);
   const t = dayTotals(slots);
   const clients = runs && clientsOn(runs, p.id).size;
-  const busy = update.isPending || plan.isFetching;
-  // R8, R9: Set saves at once, every other slot as stored; No time on a meal with none sends nothing.
-  const setTime = (x: DailyMealPlanSlot, time: string | null) => {
-    setTiming(null);
-    if (time === null && !x.time_of_day) return;
-    void flush();
-    void update.mutateAsync({ id: p.id, input: { slots: slotWrite(slots, { kind: 'time', id: x.id, time }) } })
-      .then(() => void HapticService.success(), () => void HapticService.error());
-  };
   return (
     <Screen edges={['bottom']} contentStyle={styles.content}
       footer={<PrimaryButton label="Assign to a client" disabled={!slots.length} accessibilityHint={slots.length ? undefined : 'Add a meal first'}
@@ -133,19 +117,9 @@ export default function DayPlanBuilderScreen({ route, navigation }: ProgramsScre
           placeholder="A line for clients, such as when to eat the bigger meal" placeholderTextColor={sc.textMuted}
           onEndEditing={() => void flush()} style={[styles.note, { color: sc.textPrimary }]} />
       </View>
-      {byTime(p.slots).map(({ slot: x, index: i }) => {
+      {slots.map((x, i) => {
         const slot = SLOT_NAMES[x.slot_label];
         const m = x.meal_template;
-        const min = minutesOf(x.time_of_day);
-        const words = (
-          <>
-            <View style={[styles.tile, { backgroundColor: sc.bgPrimary }]}><Ionicons name="restaurant-outline" size={22} color={sc.textPrimary} /></View>
-            <View style={ms.fill}>
-              <Text style={[typography.bodyMd, { color: sc.textPrimary }]}>{m.name}</Text>
-              <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{m.archived_at ? 'Archived meal. Clients see it until you swap it.' : macroLine(m)}</Text>
-            </View>
-          </>
-        );
         return (
           <View key={x.id} style={styles.slot}>
             <View style={styles.rail} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
@@ -154,22 +128,13 @@ export default function DayPlanBuilderScreen({ route, navigation }: ProgramsScre
             </View>
             <View style={[ms.fill, styles.slotBody]}>
               <Text style={[typography.eyebrow, { color: sc.textMuted }]}>{slot}</Text>
-              <Pressable accessibilityRole="button" accessibilityLabel={min === null ? 'Add a time' : clockOf(min)}
-                accessibilityHint={`Set the ${slot.toLowerCase()} time`} accessibilityState={{ disabled: busy }} disabled={busy}
-                onPress={() => setTiming(x)} style={({ pressed }) => [styles.time, pressed && ms.pressed, busy && styles.wait]}>
-                <Ionicons name="time-outline" size={20} color={sc.textMuted} />
-                <Text style={[typography.body, min === null ? styles.under : null, { color: min === null ? sc.accentText : sc.textPrimary }]}>
-                  {min === null ? 'Add a time' : clockOf(min)}
-                </Text>
-              </Pressable>
               <View style={[ms.card, styles.meal, { backgroundColor: sc.bgSurface, borderColor: sc.border }]}>
-                {m.archived_at ? <View style={styles.open}>{words}</View> : (
-                  <Pressable accessibilityRole="button" accessibilityLabel={`Open ${slot}: ${m.name}, ${num(m.calories_kcal)} kcal, P ${num(m.protein_g)}, C ${
-                    num(m.carbs_g)}, F ${num(m.fats_g)}`} onPress={() => navigation.navigate('MealEditor', { mealId: m.id })}
-                    style={({ pressed }) => [styles.open, pressed && ms.pressed]}>{words}</Pressable>
-                )}
-                <HapticPressable accessibilityRole="button" accessibilityLabel={`Swap ${slot.toLowerCase()}`} hitSlop={4} style={[styles.icon, busy && styles.wait]}
-                  accessibilityState={{ disabled: busy }} disabled={busy}
+                <View style={[styles.tile, { backgroundColor: sc.bgPrimary }]}><Ionicons name="restaurant-outline" size={22} color={sc.textPrimary} /></View>
+                <View style={ms.fill}>
+                  <Text style={[typography.bodyMd, { color: sc.textPrimary }]}>{m.name}</Text>
+                  <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{m.archived_at ? 'Archived meal. Clients see it until you swap it.' : macroLine(m)}</Text>
+                </View>
+                <HapticPressable accessibilityRole="button" accessibilityLabel={`Swap ${slot.toLowerCase()}`} hitSlop={4} style={styles.icon}
                   onPress={() => { void flush(); navigation.navigate('MealPicker', { planId: p.id, index: i }); }}>
                   <Ionicons name="swap-horizontal-outline" size={22} color={sc.textMuted} />
                 </HapticPressable>
@@ -178,8 +143,8 @@ export default function DayPlanBuilderScreen({ route, navigation }: ProgramsScre
           </View>
         );
       })}
-      <HapticPressable accessibilityRole="button" accessibilityLabel="Add a meal" style={[styles.add, busy && styles.wait]} testID="plan-add"
-        accessibilityState={{ disabled: busy }} disabled={busy} onPress={() => { void flush(); navigation.navigate('MealPicker', { planId: p.id }); }}>
+      <HapticPressable accessibilityRole="button" accessibilityLabel="Add a meal" style={styles.add} testID="plan-add"
+        onPress={() => { void flush(); navigation.navigate('MealPicker', { planId: p.id }); }}>
         <Ionicons name="add" size={22} color={sc.accentText} />
         <Text style={[typography.bodyMd, { color: sc.accentText }]}>Add a meal</Text>
       </HapticPressable>
@@ -189,7 +154,6 @@ export default function DayPlanBuilderScreen({ route, navigation }: ProgramsScre
           {`Changes reach the ${count(clients, 'client', 'clients')} on this plan right away. Food they already logged stays as it was.`}
         </Text>
       ) : null}
-      <MealTimeSheet slot={timing} planName={p.name} onClose={() => setTiming(null)} onSet={setTime} />
     </Screen>
   );
 }
@@ -208,10 +172,6 @@ const styles = StyleSheet.create({
   railLine: { width: 2, flex: 1, marginTop: 2, marginBottom: -16 },
   slotBody: { gap: 8 },
   meal: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12 },
-  open: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44 },
-  time: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, alignSelf: 'flex-start' },
-  under: { textDecorationLine: 'underline' },
-  wait: { opacity: 0.45 },
   tile: { width: 40, height: 40, borderRadius: radius.button, alignItems: 'center', justifyContent: 'center' },
   icon: { width: 44, height: 44, marginRight: -8, alignItems: 'center', justifyContent: 'center' },
   add: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, alignSelf: 'flex-start' },
