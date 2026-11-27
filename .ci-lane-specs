@@ -1,0 +1,11 @@
+src/screens/client/kitchen/
+src/__tests__/keyboardSafeSheets.test.tsx
+src/__tests__/copyVoice.guard.test.ts
+src/__tests__/quietLuxuryDoctrine.test.ts
+src/__tests__/fontsLoaded.guard.test.ts
+src/__tests__/boneSwapGuard.test.ts
+src/__tests__/schemePanels994.test.tsx
+src/__tests__/coachlessNeverGated134.test.tsx
+scripts/__tests__/routeContract.test.js
+src/screens/client/__tests__/GroceryOneList.test.tsx
+src/components/mealplan/__tests__/LogPlannedMealButton.test.tsx
