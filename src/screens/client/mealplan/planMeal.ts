@@ -127,7 +127,7 @@ export function changeNote(changes: PlanChange[] | null | undefined, coach: stri
 export function updatedSlotIds(changes: PlanChange[] | null | undefined, plans: DailyMealPlan[]): Set<string> {
   const rows = changes ?? [];
   return new Set(plans.flatMap((p) => p.slots ?? []).filter((s) =>
-    rows.some((c) => c && c.slot_id === s.id && !!c.to_template_id && c.to_template_id === s.meal_template_id)).map((s) => s.id));
+    rows.some((c) => c && c.slot_label === s.slot_label && !!c.to_template_id)).map((s) => s.id));
 }
 
 export interface IngredientRow { name: string; amount: string | null }
