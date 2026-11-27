@@ -24,7 +24,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Text, StyleSheet, AccessibilityInfo } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { spacing, radius, semantic } from '../../theme/tokens';
+import { spacing, radius, schemeBar } from '../../theme/tokens';
 
 const VISIBLE_MS = 2200;
 const FADE_MS = 220;
@@ -169,14 +169,14 @@ export default function CompletionToast({
         styles.toast,
         {
           bottom: insets.bottom + spacing.xl,
-          backgroundColor: semantic.success.bg,
-          borderColor: semantic.success.border,
+          backgroundColor: schemeBar.fill,
+          borderColor: schemeBar.border,
           opacity,
           transform: [{ translateY }],
         },
       ]}
     >
-      <Text style={[styles.text, { color: semantic.success.fg }]}>
+      <Text style={[styles.text, { color: schemeBar.text }]}>
         {rendered.message}
       </Text>
     </Animated.View>

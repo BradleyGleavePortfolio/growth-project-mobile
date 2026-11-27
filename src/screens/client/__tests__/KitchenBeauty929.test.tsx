@@ -1,6 +1,6 @@
 // BEAUTY-929: the kitchen screens brought to the C2 Style C drawing (C_kitchen, C_recipe, C_grocery, C_error).
-// Pins what the beauty pass changed: the page is the app's bone (#F7FAF7, owner "we keep the toothpaste color
-// for v1"), every recipe row carries its picture tile, empty states carry their line drawing, the prep guide and
+// Pins what the beauty pass changed: the page is the app's bone (#F7EED9, owner #203-E86: Sunlit sand),
+// every recipe row carries its picture tile, empty states carry their line drawing, the prep guide and
 // recipe list failures are the warm notice with a working Try again, the recipe page keeps Back while it loads or
 // fails, and prep ingredients read name then amount.
 import React from 'react';
@@ -51,7 +51,7 @@ it('the page is the bone bgPrimary, not the cream the frames draw', async () => 
   const ui = await render(<StyleCPaper />);
   const paper = ui.toJSON() as unknown as { props: { style: Parameters<typeof StyleSheet.flatten>[0] } };
   expect(StyleSheet.flatten(paper.props.style)).toMatchObject({ backgroundColor: lightTokens.bgPrimary });
-  expect(lightTokens.bgPrimary).toBe('#F7FAF7');
+  expect(lightTokens.bgPrimary).toBe('#F7EED9');
 });
 
 it('a prep guide failure is the warm notice with a Try again that loads again', async () => {
