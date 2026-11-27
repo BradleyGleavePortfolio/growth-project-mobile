@@ -1,0 +1,11 @@
+src/screens/client/foodweek
+src/screens/client/__tests__/MoreScreen
+src/screens/client/__tests__/YouScreen
+src/navigation/__tests__
+src/entitlements/dunning
+src/components/log
+src/components/mealplan
+src/screens/client/__tests__/ClientDailyMealPlan
+src/__tests__/boneSwapGuard.test.ts
+src/__tests__/schemePanels994.test.tsx
+scripts/__tests__/routeContract.test.js
