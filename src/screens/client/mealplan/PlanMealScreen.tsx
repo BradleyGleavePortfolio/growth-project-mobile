@@ -8,7 +8,7 @@
  * recipe. Writes: the plan meal log (LogPlannedMealButton) and one grocery add (the Prep guide's own write).
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Line } from 'react-native-svg';
 import { useFocusEffect, useNavigation, useRoute, type NavigationProp, type ParamListBase, type RouteProp } from '@react-navigation/native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -22,6 +22,7 @@ import { foodLogFromDailyEntry, type DailyLogEntry } from '../../../utils/log/da
 import { errorStatus } from '../../../types/common';
 import { isHiddenForAllergens, recipeAllergenDetail, type RecipeAllergenFields } from '../../../lib/recipeAllergens';
 import LogPlannedMealButton, { plannedMealFromSlot } from '../../../components/mealplan/LogPlannedMealButton';
+import HapticPressable from '../../../components/HapticPressable';
 import { PrimaryButton } from '../../../ui';
 import { QuietError, loadFailureMessage } from '../../../ui/states/QuietStates';
 import { StyleCLoadingLines, StyleCNotice, StyleCSheet, useBottomInset } from '../../../ui/layout/StyleCPage';
@@ -215,11 +216,12 @@ function PlanMealPage({ date, slotId }: Params['PlanMeal']) {
         {showButton ? <LogPlannedMealButton meal={plannedMealFromSlot(slot)} slot={slot.slot_label} planSlotId={slot.id} planned /> : null}
         {status ? <Text style={styles.status} testID="plan-meal-status">{status}</Text> : null}
         {groceries.length > 0 ? (
-          <Pressable onPress={() => { if (!addToGrocery.isPending) addToGrocery.mutate(groceries); }} disabled={addToGrocery.isPending}
+          <HapticPressable intent="light" disableAnimation onPress={() => { if (!addToGrocery.isPending) addToGrocery.mutate(groceries); }}
+            disabled={addToGrocery.isPending}
             accessibilityRole="button" accessibilityLabel="Add ingredients to grocery list"
             accessibilityState={{ disabled: addToGrocery.isPending, busy: addToGrocery.isPending }} style={styles.link} testID="plan-meal-grocery">
             <Text style={styles.linkText}>Add ingredients to grocery list</Text>
-          </Pressable>
+          </HapticPressable>
         ) : null}
       </View>
       {/* The Prep guide's confirmation sheet and words (PrepGuideScreen.tsx:320-329). */}
