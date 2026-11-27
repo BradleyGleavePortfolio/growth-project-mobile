@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useReducer } from 'react';
 import type { NavigationAction, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { featureFlags } from '../config/featureFlags';
 import { useChatDraft } from '../lib/chatDrafts';
@@ -57,6 +58,60 @@ export function openTarget(navigation: TabJump, { tab, params }: { tab: string; 
 
 export const openInboxChat = (navigation: TabJump, clientId: string, clientName: string, initialDraft?: string): void =>
   openTarget(navigation, chatTarget(clientId, clientName, initialDraft));
+
+/** A message notification's client on the Messages list's route, with the list screen's own navigation. */
+export interface InboxTap {
+  clientId: string;
+  screen: { setParams(params: { clientId: undefined }): void; isFocused(): boolean; addListener(type: 'blur', cb: () => void): () => void };
+}
+
+/**
+ * COACH-ROW-CHAT-PUSH-M (owner 203-D4, #203-E22 "open the clients chat"): a coach's message notification (the lock
+ * screen, a cold start, the in-app slip) opens Messages with its client's id and no name (pushTapRouter; b#1242's
+ * actionParams.clientId). The list then opens that client's chat as her own tap on the row does, by the row's own call
+ * and name; with no row (a block either way, a client who moved or is not hers, a failed read) she stays on the list.
+ * At most one read of the list per tap (`reread`, joining one already out). A chat opens only while the list is in
+ * front, only for the id on the route now (the newest tap), and never after she moved on. The id is spent (cleared from
+ * the route) when the list leaves the front, the chat's own opening included, or at once when the tap gives up, so
+ * Back, a refresh and the slip never see it again. The open is made in the commit after the row is found, and the id
+ * is spent after the open: React Navigation 7 drops a nested navigate that lands in the same update as a change to that
+ * stack's own state (useNavigationBuilder's paramsUsedForInitialization), such as the router's own update of this stack.
+ */
+export function useInboxTap(tap: InboxTap | undefined, list: {
+  ready: boolean; // may decide now
+  rowName(clientId: string): string | undefined; // that client's row before search, or undefined
+  reread(): Promise<unknown>;
+  open(clientId: string, name: string): void; // the row's own press
+}): void {
+  const id = tap?.clientId;
+  const run = useMemo(() => ({ asked: false, answered: false, found: false, decided: false }), [id]); // one per tap
+  const [, rerender] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    if (!tap) return undefined;
+    return tap.screen.addListener('blur', () => {
+      run.decided = true;
+      tap.screen.setParams({ clientId: undefined });
+    });
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!tap || run.decided || !list.ready) return;
+    const name = list.rowName(tap.clientId);
+    if (name !== undefined && !run.found) {
+      run.found = true;
+      rerender();
+      return;
+    }
+    if (name === undefined && !run.found && !run.asked) {
+      run.asked = true;
+      void list.reread().finally(() => { run.answered = true; rerender(); });
+      return;
+    }
+    if (name === undefined && !run.found && !run.answered) return;
+    run.decided = true;
+    if (name !== undefined && tap.screen.isFocused()) list.open(tap.clientId, name); // its blur spends the id
+    else tap.screen.setParams({ clientId: undefined });
+  });
+}
 
 /**
  * COACH-CHAT-KEEP and CHAT-DISCARD (owner 10-21): nothing asks before a chat closes (the "Discard this message?" prompt

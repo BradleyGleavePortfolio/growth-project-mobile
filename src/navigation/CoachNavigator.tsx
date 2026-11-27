@@ -329,7 +329,7 @@ export type SettingsStackParamList = {
 };
 
 /** COACH-CHAT-BACK (owner op 1) — with the six tabs: the inbox and what opens from it (chats, Broadcasts, Community reports). */
-export type MessagesStackParamList = { MessagesInbox: undefined } & Pick<ClientsStackParamList, 'ClientMessages' | 'ContactView' |
+export type MessagesStackParamList = { MessagesInbox: { clientId?: string } | undefined } & Pick<ClientsStackParamList, 'ClientMessages' | 'ContactView' |
   'CoachBroadcasts' | 'CoachBroadcastComposer' | 'CoachCommunityModeration' | 'CoachCommunityPostDetail'>;
 
 /** Phase 11 / Track 7 — team management stack param list. */

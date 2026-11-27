@@ -39,7 +39,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
 import { useBlockedUsersStore } from '../../store/blockedUsersStore';
 import { rememberClosedClients } from '../../store/closedClientsStore';
-import { openInboxChat } from '../../navigation/coachInbox';
+import { openInboxChat, useInboxTap, type InboxTap } from '../../navigation/coachInbox';
 import { subscribeToMessages } from '../../services/realtime';
 import { useTheme } from '../../theme/ThemeProvider';
 import { coachInboxB, layout } from '../../theme/tokens';
@@ -88,9 +88,13 @@ export function inboxTimeLabel(iso: string | null, now: Date = new Date()): stri
 
 export interface CoachInboxV2Props {
   onFeatureDisabled: () => void;
+  /** COACH-ROW-CHAT-PUSH-M: a message notification's client, from MessagesScreen's route. */
+  tap?: InboxTap;
 }
 
-export default function CoachInboxV2({ onFeatureDisabled }: CoachInboxV2Props) {
+const threadName = (t: InboxThread) => t.counterpart.display_name || 'Client';
+
+export default function CoachInboxV2({ onFeatureDisabled, tap }: CoachInboxV2Props) {
   const { colors } = useTheme();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const currentUser = useCurrentUser();
@@ -190,6 +194,17 @@ export default function CoachInboxV2({ onFeatureDisabled }: CoachInboxV2Props) {
     (clientId: string, clientName: string) => openInboxChat(navigation, clientId, clientName),
     [navigation],
   );
+  // COACH-ROW-CHAT-PUSH-M: a notification's client opens as her row does, looked for in threads (before search and the
+  // "start a conversation" rows); a 503 hands the tap on to the legacy list un-spent.
+  useInboxTap(tap, {
+    ready: !(error && toMessagingError(error).isFeatureDisabled),
+    rowName: (clientId) => {
+      const t = threads.find((x) => x.client_id === clientId);
+      return t && threadName(t);
+    },
+    reread: () => refetch({ cancelRefetch: false }),
+    open: openThread,
+  });
 
   const menuOptions: ActionMenuOption[] = useMemo(() => {
     if (!menuFor) return [];
@@ -235,7 +250,7 @@ export default function CoachInboxV2({ onFeatureDisabled }: CoachInboxV2Props) {
 
   const renderThread = (t: InboxThread) => {
     const unread = t.unread_count;
-    const name = t.counterpart.display_name || 'Client';
+    const name = threadName(t);
     const flags = [t.pinned ? 'pinned' : '', t.muted ? 'muted' : '', unread ? `${unread} unread` : ''].filter(Boolean);
     return (
       <InboxTile
