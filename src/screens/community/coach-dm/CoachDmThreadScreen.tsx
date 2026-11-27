@@ -1,3 +1,4 @@
+// LO-OFFLINE-BAND-ROOT-M-1 probe: an unrelated comment line at the top (never merge)
 /**
  * COACH-DM-M: one client's community DM thread for their coach (Studio frame "thread"). Its own screen built on the
  * client thread's pieces (PLAN question 2): the same reads and send (useDmMessages, useSendDm and the composer's
@@ -29,6 +30,7 @@ import { useScreenAreaKeyboardOffset } from '../../../ui/layout/ScreenArea';
 
 const DM_MAX = 4000; // backend SendDmDto (body 1..4000), as the client's thread
 
+// LO-OFFLINE-BAND-ROOT-M-1 probe: an unrelated comment line mid-file (never merge)
 export default function CoachDmThreadScreen(): React.ReactElement {
   const keyboardOffset = useScreenAreaKeyboardOffset();
   const navigation = useNavigation<CoachCommunityNav>();

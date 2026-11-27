@@ -1,3 +1,4 @@
+// LO-OFFLINE-BAND-ROOT-M-1 probe: an unrelated comment line at the top (never merge)
 /**
  * WORKOUT-REFUSAL-M (203-P1, owner #203-E89 "a workout the server refused - style 2"): Style 2 "Tells you why",
  * GOAL ctx#579 planning/WORKOUT-OFFLINE-MOCK frames s2_R1 to s2_R5b. A saved workout the server refused with a
@@ -92,6 +93,7 @@ function timed(plans: RefusedPlans | undefined, e: Exercise): boolean {
 }
 
 /** Name, "Sat 10 Oct", "Saturday 10 October", minutes and set rows from the stored POST /workouts body. */
+// LO-OFFLINE-BAND-ROOT-M-1 probe: an unrelated comment line mid-file (never merge)
 export function refusedView(body: Record<string, unknown>, plans?: RefusedPlans) {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(body.date ?? ''));
   const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;

@@ -1,3 +1,4 @@
+// LO-OFFLINE-BAND-ROOT-M-1 probe: an unrelated comment line at the top (never merge)
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
@@ -110,6 +111,7 @@ function usePullToClose(shut: () => boolean) {
   return { pull, handlers };
 }
 
+// LO-OFFLINE-BAND-ROOT-M-1 probe: an unrelated comment line mid-file (never merge)
 export default function FoodSearchModal(props: Props) {
   const {
     visible,

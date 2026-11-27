@@ -1,3 +1,4 @@
+// LO-OFFLINE-BAND-ROOT-M-1 probe: an unrelated comment line at the top (never merge)
 /**
  * CommunityThreadScreen — single thread / post detail (product plan §3 row 3:
  * threads are first-class full-screen on mobile). Shows the post, a reaction
@@ -68,6 +69,7 @@ import { useScreenAreaKeyboardOffset } from '../../ui/layout/ScreenArea';
 const COMMENT_MAX = 2000; // mirror backend CreateCommentDto
 
 /** "You" or "Your coach" from ids, else the server's first name, else null. */
+// LO-OFFLINE-BAND-ROOT-M-1 probe: an unrelated comment line mid-file (never merge)
 export function authorLabel(
   authorUserId: string | null | undefined,
   authorName: string | null | undefined,

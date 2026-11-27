@@ -1,3 +1,4 @@
+// LO-OFFLINE-BAND-ROOT-M-1 probe: an unrelated comment line at the top (never merge)
 /**
  * CommunityDmThreadScreen — a single 1:1 DM conversation (product plan §2.10).
  * Messages render newest-first in an inverted list with mine/theirs bubbles and
@@ -53,6 +54,7 @@ import { useScreenAreaKeyboardOffset } from '../../ui/layout/ScreenArea';
 
 const DM_MAX = 4000; // mirror backend SendDmDto (body 1..4000)
 
+// LO-OFFLINE-BAND-ROOT-M-1 probe: an unrelated comment line mid-file (never merge)
 export default function CommunityDmThreadScreen({ inGate }: {
   /** The locked page's thread (no coach, no stack): who, and Back to the page. */
   inGate?: { recipientId: string; onBack: () => void };

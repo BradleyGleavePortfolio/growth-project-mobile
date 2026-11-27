@@ -1,3 +1,4 @@
+// LO-OFFLINE-BAND-ROOT-M-1 probe: an unrelated comment line at the top (never merge)
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   AccessibilityInfo,
@@ -46,6 +47,7 @@ import { crisisFlagInError, holdCrisisLine } from '../../lib/communityCrisisLine
 /** Query key under ['community'] so a block refetches it with every community surface. */
 export const WINS_QUERY_KEY = ['community', 'wins'] as const;
 
+// LO-OFFLINE-BAND-ROOT-M-1 probe: an unrelated comment line mid-file (never merge)
 export function formatTimeAgo(iso: string | null, now: number = Date.now()): string {
   if (!iso) return '';
   const t = Date.parse(iso);

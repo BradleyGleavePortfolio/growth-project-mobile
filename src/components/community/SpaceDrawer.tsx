@@ -1,3 +1,4 @@
+// LO-OFFLINE-BAND-ROOT-M-1 probe: an unrelated comment line at the top (never merge)
 /**
  * SpaceListButton + drawer (C6-M1S; C6CHAT-S-V2 x1): "Open space list" on a
  * space page opens a deep forest drawer with the same tree as Community Home;
@@ -18,6 +19,7 @@ import { Monogram, SpaceTree, useOpenSpaceTarget, useSpaceTree, type SpaceTarget
 
 /** `icon`: the space chat's deep header passes 05b's drawn glyph (FX-871, FR-871); light headers keep the forest icon.
  * `label` (SPACE-STATES-M, a closed space's Back to spaces): the same drawer behind an underlined forest text link. */
+// LO-OFFLINE-BAND-ROOT-M-1 probe: an unrelated comment line mid-file (never merge)
 export function SpaceListButton({ icon, label, testID = 'space-list-open' }: { icon?: React.ReactNode; label?: string; testID?: string } = {}): React.ReactElement {
   const [open, setOpen] = useState(false);
   return (

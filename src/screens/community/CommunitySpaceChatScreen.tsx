@@ -1,3 +1,4 @@
+// LO-OFFLINE-BAND-ROOT-M-1 probe: an unrelated comment line at the top (never merge)
 /**
  * SC-M1 (agent 168, owner #167-3 / #167-5 / #167-6 op 1), FX-871 (agent 169): the space chat. One Slack / iMessage-style
  * stream per space, newest at the bottom, for members and the coach. Registered only behind `communitySpaceChat` (off by
@@ -87,6 +88,7 @@ const live = (m: SpaceMessage) =>
   kindDrawn(m) && !m.deleted && (m.kind === 'voice' ? !!m.voice_note : m.kind === 'image' || !!m.body);
 const drawable = (m: SpaceMessage) => live(m) || (kindDrawn(m) && isCoachRemoved(m));
 
+// LO-OFFLINE-BAND-ROOT-M-1 probe: an unrelated comment line mid-file (never merge)
 export default function CommunitySpaceChatScreen(): React.ReactElement {
   const { cohortId, messageId } = useRoute<RouteProp<Params, 'CommunitySpaceChat'>>().params;
   // FIX-945R4 (LS-945 B1): a push or a link into the chat already on screen keeps its stack key and changes only these
