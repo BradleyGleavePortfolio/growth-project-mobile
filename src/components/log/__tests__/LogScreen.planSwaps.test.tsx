@@ -140,7 +140,8 @@ describe('case 5: S3 and S4, Something else for a plan meal', () => {
   });
 
   it('S4: with no swap that has all four numbers there is no heading and no row (today\'s server)', async () => {
-    mockSwaps = [{ id: 'm-a', name: 'Rice cakes, honey and whey', calories_kcal: 240, protein_g: 26 }];
+    mockSwaps = [{ id: 'm-a', name: 'Rice cakes, honey and whey', calories_kcal: 240, protein_g: 26 },
+      { id: 'm-c', name: 'Oat bar', calories_kcal: 200, protein_g: 10, fats_g: 7 }];
     await openSomethingElse();
     expect(await screen.findByTestId('food-search-title')).toHaveTextContent('Something else');
     expect(screen.getByTestId('food-search-instead')).toBeTruthy();
