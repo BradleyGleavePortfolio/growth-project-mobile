@@ -3,9 +3,11 @@
  * no coach meets on Roman and Community. One serif headline, one muted line,
  * one forest "Join a coach" (EntitlementProvider.messageCoach: the coach-code
  * sheet on Messages). Copy never says "your coach": there is none yet.
+ * COMMUNITY-DM-FORMER-REACH-M (owner ALM-D5: "as it shows in style C for v1"; 203-D12): on Community, her one former
+ * coach's card (Style 3 S3_nocoach, in row 1b's form) sits under the line, and it opens that one thread here.
  */
-import React, { useContext, useEffect, useReducer } from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useContext, useEffect, useReducer, useState } from 'react';
+import { BackHandler, StyleSheet, View } from 'react-native';
 import { NavigationContext } from '@react-navigation/native';
 import { Headline, Lede, PrimaryButton, Screen, ScreenTopBar, TextLink, type ScreenEdge } from '../../ui';
 import RomanAvatar from '../roman/RomanAvatar';
@@ -16,7 +18,11 @@ import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachlessClient } from '../../hooks/useCoachlessClient';
 import { readUserCacheSync } from '../../lib/userCache';
-import { spacing } from '../../theme/tokens';
+import { layout, spacing } from '../../theme/tokens';
+import { useCommunityMe } from '../../hooks/useCommunity';
+import CommunityTermsGate from '../community/CommunityTermsGate';
+import { FormerCoachEntry, formerCoachOf } from '../community/FormerCoach';
+import CommunityDmThreadScreen from '../../screens/community/CommunityDmThreadScreen';
 
 export const JOIN_A_COACH = 'Join a coach';
 export const ROMAN_LOCK_TITLE = 'Roman works with a coach';
@@ -55,6 +61,8 @@ export interface JoinCoachStateProps {
   edges?: readonly ScreenEdge[];
   /** COACH-AI-CONSENT: the coach's Roman off state (CAC-5) puts its own button under the text instead. */
   action?: { label: string; onPress: () => void };
+  /** Drawn under the line (Community: her former coach's card); the page then scrolls, so 320 pt at 130% fits. */
+  extra?: React.ReactNode;
   testID?: string;
 }
 
@@ -65,13 +73,14 @@ export default function JoinCoachState({
   roman = false,
   edges = ['top', 'bottom'],
   action,
+  extra,
   testID = 'join-coach-state',
 }: JoinCoachStateProps): React.ReactElement {
   const { messageCoach } = useEntitlement();
   return (
     <Screen
       edges={edges}
-      scroll={false}
+      scroll={!!extra}
       centerContent
       header={<ScreenTopBar onBack={onBack} testID={`${testID}-top`} />}
       footer={action ? undefined : <PrimaryButton label={JOIN_A_COACH} onPress={messageCoach} testID={`${testID}-join`} />}
@@ -81,6 +90,7 @@ export default function JoinCoachState({
         {roman ? <RomanAvatar size={40} /> : null}
         <Headline level="h2">{title}</Headline>
         <Lede>{body}</Lede>
+        {extra ? <View style={styles.extra}>{extra}</View> : null}
         {action ? <PrimaryButton label={action.label} onPress={action.onPress} testID={`${testID}-action`} /> : null}
         {roman && !action ? <RomanLockHelp testID={testID} /> : null}
       </View>
@@ -112,10 +122,36 @@ export function CoachOnlyGate({
   children,
 }: Pick<JoinCoachStateProps, 'title' | 'body' | 'testID'> & { children: React.ReactNode }): React.ReactElement {
   const needsCoach = useClientNeedsCoach();
-  if (needsCoach) return <JoinCoachState title={title} body={body} edges={['top']} testID={testID} />;
+  if (needsCoach) return <CoachlessLock title={title} body={body} testID={testID} />;
   return <>{children}</>;
+}
+
+/** ALM-D5: the locked page with her former coach's card (GET /community/me former_coach_dms[0]); the card opens that
+ * thread in this tab, behind the community terms, and Back (Android's too) returns to the page. */
+function CoachlessLock({ title, body, testID = 'join-coach-state' }: Pick<JoinCoachStateProps, 'title' | 'body' | 'testID'>): React.ReactElement {
+  const former = formerCoachOf(useCommunityMe().data, null);
+  const [openWith, setOpenWith] = useState<string | null>(null);
+  useEffect(() => {
+    if (!openWith) return undefined;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setOpenWith(null);
+      return true;
+    });
+    return () => sub.remove();
+  }, [openWith]);
+  if (openWith) {
+    return (
+      <CommunityTermsGate>
+        <CommunityDmThreadScreen inGate={{ recipientId: openWith, onBack: () => setOpenWith(null) }} />
+      </CommunityTermsGate>
+    );
+  }
+  const card = former ? <FormerCoachEntry former={former} onPress={() => setOpenWith(former.coachId)} testID={`${testID}-former`} /> : undefined;
+  return <JoinCoachState title={title} body={body} edges={['top']} extra={card} testID={testID} />;
 }
 
 const styles = StyleSheet.create({
   block: { gap: spacing.md },
+  // S3_nocoach: the card 16 pt from the screen's sides (the page's 24 pt gutter, 8 out), 6 more above it.
+  extra: { marginTop: 6, marginHorizontal: -layout.gutter },
 });

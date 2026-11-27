@@ -3,6 +3,8 @@
  * coach's current clients only, newest first, ?limit=100), named from the roster read. States: loading, error with Try
  * again, off (403 community.dm.disabled, 503 community.disabled, the server switch, no workspace: no switch drawn, and
  * no New message, which could only answer "off"), empty with Message a client, and the rows.
+ * COMMUNITY-DM-FORMER-REACH-M (Style 3, S3_coach): the list also holds clients who left and keep their thread (203-D12).
+ * They are not on her roster, so the row takes the server's name (other_display_name, b#1253) and "Former client".
  */
 import React from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
@@ -11,6 +13,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../../../components/HapticPressable';
 import { DmRow, ThreadHeader } from '../../../components/community';
+import { FORMER_CLIENT } from '../../../components/community/FormerCoach';
 import { ForestStatusBar } from '../../../components/StatusBarBand';
 import { useTheme } from '../../../theme/useTheme';
 import { forestPop as fp } from '../../../theme/tokens';
@@ -69,13 +72,17 @@ export default function CoachDmListScreen(): React.ReactElement {
         data={rows}
         keyExtractor={(t) => t.thread_id}
         renderItem={({ item }) => {
-          const name = rosterOf(roster.data).get(item.other_user_id)?.name ?? null;
+          const onRoster = rosterOf(roster.data).get(item.other_user_id);
+          // The server lists only her clients and former clients (b#1253), and her roster holds every client, active
+          // and archived: a row that is not on it is a client who left.
+          const name = onRoster?.name ?? (item.other_display_name?.trim() || null);
           return (
             <DmRow
               thread={item}
               participantLabel={name ?? NO_NAME}
               initials={initialsOf(name)}
               chevron
+              relation={onRoster ? undefined : FORMER_CLIENT}
               onPress={() => navigation.navigate('CommunityDmThread', { recipientId: item.other_user_id, ...(name ? { name } : {}) })}
               testID={`coach-dm-row-${item.other_user_id}`}
             />
