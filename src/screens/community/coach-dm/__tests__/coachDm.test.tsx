@@ -604,6 +604,7 @@ describe('11. the coach\'s DM notification row', () => {
     // A booking row (actionScreen from the server) and a space row (a community link this job does not read).
     tap(normalizeNotification({ id: 'b1', kind: 'booking_requested', body: 'A client asked for a session', channel: 'inapp', read_at: null, created_at: '2026-11-10T09:00:00.000Z', payload: { actionScreen: 'CoachBookingInbox' } }));
     expect(nav).toHaveBeenLastCalledWith('CalendarStack', { screen: 'CoachBookingInbox', pop: true });
+    mockFlags.communitySpaceChat = false; // the space chat's own link is part 4's
     tap(dmRow('n6', `tgp://community/cohorts/${uuid(2)}`));
     expect(nav).toHaveBeenLastCalledWith('ClientsStack', { screen: 'NotificationCenter', params: undefined });
   });
