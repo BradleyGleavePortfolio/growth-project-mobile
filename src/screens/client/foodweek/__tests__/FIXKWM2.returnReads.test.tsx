@@ -93,6 +93,39 @@ beforeEach(() => {
   online();
 });
 
+/** Lets react-query's batched updates reach the page (they run on a timer), while a held read stays held. */
+const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+const spinner = () => screen.getByTestId('food-week').props.refreshControl.props.refreshing as boolean;
+/** The next weekly read waits until released, so the page is caught mid-read. */
+function holdWeekly() {
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((r) => { release = r; });
+  const answer = jest.mocked(logApi.getWeekly).getMockImplementation()!;
+  jest.mocked(logApi.getWeekly).mockImplementation(((start: string) => gate.then(() => answer(start))) as never);
+  return () => act(async () => { release(); });
+}
+
+describe('FIX-KWM-2 B1 class: the spinner belongs to the pull that started it', () => {
+  it('after a pull has ended, a later return read shows no spinner', async () => {
+    await mount();
+    await screen.findByText('1,860 kcal and 138 g protein a day, on average.');
+    let release = holdWeekly();
+    await act(async () => { screen.getByTestId('food-week').props.refreshControl.props.onRefresh(); });
+    await waitFor(() => expect(spinner()).toBe(true));
+    await release();
+    await waitFor(() => expect(spinner()).toBe(false)); // the pull's read answered
+    await waitFor(() => expect(client.isFetching()).toBe(0));
+    online();
+    release = holdWeekly();
+    await act(async () => { nav.listeners.forEach((cb) => cb()); });
+    await settle();
+    expect(jest.mocked(logApi.getWeekly).mock.calls.length).toBe(3); // first read, the pull, the return (held)
+    expect(spinner()).toBe(false); // the return read, mid-read, shows no spinner
+    await release();
+    await waitFor(() => expect(client.isFetching()).toBe(0));
+  });
+});
+
 describe('FIX-KWM-2 N1: back on the page, the plan reads that answered are not read again', () => {
   const RANGES: Array<[string, boolean]> = [['this week', false], ['an earlier week', true]];
   it.each(RANGES)('%s: the weekly read and the seven day reads go out again, no plan read', async (_name, earlier) => {
