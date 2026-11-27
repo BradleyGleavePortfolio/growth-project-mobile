@@ -83,8 +83,7 @@ export function ExerciseCard({
   // PR-ALERTS-M (C1 v2 C2_logger): the gold star and its line under the name while this block holds the recent best.
   // Open, it is one element read as the spoken sentence; folded, the header's one label says it. The star is silent.
   const bestLine = (open: boolean) => best ? (
-    <View style={local.best} testID={`exercise-best-${exIdx}`} accessible={open} accessibilityLabel={open ? best.spoken : undefined}
-      importantForAccessibility={open ? 'yes' : 'no-hide-descendants'}>
+    <View style={local.best} testID={`exercise-best-${exIdx}`} accessible={open} accessibilityLabel={open ? best.spoken : undefined}>
       <View style={local.bestStar}><PeakStar size={14} event={best.event} testID={`exercise-best-star-${exIdx}`} /></View>
       <Text style={[styles.exerciseSummary, local.bestText]}>{best.text}</Text>
     </View>
