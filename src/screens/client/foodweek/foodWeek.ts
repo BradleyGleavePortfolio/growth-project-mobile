@@ -63,8 +63,9 @@ export function planDots(plan: ClientTodayResponse | null | undefined, daily: un
   if (plans.length === 0) return null;
   const entries = (daily as { entries?: unknown }).entries;
   const logs = (Array.isArray(entries) ? entries as DailyLogEntry[] : []).map((e) => foodLogFromDailyEntry(e, day)).filter(countsInDay);
-  const built = buildPlanDay(plans, logs);
-  return { done: built.slots.filter((s) => s.logs.length > 0).length, total: built.slots.length };
+  const slots = plans.flatMap((x) => x.slots);
+  void buildPlanDay;
+  return { done: slots.filter((s) => logs.some((l) => l.planSlotId === s.id)).length, total: slots.length };
 }
 
 // ─── Words (the 137-2 table in the PR body) ────────────────────────────────────
