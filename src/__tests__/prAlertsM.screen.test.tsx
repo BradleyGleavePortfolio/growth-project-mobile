@@ -6,10 +6,11 @@
  * switches, so it runs the same in the required run and in "All switches on". Fixtures are fictional.
  */
 import React from 'react';
-import { AccessibilityInfo, Alert, StyleSheet, Text } from 'react-native';
+import { AccessibilityInfo, Alert, StyleSheet } from 'react-native';
 import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { buildActiveWorkoutExercises } from '../utils/workout/buildActiveWorkout';
 
 const mockFlags: Record<string, boolean> = { romanChat: false, romanP3Lock: true, shareSheetV2: false, clientTrainV2: false };
@@ -25,14 +26,18 @@ jest.mock('../ui/haptics/haptics.service', () => ({
   HapticService: new Proxy({}, { get: (_t, k: string) => (mockHaptic[k] ??= jest.fn()) }),
 }));
 let mockParams: Record<string, unknown> = { routineName: 'Legs with Sam', assignmentId: 'assignment-legs', exercises: '[]' };
-jest.mock('@react-navigation/native', () => ({
-  ...jest.requireActual('@react-navigation/native'),
-  useNavigation: () => ({
-    navigate: jest.fn(), goBack: jest.fn(), dispatch: jest.fn(), setParams: jest.fn(),
-    addListener: () => () => undefined,
-  }),
-  useRoute: () => ({ params: mockParams }),
-}));
+jest.mock('@react-navigation/native', () => {
+  const ReactLib = jest.requireActual('react');
+  return {
+    ...jest.requireActual('@react-navigation/native'),
+    useNavigation: () => ({
+      navigate: jest.fn(), goBack: jest.fn(), dispatch: jest.fn(), setParams: jest.fn(),
+      addListener: () => () => undefined,
+    }),
+    useRoute: () => ({ params: mockParams }),
+    useFocusEffect: (cb: () => void | (() => void)) => ReactLib.useEffect(() => cb(), [cb]),
+  };
+});
 jest.mock('../components/roman/RomanVoiceLogReadback', () => () => null);
 jest.mock('../lib/analytics', () => ({ track: jest.fn() }));
 let mockSaved: unknown = null;
@@ -139,9 +144,13 @@ afterEach(async () => {
   jest.restoreAllMocks();
 });
 
-async function start(rows: Row[] = DAY, params: Record<string, unknown> = {}) {
+async function start(rows: Row[] = DAY, params: Record<string, unknown> = {}, withQueryClient = false) {
   mockParams = { ...mockParams, exercises: JSON.stringify(seeds(rows)), ...params };
-  const view = await render(<ActiveWorkoutScreen />);
+  // The summary page reads the week through react-query, as the app (which always mounts a provider) does.
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+  const view = await render(withQueryClient
+    ? <QueryClientProvider client={client}><ActiveWorkoutScreen /></QueryClientProvider>
+    : <ActiveWorkoutScreen />);
   await waitFor(() => expect(view.getByTestId('set-done-0-0')).toBeTruthy());
   await waitFor(() => expect(mockGetAll).toHaveBeenCalled());
   await act(flush);
@@ -153,7 +162,7 @@ const tick = async (view: Awaited<ReturnType<typeof render>>, ex: number, set: n
 };
 /** The text of every Text node under `root`, in tree order. */
 const texts = (root: ReturnType<Awaited<ReturnType<typeof render>>['getByTestId']>) =>
-  within(root).UNSAFE_queryAllByType(Text).map((t) => {
+  within(root).queryAllByText(/./, { includeHiddenElements: true }).map((t) => {
     const c = t.props.children;
     return Array.isArray(c) ? c.join('') : String(c ?? '');
   });
@@ -167,9 +176,11 @@ describe('s1-s3 the moment, more sets, the drawn state', () => {
     expect(within(best).getByText(line(1, 5, 185))).toBeTruthy();
     expect(best.props.accessible).toBe(true);
     expect(best.props.accessibilityLabel).toBe(spoken(1, 5, 185));
-    const star = view.getByTestId('exercise-best-star-0');
+    // PeakStar with no label is hidden from screen readers (aria-hidden), so the query includes hidden elements.
+    const star = view.getByTestId('exercise-best-star-0', { includeHiddenElements: true });
     expect(star.props.accessibilityLabel).toBeUndefined();
     expect(star.props.accessible).toBe(false);
+    expect(star.props['aria-hidden']).toBe(true);
     // Under main's count line, in the open block.
     const card = view.getByTestId('exercise-active-0');
     const order = texts(card);
@@ -200,7 +211,7 @@ describe('s1-s3 the moment, more sets, the drawn state', () => {
     for (const s of [0, 1, 2, 3]) await tick(view, 0, s);
     await tick(view, 1, 0);
     const folded = view.getByTestId('exercise-folded-0');
-    expect(within(folded).getByTestId('exercise-best-star-0')).toBeTruthy();
+    expect(within(folded).getByTestId('exercise-best-star-0', { includeHiddenElements: true })).toBeTruthy();
     expect(within(folded).getByText(line(4, 5, 185))).toBeTruthy();
     expect(within(folded).queryByText('4 of 4 sets complete')).toBeNull();
     expect(folded.props.accessibilityLabel).toBe(`Show sets for Back squat, 4 of 4 sets complete. ${spoken(4, 5, 185)}`);
@@ -413,7 +424,7 @@ describe('s14-s17 nothing saved or sent, size, guards, the two places agree', ()
 
   it('s17 the two places agree: with clientTrainV2 on, What moved names the same 185 the logger drew', async () => {
     mockFlags.clientTrainV2 = true;
-    const view = await start();
+    const view = await start(DAY, {}, true);
     for (const s of [0, 1, 2, 3]) await tick(view, 0, s);
     await tick(view, 1, 0);
     expect(within(view.getByTestId('exercise-folded-0')).getByText(line(4, 5, 185))).toBeTruthy();
