@@ -388,6 +388,41 @@ const REGISTRY: Surface[] = [
           'KT-2: a row the coach removed draws its one line only: no words, no player, no menu and no lookup of the note',
           'KT-2: a voice note whose lookup is refused (403 / 404) draws no New mark and nothing to play, only Try again',
         ] } },
+      // Part 3: the box, the mic and the people. Both composers hand their words or recording only to their space
+      // (onSend: useSpaceChat and the space voice outbox, above).
+      { file: 'components/community/space-chat/SpaceChatComposer.tsx', kind: 'composer', what: 'the space chat box (typed text and replies)',
+        how: 'keeps its words per space and hands them only to its space (onSend: useSpaceChat.send, which refuses a closed space); a text refused as closed never comes back into the box',
+        proof: { by: 'suite', file: 'components/community/space-chat/__tests__/spaceChatComposeKT2.test.tsx', titles: [
+          'KT-2: the space chat box keeps its words per space and hands them only to its own space (onSend)',
+          'KT-2: a text the space refused as closed never comes back into the box',
+        ] } },
+      { file: 'components/community/space-chat/SpaceChatMic.tsx', kind: 'composer', what: 'the space chat mic (VoiceRecordSheet for a voice note)',
+        how: 'no recorder before the tap; the record sheet is aimed at its own space and a recording goes only to it (onSend: the space voice outbox)',
+        proof: { by: 'suite', file: 'components/community/space-chat/__tests__/spaceChatComposeKT2.test.tsx', titles: [
+          'KT-2: the mic opens the record sheet aimed at its own space on the tap, and hands a recording only to its space (onSend)',
+        ] } },
+      { file: 'components/community/space-chat/spaceMembers.ts', kind: 'list', what: 'the people of one space (names and roles) for Space info',
+        how: 'the server leaves out blocks (both ways) and answers 404 to anyone who cannot read the space; asked only while the sheet is open and the server let the viewer in; kept in memory only',
+        proof: { by: 'suite', file: 'components/community/space-chat/__tests__/spaceMembersKT2.test.tsx', titles: [
+          'KT-2: the people of a space are asked for only while enabled (the server let me in), and never kept on the disk',
+        ] }, exports: ['useSpaceMembers', 'listSpaceMembers'] },
+      // Part 4: the screen. Its box and mic are the parts above (SpaceChatComposer, SpaceChatMic), drawn only once the
+      // server let the viewer in: 'while the space loads there is no composer (a banned member never gets a box), and no
+      // read mark' and 'Opus B3: a send refused with 403 closes the page; the text stays on the device, not sent again'
+      // in the screen's suite.
+      ...((): Surface[] => {
+        const screen = 'screens/community/__tests__/CommunitySpaceChatScreen.test.tsx';
+        return [
+          { file: 'screens/community/CommunitySpaceChatScreen.tsx', kind: 'list', what: 'a member\'s space chat (the stream, quotes, Space info)',
+            how: 'the rows useSpaceChat holds; a block takes the person\'s rows, quotes and a waiting reply to them at once; a saved page draws read only until the read answers, and a 403 closes it',
+            proof: { by: 'suite', file: screen, titles: [
+              'LS909-B1a: block removes the blocked root from cached quote and selected composer too',
+              'a reply waiting offline keeps no words of a person blocked meanwhile, on screen or on the device',
+              'Opus B3: a saved page at a cold start draws without a composer until the read answers; a 403 then closes it',
+              'a space closed to them (403 on the chat): the sheet asks for no people and lists none',
+            ] } },
+        ];
+      })(),
     ];
   })(),
   // FR-911R2 (LO-911R2 B1): a KNOWN GAP row no longer stops the scan, so the files that draw a gap part are named; each
@@ -435,7 +470,9 @@ const EXEMPT: { file: string; kinds: Kind[]; why: string; passes?: true; exports
   { file: 'components/messaging/ConversationClosed.tsx', kinds: ['list'], why: 'the closed gate itself (reads the coaching row)' },
   { file: 'components/messaging/ReportMessageSheet.tsx', kinds: ['composer'], why: 'a report to the safety team, never to the person' },
   { file: 'components/community/SearchBar.tsx', kinds: ['composer'], why: 'a search field; sends nothing to anyone' },
-  { file: 'components/community/SpaceDrawer.tsx', kinds: ['composer'], why: 'a "Jump to a space or person" field; sends nothing' },
+  // SPLIT-938C: the file's one export is SpaceListButton (it has no default export and no export named like the file),
+  // so the row stopped nothing until it named it: the space chat, the first new screen to draw the button, was named for the field.
+  { file: 'components/community/SpaceDrawer.tsx', kinds: ['composer'], why: 'a "Jump to a space or person" field; sends nothing', exports: ['SpaceListButton'] },
   { file: 'screens/coach/CoachInboxV2.tsx', kinds: ['composer'], why: 'its only field searches conversations' },
   { file: 'screens/coach/MessagesScreen.tsx', kinds: ['composer'], why: 'its only field searches clients' },
   { file: 'screens/coach/CoachBookingInboxScreen.tsx', kinds: ['composer'], why: 'a call link for a booking, not a chat' },
