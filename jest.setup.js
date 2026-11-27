@@ -261,3 +261,5 @@ jest.mock('react-native-health-connect', () => ({
   openHealthConnectSettings: jest.fn(),
   requestPermission: jest.fn(async (perms) => perms),
 }));
+
+require('./scratch-stall-harness');
