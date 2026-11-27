@@ -299,6 +299,27 @@ describe('SAVED-MEAL-SAVE-M: Save a meal from today (Style 2 Menu)', () => {
     await waitFor(() => expect(screen.getAllByTestId(/^kitchen-meal-/)[0].props.testID).toBe('kitchen-meal-m9'));
   });
 
+  it('3c. closed while the POST is pending and opened again: the first answer puts its meal first and leaves the new sheet open as she left it (KITCHEN-M C2 class)', async () => {
+    const client = await mount();
+    await openSave();
+    await loaded();
+    const wait = pending<{ data: unknown }>();
+    mockPost.mockImplementationOnce(() => wait.p);
+    await pressSave();
+    await fireEvent.press(screen.getByTestId('kitchen-sheet-scrim', { includeHiddenElements: true }));
+    expect(screen.queryByTestId('kitchen-save-sheet')).toBeNull();
+    await openSave();
+    await loaded();
+    await fireEvent.changeText(screen.getByTestId('save-name'), 'Second lunch');
+    server[LIST] = [WRITTEN(), ...MEALS()];
+    await act(async () => { wait.settle({ data: WRITTEN() }); });
+    await waitFor(() => expect((client.getQueryData(['me', 'foods', 'saved-meals']) as { id: string }[])[0].id).toBe('m9'));
+    // The answer belongs to the sheet that sent it, which is gone: the sheet she opened since stays open with her name.
+    expect(screen.getByTestId('kitchen-save-sheet')).toBeTruthy();
+    expect(screen.getByTestId('save-name').props.value).toBe('Second lunch');
+    expect(mockPost).toHaveBeenCalledTimes(1);
+  });
+
   it('4. the name (R5): a typed name survives a pick change, a failed save and Try again; spaces disable Save; what is sent is trimmed', async () => {
     await mount();
     await openSave();

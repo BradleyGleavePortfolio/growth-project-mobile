@@ -195,6 +195,31 @@ describe('SAVED-MEAL-SAVE-M: rename and delete a saved meal (Style 2 Menu)', () 
     expect(screen.getByTestId('kitchen-sheet')).toBeTruthy();
   });
 
+  it('10c. a rename in flight holds the sheet (KITCHEN-M C2 class): Close, the scrim and Android Back wait for the answer, which never reaches the next meal', async () => {
+    await mount();
+    await openMeal('m1');
+    await fireEvent.press(screen.getByTestId('kitchen-rename'));
+    await fireEvent.changeText(screen.getByTestId('rename-name'), 'Weekday breakfast');
+    let release: (v: unknown) => void = () => undefined;
+    mockPatch.mockImplementationOnce(() => new Promise((r) => { release = r; }));
+    await fireEvent.press(screen.getByTestId('rename-submit'));
+    // The PATCH is running: every way out of the edit body holds still, as the add body's do.
+    await fireEvent.press(screen.getByTestId('kitchen-sheet-close'));
+    expect(screen.getByTestId('kitchen-sheet')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('kitchen-sheet-scrim', { includeHiddenElements: true }));
+    expect(screen.getByTestId('kitchen-sheet')).toBeTruthy();
+    await fireEvent(screen.getByTestId('kitchen-sheet'), 'requestClose'); // Android Back (the Modal's onRequestClose)
+    expect(screen.getByTestId('kitchen-sheet')).toBeTruthy();
+    expect(screen.getByTestId('kitchen-sheet-close').props.accessibilityState).toEqual(expect.objectContaining({ disabled: true }));
+    // The answer closes the sheet it was sent from; the next meal's sheet opens fresh and stays open.
+    await act(async () => { release({ data: saved('m1', 'Weekday breakfast') }); });
+    await waitFor(() => expect(screen.queryByTestId('kitchen-sheet')).toBeNull());
+    await openMeal('m2');
+    expect(textOf(screen.getByTestId('kitchen-sheet-title'))).toBe('Post-gym shake');
+    expect(screen.getByTestId('kitchen-sheet-close').props.accessibilityState).not.toEqual(expect.objectContaining({ disabled: true }));
+    expect(mockPatch.mock.calls.map((c) => c[0])).toEqual(['/me/foods/saved-meals/m1']);
+  });
+
   it('11. delete: one DELETE for that meal; a 2xx and a 404 both remove the row, close the sheet and speak "Deleted {name}."', async () => {
     await mount();
     await openMeal('m1');
