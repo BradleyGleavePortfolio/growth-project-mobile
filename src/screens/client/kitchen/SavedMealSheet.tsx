@@ -156,7 +156,7 @@ export default function SavedMealSheet({ meal, onClose, onAdded, onStale }: {
 
   return (
     <KitchenSheet visible title={meal.name} onClose={onClose} testID="kitchen-sheet">
-      <Text style={s.line}>{sheetLine(view)}</Text>
+      {empty ? null : <Text style={s.line}>{sheetLine(view)}</Text>}
       {view.held.length > 0 ? <Text style={s.note} testID="kitchen-held-note">{heldNote(view.held)}</Text> : null}
       {view.held.length > 0 ? (
         <View style={s.foods}>
