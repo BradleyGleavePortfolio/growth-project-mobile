@@ -1,0 +1,5 @@
+src/screens/community
+src/components/community
+src/navigation
+src/__tests__/memberContentAccess
+src/__tests__/keyboardSafeSheets.test.tsx
