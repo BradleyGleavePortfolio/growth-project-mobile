@@ -128,6 +128,7 @@ function MealForm({ meal, live, answered, picked, navigation, sc }: { meal?: Mea
     if (picked.options) setOptions(picked.options);
     if (picked.recipeId !== undefined) setRecipeId(picked.recipeId);
   }, [picked]);
+  useEffect(() => { if (recipes.failed) setRecipeId(null); }, [recipes.failed]);
   const scroll = useRef<ScrollView>(null);
   const nameField = useRef<TextInput>(null);
   const detailsY = useRef(0);
