@@ -1,0 +1,7 @@
+src/screens/community
+src/components/community
+src/components/coachless
+src/components/messaging
+src/__tests__/memberContentAccess
+src/api/__tests__
+src/navigation
