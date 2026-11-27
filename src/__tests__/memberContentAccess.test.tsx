@@ -384,9 +384,9 @@ const REGISTRY: Surface[] = [
           'KT-2: a text the space refused as closed never comes back into the box',
         ] } },
       { file: 'components/community/space-chat/SpaceChatMic.tsx', kind: 'composer', what: 'the space chat mic (VoiceRecordSheet for a voice note)',
-        how: 'no recorder before the first-use card is answered; a recording goes only to its space (onSend: the space voice outbox)',
+        how: 'no recorder before the tap; the record sheet is aimed at its own space and a recording goes only to it (onSend: the space voice outbox)',
         proof: { by: 'suite', file: 'components/community/space-chat/__tests__/spaceChatComposeKT2.test.tsx', titles: [
-          'KT-2: the mic opens no recorder until the first-use card is answered, and hands a recording only to its space (onSend)',
+          'KT-2: the mic opens the record sheet aimed at its own space on the tap, and hands a recording only to its space (onSend)',
         ] } },
       { file: 'components/community/space-chat/spaceMembers.ts', kind: 'list', what: 'the people of one space (names and roles) for Space info',
         how: 'the server leaves out blocks (both ways) and answers 404 to anyone who cannot read the space; asked only while the sheet is open and the server let the viewer in; kept in memory only',
@@ -585,8 +585,6 @@ const NOT_CONTENT: Record<string, string> = {
   'coachCommunityApi.getCohorts': 'coach admin: the coach\'s own spaces (names)',
   'coachCommunityApi.getCohortDetail': 'coach admin: a space and its roster, which the coach needs to invite or remove a member',
   'coachCommunityApi.getCoachEmptyStates': 'which empty states to draw (flags only)',
-  // SPLIT-938C (m#938 part 3): the space chat mic asks this before its first recording.
-  'spaceChatApi.getVoiceConsent': 'my own first-use answer for space voice notes (seen the card or not): a flag, no member\'s words or rows',
 };
 
 const notContent = (o: Origin) =>

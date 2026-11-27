@@ -23,7 +23,7 @@ jest.mock('../../HapticPressable', () => {
   };
 });
 jest.mock('../../../api/communityVoiceApi', () => ({ communityVoiceApi: { getOne: jest.fn() } }));
-jest.mock('../space-chat/spaceChatApi', () => ({ spaceChatApi: { markHeard: jest.fn(), getVoiceConsent: jest.fn(), recordVoiceConsent: jest.fn() } }));
+jest.mock('../space-chat/spaceChatApi', () => ({ spaceChatApi: { markHeard: jest.fn() } }));
 const mockSheet = jest.fn();
 jest.mock('../VoiceRecordSheet', () => ({
   __esModule: true,
