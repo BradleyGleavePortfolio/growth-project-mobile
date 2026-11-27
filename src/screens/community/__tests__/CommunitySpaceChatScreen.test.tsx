@@ -14,7 +14,7 @@ import { act, fireEvent, render, waitFor, within } from '@testing-library/react-
 import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import NetInfo from '@react-native-community/netinfo';
 import { authEvents } from '../../../utils/authEvents';
-import { forestPop as fp, spacing, voiceShades } from '../../../theme/tokens';
+import { forestPop as fp, schemeCard, schemeCardOutline, spacing, voiceShades } from '../../../theme/tokens';
 import * as Clipboard from 'expo-clipboard';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 
@@ -2452,7 +2452,11 @@ describe('SPACE-STATES-M: style 2, the Slot band', () => {
     if (!composer) {
       const band = r.getByTestId('space-chat-hint');
       expect(within(band).getByText('Only your coach posts here.')).toBeTruthy();
-      expect((StyleSheet.flatten(band.props.style) as { backgroundColor?: string }).backgroundColor).toBe(fp.sage);
+      // MERGEUP-945 (203-D40 op 1): the band is a panel, so the scheme's cream card with its 1 pt top line in the border
+      // colour (schemeCardOutline), as m#994's members read it.
+      expect(StyleSheet.flatten(band.props.style)).toMatchObject({
+        ...schemeCard, borderTopWidth: 1, borderTopColor: schemeCardOutline.borderTopColor,
+      });
     }
   });
 

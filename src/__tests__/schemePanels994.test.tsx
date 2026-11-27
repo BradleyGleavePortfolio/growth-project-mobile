@@ -201,6 +201,8 @@ const MEMBERS: ReadonlyArray<readonly [string, string, string, string]> = [
   // MERGEUP-994 (operator ruling, Almalfi): the two panels main added after this PR's base (m#986, m#989).
   ['the Since week 1 tile on an exercise\'s history', 'screens/client/workouts/exerciseHistoryStyleC.tsx', '[s.tile, schemeCard]} testID="exercise-history-since"', 'PANEL'],
   ["the client's check-in box on Roman's draft sheet", 'screens/coach/client-detail/CheckInDraftSheet.tsx', '...(light ? schemeCard : { backgroundColor: sem.bgSurface })', 'PANEL'],
+  // MERGEUP-945 (operator ruling, Almalfi): part 4's coach-only band ("Only your coach posts here.") is a panel.
+  ['the coach-only band in a space chat', 'screens/community/CommunitySpaceChatScreen.tsx', 'borderTopWidth: 1, ...schemeCardOutline, ...schemeCard,', 'PANEL'],
   ['the completion toast', 'components/community/CompletionToast.tsx', 'backgroundColor: schemeBar.fill,', 'SUCCESS MESSAGE'],
   ['the completion toast words', 'components/community/CompletionToast.tsx', '{ color: schemeBar.text }', 'SUCCESS MESSAGE'],
   ['the saved state of the autosave pill', 'components/workout/AutosaveStatusPill.tsx', "icon: 'checkmark-circle-outline',\n          fg: schemeBar.text,\n          bg: schemeBar.fill,\n          border: schemeBar.border,", 'SUCCESS MESSAGE'],

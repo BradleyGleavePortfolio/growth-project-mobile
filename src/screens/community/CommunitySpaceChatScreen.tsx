@@ -26,8 +26,9 @@
  *     with Back to spaces under it (members: the space drawer; the coach: the coach's space list) and one quiet line in
  *     the body, "Messages in this space are hidden.". The keyboard goes down with the composer; the bar is said once.
  *   - Empty (s2_S3 / S4 / S5): a "This is the start of {space}." row at the top of the stream with the space's purpose and
- *     member count, for everyone in the space; a coach-only space draws its slot line in the d2 sage band; the coach
- *     gets one suggestion that fills the box ("Welcome to {space}."), never sends it.
+ *     member count, for everyone in the space; a coach-only space draws its slot line in the d2 band, the scheme's
+ *     cream card (203-D40 op 1, MERGEUP-945); the coach gets one suggestion that fills the box ("Welcome to {space}."),
+ *     never sends it.
  *   - "New messages" line and pill from SC-BE2's read cursor; both hidden while the server has no read route. The page
  *     opens there (or at the message asked for), loading older pages until that row is loaded (FR-871 Sol B1), once the
  *     cursor has answered. Read marks and the pill follow what is on screen (FlatList viewability), not a scroll
@@ -70,7 +71,7 @@ import { useCommunityCohorts } from '../../hooks/useCommunity';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { isEffectivelyOnline, useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { featureFlags } from '../../config/featureFlags';
-import { colors, forestPop as fp, radius, spacing, typography, voiceShades } from '../../theme/tokens';
+import { colors, forestPop as fp, radius, schemeCard, schemeCardOutline, spacing, typography, voiceShades } from '../../theme/tokens';
 
 type Params = { CommunitySpaceChat: { cohortId: string; messageId?: string } };
 type Item =
@@ -535,7 +536,8 @@ const s = StyleSheet.create({
   startCount: { fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18, color: fp.n700, marginTop: 6 },
   band: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingHorizontal: 20, paddingVertical: spacing.lg,
-    backgroundColor: fp.sage, borderTopWidth: 1, borderTopColor: fp.sageLine,
+    // MERGEUP-945 (203-D40 op 1, owner #203-E91): a panel, so the scheme's cream card; its 1 pt top line in the border colour.
+    borderTopWidth: 1, ...schemeCardOutline, ...schemeCard,
   },
   bandText: { ...typography.bodySmall, color: colors.charcoal, textAlign: 'center', flexShrink: 1 },
 });
