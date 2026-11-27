@@ -54,6 +54,9 @@ import SpaceChatComposer from '../../components/community/space-chat/SpaceChatCo
 import SpaceChatMic from '../../components/community/space-chat/SpaceChatMic';
 import SpaceInfoSheet from '../../components/community/space-chat/SpaceInfoSheet';
 import SpaceMessageSheet from '../../components/community/space-chat/SpaceMessageSheet';
+import SafetyMenu, { type SafetyMenuHandle } from '../../components/community/SafetyMenu';
+import { markVoiceNoteReported, useReportedVoiceNotes } from '../../components/community/VoiceReportedFold';
+import { formatDuration } from '../../components/community/voiceFormat';
 import { firstLine, photoLine, quoteOf, quoteOfTarget, voiceLine } from '../../components/community/space-chat/SpaceReplyQuote';
 import type { SpaceReplyTarget } from '../../components/community/space-chat/spaceChatOutbox';
 import * as Clipboard from 'expo-clipboard';
@@ -315,7 +318,7 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
         onRemove={isCoachViewer ? () => chat.removeForEveryone(m.id, m.voice_note?.id) : undefined}
         removed={spaceRemovedLine(m, client?.id)} onSafety={safetyRoute ? () => navigation.navigate('CommunitySafety') : undefined}
         quote={quoteOf(m.parent ?? null)} onQuote={parentId ? () => jump(parentId) : undefined}
-        onHold={answer || copy ? () => { Keyboard.dismiss(); setHeld(m.id); } : undefined}
+        onHold={answer || copy || m.sender_user_id !== client?.id ? () => { Keyboard.dismiss(); setHeld(m.id); } : undefined}
         onReply={answer ? () => setReply(answer) : undefined} onCopy={copy} held={held?.id === m.id || lit === m.id}
       />
     );
@@ -339,6 +342,22 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
   const [info, setInfo] = useState(false);
   const heldNow = held && live(held) ? held : undefined;
   const heldReply = heldNow ? replyTo(heldNow) : null;
+  // REPORT-ANY-M (#200-S4, c04): the sheet's Report and Block run the held row's own SafetyMenu flows. gone() clears
+  // held before a row's action, so the message is kept here from the tap until another is chosen or it leaves (a block,
+  // a removal, a closed space), and one SafetyMenu with no •••, given the row's own props, runs them (SafetyMenu's way in).
+  const reportedIds = useReportedVoiceNotes();
+  const reportIdOf = (m: SpaceMessage) => (m.voice_note ? m.voice_note.id : m.id);
+  const heldTheirs = heldNow && heldNow.sender_user_id !== client?.id ? heldNow : undefined;
+  const heldCoach = !!heldTheirs && (!!heldTheirs.sender?.is_coach || heldTheirs.sender_user_id === client?.coach_id);
+  const [safety, setSafety] = useState<{ id: string; to: 'reasons' | 'block'; n: number } | null>(null);
+  const safetyMenu = useRef<SafetyMenuHandle>(null);
+  const safetyOf = (m: SpaceMessage, to: 'reasons' | 'block') => () => setSafety((was) => ({ id: m.id, to, n: (was?.n ?? 0) + 1 }));
+  const safetyFound = safety ? chat.messages.find((m) => m.id === safety.id) : undefined;
+  const safetyNow = safetyFound && live(safetyFound) && !chat.noAccess ? safetyFound : undefined;
+  useEffect(() => {
+    if (safety?.to === 'block') safetyMenu.current?.block();
+    else if (safety) safetyMenu.current?.open('reasons');
+  }, [safety]);
   // LO-909 B2: a member's reply refused for its words keeps the field (Announcements) until it is back in it.
   const refusedReply = chat.pending.some((r) => r.state === 'failed' && r.reason === 'rejected' && !!r.reply && !r.reply.gone);
   // FR-871R6 (m#879 Opus B1 / Sol B879-1): the member's tab bar steps aside here (ClientNavigator), so the dock and its
@@ -486,7 +505,24 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
       ) : null}
       {heldNow ? (
         <SpaceMessageSheet onClose={() => setHeld(null)} onCopy={copyOf(heldNow)}
-          onReply={heldReply ? () => setReply(heldReply) : undefined} />
+          onReply={heldReply ? () => setReply(heldReply) : undefined}
+          onReport={heldTheirs && !reportedIds.has(reportIdOf(heldTheirs)) ? safetyOf(heldTheirs, 'reasons') : undefined}
+          onBlock={heldTheirs && heldTheirs.sender_user_id && !heldCoach ? safetyOf(heldTheirs, 'block') : undefined}
+          blockName={heldTheirs ? heldTheirs.sender?.name?.trim() || 'this member' : undefined} />
+      ) : null}
+      {safety && safetyNow ? (
+        <SafetyMenu
+          key={`${safetyNow.id}-${safety.n}`} ref={safetyMenu} trigger={false}
+          targetType="message" targetId={safetyNow.id} authorUserId={safetyNow.sender_user_id} authorName={safetyNow.sender?.name ?? ''}
+          viewerUserId={client?.id}
+          viewerCoachId={safetyNow.sender?.is_coach && safetyNow.sender_user_id !== client?.id ? safetyNow.sender_user_id : client?.coach_id}
+          contentNoun={safetyNow.voice_note ? 'voice note' : 'message'}
+          context={{ name: safetyNow.sender?.name ?? '', detail: safetyNow.voice_note ? `voice note · ${formatDuration(safetyNow.voice_note.duration_ms)}`
+            : safetyNow.kind === 'image' ? photoLine(safetyNow.body) : (safetyNow.body ?? '') }}
+          reported={reportedIds.has(reportIdOf(safetyNow))} onReported={() => markVoiceNoteReported(reportIdOf(safetyNow))}
+          onRemove={isCoachViewer ? () => chat.removeForEveryone(safetyNow.id, safetyNow.voice_note?.id) : undefined}
+          onBlocked={chat.dropAuthor} testID={`space-chat-report-${safetyNow.id}`}
+        />
       ) : null}
     </SafeAreaView>
   );
