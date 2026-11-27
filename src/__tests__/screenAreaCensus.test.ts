@@ -71,8 +71,8 @@ const KEYBOARD: Record<string, [Kind, number, string]> = {
   'screens/coach/programs/ProgramFormScreen.tsx': ['SCREEN', 1, 'a program form'],
   'screens/coach/import-journey/ImportSetupView.tsx': ['SCREEN', 1, 'import setup (ImportDataScreen; iOS padding, Android height)'],
   'screens/coach/payments/CoachPackageEditScreen.tsx': ['SCREEN', 1, "the package editor's own column (not its preview Modal)"],
-  'screens/community/CommunityDmThreadScreen.tsx': ['WAITS m#1002', 1, 'a member DM thread; m#1002 owns the file'],
-  'screens/community/CommunitySpaceChatScreen.tsx': ['WAITS m#945', 1, 'space chat; new in the space chat unit (m#944 + m#945)'],
+  'screens/community/CommunityDmThreadScreen.tsx': ['SCREEN', 1, "a member DM thread (also inline on the locked page, JoinCoachState); m#1002 merged"],
+  'screens/community/CommunitySpaceChatScreen.tsx': ['WAITS m#944', 1, 'space chat; new in the space chat unit (m#945 merged into m#944)'],
   'components/ExerciseLogModal.tsx': ['MODAL', 1, '<Modal> :199'],
   'components/coach/ai-builder/AiBuilderSheet.tsx': ['MODAL', 1, '<Modal> :110'],
   'components/coach/ai-execution/AskAiActionSheet.tsx': ['MODAL', 1, '<Modal> :183'],
@@ -147,8 +147,9 @@ const MODAL_TOPS: Record<string, [ModalKind, RegExp, string]> = {
   'screens/community/CoachCommunityEventsScreen.tsx': ['MODAL-READS', /const insets = useWindowInsets\(\);[\s\S]*const insets = useWindowInsets\(\);/, 'both event overlays (:404 and :650 at 27fd81d1)'],
   'screens/coach/payments/CoachPackageEditScreen.tsx': ['MODAL-READS', /function PreviewBar[\s\S]*const insets = useWindowInsets\(\);/, "the buyer preview's bar (Android full screen); the editor's own bar keeps the area's"],
   'screens/coach/SettingsScreen.tsx': ['SCREEN-ONLY', /paddingTop: insets\.top \+ layout\.statusBarGap/, 'the top read (:452-453) is the page header, outside both Modals (:909, :964)'],
-  'components/community/SpaceDrawer.tsx': ['WAITS m#945', /useSafeAreaInsets\(\)/, 'the space drawer pads by insets.top + 12; m#945 owns the file'],
-  'components/workout/RefusedWorkoutCard.tsx': ['WAITS m#1000', /useSafeAreaInsets\(\)/, "the refusal sheet's scrim pads by insets.top + 8; new in m#1000"],
+  'components/community/SpaceDrawer.tsx': ['WAITS m#944', /useSafeAreaInsets\(\)/, 'the space drawer pads by insets.top + 12; the space chat unit (m#944) owns the file'],
+  'components/workout/RefusedWorkoutCard.tsx': ['MODAL-READS', /const windowTop = useWindowInsets\(\)\.top;[\s\S]*paddingTop: windowTop \+ 8/, "the refusal sheet's scrim top (m#1000, merged); its bottom keeps the area's (the same)"],
+  'screens/client/RoutineBuilderScreen.tsx': ['SCREEN-ONLY', /paddingTop: insets\.top \+ spacing\.xs/, "the top read (:308) is the page's own masthead, outside its Modal (:415), which reads no top"],
 };
 const TOP_SOURCE = /useSafeAreaInsets\(|useScreenInsets\(|SafeAreaInsetsContext\b/;
 const TOP_READ = /\binsets\.top\b|SafeAreaInsetsContext\)\?\.top|use(?:SafeArea|Screen)Insets\(\)\.top|\{\s*top\b[^}]*\}\s*=\s*use(?:SafeArea|Screen)Insets\(/;
