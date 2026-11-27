@@ -169,6 +169,12 @@ describe('1. the door: "Food this week" right after Macro targets, opening FoodW
     expect(NAV).toMatch(/const ProtectedFoodWeekScreen = withProtectedScreen\(FoodWeekScreen, OWN\);/);
     expect(NAV).toMatch(/FoodWeek:\s+undefined;/);
   });
+  it('the route stays open through the payment lockout, as every OWN route does (the Food log, the meal plan, Your weeks)', () => {
+    const lockout = fs.readFileSync(path.join(SRC, 'entitlements', 'dunning', 'DunningLockoutProvider.tsx'), 'utf8');
+    const open = /OPEN_FOR_OWN_LOGGING[^=]*= new Set\(\[([^\]]*)\]/.exec(lockout)?.[1] ?? '';
+    expect(open).toMatch(/'YourWeeks'/);
+    expect(open).toMatch(/'FoodWeek'/);
+  });
   it('the kitchen rows and their targets are as they were', () => {
     const kitchen = MORE_ITEMS.filter((i) => ['Recipes', 'Grocery list', 'Prep guide'].includes(i.label)).map((i) => [i.label, i.target]);
     expect(kitchen).toEqual([['Recipes', { type: 'stack', screen: 'Recipes' }], ['Grocery list', { type: 'stack', screen: 'GroceryList' }],
