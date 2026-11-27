@@ -107,7 +107,7 @@ export function saveBody(name: string, foods: DayFood[]): SaveMealBody {
       const portion = typeof qty === 'number' && Number.isFinite(qty) && qty >= 0 && qty <= QUANTITY_MAX && unit.length > 0
         && unit.length <= UNIT_MAX;
       return portion
-        ? { food_item_id: e.food_item_id, quantity_multiplier: e.quantity_multiplier, original_quantity: qty, original_unit: unit }
+        ? { food_item_id: e.food_item_id, quantity_multiplier: e.quantity_multiplier, original_quantity: qty, original_unit: unit, meal_type: e.meal_type } /* MUTATION M1 */
         : { food_item_id: e.food_item_id, quantity_multiplier: e.quantity_multiplier };
     }),
   };
