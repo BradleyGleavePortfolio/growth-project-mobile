@@ -135,8 +135,8 @@ export function CoachOnlyGate({
   // this mount is handed the params found at that flip, and spends them as no tap (by identity: its effects run first).
   const stack = useRef<{ drawn: boolean; took?: object }>({ drawn: false });
   if (!needsCoach) stack.current = { drawn: true };
-  else if (stack.current.drawn) stack.current = { drawn: false, took: params };
-  if (needsCoach) return <CoachlessLock title={title} body={body} testID={testID} took={stack.current.took} />;
+  else if (stack.current.drawn) stack.current = { drawn: false, took: {} };
+  if (needsCoach) return <CoachlessLock title={title} body={body} testID={testID} took={stack.current.took ? params : undefined} />;
   return <>{children}</>;
 }
 
