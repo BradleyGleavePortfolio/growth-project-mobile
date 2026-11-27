@@ -1,0 +1,3 @@
+scripts/__tests__/prRunSupersede.test.js
+scripts/__tests__/deviceLoop.test.js
+scripts/__tests__/routeContract.test.js
