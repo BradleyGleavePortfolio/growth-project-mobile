@@ -26,8 +26,8 @@ const DEFAULT_KIND = new Map<string, FoodDrawingKind>(([
   ['glass', ['Beverages']],
   ['bowl', ['Fruits and Fruit Juices', 'Vegetables and Vegetable Products', LEGUMES, NUTS, 'Cereal Grains and Pasta',
     'Breakfast Cereals', SOUPS]],
-  ['jar', [DAIRY, 'Fats and Oils', 'Spices and Herbs', 'Sweets', 'Baby Foods']],
-  ['plate', ['Beef Products', 'Pork Products', 'Poultry Products', 'Lamb, Veal, and Game Products', 'Finfish and Shellfish Products',
+  ['jar', ['Fats and Oils', 'Spices and Herbs', 'Sweets', 'Baby Foods']],
+  ['plate', [DAIRY, 'Beef Products', 'Pork Products', 'Poultry Products', 'Lamb, Veal, and Game Products', 'Finfish and Shellfish Products',
     'Sausages and Luncheon Meats', 'Baked Products', 'Snacks', 'Fast Foods', 'Restaurant Foods', 'Meals, Entrees, and Side Dishes',
     'American Indian/Alaska Native Foods']],
 ] as const).flatMap(([kind, groups]) => groups.map((group) => [group, kind] as [string, FoodDrawingKind])));
