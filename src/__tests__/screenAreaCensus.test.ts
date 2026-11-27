@@ -8,11 +8,14 @@
  *    useScreenAreaKeyboardOffset), MODAL or SHEET (inside a <Modal> or a native page sheet, which measure the keyboard
  *    in their own window: no offset), or WAITS <PR> (an open PR owns the file; the row stays valid while the file is
  *    absent, so that PR's later merge of main stays green). An unlisted one fails: "classify this
- *    KeyboardAvoidingView".
+ *    KeyboardAvoidingView", naming the KEYBOARD row to add. A file with views of more than one kind (a screen's own
+ *    view and a sheet's, FIX-OBR-1) lists one kind per view, in source order: [['SCREEN', 'MODAL'], 2, why].
  * 2. Modal top reads. A Modal draws from the window's top, over the band, while React context still hands its content
  *    the area's insets (top 0 while the band shows). Every file with a <Modal that takes a top from useSafeAreaInsets,
  *    useScreenInsets or SafeAreaInsetsContext is MODAL-READS (the Modal reads it through useWindowInsets), SCREEN-ONLY
- *    (its top read is outside every Modal) or WAITS <PR>; an unlisted one fails: "classify this Modal's top read". The
+ *    (its top read is outside every Modal) or WAITS <PR>; an unlisted one fails: "classify this Modal's top read",
+ *    naming the MODAL_TOPS row to add (a file with a screen read and a Modal read is MODAL-READS: its regex holds the
+ *    Modal's read, as CoachPackageEditScreen's row). The
  *    scan cannot see a Modal whose content reads the top in another file: those are listed by hand below (a Screen
  *    drawn in a Modal passes inModal; ClientPlanPage's masthead reads the window), with the workout summary's
  *    window-height math.
@@ -52,8 +55,10 @@ const PASSES_OFFSET = /keyboardVerticalOffset=\{(?:inModal \? 0 : )?keyboardOffs
 const CALLS_OFFSET = /const keyboardOffset = useScreenAreaKeyboardOffset\(\);/;
 
 type Kind = 'SCREEN' | 'MODAL' | 'SHEET' | `WAITS m#${number}`;
-// file -> kind, count, and why (the Modal at file:line, or the screen it roots); lines at mobile main 27fd81d1.
-const KEYBOARD: Record<string, [Kind, number, string]> = {
+// file -> kind (or, for a mixed file, one kind per view in source order), count, and why (the Modal at file:line, or
+// the screen it roots); lines at mobile main 27fd81d1.
+type KeyboardRow = [Kind | Kind[], number, string];
+const KEYBOARD: Record<string, KeyboardRow> = {
   'ui/layout/Screen.tsx': ['SCREEN', 1, 'the shared page wrapper; a Screen drawn in a Modal passes inModal (offset 0)'],
   'screens/client/MessagesScreen.tsx': ['SCREEN', 1, "the client's coach thread"],
   'screens/coach/ClientMessagesScreen.tsx': ['SCREEN', 1, "the coach's client thread"],
@@ -103,36 +108,49 @@ const KEYBOARD: Record<string, [Kind, number, string]> = {
   'screens/settings/RomanChatsConfirmSheet.tsx': ['MODAL', 1, '<Modal> :48'],
 };
 
-describe('every KeyboardAvoidingView in src is classified, and only a screen-level one counts the area', () => {
-  const found = new Map<string, string[]>();
-  for (const f of files) {
-    const tags = keyboardTags(read(rel(f)));
-    if (tags.length) found.set(rel(f), tags);
+const CENSUS = 'src/__tests__/screenAreaCensus.test.ts';
+const kindsOf = ([kind, n]: KeyboardRow): Kind[] => (Array.isArray(kind) ? kind : Array<Kind>(n).fill(kind));
+const inModal = (k: Kind) => k === 'MODAL' || k === 'SHEET';
+
+/** The file's views against its row: unlisted, or a count that differs (text null: the file is absent). */
+function countProblems(f: string, text: string | null, row: KeyboardRow | undefined): string[] {
+  const n = text === null ? 0 : keyboardTags(text).length;
+  if (!row) {
+    return n ? [`classify this KeyboardAvoidingView: ${f} (${n}). Add one row to KEYBOARD in ${CENSUS}: '${f}': ['SCREEN' | 'MODAL' | 'SHEET' | 'WAITS m#<PR>', ${n}, '<why>'] (views of more than one kind: one kind per view in source order, e.g. [['SCREEN', 'MODAL'], 2, '<why>'])`] : [];
   }
+  const kinds = kindsOf(row);
+  if (text === null && kinds.every((k) => k.startsWith('WAITS'))) return [];
+  if (n === kinds.length && n === row[1]) return [];
+  return [`${f}: ${n} KeyboardAvoidingView, the census lists ${row[1]} (${kinds.length} kinds). Change its row in KEYBOARD in ${CENSUS} to ${n}, one kind per view in source order if they differ`];
+}
+
+/** SCREEN: each SCREEN view passes the area offset. MODAL: no view in a Modal or sheet passes it. */
+function viewProblems(f: string, text: string, row: KeyboardRow, which: 'SCREEN' | 'MODAL'): string[] {
+  const kinds = kindsOf(row);
+  const problems: string[] = [];
+  if (which === 'SCREEN' && !CALLS_OFFSET.test(text)) problems.push(`${f}: a SCREEN view, but no const keyboardOffset = useScreenAreaKeyboardOffset();`);
+  if (which === 'MODAL' && !kinds.includes('SCREEN') && /useScreenAreaKeyboardOffset/.test(text)) problems.push(`${f}: no SCREEN view, but it reads useScreenAreaKeyboardOffset`);
+  keyboardTags(text).forEach((tag, i) => {
+    if (which === 'SCREEN' && kinds[i] === 'SCREEN' && !PASSES_OFFSET.test(tag)) problems.push(`${f} view ${i + 1} (SCREEN) passes no area offset: ${tag.slice(0, 80)}`);
+    if (which === 'MODAL' && inModal(kinds[i]) && /keyboardOffset/.test(tag)) problems.push(`${f} view ${i + 1} (${kinds[i]}) passes the area offset in a Modal: ${tag.slice(0, 80)}`);
+  });
+  return problems;
+}
+
+describe('every KeyboardAvoidingView in src is classified, and only a screen-level one counts the area', () => {
+  const found = new Set(files.map(rel).filter((f) => keyboardTags(read(f)).length > 0));
 
   it('none is unlisted, and each listed file has the listed number', () => {
-    const problems: string[] = [];
-    for (const [f, tags] of found) {
-      const row = KEYBOARD[f];
-      if (!row) problems.push(`classify this KeyboardAvoidingView: ${f} (${tags.length})`);
-      else if (row[1] !== tags.length) problems.push(`${f}: ${tags.length} KeyboardAvoidingView, the census lists ${row[1]}`);
-    }
-    for (const [f, [kind]] of Object.entries(KEYBOARD)) {
-      if (!found.has(f) && !(kind.startsWith('WAITS') && !exists(f))) problems.push(`${f}: listed as ${kind} but has no KeyboardAvoidingView`);
-    }
-    expect(problems).toEqual([]);
+    const all = [...new Set([...found, ...Object.keys(KEYBOARD)])];
+    expect(all.flatMap((f) => countProblems(f, exists(f) ? read(f) : null, KEYBOARD[f]))).toEqual([]);
   });
 
-  it.each(Object.entries(KEYBOARD).filter(([, [kind]]) => kind === 'SCREEN'))('SCREEN %s passes the area offset', (f) => {
-    const text = read(f);
-    expect(text).toMatch(CALLS_OFFSET);
-    for (const tag of keyboardTags(text)) expect({ f, tag: tag.slice(0, 80), passes: PASSES_OFFSET.test(tag) }).toEqual({ f, tag: tag.slice(0, 80), passes: true });
+  it.each(Object.entries(KEYBOARD).filter(([, row]) => kindsOf(row).includes('SCREEN')))('SCREEN %s passes the area offset', (f, row) => {
+    expect(viewProblems(f, read(f), row, 'SCREEN')).toEqual([]);
   });
 
-  it.each(Object.entries(KEYBOARD).filter(([, [kind]]) => kind === 'MODAL' || kind === 'SHEET'))('%s (in a Modal) passes no area offset', (f) => {
-    const text = read(f);
-    expect(text).not.toMatch(/useScreenAreaKeyboardOffset/);
-    for (const tag of keyboardTags(text)) expect(tag).not.toMatch(/keyboardOffset/);
+  it.each(Object.entries(KEYBOARD).filter(([, row]) => kindsOf(row).some(inModal)))('%s (in a Modal) passes no area offset', (f, row) => {
+    expect(viewProblems(f, read(f), row, 'MODAL')).toEqual([]);
   });
 });
 
@@ -151,6 +169,8 @@ const MODAL_TOPS: Record<string, [ModalKind, RegExp, string]> = {
   'components/workout/RefusedWorkoutCard.tsx': ['MODAL-READS', /const windowTop = useWindowInsets\(\)\.top;[\s\S]*paddingTop: windowTop \+ 8/, "the refusal sheet's scrim top (m#1000, merged); its bottom keeps the area's (the same)"],
   'screens/client/RoutineBuilderScreen.tsx': ['SCREEN-ONLY', /paddingTop: insets\.top \+ spacing\.xs/, "the top read (:308) is the page's own masthead, outside its Modal (:415), which reads no top"],
 };
+const modalTopHint = (f: string) =>
+  `classify this Modal's top read: ${f}. Add one row to MODAL_TOPS in ${CENSUS}: '${f}': ['MODAL-READS' | 'SCREEN-ONLY' | 'WAITS m#<PR>', /<the read it must hold>/, '<why>']`;
 const TOP_SOURCE = /useSafeAreaInsets\(|useScreenInsets\(|SafeAreaInsetsContext\b/;
 const TOP_READ = /\binsets\.top\b|SafeAreaInsetsContext\)\?\.top|use(?:SafeArea|Screen)Insets\(\)\.top|\{\s*top\b[^}]*\}\s*=\s*use(?:SafeArea|Screen)Insets\(/;
 
@@ -160,7 +180,7 @@ describe("every Modal that reads a top inset reads the window's", () => {
     for (const f of files) {
       const text = stripComments(read(rel(f)));
       if (/<Modal\b/.test(text) && TOP_SOURCE.test(text) && TOP_READ.test(text) && !MODAL_TOPS[rel(f)]) {
-        problems.push(`classify this Modal's top read: ${rel(f)}`);
+        problems.push(modalTopHint(rel(f)));
       }
     }
     expect(problems).toEqual([]);
@@ -193,5 +213,33 @@ describe("every Modal that reads a top inset reads the window's", () => {
   });
   it("the workout summary's ring takes its room from the window's top, not the area's", () => {
     expect(read('screens/client/active-workout/WorkoutSummaryC5.tsx')).toMatch(/ringSize\(useWindowDimensions\(\)\.height - useWindowInsets\(\)\.top - insets\.bottom\)/);
+  });
+});
+
+describe('FIX-OBR-1 (LS-OFFLINE-BAND-ROOT-M-1 C1): a mixed file is one row, and each failure names the row to add', () => {
+  // A screen's own view and a sheet's view in one file (a Modal drawn by the screen), in source order.
+  const f = 'screens/example/MixedScreen.tsx';
+  const text = [
+    'const keyboardOffset = useScreenAreaKeyboardOffset();',
+    '<KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={keyboardOffset}>',
+    '<Modal visible><KeyboardAvoidingView behavior="padding"></KeyboardAvoidingView></Modal>',
+  ].join('\n');
+  const mixed: KeyboardRow = [['SCREEN', 'MODAL'], 2, 'the page and its sheet'];
+
+  it('one kind per view classifies it: every check holds', () => {
+    expect([...countProblems(f, text, mixed), ...viewProblems(f, text, mixed, 'SCREEN'), ...viewProblems(f, text, mixed, 'MODAL')]).toEqual([]);
+  });
+
+  it('one kind for both views does not: the sheet is no SCREEN view, the page no MODAL view', () => {
+    expect(viewProblems(f, text, ['SCREEN', 2, ''], 'SCREEN')).toEqual([`${f} view 2 (SCREEN) passes no area offset: <KeyboardAvoidingView behavior="padding">`]);
+    expect(viewProblems(f, text, ['MODAL', 2, ''], 'MODAL')).toHaveLength(2);
+    expect(viewProblems(f, text, [['MODAL', 'SCREEN'], 2, ''], 'MODAL')).toEqual([expect.stringContaining(`${f} view 1 (MODAL) passes the area offset in a Modal`)]);
+  });
+
+  it('unlisted or miscounted, the message names the row in KEYBOARD; an unlisted Modal top read names MODAL_TOPS', () => {
+    expect(countProblems(f, text, undefined)[0]).toContain(`Add one row to KEYBOARD in src/__tests__/screenAreaCensus.test.ts: '${f}': ['SCREEN' | 'MODAL' | 'SHEET' | 'WAITS m#<PR>', 2, '<why>']`);
+    expect(countProblems(f, text, ['SCREEN', 1, ''])[0]).toContain('Change its row in KEYBOARD in src/__tests__/screenAreaCensus.test.ts to 2');
+    expect(countProblems(f, text, [['SCREEN', 'MODAL', 'MODAL'], 3, ''])).toHaveLength(1);
+    expect(modalTopHint(f)).toContain(`Add one row to MODAL_TOPS in src/__tests__/screenAreaCensus.test.ts: '${f}': ['MODAL-READS'`);
   });
 });
