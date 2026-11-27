@@ -31,41 +31,46 @@ import { WORDS, addIntent, failureOf, heldNote, kcalWords, mealOfHour, mealView,
 
 const nowMinute = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
 
-/** A downward pull on the sheet's top closes it; a short pull springs back (the add sheet's gesture). */
-function usePullDown(close: () => void) {
+/** A downward pull on the sheet's top closes it; a short pull springs back (the add sheet's gesture). Off while busy. */
+function usePullDown(close: () => void, busy: boolean) {
   const y = useRef(new Animated.Value(0)).current;
   const from = useRef(0);
   const dy = (e: GestureResponderEvent) => e.nativeEvent.pageY - from.current;
   const back = () => Animated.spring(y, { toValue: 0, useNativeDriver: true }).start();
   return { y, handlers: {
     onTouchStart: (e: GestureResponderEvent) => { from.current = e.nativeEvent.pageY; },
-    onMoveShouldSetResponder: (e: GestureResponderEvent) => dy(e) > 8,
+    onMoveShouldSetResponder: (e: GestureResponderEvent) => !busy && dy(e) > 8,
     onResponderMove: (e: GestureResponderEvent) => y.setValue(Math.max(0, dy(e))),
     onResponderRelease: (e: GestureResponderEvent) => { if (dy(e) > 80) close(); else back(); },
     onResponderTerminate: back,
   } };
 }
 
-/** The sheet's frame (R10: shared with SAVED-MEAL-SAVE-M). */
-export function KitchenSheet({ visible, title, onClose, children, testID }: {
-  visible: boolean; title: string; onClose: () => void; children?: React.ReactNode; testID?: string;
+/**
+ * The sheet's frame (R10: shared with SAVED-MEAL-SAVE-M). `busy`: a send is running, so Close, the scrim, the pull and
+ * Android Back do nothing until it answers (LS-KITCHEN-M-1 C2): the answer always lands on the sheet it was sent from,
+ * and the api's own timeout ends every send.
+ */
+export function KitchenSheet({ visible, title, onClose, busy = false, children, testID }: {
+  visible: boolean; title: string; onClose: () => void; busy?: boolean; children?: React.ReactNode; testID?: string;
 }) {
   const { semanticColors: sc } = useTheme();
   const s = useMemo(() => makeStyles(sc), [sc]);
   const bottom = useBottomInset();
   const { height } = useWindowDimensions();
   const reduced = useReducedMotion();
-  const pull = usePullDown(onClose);
+  const close = () => { if (!busy) onClose(); };
+  const pull = usePullDown(close, busy);
   return (
-    <Modal visible={visible} transparent animationType={reduced ? 'none' : 'slide'} onRequestClose={onClose} statusBarTranslucent>
-      <Pressable testID="kitchen-sheet-scrim" style={s.scrim} onPress={onClose} accessible={false} importantForAccessibility="no" />
+    <Modal visible={visible} transparent animationType={reduced ? 'none' : 'slide'} onRequestClose={close} statusBarTranslucent>
+      <Pressable testID="kitchen-sheet-scrim" style={s.scrim} onPress={close} disabled={busy} accessible={false} importantForAccessibility="no" />
       <Animated.View accessibilityViewIsModal testID={testID}
         style={[s.sheet, { maxHeight: height * 0.92, paddingBottom: bottom + 16, transform: [{ translateY: pull.y }] }]}>
         <View {...pull.handlers}>
           <View style={s.grab} />
           <View style={s.head}>
             <Text accessibilityRole="header" style={s.title}>{title}</Text>
-            <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel={WORDS.close} style={s.close}
+            <Pressable onPress={close} disabled={busy} accessibilityRole="button" accessibilityLabel={WORDS.close} style={s.close}
               testID="kitchen-sheet-close">
               <Ionicons name="close" size={28} color={sc.textPrimary} />
             </Pressable>
@@ -155,7 +160,7 @@ export default function SavedMealSheet({ meal, onClose, onAdded, onStale }: {
   };
 
   return (
-    <KitchenSheet visible title={meal.name} onClose={onClose} testID="kitchen-sheet">
+    <KitchenSheet visible title={meal.name} onClose={onClose} busy={busy} testID="kitchen-sheet">
       {empty ? null : <Text style={s.line}>{sheetLine(view)}</Text>}
       {view.held.length > 0 ? <Text style={s.note} testID="kitchen-held-note">{heldNote(view.held)}</Text> : null}
       {view.held.length > 0 ? (
