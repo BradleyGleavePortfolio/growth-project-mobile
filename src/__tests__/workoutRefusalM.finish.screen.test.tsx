@@ -94,6 +94,21 @@ jest.mock('../offline', () => ({
   workoutSyncEvents: { on: jest.fn(), off: jest.fn() },
 }));
 
+// ALM-D8: the logger's own reach into the local store (getDatabase); every statement it sends is recorded, so Leave can
+// be shown to leave the parked row where the Train tab's card lists it.
+const mockStoreStatements: string[] = [];
+jest.mock('../offline/database', () => ({
+  getDatabase: async () => {
+    const note = (sql: string) => { mockStoreStatements.push(sql); };
+    return {
+      runAsync: async (sql: string) => note(sql),
+      execAsync: async (sql: string) => note(sql),
+      getFirstAsync: async (sql: string) => { note(sql); return null; },
+      getAllAsync: async (sql: string) => { note(sql); return []; },
+    };
+  },
+}));
+
 const mockTrack = jest.fn();
 jest.mock('../lib/analytics', () => ({ track: (...a: unknown[]) => mockTrack(...a) }));
 
@@ -265,10 +280,14 @@ describe('ALM-D8: leaving the logger after a refused Finish', () => {
     expect(mockGoBack).not.toHaveBeenCalled(); // asked first, nothing left yet
     const before = sends();
     mockClearActiveWorkoutSession.mockClear();
+    mockStoreStatements.length = 0;
     await act(async () => { alertButtons[i][2].onPress!(); for (let k = 0; k < 6; k++) await Promise.resolve(); });
     left(); // the logger closed (and the tab opened)
     expect(mockClearActiveWorkoutSession).toHaveBeenCalledWith('c1'); // the live session ended
     expect(sends()).toEqual(before); // nothing sent, nothing queued again, the parked row not touched
     expect(mockQueueWorkout).toHaveBeenCalledTimes(1); // no second copy
+    // The parked row is still listed: Leave sends no statement to the local store, so the dead_letter row and its
+    // reason stay as releaseQueuedWorkout left them (listRefusedWorkouts lists such a row: workoutRefusalM.engine).
+    expect(mockStoreStatements).toEqual([]);
   });
 });
