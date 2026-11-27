@@ -142,7 +142,7 @@ export default function PlanMealScreen() {
   const rows = recipeId ? (shownRecipe ? ingredientRows(shownRecipe, null) : []) : ingredientRows(null, t.items);
   const groceries = recipeId ? (shownRecipe ? groceryItems(shownRecipe, null) : []) : groceryItems(null, t.items);
   const status = eatenAtOpen.current && eaten?.status ? eaten.status : null;
-  const showButton = isToday && eatenAtOpen.current === false;
+  const showButton = eatenAtOpen.current === false;
 
   return (
     <View style={styles.screen}>
