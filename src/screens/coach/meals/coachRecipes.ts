@@ -22,7 +22,7 @@ export function useAnsweredOnce(read: ReadLike): boolean {
   const now = read.isSuccess && (read.isFetchedAfterMount || !read.isStale);
   const [latched, setLatched] = useState(now);
   useEffect(() => { if (now) setLatched(true); }, [now]);
-  return latched || now;
+  return now;
 }
 
 export function useCoachRecipes() {
