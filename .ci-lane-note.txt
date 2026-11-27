@@ -1,0 +1,3 @@
+FOOD-JOURNEY-SWITCHON-M probe proof (never merge): 20 copies of the head file run plain (besideNN), 10 copies of the head
+file under the stall probe (probeFixNN) and 10 copies of main 644dfac5's file under the same probe (probeMainNN), all in
+one jest run. The probe arms only in the probeFixNN and probeMainNN copies (.fjs-probe/stall.ci-gated.setup.js).
