@@ -1,0 +1,10 @@
+src/screens/client/kitchen
+src/__tests__
+src/utils/__tests__
+src/navigation/__tests__
+src/screens/client/__tests__
+src/screens/client/foodweek
+src/components/mealplan
+src/entitlements/dunning
+src/theme/__tests__
+scripts/__tests__/routeContract.test.js
