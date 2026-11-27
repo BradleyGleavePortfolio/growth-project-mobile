@@ -36,7 +36,6 @@ export function ScreenArea({ children }: { children: React.ReactNode }): React.R
     <WindowInsetsContext.Provider value={windowInsets}>
       <SafeArea.SafeAreaProvider
         testID="screen-area"
-        initialMetrics={{ insets: windowInsets, frame: windowFrame ?? { x: 0, y: 0, width, height } }}
       >
         {children}
       </SafeArea.SafeAreaProvider>
