@@ -48,6 +48,7 @@ import type { SearchResponse } from '../api/communitySearchApi';
 import { refreshVoiceQueries } from './voiceQueryKeys';
 import { communitySearchKeys } from './useCommunitySearch';
 import api from '../services/api';
+import { refreshDmReadsIn } from '../services/dmReads';
 
 // ─── Query keys (stable, namespaced) ─────────────────────────────────────────
 
@@ -442,6 +443,14 @@ function onCommunityPing(qc: QueryClient, ping?: CommunityPing): void {
   // already re-reads the voice queries and all-kinds searches above, and lists re-read on open.
   if (event === COMMUNITY_BROADCAST_EVENTS.postUpdated) {
     void refreshPostQueries(qc);
+  }
+  // REFINE-985R3 (LO-985R2 B1): a DM pings its recipient as message.created (backend community-dms.service.ts), and
+  // at night, under Mute all or with no token that ping is the only word the phone gets (the push waits or is never
+  // sent). Re-read the DM reads (dmReads.ts, the one copy) so the open thread draws the reply and the list takes
+  // the server's order. Only the event name is read; a missing or unknown one re-reads them too. A space message
+  // pings with the same name: one DM read per ping while a DM screen is mounted, none otherwise.
+  if (event === COMMUNITY_BROADCAST_EVENTS.messageCreated || !known.includes(event)) {
+    refreshDmReadsIn(qc);
   }
 }
 

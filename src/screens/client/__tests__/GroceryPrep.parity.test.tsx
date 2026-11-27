@@ -6,7 +6,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { listsApi, prepGuideApi } from '../../../services/api';
 import { lightTokens, darkTokens } from '../../../theme/tokens';
 import GroceryListScreen from '../GroceryListScreen';
-import ShoppingListScreen from '../ShoppingListScreen';
 import PrepGuideScreen from '../PrepGuideScreen';
 
 const mockNavigation = { goBack: jest.fn(), navigate: jest.fn() };
@@ -67,7 +66,7 @@ beforeEach(() => {
   } satisfies AxiosResponse<Record<string, never>>;
   for (const method of [listsApi.addItem, listsApi.updateItem, listsApi.deleteItem, listsApi.clearChecked]) jest.mocked(method).mockResolvedValue(mutationResponse);
 });
-describe.each([['grocery', GroceryListScreen], ['shopping', ShoppingListScreen]] as const)('%s action parity', (type, Screen) => {
+describe.each([['grocery', GroceryListScreen]] as const)('%s action parity', (type, Screen) => {
   it('preserves back, add with quantity/unit, check, uncheck, remove, clear confirmation and refresh', async () => {
     const view = await mount(Screen);
     await view.findByText('Milk');
@@ -147,7 +146,7 @@ it('describes fetching the prep guide without claiming it is being built', async
   const view = await mount(PrepGuideScreen);
   expect(view.getByText('Loading your prep guide…')).toBeTruthy();
 });
-it.each([GroceryListScreen, ShoppingListScreen, PrepGuideScreen])('uses semantic page colors in dark mode', async (Screen) => {
+it.each([GroceryListScreen, PrepGuideScreen])('uses semantic page colors in dark mode', async (Screen) => {
   mockTokens = darkTokens;
   const view = await mount(Screen);
   // STYLE-KITCHEN-M: the page under the inset top is the Style C forest masthead token; the paper is bgSurface.

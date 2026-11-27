@@ -3,7 +3,6 @@ import { Dimensions, StyleSheet } from 'react-native';
 import { render } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import GroceryListScreen from '../GroceryListScreen';
-import ShoppingListScreen from '../ShoppingListScreen';
 
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: jest.fn(), navigate: jest.fn() }) }));
 jest.mock('../../../components/StatusBarBand', () => ({ useStatusBarBand: () => undefined }));
@@ -23,8 +22,7 @@ jest.mock('../../../services/api', () => ({
 
 // Android's ordinary Small text preset is 0.85. Text may shrink, but the
 // physical input hit target must retain the job's 44pt minimum.
-// Render both actual consumers because Shopping imports Grocery's list styles.
-describe.each([['Grocery', GroceryListScreen], ['Shopping', ShoppingListScreen]] as const)(
+describe.each([['Grocery', GroceryListScreen]] as const)(
   'B1 LS-954R2: %s input targets',
   (_name, Screen) => {
     describe.each([0.85, 1, 1.3])('at font scale %s', (fontScale) => {

@@ -33,7 +33,7 @@ import { HapticService } from '../../ui/haptics/haptics.service';
 import { SegmentedRing, type SegmentState } from '../../ui/charts';
 import { Overline, PrimaryButton, QuietTextButton, Screen, TextLink, useScreenInsets } from '../../ui';
 import { useTheme } from '../../theme/ThemeProvider';
-import { layout, radius, typography, type SemanticTokens } from '../../theme/tokens';
+import { layout, radius, schemeCard, typography, type SemanticTokens } from '../../theme/tokens';
 import {
   MORE_ITEMS,
   NEW_ROW,
@@ -396,7 +396,7 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   bar: { height: 22, borderRadius: radius.control, marginBottom: 10 },
   barThin: { height: 12, marginBottom: 0 },
   body: { paddingHorizontal: layout.gutter, paddingTop: 16 },
-  card: { backgroundColor: sc.surface.sage, borderRadius: radius.card, padding: 20 },
+  card: { ...schemeCard, borderRadius: radius.card, padding: 20 },
   cardLoading: { minHeight: 150 },
   cardOverline: { color: sc.textPrimary },
   cardBody: { ...typography.body, color: sc.textPrimary, marginTop: 4 },

@@ -13,7 +13,7 @@ export const Colors = {
   accent:        '#3A5C46',  // forest mid (was #40916C)
 
   // Backgrounds → bone/cream
-  background:        '#F7FAF7',  // bone (owner #166-2: near-white)
+  background:        '#F7EED9',  // bone (owner #203-E86: Sunlit sand)
   surface:           '#F1E8D5',  // cream (was #FFFFFF)
   surfaceElevated:   '#F1E8D5',  // cream (was #F5F0E8)
 
@@ -21,7 +21,7 @@ export const Colors = {
   textPrimary:    '#1A1A18',  // ink (was #1B2B1E)
   textSecondary:  '#3D3D3A',  // charcoal (was #4A6358)
   textMuted:      '#6B675F',  // AA-readable on bone and cream
-  textOnPrimary:  '#F7FAF7',  // bone on dark bg (was #FFFFFF)
+  textOnPrimary:  '#F7EED9',  // bone on dark bg (was #FFFFFF)
 
   // Borders & dividers → stone/camel
   border:   '#B08D57',  // camel hairlines (was #E2EDE6)
@@ -62,7 +62,7 @@ export const Colors = {
   // Tab bar
   tabActive:      '#2C4A36',  // forest
   tabInactive:    '#B1A89F',  // stone
-  tabBackground:  '#F7FAF7',  // bone
+  tabBackground:  '#F7EED9',  // bone
   tabBorder:      'rgba(176,141,87,0.3)',  // camel
 
   // Cards
@@ -78,7 +78,7 @@ export const Colors = {
   // accent (#9A3030) is a desaturated dark red that works on bone.
   noticeWarningBg:       '#F8F2E5',
   noticeWarningIconBg:   '#F3EBD8',
-  noticeWarningText:     '#8A6A2A',
+  noticeWarningText:     '#6B4F1A',  // gold[800]: 6.59:1 on the Sunlit sand page (was #8A6A2A, 4.36:1)
   noticeCriticalBg:      '#F2E0E0',
   noticeCriticalAccent:  '#9A3030',
   noticeCriticalText:    '#7A1F1F',

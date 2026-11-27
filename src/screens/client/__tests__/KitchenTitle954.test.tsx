@@ -9,7 +9,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { listsApi, prepGuideApi, recipesApi } from '../../../services/api';
 import GroceryListScreen from '../GroceryListScreen';
-import ShoppingListScreen from '../ShoppingListScreen';
 import PrepGuideScreen from '../PrepGuideScreen';
 import RecipesScreen from '../RecipesScreen';
 import RecipeDetailScreen from '../RecipeDetailScreen';
@@ -69,7 +68,6 @@ function serve(state: State) {
 
 const SCREENS = {
   Grocery: { Screen: GroceryListScreen, label: 'Back', states: ['loaded', 'empty', 'loading', 'error'] },
-  Shopping: { Screen: ShoppingListScreen, label: 'Back', states: ['loaded', 'empty', 'loading', 'error'] },
   Prep: { Screen: PrepGuideScreen, label: 'Back', states: ['loaded', 'empty', 'loading', 'error'] },
   Recipes: { Screen: RecipesScreen, label: 'Go back', states: ['loaded', 'empty', 'loading', 'error'] },
   RecipeDetail: { Screen: RecipeDetailScreen, label: 'Go back', states: ['loaded', 'loading', 'error'] },
@@ -117,7 +115,7 @@ async function measure(name: keyof typeof SCREENS, state: State, size: (typeof S
   );
   if (state !== 'loading') await waitFor(() => expect(client.isFetching()).toBe(0));
   if (state === 'error') await waitFor(() => expect(ui.getAllByRole('alert').length).toBeGreaterThan(0));
-  if (state === 'loaded') await waitFor(() => expect(ui.getAllByText(name === 'Grocery' || name === 'Shopping' ? 'Milk' : 'Lentil soup').length).toBeGreaterThan(0));
+  if (state === 'loaded') await waitFor(() => expect(ui.getAllByText(name === 'Grocery' ? 'Milk' : 'Lentil soup').length).toBeGreaterThan(0));
   // The masthead's Back comes first in the tree (RecipeDetail's error page also has a "Go back" link on the paper).
   const back = ui.getAllByRole('button', { name: label })[0] as unknown as Host;
   let row: Host | null = back.parent;

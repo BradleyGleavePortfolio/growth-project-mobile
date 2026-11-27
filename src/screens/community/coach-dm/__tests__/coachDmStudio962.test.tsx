@@ -225,7 +225,7 @@ beforeEach(async () => {
 afterEach(() => jest.restoreAllMocks());
 
 const tokens = jest.requireActual('../../../../theme/tokens');
-const { forestPop: fp, colors, brand, neutral, lightTokens } = tokens;
+const { forestPop: fp, colors, brand, neutral, lightTokens, schemeCard } = tokens;
 const { dayLabel } = require('../coachDm');
 const schedulingApi = require('../../../../api/schedulingApi');
 const flat = (el: { props: { style?: unknown } }): Record<string, unknown> =>
@@ -439,12 +439,13 @@ describe('i. Report and Block names the first name (S_report_menu_ios.html: "Blo
 });
 
 describe('j. the Direct messages row on today\'s home moves toward Studio\'s row (S_entry_ios.html: .row :56 with #E0EBE4, .nm :57, .meta :58)', () => {
-  it('a sage row, 64 pt, the square bubble at 22 pt in forest, 16.5 pt name and 13.5 pt count', async () => {
+  // The row's fill is the scheme's cream card with its forest edge since owner ruling 203-E91 (Studio draws sage).
+  it('a cream card row with the forest edge, 64 pt, the square bubble at 22 pt in forest, 16.5 pt name and 13.5 pt count', async () => {
     serve(base());
     const view = await mount();
     await waitFor(() => expect(view.getByTestId('coach-dm-entry-count')).toBeTruthy());
     const row = view.getByTestId('coach-dm-entry');
-    expect(flat(row)).toEqual(expect.objectContaining({ backgroundColor: fp.sage, minHeight: 64, paddingHorizontal: 18, gap: 14 }));
+    expect(flat(row)).toEqual(expect.objectContaining({ ...schemeCard, minHeight: 64, paddingHorizontal: 18, gap: 14 }));
     expect(iconIn(row, 'chatbox-outline')?.props).toEqual(expect.objectContaining({ size: 22, color: fp.forest }));
     expect(flat(within(row).getByText('Direct messages'))).toEqual(expect.objectContaining({ fontSize: 16.5, color: colors.ink }));
     expect(flat(view.getByTestId('coach-dm-entry-count'))).toEqual(expect.objectContaining({ fontSize: 13.5, color: fp.n700 }));

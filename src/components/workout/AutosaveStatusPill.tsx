@@ -58,7 +58,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { spacing, typography, radius, semantic } from '../../theme/tokens';
+import { spacing, typography, radius, schemeBar, semantic } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useReduceMotion } from '../../screens/client/wearables/components/useReduceMotion';
 import type { AutosaveStatus } from '../../hooks/useAutosave';
@@ -188,9 +188,9 @@ export default function AutosaveStatusPill(props: AutosaveStatusPillProps) {
         return {
           label: relativeSavedLabel(lastSavedAt, now),
           icon: 'checkmark-circle-outline',
-          fg: semantic.success.fg,
-          bg: semantic.success.bg,
-          border: semantic.success.border,
+          fg: schemeBar.text,
+          bg: schemeBar.fill,
+          border: schemeBar.border,
           interactive: false,
         };
       case 'offline':

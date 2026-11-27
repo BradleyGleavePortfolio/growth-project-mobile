@@ -1,4 +1,4 @@
-import React, { useCallback, useSyncExternalStore } from 'react';
+import React, { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -14,7 +14,7 @@ import { lightTokens } from '../theme/tokens';
 // zero-offset behaviour and avoiding a double top inset on screens that apply
 // their own safe-area padding. Must live inside a SafeAreaProvider so the inset
 // resolves to the real device value (notch / cutout height). Bone is the default.
-export const STATUS_BAR_BONE = '#F7FAF7';
+export const STATUS_BAR_BONE = '#F7EED9';
 export const STATUS_BAR_BAND_Z_INDEX = 1000; // above app content, below modal layer
 
 // A focused dark screen owns both the inset colour and its icon contrast.
@@ -39,6 +39,17 @@ export function useStatusBarBand(color: string) {
     setOwners([...owners, owner]);
     return () => setOwners(owners.filter((o) => o !== owner));
   }, [color]));
+}
+
+// ROUND-989: the same band for a screen that already reads its own focus (useIsFocused), Roman's drafts list: it owns
+// the band while focused and gives it back on blur or unmount, as useStatusBarBand's focus effect does.
+export function useStatusBarBandWhile(color: string, focused: boolean) {
+  useEffect(() => {
+    if (!focused) return undefined;
+    const owner = { color };
+    setOwners([...owners, owner]);
+    return () => setOwners(owners.filter((o) => o !== owner));
+  }, [color, focused]);
 }
 
 // K1-OVERVIEW: the coach's client file, whose deep-forest masthead runs to the top edge.
