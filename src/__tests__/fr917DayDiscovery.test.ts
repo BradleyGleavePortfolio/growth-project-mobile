@@ -1,16 +1,22 @@
 // FR-917 F3 (LS-917 B3, LO-917 C1), the other paths: the real day guard
 // (workoutDayRule.test.ts) must catch a new day reader of each shape the
 // audits named, whichever workout or assignment type, hook or API entry point
-// leads to it. The probe files exist only while the child jest runs; the guard
-// reads files named fr917DayProbe* only when FR917_DAY_PROBE=1, so a guard run
-// elsewhere in the suite never sees them.
+// leads to it. The guard reads files named fr917DayProbe* only when
+// FR917_DAY_PROBE=1. FLAKY-PAIR-M: the probes are written into a private copy
+// of src (FR917_DAY_ROOT), never the shared tree, so a suite that walks src at
+// the same time (romanVoiceReaders.fix963r2, ENOENT in main run 45752952784)
+// never lists a probe that is then removed.
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
 
 const root = path.resolve(__dirname, '../..');
 const guard = path.join(root, 'src/__tests__/workoutDayRule.test.ts');
-const dir = path.join(root, 'src/utils/workout');
+const copy = fs.mkdtempSync(path.join(os.tmpdir(), 'fr917-day-'));
+fs.cpSync(path.join(root, 'src'), path.join(copy, 'src'), { recursive: true });
+afterAll(() => fs.rmSync(copy, { recursive: true, force: true }));
+const dir = path.join(copy, 'src/utils/workout');
 
 // [probe file, what it reads, source]
 const PROBES: Array<[file: string, what: string, source: string]> = [
@@ -52,7 +58,7 @@ function runGuard() {
       require.resolve('jest/bin/jest'), '--runInBand', '--forceExit', '--runTestsByPath', guard,
     ], {
       cwd: root, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, timeout: 60_000,
-      env: { ...process.env, FR917_DAY_PROBE: '1' },
+      env: { ...process.env, FR917_DAY_PROBE: '1', FR917_DAY_ROOT: copy },
     });
     if (result.error) throw result.error;
     return result;
