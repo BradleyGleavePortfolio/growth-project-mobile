@@ -177,6 +177,12 @@ describe("every Modal that reads a top inset reads the window's", () => {
     ['screens/join/JoinPackageScreen.tsx', 1, "its Screen (:157), drawn in JoinPackageHost.tsx's page sheet Modal (Android: full screen)"],
     ['screens/client/packageDetail/ClientPlanPresentation.tsx', 1, "ClientPlanPage, drawn only in ClientPackagesScreen.tsx's full-screen Modal"],
   ];
+  it("the shared Screen: inModal takes the window's top for its top edge and adds no keyboard offset", () => {
+    const text = read('ui/layout/Screen.tsx');
+    expect(text).toMatch(/const windowInsets = useWindowInsets\(\);/);
+    expect(text).toMatch(/edges\.includes\('top'\) \? \(inModal \? windowInsets\.top : insets\.top\) \+ layout\.statusBarGap : 0/);
+    expect(keyboardTags(text).map((t) => /keyboardVerticalOffset=\{inModal \? 0 : keyboardOffset\}/.test(t))).toEqual([true]);
+  });
   it.each(IN_MODAL)('%s: each Screen drawn in a Modal passes inModal (%i)', (f, n) => {
     const tags = Array.from(read(f).matchAll(/<Screen\b/g), (m) => tagAt(read(f), m.index ?? 0));
     expect(tags.filter((t) => /\binModal\b/.test(t))).toHaveLength(n);
