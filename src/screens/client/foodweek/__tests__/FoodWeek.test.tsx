@@ -8,7 +8,7 @@
 import fs from 'fs';
 import path from 'path';
 import React from 'react';
-import { StyleSheet } from 'react-native';
+import { processColor, StyleSheet } from 'react-native';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { gold } from '../../../../theme/tokens';
@@ -60,6 +60,24 @@ const nav = jest.requireMock('@react-navigation/native').__nav as { listeners: A
 const HIDDEN = { includeHiddenElements: true } as const;
 const SRC = path.resolve(__dirname, '..', '..', '..', '..');
 const flat = (el: { props: { style?: unknown } }) => (StyleSheet.flatten(el.props.style as never) ?? {}) as Record<string, unknown>;
+// An svg fill arrives processed ({ type, payload }); compare it with the token the same way.
+const fillOf = (el: { props: { fill?: unknown } } | null) => {
+  const f = el?.props.fill as { payload?: unknown } | string | undefined;
+  return f && typeof f === 'object' && 'payload' in f ? f.payload : f;
+};
+const GOLD = processColor(gold[300]);
+type JsonNode = { type: string; props: Record<string, unknown>; children: Array<JsonNode | string> | null };
+const textNodes = () => {
+  const out: JsonNode[] = [];
+  const walk = (node: JsonNode | JsonNode[] | string | null) => {
+    if (!node || typeof node === 'string') return;
+    if (Array.isArray(node)) { node.forEach(walk); return; }
+    if (node.type === 'Text') out.push(node);
+    (node.children ?? []).forEach(walk);
+  };
+  walk(screen.toJSON() as JsonNode | JsonNode[] | null);
+  return out;
+};
 
 // ---------- fixtures (fictional: client Jordan, coach Sam) ----------
 const DAYS = ['2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10', '2026-10-11', '2026-10-12', '2026-10-13'];
@@ -162,7 +180,7 @@ describe.each(SIZES)('S1 to S3 at %s', (_size, dims) => {
   beforeEach(() => { mockDims = { ...dims }; });
 
   it('2. S1: the range, the title, the average without today, seven rows oldest first', async () => {
-    mount();
+    await mount();
     expect(await screen.findByText('1,860 kcal and 138 g protein a day, on average.')).toBeTruthy();
     expect(screen.getByRole('header', { name: 'This week' })).toBeTruthy();
     const range = screen.getByText('October 7 to 13');
@@ -176,7 +194,7 @@ describe.each(SIZES)('S1 to S3 at %s', (_size, dims) => {
   });
 
   it('3. dots: 4 of 4 on Wednesday, 2 of 4 on Friday, the Food day\'s rule; each row one sentence, dots hidden', async () => {
-    mount();
+    await mount();
     await waitFor(() => expect(row(DAYS[2]).props.accessibilityLabel).toBe('Friday, 2 of 4, 2,140 kcal, 128 g protein'));
     expect([dotsOf(DAYS[0], 'done'), dotsOf(DAYS[0], 'open')]).toEqual([4, 0]);
     expect([dotsOf(DAYS[2], 'done'), dotsOf(DAYS[2], 'open')]).toEqual([2, 2]);
@@ -198,7 +216,7 @@ describe.each(SIZES)('S1 to S3 at %s', (_size, dims) => {
     ['a coach with the checklist switch off', () => { mockFlags.foodPlanChecklist = false; }],
   ])('4. S2, %s: no eyebrow, no dots, no plan or daily read, no coach, Roman or plan word', async (_name, arrange) => {
     arrange();
-    mount();
+    await mount();
     await waitFor(() => expect(row(DAYS[2]).props.accessibilityLabel).toBe('Friday, 2,140 kcal, 128 g protein'));
     expect(screen.queryByText('Plan meals done', HIDDEN)).toBeNull();
     expect(screen.queryAllByTestId(/^food-week-dot-/, HIDDEN)).toHaveLength(0);
@@ -208,12 +226,12 @@ describe.each(SIZES)('S1 to S3 at %s', (_size, dims) => {
   });
 
   it('5. S1 and S3: the dashed target line and its legend; none without a target; one spoken label', async () => {
-    mount();
+    await mount();
     expect(await screen.findByText('Dashed line: 1,850 kcal target. Gold dot: today so far.')).toBeTruthy();
     const chart = screen.getByRole('image');
     expect(chart.props.accessibilityLabel).toBe('Calories per day against the 1,850 kcal target');
     expect(screen.getByTestId('food-week-target', HIDDEN).props.strokeDasharray).toBeTruthy();
-    expect(screen.getByTestId(`food-week-point-${DAYS[6]}`, HIDDEN).props.fill).toBe(gold[300]);
+    expect(fillOf(screen.getByTestId(`food-week-point-${DAYS[6]}`, HIDDEN))).toBe(GOLD);
     expect(screen.getAllByRole('image')).toHaveLength(1);
   });
 
@@ -222,7 +240,7 @@ describe.each(SIZES)('S1 to S3 at %s', (_size, dims) => {
     ['a failed target read', () => Promise.reject(new Error('boom'))],
   ])('5. S3 with %s: no dashed line, "Gold dot: today so far."', async (_name, target) => {
     serve({ target });
-    mount();
+    await mount();
     expect(await screen.findByText('Gold dot: today so far.')).toBeTruthy();
     expect(screen.queryByTestId('food-week-target', HIDDEN)).toBeNull();
     expect(screen.getByRole('image').props.accessibilityLabel).toBe('Calories per day');
@@ -234,7 +252,7 @@ describe('6. S4, S5 and S10: a day with nothing, a day with no plan, a week with
   it('S4: "Nothing yet", no point, the line breaks; its dots still follow its plan, all open', async () => {
     serve({ weekly: () => Promise.resolve({ data: weeklyRows().filter((r) => r.date !== DAYS[3]) }),
       daily: (date) => Promise.resolve({ data: { entries: date === DAYS[3] ? [] : dailyFor(date) } }) });
-    mount();
+    await mount();
     await waitFor(() => expect(row(DAYS[3]).props.accessibilityLabel).toBe('Saturday, 0 of 4, nothing yet'));
     expect(within(row(DAYS[3])).getByText('Nothing yet', HIDDEN)).toBeTruthy();
     expect(screen.queryByTestId(`food-week-point-${DAYS[3]}`, HIDDEN)).toBeNull();
@@ -243,14 +261,14 @@ describe('6. S4, S5 and S10: a day with nothing, a day with no plan, a week with
   });
   it('S5: a day with no plan has no dots; its numbers stay', async () => {
     serve({ plan: (date) => Promise.resolve({ data: date === DAYS[4] ? { date, assignments: [] } : planFor(date) }) });
-    mount();
+    await mount();
     await waitFor(() => expect(row(DAYS[4]).props.accessibilityLabel).toBe('Sunday, 1,610 kcal, 118 g protein'));
     expect(within(row(DAYS[4])).queryAllByTestId(/^food-week-dot-/, HIDDEN)).toHaveLength(0);
     expect(within(row(DAYS[4])).getByText('1,610 kcal, 118 g', HIDDEN)).toBeTruthy();
   });
   it('S10: no entries all week: no chart, legend, average or footnote; seven "Nothing yet"', async () => {
     serve({ weekly: () => Promise.resolve({ data: [] }) });
-    mount();
+    await mount();
     await waitFor(() => expect(screen.getAllByText('Nothing yet', HIDDEN)).toHaveLength(7));
     expect(screen.queryByRole('image')).toBeNull();
     expect(screen.queryByText(/Gold dot|Dashed line/)).toBeNull();
@@ -261,10 +279,10 @@ describe('6. S4, S5 and S10: a day with nothing, a day with no plan, a week with
 
 describe('7. S6: an earlier range', () => {
   it('Previous week reads the seven days before; "Earlier week"; Next week shows and returns; none on the current range', async () => {
-    mount();
+    await mount();
     await screen.findByText('1,860 kcal and 138 g protein a day, on average.');
     expect(screen.queryByLabelText('Next week', HIDDEN)).toBeNull();
-    fireEvent.press(screen.getByLabelText('Previous week'));
+    await fireEvent.press(screen.getByLabelText('Previous week'));
     expect(await screen.findByRole('header', { name: 'Earlier week' })).toBeTruthy();
     expect(logApi.getWeekly).toHaveBeenLastCalledWith('2026-09-30');
     await waitFor(() => expect(logApi.getDaily).toHaveBeenCalledTimes(14));
@@ -276,11 +294,11 @@ describe('7. S6: an earlier range', () => {
     expect(screen.queryByText('This week')).toBeNull();
     // Every day counts on an earlier range: 12,370 / 7 = 1,767 kcal and 915 / 7 = 131 g.
     await screen.findByText('1,767 kcal and 131 g protein a day, on average.');
-    expect(screen.queryByTestId(`food-week-point-${EARLIER[6]}`, HIDDEN)?.props.fill).not.toBe(gold[300]);
+    expect(fillOf(screen.getByTestId(`food-week-point-${EARLIER[6]}`, HIDDEN))).not.toBe(GOLD); // no gold point on an earlier range
     expect(screen.getByText('Dashed line: 1,850 kcal target.')).toBeTruthy();
     expect(screen.queryByText(/Gold dot/)).toBeNull();
     expect(screen.queryByText('Average leaves out today until the day ends.')).toBeNull();
-    fireEvent.press(screen.getByLabelText('Next week'));
+    await fireEvent.press(screen.getByLabelText('Next week'));
     expect(await screen.findByRole('header', { name: 'This week' })).toBeTruthy();
     expect(screen.queryByLabelText('Next week', HIDDEN)).toBeNull();
   });
@@ -290,9 +308,9 @@ describe('8. S7: loading', () => {
   it('the row, range and title at once; still blocks read once as "Loading your week"; a new range shows no old number', async () => {
     let release: (v: unknown) => void = () => undefined;
     serve({ weekly: (start) => (start === DAYS[0] ? Promise.resolve({ data: weeklyRows() }) : new Promise((r) => { release = r; })) });
-    mount();
+    await mount();
     await screen.findByText('1,860 kcal and 138 g protein a day, on average.');
-    fireEvent.press(screen.getByLabelText('Previous week'));
+    await fireEvent.press(screen.getByLabelText('Previous week'));
     expect(await screen.findByLabelText('Loading your week')).toBeTruthy();
     expect(screen.getAllByLabelText('Loading your week', HIDDEN)).toHaveLength(1);
     expect(screen.getByRole('header', { name: 'Earlier week' })).toBeTruthy();
@@ -308,13 +326,13 @@ describe('9. S8 and S9: a read that failed is never a zero', () => {
     let fail = true;
     serve({ weekly: () => (fail ? Promise.reject(Object.assign(new Error('Network Error'), { isAxiosError: true }))
       : Promise.resolve({ data: weeklyRows() })) });
-    mount();
+    await mount();
     expect(await screen.findByText('Your week could not load. Check your connection, then try again.')).toBeTruthy();
     expect(screen.getByRole('header', { name: 'This week' })).toBeTruthy();
     expect(screen.queryByText(/kcal|Nothing yet|on average/, HIDDEN)).toBeNull();
     const daily = jest.mocked(logApi.getDaily).mock.calls.length;
     fail = false;
-    fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
     expect(await screen.findByText('1,860 kcal and 138 g protein a day, on average.')).toBeTruthy();
     expect(logApi.getWeekly).toHaveBeenCalledTimes(2);
     await waitFor(() => expect(jest.mocked(logApi.getDaily).mock.calls.length).toBeGreaterThan(daily));
@@ -324,7 +342,7 @@ describe('9. S8 and S9: a read that failed is never a zero', () => {
     ['plan', { plan: (date: string) => (date === '2026-10-09' ? Promise.reject(new Error('boom')) : Promise.resolve({ data: planFor(date) })) }],
   ])('S9: Friday\'s %s read failed: no dots and no count on Friday, its numbers kept; pull to refresh retries', async (_n, over) => {
     serve(over as Serve);
-    mount();
+    await mount();
     await waitFor(() => expect(row(DAYS[0]).props.accessibilityLabel).toBe('Wednesday, 4 of 4, 1,820 kcal, 146 g protein'));
     await waitFor(() => expect(row(DAYS[2]).props.accessibilityLabel).toBe('Friday, 2,140 kcal, 128 g protein'));
     expect(within(row(DAYS[2])).queryAllByTestId(/^food-week-dot-/, HIDDEN)).toHaveLength(0);
@@ -340,7 +358,7 @@ describe('9. S8 and S9: a read that failed is never a zero', () => {
 
 describe('10. back on the page after logging a food elsewhere', () => {
   it('today\'s numbers, dots and point are read again', async () => {
-    mount();
+    await mount();
     await waitFor(() => expect(row(DAYS[6]).props.accessibilityLabel).toBe('Tuesday, 2 of 4, 1,210 kcal, 87 g protein'));
     const later = NUMBERS.map((x, i) => (i === 6 ? [1660, 122] : x)) as Array<[number, number]>;
     serve({ weekly: () => Promise.resolve({ data: weeklyRows(DAYS, later) }),
@@ -348,7 +366,7 @@ describe('10. back on the page after logging a food elsewhere', () => {
     expect(nav.listeners.length).toBeGreaterThan(0);
     await act(async () => { nav.listeners.forEach((cb) => cb()); });
     await waitFor(() => expect(row(DAYS[6]).props.accessibilityLabel).toBe('Tuesday, 3 of 4, 1,660 kcal, 122 g protein'));
-    expect(screen.getByTestId(`food-week-point-${DAYS[6]}`, HIDDEN).props.fill).toBe(gold[300]);
+    expect(fillOf(screen.getByTestId(`food-week-point-${DAYS[6]}`, HIDDEN))).toBe(GOLD);
   });
 });
 
@@ -356,12 +374,13 @@ describe('11. 320 x 568 at 130%: nothing cut, every control 44 pt, a row wraps r
   it.each([[true], [false]])('coached=%s', async (coached) => {
     mockDims = { width: 320, height: 568, scale: 2, fontScale: 1.3 };
     mockUser = { id: 'jordan', coach_id: coached ? 'sam' : null };
-    mount();
+    await mount();
     await screen.findByText('1,860 kcal and 138 g protein a day, on average.');
-    fireEvent.press(screen.getByLabelText('Previous week'));
+    await fireEvent.press(screen.getByLabelText('Previous week'));
     await screen.findByRole('header', { name: 'Earlier week' });
     await screen.findByText('1,767 kcal and 131 g protein a day, on average.');
-    for (const t of screen.UNSAFE_root.findAll((n) => typeof n.type === 'string' && n.type === 'Text')) {
+    expect(textNodes().length).toBeGreaterThan(10);
+    for (const t of textNodes()) {
       expect(t.props.numberOfLines).toBeUndefined();
       expect(t.props.adjustsFontSizeToFit).toBeUndefined();
     }
@@ -370,7 +389,7 @@ describe('11. 320 x 568 at 130%: nothing cut, every control 44 pt, a row wraps r
       expect(Number(s.minHeight ?? s.height)).toBeGreaterThanOrEqual(44);
       expect(Number(s.minWidth ?? s.width ?? 44)).toBeGreaterThanOrEqual(44);
     }
-    expect(flat(row(DAYS[2])).flexWrap).toBe('wrap');
+    expect(flat(row(EARLIER[2])).flexWrap).toBe('wrap');
   });
 });
 
@@ -379,6 +398,7 @@ describe('12. guards on the new files', () => {
     const text = fs.readFileSync(path.join(SRC, file), 'utf8');
     expect(text).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
     expect(text).not.toMatch(/\brgba?\(/);
-    expect(text).not.toMatch(/sage|success\.bg|primaryPale|brand\[50\]/);
+    // The census's own pattern (schemePanels994.test.tsx): the family names as words.
+    expect(text).not.toMatch(/(^|[^A-Za-z])(sage|sageLine)([^A-Za-z]|$)|success\.bg|successBg|primaryPale|brand\[50\]/);
   });
 });
