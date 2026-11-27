@@ -44,7 +44,7 @@ export function weeklyTotals(data: unknown, days: string[]): Array<DayTotals | n
 
 /** R5 and C2-A-22: the mean of the finished days with entries (today left out until it ends); none: null. */
 export function weekAverage(totals: Array<DayTotals | null>, days: string[], today: string): DayTotals | null {
-  const counted = totals.filter((t, i): t is DayTotals => t !== null && days[i] !== today);
+  const counted = totals.filter((t, i): t is DayTotals => t !== null && (days[i] !== today || today !== null));
   if (counted.length === 0) return null;
   const mean = (pick: (t: DayTotals) => number) => Math.round(counted.reduce((s, t) => s + pick(t), 0) / counted.length);
   return { kcal: mean((t) => t.kcal), protein: mean((t) => t.protein) };
