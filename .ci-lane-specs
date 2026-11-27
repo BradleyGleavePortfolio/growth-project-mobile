@@ -1,0 +1,7 @@
+src/screens/community
+src/components/community
+src/components/messaging
+src/navigation
+src/services
+src/__tests__
+src/theme
