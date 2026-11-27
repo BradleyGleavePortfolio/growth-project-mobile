@@ -5,6 +5,9 @@
  * sheet on Messages). Copy never says "your coach": there is none yet.
  * COMMUNITY-DM-FORMER-REACH-M (owner ALM-D5: "as it shows in style C for v1"; 203-D12): on Community, her one former
  * coach's card (Style 3 S3_nocoach, in row 1b's form) sits under the line, and it opens that one thread here.
+ * FIX-DMFR-M-1 (OPERATOR RULING 7213408207 item 2): the card follows the phone's DM switch like every other DM entry
+ * (C4); the terms pages in front of the thread carry Back to this page (C1); Android's back is heard only while the
+ * Community tab is in front (C6).
  */
 import React, { useContext, useEffect, useReducer, useState } from 'react';
 import { BackHandler, StyleSheet, View } from 'react-native';
@@ -18,6 +21,7 @@ import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachlessClient } from '../../hooks/useCoachlessClient';
 import { readUserCacheSync } from '../../lib/userCache';
+import { featureFlags } from '../../config/featureFlags';
 import { layout, spacing } from '../../theme/tokens';
 import { useCommunityMe } from '../../hooks/useCommunity';
 import CommunityTermsGate from '../community/CommunityTermsGate';
@@ -127,23 +131,50 @@ export function CoachOnlyGate({
   return <>{children}</>;
 }
 
+/** The locked page: with the phone's DM switch off it is the page as before (no card, no /me read), as every other DM
+ * entry is behind featureFlags.communityDm (C4). */
+function CoachlessLock(props: Pick<JoinCoachStateProps, 'title' | 'body' | 'testID'>): React.ReactElement {
+  if (!featureFlags.communityDm) return <JoinCoachState {...props} edges={['top']} />;
+  return <CoachlessLockWithFormer {...props} />;
+}
+
+/** Whether this tab is in front: its navigator's focus and blur (no navigator: in front). */
+function useTabInFront(): boolean {
+  const navigation = useContext(NavigationContext);
+  const [inFront, setInFront] = useState(true);
+  useEffect(() => {
+    if (typeof navigation?.addListener !== 'function') return undefined;
+    setInFront(navigation.isFocused?.() ?? true);
+    const offFocus = navigation.addListener('focus', () => setInFront(true));
+    const offBlur = navigation.addListener('blur', () => setInFront(false));
+    return () => {
+      offFocus();
+      offBlur();
+    };
+  }, [navigation]);
+  return inFront;
+}
+
 /** ALM-D5: the locked page with her former coach's card (GET /community/me former_coach_dms[0]); the card opens that
- * thread in this tab, behind the community terms, and Back (Android's too) returns to the page. */
-function CoachlessLock({ title, body, testID = 'join-coach-state' }: Pick<JoinCoachStateProps, 'title' | 'body' | 'testID'>): React.ReactElement {
+ * thread in this tab, behind the community terms, and Back (the terms pages', the thread's, Android's) returns to the
+ * page. */
+function CoachlessLockWithFormer({ title, body, testID = 'join-coach-state' }: Pick<JoinCoachStateProps, 'title' | 'body' | 'testID'>): React.ReactElement {
   const former = useFormerCoach(useCommunityMe().data, null);
   const [openWith, setOpenWith] = useState<string | null>(null);
+  const inFront = useTabInFront();
   useEffect(() => {
-    if (!openWith) return undefined;
+    if (!openWith || !inFront) return undefined; // C6: another tab's Back is that tab's
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       setOpenWith(null);
       return true;
     });
     return () => sub.remove();
-  }, [openWith]);
+  }, [openWith, inFront]);
   if (openWith) {
+    const back = () => setOpenWith(null);
     return (
-      <CommunityTermsGate>
-        <CommunityDmThreadScreen inGate={{ recipientId: openWith, onBack: () => setOpenWith(null) }} />
+      <CommunityTermsGate onBack={back}>
+        <CommunityDmThreadScreen inGate={{ recipientId: openWith, onBack: back }} />
       </CommunityTermsGate>
     );
   }

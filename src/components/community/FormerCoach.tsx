@@ -35,6 +35,9 @@ import { dmActivity } from './DmRow';
 
 /** W1 / W11 (approved, operator #203-E15): the relation, and the title when the phone has no name. */
 export const FORMER_COACH = 'Former coach';
+/** The closed page's row label (reused, approved elsewhere). W13 (OPERATOR RULING 7213408207 item 3): the row says its
+ * visible words in reading order, "Your coach, {her coach's name}". */
+const YOUR_COACH = 'Your coach';
 /** W2 (approved, operator #203-E15): the coach's row for a client who left. */
 export const FORMER_CLIENT = 'Former client';
 /** W7 (approved, operator #203-E15): the closed page's line; true for removed, banned and gone alike. */
@@ -63,13 +66,19 @@ export function useFormerCoach(me: CommunityMeResponse | undefined, myCoachId: s
 }
 
 /** The thread's former coach: listed by /me for this person, then held for the visit, so a thread the server stops
- * listing keeps its page and community, and the server's own refusal of the read closes it. */
-export function useFormerThread(me: CommunityMeResponse | undefined, myCoachId: string | null | undefined, recipientId: string): FormerCoach | null {
+ * listing keeps its page and community. FIX-DMFR-M-1 C3 (OPERATOR RULING 7213408207 item 2): when a later /me read no
+ * longer lists her (his block, a ban, a removal), `gone` is true and the thread closes; the thread is read once more so
+ * the server's refusal can say who closed it. Never for her coach now (she joined him again: not a closed thread). */
+export function useFormerThread(me: CommunityMeResponse | undefined, myCoachId: string | null | undefined, recipientId: string): {
+  former: FormerCoach | null;
+  gone: boolean;
+} {
   const listed = formerCoachOf(me, myCoachId);
   const now = listed && listed.coachId === recipientId ? listed : null;
   const [held, setHeld] = useState<FormerCoach | null>(now);
   if (now && (held?.coachId !== now.coachId || held.workspaceId !== now.workspaceId || held.name !== now.name)) setHeld(now);
-  return now ?? (held?.coachId === recipientId ? held : null);
+  const kept = held?.coachId === recipientId ? held : null;
+  return { former: now ?? kept, gone: !now && !!kept && !!me && recipientId !== myCoachId };
 }
 
 const spoken = (line: string) => line.charAt(0).toLowerCase() + line.slice(1);
@@ -141,7 +150,8 @@ export function FormerCoachPaper({ children }: { children: React.ReactNode }): R
 }
 
 /** Closed (S3_closed): the title, one line that names no reason, and her coach now, when she has one. A block keeps
- * its own approved line (#169-5: who closed it) under the same title. */
+ * its own approved line (#169-5: who closed it) under the same title, when that line says more than the title: BAM-2a,
+ * or BAM-2b with his name. With no name to say, W7 (C2: the title is never said twice). */
 export function FormerCoachClosed({ by, name, coachName, onCoach }: {
   by: ClosedBy;
   name: string | null;
@@ -149,20 +159,21 @@ export function FormerCoachClosed({ by, name, coachName, onCoach }: {
   /** Opens her coach's thread; omitted with no coach (the row and button are not drawn). */
   onCoach?: () => void;
 }): React.ReactElement {
+  const saysWho = by === 'me' || (by === 'them' && !!name?.trim());
   return (
     <View style={s.closed} testID="former-thread-closed">
       <View style={s.closedTop}>
         <Text style={s.closedTitle} accessibilityRole="header">{CLOSED_LINE}</Text>
-        {by ? (
+        {saysWho ? (
           <ConversationClosedLine by={by} name={name} style={s.closedBar} testID="former-thread-closed-by" />
         ) : (
           <Text style={s.closedLine} accessibilityLiveRegion="polite">{FORMER_CLOSED_LINE}</Text>
         )}
         {onCoach ? (
           <HapticPressable intent="light" onPress={onCoach} accessibilityRole="button"
-            accessibilityLabel={coachName ? `Open conversation with ${coachName}, your coach` : 'Open conversation with your coach'}
+            accessibilityLabel={coachName ? `${YOUR_COACH}, ${coachName}` : YOUR_COACH}
             style={s.olr} testID="former-thread-closed-coach">
-            <Text style={s.olrLabel}>Your coach</Text>
+            <Text style={s.olrLabel}>{YOUR_COACH}</Text>
             <Text style={s.olrValue} numberOfLines={1}>{coachName ?? ''}</Text>
             <Ionicons name="chevron-forward" size={20} color={fp.n700} />
           </HapticPressable>

@@ -51,7 +51,7 @@ jest.mock('../../../storage/mmkv', () => ({
     delete: async (k: string) => { mockDisk.delete(k); },
     getAllKeys: async () => [...mockDisk.keys()],
   },
-  prefsStorage: { getString: () => undefined, set: () => undefined },
+  prefsStorage: { getString: () => undefined, getStringAsync: async () => undefined, set: () => undefined },
 }));
 jest.mock('../../../api/communityRealtime', () => new Proxy({ __esModule: true }, {
   get: (target, key) => (key in target ? target[key as keyof typeof target] : () => () => undefined),
@@ -63,10 +63,16 @@ jest.mock('../../../hooks/useCoachlessClient', () => ({ useCoachlessClient: () =
 jest.mock('../../../lib/userCache', () => ({ ...jest.requireActual('../../../lib/userCache'), readUserCacheSync: () => null }));
 jest.mock('../../../entitlements/EntitlementProvider', () => ({ useEntitlement: () => ({ messageCoach: jest.fn() }) }));
 // The terms gate is its own suite (CommunityTermsGate.test.tsx); here it marks that the locked page's thread is behind it.
+// FIX-DMFR-M-1 C1 draws the real gate (mockRealGate) to show its pages' Back in front of the locked page's thread.
+let mockRealGate = false;
 jest.mock('../../../components/community/CommunityTermsGate', () => {
   const R = require('react');
   const { View } = require('react-native');
-  return { __esModule: true, default: ({ children }: { children: React.ReactNode }) => R.createElement(View, { testID: 'terms-gate' }, children) };
+  const Real = jest.requireActual('../../../components/community/CommunityTermsGate').default;
+  return {
+    __esModule: true,
+    default: (p: { children: React.ReactNode }) => (mockRealGate ? R.createElement(Real, p) : R.createElement(View, { testID: 'terms-gate' }, p.children)),
+  };
 });
 const mockNav = { navigate: jest.fn(), goBack: jest.fn(), replace: jest.fn(), addListener: () => () => undefined, setOptions: () => undefined };
 let mockParams: Record<string, unknown> = {};
@@ -159,6 +165,7 @@ beforeEach(() => {
   for (const k of Object.keys(mockMenus)) delete mockMenus[k];
   mockUser = { id: CLIENT, role: 'student', name: 'Dana Cruz', firstName: 'Dana', coach_id: LEE };
   mockCoachless = false;
+  mockRealGate = false;
   useBlockedUsersStore.setState({ blocked: [] });
   qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 0, gcTime: Infinity } } });
 });
@@ -270,7 +277,8 @@ describe('the thread (Style 3 S3_thread: a Style C page)', () => {
     await waitFor(() => expect(within(page).getByText('Lee Tanaka')).toBeTruthy());
     expect(view.queryByTestId('community-dmthread-composer')).toBeNull();
     expect(view.queryByTestId('former-thread-about')).toBeNull();
-    expect(view.getByTestId('former-thread-closed-coach').props.accessibilityLabel).toBe('Open conversation with Lee Tanaka, your coach');
+    // W13 (OPERATOR RULING 7213408207 item 3): the row says its visible words in reading order.
+    expect(view.getByTestId('former-thread-closed-coach').props.accessibilityLabel).toBe('Your coach, Lee Tanaka');
     await fireEvent.press(view.getByTestId('former-thread-closed-action'));
     expect(mockNav.replace).toHaveBeenCalledWith('CommunityDmThread', { recipientId: LEE });
   });
@@ -413,5 +421,241 @@ describe('LO-DMFR-M-1 B1: a saved roster from before a client joined', () => {
     expect(within(sam).getByText('Sam Rivera')).toBeTruthy();
     expect(within(sam).queryByText('Former client')).toBeNull();
     expect(sam.props.accessibilityLabel).toBe('Open conversation with Sam Rivera');
+  });
+});
+
+// FIX-DMFR-M-1 (fix round 1, OPERATOR RULING 7213408207 items 1-4): one row per finding.
+describe('FIX-DMFR-M-1 B1 class: "Former client" only from a roster read in this visit, read again for a new arrival', () => {
+  const COACH_ME = { ...OLD_ME, workspace_id: WS2, membership: null };
+  const ROSTER_KEY = ['coach', 'dm-roster', MAYA];
+  const SAVED = { [JORDAN]: { name: 'Jordan Lee', archived: false } }; // the roster the phone saved before Sam joined
+  const client = (id: string, name: string) => ({ id, name, archived_at: null });
+  let threads: unknown[] = [];
+  const coachServe = () => {
+    mockGet.mockImplementation(async (url: string) => {
+      const key = url.split('?')[0];
+      if (key === '/community/me') return { data: COACH_ME, headers: {} };
+      if (key === `/community/workspaces/${WS2}/dms`) return { data: { threads }, headers: {} };
+      throw notFound();
+    });
+  };
+  const row = (view: ReturnType<typeof render>, id: string) => view.getByTestId(`coach-dm-row-${id}`);
+  const chip = (view: ReturnType<typeof render>, id: string) => within(row(view, id)).queryByText('Former client');
+  const arrive = async (next: unknown[]) => {
+    threads = next;
+    await act(async () => { await qc.invalidateQueries({ queryKey: ['community'] }); });
+  };
+  type Case = { name: string; run: () => Promise<void> };
+  const cases: Case[] = [
+    { name: 'a saved roster whose read is still out: no chip on anyone (LO B-TEST shape)', run: async () => {
+      qc.setQueryData(ROSTER_KEY, SAVED, { updatedAt: NOW - 3_600_000 });
+      mockGetClients.mockImplementation(() => new Promise(() => {}));
+      threads = [thread(WS2, SAM, ago(2), { other_display_name: 'Sam Rivera' })];
+      const view = await wrap(<CoachDmListScreen />);
+      await waitFor(() => expect(row(view, SAM)).toBeTruthy());
+      expect(chip(view, SAM)).toBeNull();
+      expect(row(view, SAM).props.accessibilityLabel).toBe('Open conversation with Sam Rivera');
+    } },
+    { name: 'a saved roster whose read fails: the list stays, and no chip for the whole visit', run: async () => {
+      qc.setQueryData(ROSTER_KEY, SAVED, { updatedAt: NOW - 3_600_000 });
+      mockGetClients.mockRejectedValue(new Error('offline'));
+      threads = [thread(WS2, SAM, ago(2), { other_display_name: 'Sam Rivera' }), thread(WS2, JORDAN, ago(60))];
+      const view = await wrap(<CoachDmListScreen />);
+      await waitFor(() => expect(row(view, SAM)).toBeTruthy());
+      await waitFor(() => expect(qc.getQueryState(ROSTER_KEY)?.status).toBe('error'));
+      expect(chip(view, SAM)).toBeNull();
+      expect(within(row(view, SAM)).getByText('Sam Rivera')).toBeTruthy(); // the server's name, as before this PR
+      expect(within(row(view, JORDAN)).getByText('Jordan Lee')).toBeTruthy(); // names still come from the saved roster
+      expect(mockGetClients).toHaveBeenCalledTimes(1);
+    } },
+    { name: 'a roster read in this visit without her: "Former client", and no second roster read', run: async () => {
+      mockGetClients.mockResolvedValue({ data: [client(JORDAN, 'Jordan Lee')] });
+      threads = [thread(WS2, SAM, ago(2), { other_display_name: 'Sam Rivera' }), thread(WS2, JORDAN, ago(60))];
+      const view = await wrap(<CoachDmListScreen />);
+      await waitFor(() => expect(chip(view, SAM)).toBeTruthy());
+      expect(chip(view, JORDAN)).toBeNull();
+      await act(async () => Promise.resolve());
+      expect(mockGetClients).toHaveBeenCalledTimes(1);
+    } },
+    { name: 'her first message arrives while the list is open: the roster is read again and has her, so no chip', run: async () => {
+      mockGetClients.mockResolvedValue({ data: [client(JORDAN, 'Jordan Lee')] });
+      threads = [thread(WS2, JORDAN, ago(60))];
+      const view = await wrap(<CoachDmListScreen />);
+      await waitFor(() => expect(row(view, JORDAN)).toBeTruthy());
+      mockGetClients.mockResolvedValue({ data: [client(SAM, 'Sam Rivera'), client(JORDAN, 'Jordan Lee')] });
+      await arrive([thread(WS2, SAM, ago(0), { other_display_name: 'Sam Rivera' }), thread(WS2, JORDAN, ago(60))]);
+      await waitFor(() => expect(row(view, SAM)).toBeTruthy());
+      expect(chip(view, SAM)).toBeNull();
+      await waitFor(() => expect(mockGetClients).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(within(row(view, SAM)).getByText('Sam Rivera')).toBeTruthy());
+      expect(chip(view, SAM)).toBeNull();
+    } },
+    { name: 'a client who left writes while the list is open: "Former client" once the roster read again leaves her out', run: async () => {
+      mockGetClients.mockResolvedValue({ data: [client(JORDAN, 'Jordan Lee')] });
+      threads = [];
+      const view = await wrap(<CoachDmListScreen />);
+      await waitFor(() => expect(view.getByTestId('coach-dm-list-empty')).toBeTruthy()); // the visit's first list is empty
+      await arrive([thread(WS2, SAM, ago(0), { other_display_name: 'Sam Rivera' })]);
+      await waitFor(() => expect(mockGetClients).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(chip(view, SAM)).toBeTruthy());
+      expect(row(view, SAM).props.accessibilityLabel).toBe('Open conversation with Sam Rivera, former client');
+    } },
+  ];
+  it.each(cases.map((c) => [c.name, c]))('B1 class: %s', async (_n, c) => {
+    mockUser = { id: MAYA, role: 'coach', name: 'Maya Brooks', firstName: 'Maya' };
+    coachServe();
+    await (c as Case).run();
+  });
+});
+
+describe('FIX-DMFR-M-1 C1-C6 and the words (OPERATOR RULING 7213408207 items 2-4)', () => {
+  const lock = () => wrap(
+    <CoachOnlyGate title={COMMUNITY_LOCK_TITLE} body={COMMUNITY_LOCK_BODY} testID="community-coach-lock"><Text>the stack</Text></CoachOnlyGate>,
+  );
+  const COACHLESS_ME = { ...OLD_ME, workspace_id: null, membership: null, former_coach_dms: [formerItem(WS2, MAYA, 'Maya Brooks')] };
+  const coachless = () => {
+    mockUser = { id: CLIENT, role: 'student', name: 'Dana Cruz', firstName: 'Dana' };
+    mockCoachless = true;
+  };
+
+  it.each([
+    ['the guidelines (her saved agreement does not cover them)', { consent_recorded: false, answers: {} }, 'community-terms-gate'],
+    ['"Your community did not load" (her record cannot be read)', undefined, 'community-terms-unknown'],
+  ])('C1: Back on the terms page in front of the locked page\'s thread: %s', async (_n, record, page) => {
+    coachless();
+    mockRealGate = true;
+    serve({ ...BASE, '/community/me': COACHLESS_ME, [mayaMsgs]: MAYA_MSGS, ...(record ? { '/me/onboarding': record } : {}) });
+    const view = await lock();
+    await fireEvent.press(await waitFor(() => view.getByTestId('community-coach-lock-former')));
+    await waitFor(() => expect(view.getByTestId(page)).toBeTruthy());
+    expect(view.queryByText('Same time next Saturday?')).toBeNull(); // nothing of the thread before the terms
+    await fireEvent.press(view.getByTestId('community-terms-back'));
+    expect(view.getByText(COMMUNITY_LOCK_TITLE)).toBeTruthy();
+    expect(view.getByTestId('community-coach-lock-former')).toBeTruthy();
+    expect(mockNav.goBack).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['nobody named (removed, banned, gone)', null, 'Maya Brooks', FORMER_CLOSED_LINE],
+    ['I blocked him', 'me', 'Maya Brooks', 'You blocked them. Unblock in Settings'],
+    ['he blocked me, his name known', 'them', 'Maya Brooks', 'Maya Brooks has blocked you'],
+    ['he blocked me, no name (the server today)', 'them', null, FORMER_CLOSED_LINE],
+  ])('C2: the closed page says "This conversation is closed" once: %s', async (_n, by, name, line) => {
+    const { FormerCoachClosed } = require('../../../components/community/FormerCoach');
+    const view = await wrap(<FormerCoachClosed by={by} name={name} coachName="Lee Tanaka" onCoach={() => undefined} />);
+    expect(view.getAllByText(CLOSED_LINE)).toHaveLength(1);
+    expect(view.getByText(line)).toBeTruthy();
+  });
+
+  it.each([
+    ['nobody named (a ban, a removal)', closedErr, FORMER_CLOSED_LINE],
+    ['his block', () => Object.assign(new Error('HTTP 403'), { isAxiosError: true, response: { status: 403, data: { code: 'community.dm.blocked_by_them' } } }), 'Maya Brooks has blocked you'],
+  ])('C3: an open thread closes when /me read again no longer lists her old coach: %s', async (_n, refusal, line) => {
+    serve({ ...BASE, '/community/me': ME, [mayaMsgs]: MAYA_MSGS });
+    const view = await openThread(MAYA);
+    await waitFor(() => expect(view.getByTestId('community-dmthread-composer')).toBeTruthy());
+    const reads = () => mockGet.mock.calls.filter((c) => c[0].split('?')[0] === mayaMsgs).length;
+    const before = reads();
+    serve({ ...BASE, '/community/me': { ...ME, former_coach_dms: [] }, [mayaMsgs]: () => { throw refusal(); } });
+    await act(async () => { await qc.invalidateQueries({ queryKey: ['community', 'me'] }); }); // the 60 s read of /me
+    const page = await waitFor(() => view.getByTestId('former-thread-closed'));
+    expect(view.queryByTestId('community-dmthread-composer')).toBeNull();
+    expect(view.queryByText('Same time next Saturday?')).toBeNull();
+    expect(within(view.getByTestId('former-thread-masthead')).getByText('Maya Brooks')).toBeTruthy(); // the page is kept
+    await waitFor(() => expect(within(page).getByText(line)).toBeTruthy());
+    expect(reads()).toBe(before + 1); // the thread read once more, in her former community
+    expect(within(page).getAllByText(CLOSED_LINE)).toHaveLength(1);
+  });
+
+  it('C3: her coach now (she joined him again) is not a closed thread', async () => {
+    serve({ ...BASE, '/community/me': ME, [mayaMsgs]: MAYA_MSGS });
+    const view = await openThread(MAYA);
+    await waitFor(() => expect(view.getByTestId('community-dmthread-composer')).toBeTruthy());
+    mockUser = { id: CLIENT, role: 'student', name: 'Dana Cruz', firstName: 'Dana', coach_id: MAYA };
+    serve({ ...BASE, '/community/me': { ...ME, workspace_id: WS2 }, [mayaMsgs]: MAYA_MSGS });
+    await act(async () => { await qc.invalidateQueries({ queryKey: ['community', 'me'] }); });
+    expect(view.queryByTestId('former-thread-closed')).toBeNull();
+    expect(view.getByTestId('community-dmthread-composer')).toBeTruthy();
+  });
+
+  it.each([
+    ['the phone\'s DM switch off: the locked page as before, with no /me read', false, 'lock'],
+    ['an empty former_coach_dms (b#1260 ruling 7209184240): the locked page', true, 'lock'],
+    ['an empty former_coach_dms: her list', true, 'list'],
+  ])('C4 and item 4: no card anywhere with %s', async (_n, dmOn, where) => {
+    const { featureFlags } = require('../../../config/featureFlags');
+    featureFlags.communityDm = dmOn;
+    try {
+      if (where === 'lock') {
+        coachless();
+        serve({ ...BASE, '/community/me': { ...COACHLESS_ME, ...(dmOn ? { former_coach_dms: [] } : {}) }, [mayaMsgs]: MAYA_MSGS });
+        const view = await lock();
+        expect(view.getByText(COMMUNITY_LOCK_TITLE)).toBeTruthy();
+        if (dmOn) await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/community/me'));
+        await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+        expect(view.queryByTestId('community-coach-lock-former')).toBeNull();
+        if (!dmOn) expect(mockGet).not.toHaveBeenCalledWith('/community/me');
+      } else {
+        serve({ ...BASE, '/community/me': { ...ME, former_coach_dms: [] } });
+        const view = await list();
+        await waitFor(() => expect(view.getByText('Lee Tanaka')).toBeTruthy());
+        expect(view.queryByTestId('dm-former-coach')).toBeNull();
+      }
+    } finally {
+      featureFlags.communityDm = true;
+    }
+  });
+
+  it('C6: Android\'s back closes the locked page\'s thread only while the Community tab is in front', async () => {
+    const { BackHandler } = require('react-native');
+    const { NavigationContext } = require('@react-navigation/native');
+    const live = new Set<() => boolean>();
+    const spy = jest.spyOn(BackHandler, 'addEventListener').mockImplementation((...a: unknown[]) => {
+      const h = a[1] as () => boolean;
+      live.add(h);
+      return { remove: () => { live.delete(h); } };
+    });
+    const listeners: Record<string, Set<() => void>> = { focus: new Set(), blur: new Set() };
+    const tab = {
+      isFocused: () => true,
+      addListener: (e: string, cb: () => void) => { listeners[e]?.add(cb); return () => listeners[e]?.delete(cb); },
+    };
+    const emit = (e: string) => act(async () => { listeners[e].forEach((cb) => cb()); });
+    coachless();
+    serve({ ...BASE, '/community/me': COACHLESS_ME, [mayaMsgs]: MAYA_MSGS });
+    const view = await wrap(
+      <NavigationContext.Provider value={tab}>
+        <CoachOnlyGate title={COMMUNITY_LOCK_TITLE} body={COMMUNITY_LOCK_BODY} testID="community-coach-lock"><Text>the stack</Text></CoachOnlyGate>
+      </NavigationContext.Provider>,
+    );
+    await fireEvent.press(await waitFor(() => view.getByTestId('community-coach-lock-former')));
+    await waitFor(() => expect(view.getByTestId('former-thread-masthead')).toBeTruthy());
+    expect(live.size).toBe(1);
+    await emit('blur'); // she moved to another tab with the thread left open
+    expect(live.size).toBe(0); // another tab's Back is that tab's
+    await emit('focus');
+    expect(live.size).toBe(1);
+    await act(async () => { [...live][0](); });
+    expect(view.getByText(COMMUNITY_LOCK_TITLE)).toBeTruthy();
+    expect(live.size).toBe(0);
+    spy.mockRestore();
+  });
+
+  it('W12 (operator, ruling item 3): the three dots say "About this conversation"', async () => {
+    serve({ ...BASE, '/community/me': ME, [mayaMsgs]: MAYA_MSGS });
+    const view = await openThread(MAYA);
+    await waitFor(() => expect(view.getByText('Same time next Saturday?')).toBeTruthy());
+    expect(view.getByTestId('former-thread-about').props.accessibilityLabel).toBe('About this conversation');
+  });
+
+  it.each([
+    ['her coach\'s name known', 'Lee Tanaka', 'Your coach, Lee Tanaka'],
+    ['no name known yet', null, 'Your coach'],
+  ])('W13 (operator, ruling item 3): the closed page\'s coach row says its visible words in reading order: %s', async (_n, coachName, spoken) => {
+    const { FormerCoachClosed } = require('../../../components/community/FormerCoach');
+    const view = await wrap(<FormerCoachClosed by={null} name={null} coachName={coachName} onCoach={() => undefined} />);
+    const row = view.getByTestId('former-thread-closed-coach');
+    expect(row.props.accessibilityLabel).toBe(spoken);
+    expect(within(row).getByText('Your coach')).toBeTruthy();
   });
 });

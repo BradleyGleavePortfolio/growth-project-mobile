@@ -5,8 +5,12 @@
  * no New message, which could only answer "off"), empty with Message a client, and the rows.
  * COMMUNITY-DM-FORMER-REACH-M (Style 3, S3_coach): the list also holds clients who left and keep their thread (203-D12).
  * They are not on her roster, so the row takes the server's name (other_display_name, b#1253) and "Former client".
+ * FIX-DMFR-M-1 B1 (OPERATOR RULING 7213408207 item 1): "Former client" is said only from a roster read that answered
+ * during this visit (or was still fresh when the list opened), never from the saved copy alone, and a person who first
+ * appears after that read is asked about again (one roster read) before she is called former. Until then the row reads
+ * as before (the server's name, no chip).
  */
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -20,12 +24,52 @@ import { forestPop as fp } from '../../../theme/tokens';
 import type { CoachCommunityNav } from '../coachCommunityNavTypes';
 import { DmState, NO_NAME, OFF_LINE, OFF_TITLE, initialsOf, rosterOf, useCoachDms, useDmRoster, useStudioInk } from './coachDm';
 
+type Roster = ReturnType<typeof useDmRoster>;
+type Threads = ReturnType<typeof useCoachDms>['threads'];
+
+/**
+ * B1: who the held roster may call "Former client". The roster may say so only when it answered during this visit, or
+ * was still fresh when the list opened (the saved copy restored at a cold start is neither). Everyone on the first
+ * thread list of the visit is covered by such a read; a person who first appears in a later thread read (her first
+ * message arrives while the list is open) is covered only by a roster read that answered after it, and the roster is
+ * read again once for her. A failed read keeps the list and says nothing new: the row reads as before.
+ */
+export function useFormerClientCheck(roster: Roster, threads: Threads): (id: string) => boolean {
+  const [openedAt] = useState(() => Date.now());
+  const [freshAtOpen] = useState(() => !!roster.data && !roster.isStale);
+  // Each listed person and the thread read she first appeared in during this visit (0: the visit's first list).
+  const [seen, setSeen] = useState<ReadonlyMap<string, number> | null>(null);
+  const listed = threads.data;
+  if (listed && (!seen || listed.some((t) => !seen.has(t.other_user_id)))) {
+    const next = new Map(seen ?? []);
+    for (const t of listed) if (!next.has(t.other_user_id)) next.set(t.other_user_id, seen ? threads.dataUpdatedAt : 0);
+    setSeen(next);
+  }
+  const held = rosterOf(roster.data);
+  const trusted = !!roster.data && (freshAtOpen || roster.dataUpdatedAt >= openedAt);
+  const coveredAt = (id: string) => seen?.get(id) ?? Infinity;
+  // Listed, not on the held roster, and first listed after that roster answered: read the roster again (once each).
+  const unsure = !roster.data || !seen ? [] : (listed ?? []).map((t) => t.other_user_id)
+    .filter((id) => seen.has(id) && !held.has(id) && roster.dataUpdatedAt < coveredAt(id));
+  const unsureKey = [...new Set(unsure)].join(',');
+  const asked = useRef(new Set<string>());
+  const { isFetching, refetch } = roster;
+  useEffect(() => {
+    const ask = unsureKey ? unsureKey.split(',').filter((id) => !asked.current.has(id)) : [];
+    if (ask.length === 0 || isFetching) return;
+    for (const id of ask) asked.current.add(id);
+    void refetch();
+  }, [unsureKey, isFetching, refetch]);
+  return (id) => trusted && !held.has(id) && coveredAt(id) <= roster.dataUpdatedAt;
+}
+
 export default function CoachDmListScreen(): React.ReactElement {
   const navigation = useNavigation<CoachCommunityNav>();
   const { semanticColors: c } = useTheme();
   const ink = useStudioInk();
   const { me, threads, off } = useCoachDms();
   const roster = useDmRoster();
+  const formerClient = useFormerClientCheck(roster, threads);
   // LS-962R1 C1: a read that failed in the background while its data is held keeps the list (as the thread does).
   const failed = !off && ((me.isError && !me.data) || (threads.isError && !threads.data) || (roster.isError && !roster.data));
   const loading = !off && !failed && (me.isLoading || threads.isLoading || roster.isLoading || !threads.data || !roster.data);
@@ -74,7 +118,7 @@ export default function CoachDmListScreen(): React.ReactElement {
         renderItem={({ item }) => {
           const onRoster = rosterOf(roster.data).get(item.other_user_id);
           // The server lists only her clients and former clients (b#1253), and her roster holds every client, active
-          // and archived: a row that is not on it is a client who left.
+          // and archived: a row that is not on a roster read after it was listed is a client who left (B1).
           const name = onRoster?.name ?? (item.other_display_name?.trim() || null);
           return (
             <DmRow
@@ -82,7 +126,7 @@ export default function CoachDmListScreen(): React.ReactElement {
               participantLabel={name ?? NO_NAME}
               initials={initialsOf(name)}
               chevron
-              relation={onRoster ? undefined : FORMER_CLIENT}
+              relation={formerClient(item.other_user_id) ? FORMER_CLIENT : undefined}
               onPress={() => navigation.navigate('CommunityDmThread', { recipientId: item.other_user_id, ...(name ? { name } : {}) })}
               testID={`coach-dm-row-${item.other_user_id}`}
             />

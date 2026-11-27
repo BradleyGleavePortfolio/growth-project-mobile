@@ -13,7 +13,7 @@
  * the masthead, the conversation on the sheet, the three dots' sheet, and the closed page. No new route param: the
  * community comes from /me. `inGate` is the locked Community page's way in (no coach: JoinCoachState.tsx).
  */
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   View,
@@ -76,7 +76,7 @@ export default function CommunityDmThreadScreen({ inGate }: {
   const coachLetter = coachLine ? Array.from(initialsOf(coachLine) ?? '')[0] ?? null : null;
   const composerRef = useRef<ComposerInputHandle>(null);
   const me = useCommunityMe();
-  const former = useFormerThread(me.data, client?.coach_id, recipientId);
+  const { former, gone } = useFormerThread(me.data, client?.coach_id, recipientId);
   const workspaceId = former?.workspaceId ?? me.data?.workspace_id ?? '';
   // Her coach now, for the former page's closed state (the list's read: usually in memory already).
   const myCoachNow = useMyCoachName(former ? client?.coach_id : null);
@@ -97,8 +97,14 @@ export default function CommunityDmThreadScreen({ inGate }: {
     recipientId,
     [readError],
     useServerAnswered(messages) && workspaceId.length > 0,
-    noAccess ? true : undefined,
+    noAccess || gone ? true : undefined,
   );
+  // FIX-DMFR-M-1 C3: /me (read again on its 60 s floor) stopped listing her old coach: closed, and the thread is read
+  // once more so a block's refusal says who closed it.
+  const refetchMessages = messages.refetch;
+  useEffect(() => {
+    if (gone) void refetchMessages();
+  }, [gone, refetchMessages]);
   // BLOCK-TELL #169-5: the read refusal's code (blocked_by_you / blocked_by_them) says who closed it.
   const by = useClosedBy(recipientId, closed, { errors: [readError] });
   // FR-877R2 (LO C2): BAM-2b names them only by a name this screen was given, or, for my own coach, the bar's name
