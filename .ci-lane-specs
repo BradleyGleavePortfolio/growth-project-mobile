@@ -1,0 +1,4 @@
+^(?!.*/src/screens/)
+--setupFilesAfterEnv
+<rootDir>/jest.setup.js
+<rootDir>/.ci-lane-probe/stall.setup.js
