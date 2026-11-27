@@ -1,0 +1,5 @@
+src/screens/client/mealplan/__tests__/planMeal.test.ts
+src/screens/client/mealplan/__tests__/PlanMealScreen.test.tsx
+src/components/log/__tests__/FoodDayView.planSwaps.test.tsx
+src/components/log/__tests__/LogScreen.planSwaps.test.tsx
+src/screens/client/__tests__/MealPlan.recipeLink.planSwaps.test.tsx
