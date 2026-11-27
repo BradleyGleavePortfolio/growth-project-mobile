@@ -1,0 +1,4 @@
+src/screens/client/mealplan/__tests__
+src/components/log/__tests__/FoodDayView
+src/components/log/__tests__/LogScreen.planSwaps
+src/screens/client/__tests__/MealPlan
