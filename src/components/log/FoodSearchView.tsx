@@ -270,7 +270,8 @@ export default function FoodSearchView({
     </>
   );
   // With a plan meal the whole block scrolls with the list, so the swaps and the footnote are never cut at 320 pt or 130%.
-  const withTop = (head: React.ReactNode) => (planMeal ? <>{top}{head}</> : head);
+  // The list pads its rows by the gutter; the block keeps its own margins, so it sits out of that padding.
+  const withTop = (head: React.ReactNode) => (planMeal ? <><View style={styles.bleed}>{top}</View>{head}</> : head);
 
   return (
     <View style={styles.modalBody}>
@@ -524,6 +525,7 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6, minHeight: layout.rowMinHeight,
     borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: sc.border,
   },
+  bleed: { marginHorizontal: -layout.gutter },
   // MealArt draws its 52 pt tile 10 from the words it follows; here it leads the row.
   swapArt: { marginLeft: -10, marginTop: -2 },
   // C_something .cap (C2-S-101): 13 muted, 10 under the field.

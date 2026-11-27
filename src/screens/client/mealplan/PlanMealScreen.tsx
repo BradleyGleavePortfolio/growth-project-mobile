@@ -260,7 +260,7 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   leadAmount: { ...typography.body, color: sc.textPrimary, fontVariant: ['tabular-nums'], flexShrink: 0, maxWidth: '45%', textAlign: 'right' },
   // C_recipe's steps: a serif numeral in gold (gold 800 on the sand paper, as RecipeDetail), the step beside it.
   step: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', paddingVertical: 4 },
-  stepNo: { ...typography.h3, fontSize: 24, lineHeight: 28, minWidth: 16, color: gold[800] },
+  stepNo: { ...typography.h3, fontSize: 24, lineHeight: 28, minWidth: 16, color: gold[800], fontVariant: ['lining-nums'] },
   foot: { backgroundColor: sc.bgPrimary, paddingHorizontal: layout.gutter, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderColor: sc.border },
   status: { ...typography.bodySmall, fontSize: 13, lineHeight: 18, color: sc.textMuted, textAlign: 'center', paddingVertical: 8 },
   link: { minHeight: layout.touchMin, alignItems: 'center', justifyContent: 'center', alignSelf: 'center', paddingHorizontal: 8 },
