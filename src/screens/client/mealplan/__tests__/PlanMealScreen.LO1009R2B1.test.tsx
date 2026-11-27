@@ -14,7 +14,7 @@ import PlanMealScreen from '../PlanMealScreen';
 
 jest.mock('../../../../config/featureFlags', () => {
   const actual = jest.requireActual('../../../../config/featureFlags');
-  return { ...actual, featureFlags: { ...actual.featureFlags, foodPlanChecklist: true, youTabV2: true, clientTimelineV2: true, romanChat: true } };
+  return { ...actual, featureFlags: { ...actual.featureFlags, foodPlanChecklist: true, youTabV2: true, clientTimelineV2: true, romanChat: true, offlineFoodInDay: true } };
 });
 // useFocusEffect as React Navigation runs it: once when the screen is focused, and again each time it is focused again.
 const mockFocus: { cb: (() => void) | null } = { cb: null };
@@ -41,12 +41,8 @@ jest.mock('../../../../services/api', () => ({
   logApi: { getDaily: (...a: unknown[]) => mockDaily(...a), deleteEntry: jest.fn(), logFood: jest.fn() },
   foodApi: { create: jest.fn() },
 }));
-const mockOffline = jest.fn(async (args: { foodName: string }) => args.foodName);
-jest.mock('../../../../utils/log/logSubmit', () => ({
-  ...jest.requireActual('../../../../utils/log/logSubmit'),
-  submitManualLogOffline: (args: { foodName: string }) => mockOffline(args),
-}));
-jest.mock('../../../../services/foodLogSync', () => ({ notifyPendingFoodLogs: jest.fn(async () => 1) }));
+// The phone's own offline queue (foodLogQueue on the jest AsyncStorage), as LogPlannedMealButton writes it.
+const queued = async () => (await jest.requireActual('../../../../services/foodLogQueue').readQueue()) as unknown[];
 jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
   __esModule: true,
   default: () => ({ width: 390, height: 844, scale: 2, fontScale: 1 }),
@@ -80,8 +76,9 @@ const plan = {
 const noConnection = () => Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK' });
 
 let client: QueryClient | null = null;
-beforeEach(() => {
+beforeEach(async () => {
   jest.clearAllMocks();
+  await jest.requireActual('../../../../services/foodLogQueue').clearQueue();
   (NetInfo as unknown as { __reset: () => void }).__reset();
   mockGet.mockImplementation(async (url: string) => {
     if (url.startsWith('/me/meal-plan/today')) return { data: plan };
@@ -111,7 +108,7 @@ describe('LO-PLAN-SWAPS-M-2 B1: a plan meal saved offline on its page stays save
     mockDaily.mockRejectedValue(noConnection());
     fireEvent.press(button);
     expect(await screen.findByText(/^Saved offline\./)).toBeTruthy();
-    expect(mockOffline).toHaveBeenCalledTimes(1);
+    expect(await queued()).toHaveLength(1);
 
     // She looks at the Food tab (the page blurs, stays mounted in the You stack) and taps the You tab again.
     await act(async () => {
@@ -123,6 +120,6 @@ describe('LO-PLAN-SWAPS-M-2 B1: a plan meal saved offline on its page stays save
     });
 
     expect(screen.queryByText('Ate it as planned')).toBeNull();
-    expect(mockOffline).toHaveBeenCalledTimes(1);
+    expect(await queued()).toHaveLength(1);
   });
 });
