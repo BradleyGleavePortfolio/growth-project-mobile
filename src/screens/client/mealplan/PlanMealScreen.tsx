@@ -190,7 +190,7 @@ export default function PlanMealScreen() {
         {showButton ? <LogPlannedMealButton meal={plannedMealFromSlot(slot)} slot={slot.slot_label} planSlotId={slot.id} planned /> : null}
         {status ? <Text style={styles.status} testID="plan-meal-status">{status}</Text> : null}
         {groceries.length > 0 ? (
-          <Pressable onPress={() => { if (!addToGrocery.isPending) addToGrocery.mutate(groceries); }} disabled={addToGrocery.isPending}
+          <Pressable onPress={() => { if (!addToGrocery.isPending) addToGrocery.mutate(groceries.map((g) => ({ ...g, source_plan_slot_id: slot.id }))); }} disabled={addToGrocery.isPending}
             accessibilityRole="button" accessibilityLabel="Add ingredients to grocery list"
             accessibilityState={{ disabled: addToGrocery.isPending, busy: addToGrocery.isPending }} style={styles.link} testID="plan-meal-grocery">
             <Text style={styles.linkText}>Add ingredients to grocery list</Text>
