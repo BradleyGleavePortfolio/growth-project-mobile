@@ -82,7 +82,8 @@ export default function JoinCoachState({
       edges={edges}
       scroll={!!extra}
       centerContent
-      header={<ScreenTopBar onBack={onBack} testID={`${testID}-top`} />}
+      // S3_nocoach draws no bar over the page with the card: an empty one would push the card under the button.
+      header={extra && !onBack ? undefined : <ScreenTopBar onBack={onBack} testID={`${testID}-top`} />}
       footer={action ? undefined : <PrimaryButton label={JOIN_A_COACH} onPress={messageCoach} testID={`${testID}-join`} />}
       testID={testID}
     >
