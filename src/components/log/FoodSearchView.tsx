@@ -17,6 +17,7 @@ import { TextLink } from '../../ui';
 import { QuietText as Text } from '../../ui/progress/QuietBar';
 import FoodImage from '../FoodImage';
 import { SearchResult } from '../../utils/log/types';
+import { drawingFor } from '../../utils/log/foodDrawing';
 import type { PastMeal } from '../../hooks/useFoodBrowse';
 import { formatPortion } from '../../utils/log/quickLog';
 import { calcMacros } from '../../utils/log/macros';
@@ -71,17 +72,22 @@ export function foodRowFacts(item: SearchResult): { line: string; kcal: string }
 
 function FoodThumb({ item }: { item: SearchResult }) {
   const styles = makeStyles(useTheme().semanticColors);
-  if (item.image_url) {
+  // FOOD-IMAGES-M R6: the photo that failed on this row; a new image_url on the row shows again.
+  const [failedUri, setFailedUri] = React.useState<string | null>(null);
+  if (item.image_url && item.image_url !== failedUri) {
+    const uri = item.image_url;
     return (
       <Image
-        source={{ uri: item.image_url }}
+        source={{ uri }}
         style={styles.foodThumb}
         resizeMode="cover"
+        onError={() => setFailedUri(uri)}
       />
     );
   }
-  // REFINE-968 (ruling 6): with no photo, the C_add cream tile with its bowl.
-  return <FoodImage name={item.name || '?'} size={48} drawn />;
+  // REFINE-968 (ruling 6), FOOD-IMAGES-M (#192-E6): with no photo, the stock photo, else the C_add cream tile with the
+  // food group's drawing (the bowl with no group).
+  return <FoodImage name={item.name || '?'} size={48} drawn drawing={drawingFor(item.name, item.food_group)} />;
 }
 
 function FoodRow({ item, onPress }: { item: SearchResult; onPress: () => void }) {
