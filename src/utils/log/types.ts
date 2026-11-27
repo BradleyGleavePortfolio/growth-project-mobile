@@ -42,6 +42,10 @@ export interface SearchResult {
   // weights for cup/tbsp/tsp.
   food_category?: string;
 
+  // FOOD-IMAGES-M (#192-E6): the food group the server sends (a stored row's category: tag, a live USDA hit's
+  // category), set by the mappers; the add sheet draws its line drawing from it. Never food_category's value.
+  food_group?: string;
+
   // Set for foods taken from the client's own log: the portion logged last
   // time (prefilled in the quantity picker) and whether this result came
   // from the log rather than the catalog search.
