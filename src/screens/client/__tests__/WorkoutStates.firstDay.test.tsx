@@ -287,6 +287,19 @@ describe('WORKOUT-STATES-M: the first day on Train (C2_first)', () => {
     expect(mockChatCalls).toEqual([]);
   });
 
+  it('6c. H6: the coach\'s first workout arrives while she is away: on the next read the card and the link leave', async () => {
+    const view = await firstDay();
+    expect(view.getByTestId('train-first-card')).toBeTruthy();
+    expect(view.getByText('Message Sam')).toBeTruthy();
+    mockQuery = { data: [open] };
+    await view.rerender(<WorkoutScreen />);
+    await waitFor(() => expect(view.getByText('Full body A')).toBeTruthy());
+    expect(view.queryByTestId('train-first-card')).toBeNull();
+    expect(view.queryByText(/^Message /)).toBeNull();
+    expect(view.queryByText('Nothing planned yet.')).toBeNull();
+    for (const t of NOTHING_YET) expect(view.getByText(t)).toBeTruthy();
+  });
+
   it('7. no flash: while the coach read loads, the "nothing yet" lines never draw; settled with a workout they appear', async () => {
     mockQuery = { isLoading: true };
     const view = await render(<WorkoutScreen />);
