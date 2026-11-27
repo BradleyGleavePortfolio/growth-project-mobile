@@ -20,15 +20,18 @@ import { useMyCoaches } from '../../hooks/useCalendar';
 import { useCoachlessClient } from '../../hooks/useCoachlessClient';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import type { ClientWorkoutAssignmentWithPlan } from '../../api/workoutBuilderApi';
 import {
+  canSendAgain,
   deadLetterEvents,
   listRefusedWorkouts,
+  refusalLines,
   removeRefusedWorkout,
   sendRefusedWorkoutAgain,
   workoutSyncEvents,
   type RefusedWorkout,
-} from '../../offline/sync/sync-engine';
-import { canSendAgain, refusalLines } from '../../offline/sync/refusal';
+} from '../../offline';
+import { calendarDay, dayStart } from '../../utils/workout/workoutDay';
 import { useTheme } from '../../theme/ThemeProvider';
 import { colors, layout, radius, typography } from '../../theme/tokens';
 import { PrimaryButton, TextLink } from '../../ui';
@@ -76,9 +79,8 @@ type Exercise = {
   exercise_name?: unknown; sets_completed?: unknown; reps_per_set?: unknown; weight_per_set?: unknown;
   plan_assignment_id?: unknown; plan_order?: unknown;
 };
-/** The client's assignments as the Train tab reads them (GET /assignments/me), in assignmentPrescription's shape. */
-type Assignment = Parameters<typeof assignmentPrescription>[0];
-export type RefusedPlans = ReadonlyArray<Partial<Assignment>>;
+/** The client's assignments as the Train tab reads them (GET /assignments/me): each plan row names its unit. */
+export type RefusedPlans = ReadonlyArray<Partial<ClientWorkoutAssignmentWithPlan>>;
 
 /**
  * C3 (TIMED-SETS-M): the stored body counts seconds in reps_per_set with no unit; an exercise logged from an assignment
@@ -87,13 +89,12 @@ export type RefusedPlans = ReadonlyArray<Partial<Assignment>>;
 function timed(plans: RefusedPlans | undefined, e: Exercise): boolean {
   const a = typeof e.plan_assignment_id === 'string' ? plans?.find((p) => p.id === e.plan_assignment_id) : undefined;
   return !!a && typeof e.plan_order === 'number'
-    && isTimedRow(assignmentPrescription(a as Assignment).exercises.find((r) => r.order === e.plan_order));
+    && isTimedRow(assignmentPrescription(a as ClientWorkoutAssignmentWithPlan).exercises.find((r) => r.order === e.plan_order));
 }
 
 /** Name, "Sat 10 Oct", "Saturday 10 October", minutes and set rows from the stored POST /workouts body. */
 export function refusedView(body: Record<string, unknown>, plans?: RefusedPlans) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(body.date ?? ''));
-  const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+  const d = dayStart(calendarDay(typeof body.date === 'string' ? body.date : null));
   const exercises = (Array.isArray(body.exercises) ? body.exercises : []) as Exercise[];
   const rows = exercises.map((e) => {
     const reps = Array.isArray(e.reps_per_set) ? (e.reps_per_set as number[]) : [];
