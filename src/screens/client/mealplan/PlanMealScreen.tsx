@@ -7,10 +7,10 @@
  * ingredients to grocery list". Reads: the day's plan (the Food day's key), the coach, the day's log (today), the
  * recipe. Writes: the plan meal log (LogPlannedMealButton) and one grocery add (the Prep guide's own write).
  */
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Line } from 'react-native-svg';
-import { useNavigation, useRoute, type NavigationProp, type ParamListBase, type RouteProp } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute, type NavigationProp, type ParamListBase, type RouteProp } from '@react-navigation/native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api, { listsApi, recipesApi } from '../../../services/api';
 import { mealTemplatesApi, type ClientTodayResponse } from '../../../api/mealTemplatesApi';
@@ -45,10 +45,17 @@ const quoted = (t: string) => (QUOTED.test(t) ? t : `“${t}”`);
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
 export default function PlanMealScreen() {
+  const { date, slotId } = useRoute<RouteProp<Params, 'PlanMeal'>>().params;
+  // One page per meal (LO B1, LS B2). The stack reuses the PlanMeal route on top when a door names it again (the Food
+  // tab's navigate('MoreTab', { screen: 'PlanMeal', params })), so the body is keyed by the meal: what a visit holds
+  // (the eaten decision, the button's log and Undo, the grocery sheet) starts again for each meal, from every door.
+  return <PlanMealPage key={`${date}|${slotId}`} date={date} slotId={slotId} />;
+}
+
+function PlanMealPage({ date, slotId }: Params['PlanMeal']) {
   const { semanticColors: sc } = useTheme();
   const styles = makeStyles(sc);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
-  const { date, slotId } = useRoute<RouteProp<Params, 'PlanMeal'>>().params;
   const qc = useQueryClient();
   const italic = useCoachItalic();
   const bottom = useBottomInset();
@@ -80,13 +87,31 @@ export default function PlanMealScreen() {
     staleTime: FIVE_MIN,
   });
   // R8: the meal plan page's eaten rule (buildPlanDay over the day's log), today only.
-  const day = useTodayLog(isToday && slot ? date : '');
+  const dayOn = isToday && !!slot;
+  const day = useTodayLog(dayOn ? date : '');
   const entries = day.data && typeof day.data === 'object' ? (day.data as { entries?: DailyLogEntry[] }).entries ?? [] : null;
   const eaten = found && entries && featureFlags.foodPlanChecklist
     ? buildPlanDay([found.plan], entries.map((e) => foodLogFromDailyEntry(e, date))).slots.find((x) => x.key === slotId) ?? null : null;
-  // Whether the meal was eaten when the page opened: a meal logged here keeps its button (and its Undo) for this visit.
-  const eatenAtOpen = useRef<boolean | null>(null);
-  if (eatenAtOpen.current === null && (entries || day.isError)) eatenAtOpen.current = (eaten?.logs.length ?? 0) > 0;
+  // LS B1: whether the meal was eaten is decided once per visit from the day's log read for that visit, never from a
+  // log the app already held (the Food day's own logs refresh its store, not this query). A visit starts when the page
+  // opens and again when it comes back into focus; offline (the read waits for a connection) the log in hand decides.
+  // A meal logged here keeps its button (and its Undo) for the rest of the visit.
+  const [visitAt, setVisitAt] = useState(() => Date.now());
+  const opened = useRef(false);
+  useFocusEffect(useCallback(() => {
+    if (opened.current) setVisitAt(Date.now());
+    opened.current = true;
+  }, []));
+  const { refetch } = day;
+  useEffect(() => {
+    if (dayOn) void refetch();
+  }, [dayOn, visitAt, refetch]);
+  const readForVisit = day.dataUpdatedAt >= visitAt || day.errorUpdatedAt >= visitAt || day.fetchStatus === 'paused';
+  const eatenAtOpen = useRef<{ at: number; eaten: boolean } | null>(null);
+  if (eatenAtOpen.current?.at !== visitAt && readForVisit && (entries || day.isError)) {
+    eatenAtOpen.current = { at: visitAt, eaten: (eaten?.logs.length ?? 0) > 0 };
+  }
+  const eatenThisVisit = eatenAtOpen.current?.at === visitAt ? eatenAtOpen.current.eaten : null;
 
   const [added, setAdded] = useState<number | null>(null);
   const addToGrocery = useMutation({
@@ -141,8 +166,8 @@ export default function PlanMealScreen() {
   const shownRecipe = recipeId ? recipe.data ?? null : null;
   const rows = recipeId ? (shownRecipe ? ingredientRows(shownRecipe, null) : []) : ingredientRows(null, t.items);
   const groceries = recipeId ? (shownRecipe ? groceryItems(shownRecipe, null) : []) : groceryItems(null, t.items);
-  const status = eatenAtOpen.current && eaten?.status ? eaten.status : null;
-  const showButton = isToday && eatenAtOpen.current === false;
+  const status = eatenThisVisit && eaten?.status ? eaten.status : null;
+  const showButton = isToday && eatenThisVisit === false;
 
   return (
     <View style={styles.screen}>
