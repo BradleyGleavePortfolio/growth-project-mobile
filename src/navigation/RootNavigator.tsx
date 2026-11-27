@@ -173,7 +173,14 @@ export const linking: LinkingOptions<Record<string, object | undefined>> = {
     // reduced to a token-free status before parsing (see deepLinkUtils).
     const verified = emailVerifiedPath(path);
     if (verified) return getStateFromPath(verified, options);
-    return getStateFromPath(fragmentToQuery(path), options);
+    const parsed = fragmentToQuery(path);
+    // A link whose %-encoding does not decode is refused (Dependabot alerts 78 and 28).
+    try {
+      decodeURIComponent(parsed);
+    } catch {
+      return undefined;
+    }
+    return getStateFromPath(parsed, options);
   },
   config: {
     screens: {

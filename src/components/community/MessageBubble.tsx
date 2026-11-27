@@ -22,6 +22,10 @@ export interface MessageBubbleProps {
    * bubble white with a sage line; the caller's box sets the width. Only the coach's DM thread passes it; unset, the
    * bubble draws as before. A dark theme keeps its own colours. */
   studio?: boolean;
+  /** REFINE-985 (C6CHAT-S-V2 c08, src/screens.py:122-127): radius 18 with 6 at the tail, padding 10 14, at most 78% wide,
+   * the other person's bubble white with a 1 pt sage line. Only the client's DM thread passes it; unset, the bubble
+   * draws as before. A dark theme keeps its colours. */
+  voiceB?: boolean;
   testID?: string;
 }
 
@@ -30,10 +34,12 @@ export default function MessageBubble({
   myUserId,
   showTime,
   studio = false,
+  voiceB = false,
   testID,
 }: MessageBubbleProps): React.ReactElement {
   const { semanticColors, colorScheme } = useTheme();
   const studioLight = studio && colorScheme !== 'dark';
+  const voiceBLight = voiceB && colorScheme !== 'dark';
   const mine = message.sender_user_id === myUserId;
   const sending = isOptimisticId(message.id);
   const body = message.deleted ? 'Message removed' : message.body ?? '';
@@ -44,7 +50,7 @@ export default function MessageBubble({
       testID={testID}
     >
       <View
-        testID={studio && testID ? `bubble-${testID}` : undefined}
+        testID={(studio || voiceB) && testID ? `bubble-${testID}` : undefined}
         style={[
           styles.bubble,
           {
@@ -57,6 +63,8 @@ export default function MessageBubble({
           mine ? styles.bubbleMine : styles.bubbleTheirs,
           studio ? [styles.studioBubble, mine ? styles.studioMine : styles.studioTheirs] : null,
           studioLight && !mine ? { backgroundColor: neutral[0], borderColor: forestPop.sageLine } : null,
+          voiceB ? [styles.voiceBBubble, mine ? styles.voiceBMine : styles.voiceBTheirs] : null,
+          voiceBLight && !mine ? { backgroundColor: neutral[0], borderColor: forestPop.sageLine } : null,
         ]}
       >
         <Text
@@ -132,4 +140,8 @@ const styles = StyleSheet.create({
   studioTheirs: { borderBottomLeftRadius: 18, borderWidth: 1.5 },
   studioBody: { fontSize: 16, lineHeight: 22 },
   studioTime: { fontSize: 12.5, marginTop: 6 },
+  // REFINE-985 `voiceB`: c08 bubble (max-width 78%, padding 10px 14px, radius 18px, 6px at the tail, them a 1 px line).
+  voiceBBubble: { maxWidth: '78%', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18 },
+  voiceBMine: { borderBottomRightRadius: 6, borderWidth: 0 },
+  voiceBTheirs: { borderBottomLeftRadius: 6, borderWidth: 1 },
 });

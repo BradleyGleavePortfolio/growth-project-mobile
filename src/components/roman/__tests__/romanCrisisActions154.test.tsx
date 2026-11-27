@@ -148,7 +148,7 @@ it('the read-only transcript shows the same actions under a marked reply', async
   ));
   await fireEvent.press(await s.findByRole('button', { name: 'Call 9 1 1' }));
   expect(openURL).toHaveBeenLastCalledWith('tel:911');
-  expect(s.getByTestId('roman-transcript-crisis-a1')).toBeTruthy();
+  expect(s.getByTestId('roman-transcript-message-a1-crisis')).toBeTruthy();
   expect(s.getByRole('button', { name: 'Call 988' })).toBeTruthy();
   expect(s.getByRole('button', { name: 'Text 988' })).toBeTruthy();
 });

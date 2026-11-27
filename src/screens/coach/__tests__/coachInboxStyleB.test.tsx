@@ -106,15 +106,15 @@ it('sits on the app page (owner #197-E6)', async () => {
   const view = await draw(<MessagesScreen />);
   const bg = StyleSheet.flatten((await view.findByTestId('coach-messages')).props.style).backgroundColor;
   expect(bg).toBe(coachInboxB.page);
-  expect(String(bg).toUpperCase()).toBe('#F7FAF7');
+  expect(String(bg).toUpperCase()).toBe('#F7EED9');
 });
 
 it('the drafts screen says how many wait, counts them by kind, and Back goes back', async () => {
   mockDrafts.mockReturnValue({ data: { drafts: queue }, isLoading: false, isError: false, isFetching: false, error: null, refetch: jest.fn() });
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const view = await render(<QueryClientProvider client={qc}><PendingAiDraftsScreen /></QueryClientProvider>);
-  expect(await view.findByText('Roman has 3 drafts ready')).toBeTruthy();
-  expect(view.getByText('Pending AI drafts')).toBeTruthy();
+  expect(await view.findByText('3 drafts to review')).toBeTruthy();
+  expect(view.getByText('Roman')).toBeTruthy();
   expect(view.getByLabelText('2 Workouts')).toBeTruthy();
   expect(view.getByLabelText('1 Nudge')).toBeTruthy();
   expect(StyleSheet.flatten(view.getByTestId('pending-ai-drafts-screen').props.style).backgroundColor).toBe(coachInboxB.page);

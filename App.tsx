@@ -7,6 +7,7 @@ import {
   useFonts,
   CormorantGaramond_400Regular,
   CormorantGaramond_500Medium,
+  CormorantGaramond_600SemiBold,
 } from '@expo-google-fonts/cormorant-garamond';
 import {
   Inter_400Regular,
@@ -104,6 +105,7 @@ function App() {
   const [fontsLoaded] = useFonts({
     CormorantGaramond_400Regular,
     CormorantGaramond_500Medium,
+    CormorantGaramond_600SemiBold,
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,

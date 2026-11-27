@@ -9,7 +9,7 @@ import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { usePreventRemove, type NavigationAction } from '@react-navigation/native';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { radius, typography } from '../../../theme/tokens';
+import { radius, schemeCard, typography } from '../../../theme/tokens';
 import { Screen } from '../../../ui/layout/Screen';
 import { PrimaryButton } from '../../../ui/buttons/PrimaryButton';
 import HapticPressable from '../../../components/HapticPressable';
@@ -111,7 +111,7 @@ export default function DayPlanBuilderScreen({ route, navigation }: ProgramsScre
         {clients ? <Text style={[typography.body, muted]}>{`${count(clients, 'client follows', 'clients follow')} this plan`}</Text> : null}
       </Masthead>
       {assigned ? <Text accessibilityLiveRegion="polite" style={[typography.bodyMd, { color: sc.accentText }]}>{assigned}</Text> : null}
-      <View style={[ms.card, styles.noteCard, { backgroundColor: sc.surface.sage }]}>
+      <View style={[ms.card, styles.noteCard, schemeCard]}>
         <Text style={[typography.eyebrow, { color: sc.textPrimary }]}>Your note · clients see it</Text>
         <TextInput value={note ?? p.notes ?? ''} onChangeText={setNote} multiline maxLength={2000} accessibilityLabel="Your note on this plan, clients see it"
           placeholder="A line for clients, such as when to eat the bigger meal" placeholderTextColor={sc.textMuted}

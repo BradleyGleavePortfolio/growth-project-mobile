@@ -607,11 +607,12 @@ describe('11. the coach\'s DM notification row', () => {
     tap(dmRow('n6', `tgp://community/cohorts/${uuid(2)}`));
     expect(nav).toHaveBeenLastCalledWith('ClientsStack', { screen: 'NotificationCenter', params: undefined });
   });
-  it('12. the client\'s own DM row (N2) still lands on the Community root, old and new link alike', () => {
+  it('12. the client\'s own DM row (N2) opens the coach\'s thread, old and new link alike (COACH-DM-CLIENT-M case 4)', () => {
     attach('student', JORDAN);
     tap(dmRow('c1', `tgp://community/dm/${COACH}`));
     tap(dmRow('c2', `tgp://community/dms/${WS}:${[COACH, JORDAN].sort().join(':')}`));
-    expect(nav.mock.calls).toEqual([['CommunityTab', undefined], ['CommunityTab', undefined]]);
+    const thread = ['CommunityTab', { screen: 'CommunityDmThread', params: { recipientId: COACH }, initial: false }];
+    expect(nav.mock.calls).toEqual([thread, thread]);
   });
 });
 

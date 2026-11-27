@@ -5,7 +5,6 @@ import { render, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { listsApi, prepGuideApi } from '../../../services/api';
 import GroceryListScreen from '../GroceryListScreen';
-import ShoppingListScreen from '../ShoppingListScreen';
 import PrepGuideScreen from '../PrepGuideScreen';
 
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: jest.fn(), navigate: jest.fn() }) }));
@@ -42,7 +41,6 @@ afterEach(() => { clients.splice(0).forEach((c) => c.clear()); jest.restoreAllMo
 
 it.each([
   ['Grocery list', GroceryListScreen],
-  ['Shopping list', ShoppingListScreen],
 ] as const)('B1 LO-954: the %s add form now scrolls with the list, so its scroll view must let a tap on Add item through while the keyboard is up', async (_name, Screen) => {
   const ui = await mount(Screen);
   await waitFor(() => expect(ui.getAllByText('Milk').length).toBeGreaterThan(0));
@@ -70,7 +68,6 @@ function offsetInsideScroll(node: Inst, scroll: Inst): number {
 
 it.each([
   ['Grocery list', GroceryListScreen, 'Milk'],
-  ['Shopping list', ShoppingListScreen, 'Milk'],
   ['Prep guide', PrepGuideScreen, 'Lentil soup'],
 ] as const)('B2 LO-954: the %s Back target keeps its full 44 pt inside the scroll view (not pulled above its top edge)', async (_name, Screen, row) => {
   const ui = await mount(Screen);

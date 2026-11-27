@@ -43,7 +43,7 @@ async function draw() {
 it('counts the plan changes the list shows in the headline, not in the kind tiles', async () => {
   mockPath = [{ id: 'p1', clientId: 'client-1' }, { id: 'p2', clientId: 'client-2' }];
   const view = await draw();
-  expect(view.getByText('Roman has 4 drafts ready')).toBeTruthy();
+  expect(view.getByText('4 drafts to review')).toBeTruthy();
   expect(view.getByLabelText('1 Workout')).toBeTruthy();
   expect(view.getByLabelText('1 Nudge')).toBeTruthy();
   view.unmount();
@@ -52,6 +52,6 @@ it('counts the plan changes the list shows in the headline, not in the kind tile
 it('keeps the Stream 2 count when no plan change waits', async () => {
   mockPath = [];
   const view = await draw();
-  expect(view.getByText('Roman has 2 drafts ready')).toBeTruthy();
+  expect(view.getByText('2 drafts to review')).toBeTruthy();
   view.unmount();
 });

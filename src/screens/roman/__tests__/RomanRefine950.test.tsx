@@ -259,7 +259,7 @@ describe('the direct-message sheets keep main\'s look (no look prop)', () => {
     const cancel = r.getByText('Cancel') as unknown as Node;
     expect(flat(cancel)).toEqual({ fontSize: 16, color: '#1A1A18', fontWeight: '600' });
     expect(flat(cancel.parent as Node)).toEqual({
-      marginTop: 8, paddingVertical: 14, paddingHorizontal: 16, alignItems: 'center', borderRadius: 12, backgroundColor: '#F7FAF7',
+      marginTop: 8, paddingVertical: 14, paddingHorizontal: 16, alignItems: 'center', borderRadius: 12, backgroundColor: '#F7EED9',
     });
     expect(r.queryByLabelText('Reply')).toBeNull();
   });
@@ -270,7 +270,7 @@ describe('the direct-message sheets keep main\'s look (no look prop)', () => {
     const close = r.getByLabelText('Close report sheet') as unknown as Node;
     const header = close.parent as Node;
     const body = header.parent as Node;
-    expect(flat(body)).toEqual({ flex: 1, backgroundColor: '#F7FAF7' });
+    expect(flat(body)).toEqual({ flex: 1, backgroundColor: '#F7EED9' });
     expect(flat(header)).toEqual({
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16,
       paddingTop: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#DCD5CC',
@@ -307,7 +307,7 @@ describe('the direct-message sheets keep main\'s look (no look prop)', () => {
     const button = { paddingVertical: 14, borderRadius: 10, alignItems: 'center' };
     expect(flat(submit)).toEqual({ ...button, backgroundColor: '#DCD5CC' });
     expect(flat(submit.parent as Node)).toEqual({ padding: 16, borderTopWidth: 1, borderTopColor: '#DCD5CC', backgroundColor: '#F1E8D5' });
-    expect(flat(r.getByText('Submit Report') as unknown as Node)).toEqual({ color: '#F7FAF7', fontSize: 15, fontWeight: '600' });
+    expect(flat(r.getByText('Submit Report') as unknown as Node)).toEqual({ color: '#F7EED9', fontSize: 15, fontWeight: '600' });
     await act(async () => { fireEvent.press(r.getByLabelText('Violence or threats')); });
     const picked = r.getByLabelText('Violence or threats') as unknown as Node;
     expect(flat(picked)).toEqual({ ...option, borderColor: '#2C4A36' });

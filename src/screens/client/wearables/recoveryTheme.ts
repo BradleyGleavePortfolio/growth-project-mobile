@@ -54,8 +54,8 @@ export interface RecoveryStateView {
   /** Cool ring/fill colour for this state. */
   color: (palette: RecoveryPalette) => string;
   /**
-   * Text colour for the label. Indigo reads at AA; the slate fill does not (3.4:1 on bone), so a slate
-   * state labels in graphite (#168-13) while its ring stays slate.
+   * Text colour for the label. Neither ring colour reads at AA as text on bone (indigo 4.25:1, slate 3.11:1 on
+   * Sunlit sand of owner #203-E86), so every state labels in graphite (#168-13) while its ring keeps its colour.
    */
   labelColor: (palette: RecoveryPalette) => string;
 }
@@ -75,10 +75,10 @@ export function resolveRecoveryState(score: number | null): RecoveryStateView {
     };
   }
   if (score >= 67) {
-    return { state: 'recovered', label: 'Recovered', color: (p) => p.accent, labelColor: (p) => p.accent };
+    return { state: 'recovered', label: 'Recovered', color: (p) => p.accent, labelColor: () => brand.graphite };
   }
   if (score >= 34) {
-    return { state: 'recovering', label: 'Recovering', color: (p) => p.accent, labelColor: (p) => p.accent };
+    return { state: 'recovering', label: 'Recovering', color: (p) => p.accent, labelColor: () => brand.graphite };
   }
   // Low recovery — desaturated slate, reassurance-first label. NEVER red.
   return { state: 'run_down', label: 'Run-down', color: (p) => p.accentMuted, labelColor: () => brand.graphite };
