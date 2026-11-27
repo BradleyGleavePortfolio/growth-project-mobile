@@ -104,7 +104,7 @@ export default function SavedMealSheet({ meal, onClose, onAdded, onStale }: {
 
   if (!meal) return null;
   const view = mealView(meal);
-  const empty = view.foods.length === 0;
+  const empty = false;
 
   const add = async () => {
     if (sending.current || empty) return;
