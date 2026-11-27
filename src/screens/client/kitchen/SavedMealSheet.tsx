@@ -7,8 +7,8 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AccessibilityInfo, Animated, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions,
-  type GestureResponderEvent,
+  AccessibilityInfo, Animated, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View,
+  useWindowDimensions, type GestureResponderEvent,
 } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { Ionicons } from '@expo/vector-icons';
@@ -46,9 +46,25 @@ function usePullDown(close: () => void) {
   } };
 }
 
-/** The sheet's frame (R10: shared with SAVED-MEAL-SAVE-M). */
-export function KitchenSheet({ visible, title, onClose, children, testID }: {
-  visible: boolean; title: string; onClose: () => void; children?: React.ReactNode; testID?: string;
+/** The keyboard's height while it is up, 0 otherwise (SAVED-MEAL-SAVE-M SS9). */
+function useKeyboardHeight(): number {
+  const [h, setH] = useState(0);
+  useEffect(() => {
+    const ios = Platform.OS === 'ios';
+    const up = Keyboard.addListener(ios ? 'keyboardWillShow' : 'keyboardDidShow', (e) => setH(e?.endCoordinates?.height ?? 0));
+    const down = Keyboard.addListener(ios ? 'keyboardWillHide' : 'keyboardDidHide', () => setH(0));
+    return () => { up.remove(); down.remove(); };
+  }, []);
+  return h;
+}
+
+/**
+ * The sheet's frame (R10: shared with SAVED-MEAL-SAVE-M). `footer` is pinned under the scrolling body; with a field in
+ * it, the keyboard view (iOS) lifts the sheet, the sheet keeps to the window left above the keyboard and the body
+ * shrinks first, so the field and its button stay in view (SAVED-MEAL-SAVE-M SS9). With no keyboard it draws as before.
+ */
+export function KitchenSheet({ visible, title, onClose, children, footer, testID }: {
+  visible: boolean; title: string; onClose: () => void; children?: React.ReactNode; footer?: React.ReactNode; testID?: string;
 }) {
   const { semanticColors: sc } = useTheme();
   const s = useMemo(() => makeStyles(sc), [sc]);
@@ -56,23 +72,32 @@ export function KitchenSheet({ visible, title, onClose, children, testID }: {
   const { height } = useWindowDimensions();
   const reduced = useReducedMotion();
   const pull = usePullDown(onClose);
+  const keyboard = useKeyboardHeight();
+  const fit = keyboard > 0
+    ? { maxHeight: height - keyboard - 16, paddingBottom: 12 }
+    : { maxHeight: height * 0.92, paddingBottom: bottom + 16 };
   return (
     <Modal visible={visible} transparent animationType={reduced ? 'none' : 'slide'} onRequestClose={onClose} statusBarTranslucent>
-      <Pressable testID="kitchen-sheet-scrim" style={s.scrim} onPress={onClose} accessible={false} importantForAccessibility="no" />
-      <Animated.View accessibilityViewIsModal testID={testID}
-        style={[s.sheet, { maxHeight: height * 0.92, paddingBottom: bottom + 16, transform: [{ translateY: pull.y }] }]}>
-        <View {...pull.handlers}>
-          <View style={s.grab} />
-          <View style={s.head}>
-            <Text accessibilityRole="header" style={s.title}>{title}</Text>
-            <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel={WORDS.close} style={s.close}
-              testID="kitchen-sheet-close">
-              <Ionicons name="close" size={28} color={sc.textPrimary} />
-            </Pressable>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.avoid} testID="kitchen-sheet-avoider">
+        <Pressable testID="kitchen-sheet-scrim" style={s.scrim} onPress={onClose} accessible={false} importantForAccessibility="no" />
+        <Animated.View accessibilityViewIsModal testID={testID}
+          style={[s.sheet, { ...fit, transform: [{ translateY: pull.y }] }]}>
+          <View {...pull.handlers}>
+            <View style={s.grab} testID="kitchen-sheet-grab" />
+            <View style={s.head}>
+              <Text accessibilityRole="header" style={s.title} testID="kitchen-sheet-title">{title}</Text>
+              <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel={WORDS.close} style={s.close}
+                testID="kitchen-sheet-close">
+                <Ionicons name="close" size={28} color={sc.textPrimary} />
+              </Pressable>
+            </View>
           </View>
-        </View>
-        <ScrollView style={s.body} contentContainerStyle={s.bodyIn} keyboardShouldPersistTaps="handled">{children}</ScrollView>
-      </Animated.View>
+          <ScrollView style={s.body} contentContainerStyle={s.bodyIn} keyboardShouldPersistTaps="handled" testID="kitchen-sheet-body">
+            {children}
+          </ScrollView>
+          {footer ? <View style={s.foot} testID="kitchen-sheet-foot">{footer}</View> : null}
+        </Animated.View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -200,6 +225,7 @@ export default function SavedMealSheet({ meal, onClose, onAdded, onStale }: {
 
 const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   // S2_use: the ink scrim at 42% runs under the sheet's 24 pt top corners; the sheet is cream (colors.cream).
+  avoid: { flex: 1, justifyContent: 'flex-end' },
   scrim: { flex: 1, marginBottom: -radius.sheet, backgroundColor: withAlpha(sc.textPrimary, 0.42) },
   sheet: { backgroundColor: palette.cream, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet,
     paddingHorizontal: layout.gutter, paddingTop: 10 },
@@ -209,7 +235,8 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   title: { ...typography.h2, flex: 1, fontFamily: 'CormorantGaramond_500Medium', fontWeight: '500', fontSize: 27,
     lineHeight: 34, letterSpacing: 0, color: sc.textPrimary, paddingTop: 4 },
   close: { width: layout.touchMin, height: layout.touchMin, alignItems: 'center', justifyContent: 'center', marginRight: -8 },
-  body: { flexGrow: 0 },
+  body: { flexGrow: 0, flexShrink: 1 },
+  foot: { paddingTop: 10 },
   bodyIn: { paddingBottom: 4 },
   line: { ...typography.body, fontSize: 15, lineHeight: 22, letterSpacing: 0, color: sc.textMuted, marginTop: 2,
     fontVariant: ['tabular-nums'] },
