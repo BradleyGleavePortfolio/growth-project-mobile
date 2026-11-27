@@ -195,7 +195,7 @@ function MealForm({ meal, live, answered, picked, navigation, sc }: { meal?: Mea
       <OptionsBlock rows={optionRows(options, live, answered)} editing={editing} onEditing={setEditing} onChange={setOptions}
         onAdd={() => navigation.navigate('MealOptionsPicker', { mealId: meal?.id, mealName: name.trim(), chosen: options })} />
       <RecipeCard recipeId={recipeId} mine={recipes.mine} error={recipes.failed ? recipes.read.error : null}
-        retry={() => void recipes.read.refetch()} retrying={recipes.read.isFetching} onRemove={() => setRecipeId(null)}
+        retry={() => void recipes.read.refetch()} retrying={recipes.read.isFetching} onRemove={() => setRecipeId('')}
         onPick={() => navigation.navigate('MealRecipePicker', { mealId: meal?.id, mealName: name.trim(), recipeId })} />
       <View style={panel} onLayout={(e) => { detailsY.current = e.nativeEvent.layout.y; }}>
         <Text accessibilityRole="header" style={[ms.cardTitle, { color: sc.textPrimary }]}>Details</Text>
