@@ -1,0 +1,2 @@
+src/__tests__/screenAreaCensus.test.ts
+src/navigation/__tests__/rootScreenArea.source.test.ts
