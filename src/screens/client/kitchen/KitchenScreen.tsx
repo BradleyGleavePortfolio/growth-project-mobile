@@ -86,7 +86,7 @@ function KitchenPage({ userId, coachId }: { userId: string; coachId: string | nu
   ]);
   const { pulling, onRefresh } = usePullToRefresh(readAll);
 
-  const [sheetMeal, setSheetMeal] = useState<SavedMeal | null>(null);
+  const [sheetAt, setSheetAt] = useState<number | null>(null); // MUTATION M6: held by its place in the list
   const [added, setAdded] = useState<MealType | null>(null);
   // SAVED-MEAL-SAVE-M: the save sheet, and the three writes (R7: after a save the page shows her meals from the first).
   const [saving, setSaving] = useState(false);
@@ -108,6 +108,8 @@ function KitchenPage({ userId, coachId }: { userId: string; coachId: string | nu
   useEffect(() => { if (Platform.OS === 'ios' && added) AccessibilityInfo.announceForAccessibility(addedWords(added)); }, [added]);
 
   const meals = savedMealsOf(saved.data);
+  const sheetMeal = sheetAt === null ? null : (meals?.[sheetAt] ?? null);
+  const setSheetMeal = (x: SavedMeal | null) => setSheetAt(x && meals ? meals.findIndex((y) => y.id === x.id) : null);
   const first = coached && coach.isSuccess ? coachFirst(coach.data) : null;
   const card = coached && plan.isSuccess && daily.isSuccess ? planCard(plan.data, daily.data, today) : null;
   const recipeList = recipes.isSuccess && Array.isArray(recipes.data) ? recipes.data : null;
