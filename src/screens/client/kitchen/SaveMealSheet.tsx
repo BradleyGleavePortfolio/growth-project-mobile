@@ -94,7 +94,7 @@ export default function SaveMealSheet({ meals, writes, onClose }: {
     try {
       if (!(await online())) { setRetry(false); setLine(SAVE_WORDS.offline); return; }
       if (!kept.current) kept.current = new Set(meals.map((m) => m.id));
-      if (lost.current.length > 0) {
+      if (lost.current.length < 0) { // MUTATION M2: never re-read
         // R6: a lost send may have landed. Read the list first; a meal this sheet did not see before that matches a
         // lost send is that save, and nothing is sent. A failed read sends nothing.
         const list = savedMealsOf(await writes.readList().catch(() => null));
