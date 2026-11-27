@@ -100,7 +100,7 @@ function FoodWeekPage({ coached }: { coached: boolean }) {
   const onReturn = useRef<() => void>(() => undefined);
   onReturn.current = () => {
     if (!weekly.isFetching) void weekly.refetch();
-    if (withDots) [...daily, ...plans].forEach((q) => { if (!q.isFetching) void q.refetch(); });
+    if (withDots) [daily[6], plans[6]].forEach((q) => { if (!q.isFetching) void q.refetch(); });
   };
   useEffect(() => navigation?.addListener?.('focus', () => onReturn.current()), [navigation]);
 
