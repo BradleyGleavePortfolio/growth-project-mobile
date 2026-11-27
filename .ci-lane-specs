@@ -1,0 +1,15 @@
+src/screens/client/foodweek
+src/screens/client/__tests__/MoreScreen
+src/screens/client/__tests__/YouScreen
+src/screens/client/__tests__/Goal927
+src/screens/client/__tests__/Kitchen
+src/screens/client/__tests__/ClientDailyMealPlan
+src/screens/client/__tests__/LogScreen
+src/components/log
+src/components/mealplan
+src/navigation/__tests__
+src/entitlements/dunning
+src/utils/log
+src/__tests__/boneSwapGuard
+src/__tests__/schemePanels994
+scripts/__tests__/routeContract
