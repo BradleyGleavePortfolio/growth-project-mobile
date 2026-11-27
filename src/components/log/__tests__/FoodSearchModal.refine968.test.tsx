@@ -4,11 +4,11 @@
  * whose CSS line each case quotes). Operator rulings 23:5x PST 11-12: the sheet over the day (2), "Add at {time}" only
  * when a save now files under today (3), the drawn three-column tool row with main's one tile (4; it reads the drawn
  * "Quick add" with the drawn bolt, QUICKADD-968), Frequent kept (5), the bowl on rows with no photo (6), the sheet
- * fill sc.bgSurface (9). No tile, tab or control for a feature phone main lacks: no Photo of a meal, Scan a barcode,
- * Favourites or Saved meals in any state.
+ * fill sc.bgSurface (9). No tile, tab or control for a feature phone main lacks: no Scan a barcode, Favourites or Saved
+ * meals in any state (Photo of a meal is MEAL-PHOTO-M's, owner 203-D8 op 1).
  */
 import React from 'react';
-import { Dimensions, StyleSheet, Text } from 'react-native';
+import { ActionSheetIOS, Dimensions, StyleSheet, Text } from 'react-native';
 import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
 import FoodSearchModal from '../FoodSearchModal';
 import { colors as palette, gold, lightTokens, radius } from '../../../theme/tokens';
@@ -257,14 +257,14 @@ describe('the drawn parts (C_add.html)', () => {
     expect(cells.map((c) => flat(c).flex)).toEqual([1, 1, 1]);
     const tile = screen.getByRole('button', { name: 'Quick add, enter a food manually' });
     expect(tile.parent).toBe(cells[0]);
-    // Columns 2 and 3 hold their place for MEAL-PHOTO-M and a later barcode tile: empty, nothing to press.
-    expect(cells.slice(1).map((c) => c.children.length)).toEqual([0, 0]);
+    // MEAL-PHOTO-M's Photo of a meal fills column 2; column 3 holds its place for a later barcode tile: empty.
+    expect(cells.slice(1).map((c) => c.children.length)).toEqual([1, 0]);
   });
 
-  it('past 100% text the manual tile takes two shares, so its words stay inside the tile', async () => {
+  it('past 100% text the row keeps the drawn three equal columns while Photo of a meal shows (MEAL-PHOTO-M R1)', async () => {
     expect(Dimensions.get('window').fontScale).toBeGreaterThan(1); // the jest window reads a larger text size
     await show();
-    expect(kids(screen.getByTestId('food-tools')).map((c) => flat(c).flex)).toEqual([2, 1, 1]);
+    expect(kids(screen.getByTestId('food-tools')).map((c) => flat(c).flex)).toEqual([1, 1, 1]);
   });
 
   it('main\'s manual tile in the drawn shape: .c-big2 a :122 1 pt forest border, corner 16, 72 tall, glyph 24 above the label, Inter 500 15/19 forest', async () => {
@@ -384,9 +384,9 @@ describe('no control for a feature phone main lacks, in any state (negatives)', 
     ['a past day', { savesToday: () => false }],
     ['saving', { saving: true }],
   ];
-  it.each(states)('%s: no Photo of a meal, Scan a barcode, Favourites or Saved meals', async (_name, over) => {
+  it.each(states)('%s: no Scan a barcode, Favourites or Saved meals', async (_name, over) => {
     await show(over);
-    const missing = /Photo of a meal|Scan a barcode|Favourites|Favorites|Saved meals/i;
+    const missing = /Scan a barcode|Favourites|Favorites|Saved meals/i;
     expect(screen.queryAllByText(missing, { includeHiddenElements: true })).toHaveLength(0);
     expect(screen.queryAllByLabelText(missing, { includeHiddenElements: true })).toHaveLength(0);
   });
@@ -398,13 +398,16 @@ describe('no control for a feature phone main lacks, in any state (negatives)', 
       ...screen.queryAllByText('Try again'), dimOf(),
     ];
     const dead: string[] = [];
+    // MEAL-PHOTO-M: the Photo tile's press opens the iOS action sheet, not a sheet prop.
+    const chooser = jest.spyOn(ActionSheetIOS, 'showActionSheetWithOptions').mockImplementation(() => undefined);
     for (const p of pressables) {
       if (p.props.accessibilityState?.disabled) continue; // announced as unavailable, not a dead tap
       jest.clearAllMocks();
       await fireEvent.press(p);
-      const called = Object.values(handlers).some((h) => h.mock.calls.length > 0);
+      const called = Object.values(handlers).some((h) => h.mock.calls.length > 0) || chooser.mock.calls.length > 0;
       if (!called) dead.push(String(p.props.accessibilityLabel ?? p.props.testID ?? JSON.stringify(p.props.children)));
     }
+    chooser.mockRestore();
     expect(dead).toEqual([]);
   });
 });
