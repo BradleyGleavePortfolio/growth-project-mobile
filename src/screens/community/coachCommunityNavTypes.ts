@@ -43,6 +43,8 @@ export type CoachCommunityStackParamList = {
   CommunityDmThread: { recipientId: string; name?: string };
   /** New message: pick one of the coach's active clients. */
   CoachCommunityDmNew: undefined;
+  /** D10-BUILD-COMMUNITY: New space (name and kind, then who can join); registered with the S v2 Home only. */
+  CoachCommunityNewSpace: undefined;
 };
 
 /** Loosely-typed nav prop used by the screens (matches the codebase pattern). */

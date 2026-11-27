@@ -111,3 +111,17 @@ so no participant count is fabricated. Tests: `CommunityChallengesScreen.test.ts
 
 Tests: `CommunityTodayScreen.test.tsx`, `communityLeaderboardEntry.test.tsx`,
 `communityMessageCoach.test.tsx`. Design rules: `docs/QUIET_LUXURY_DOCTRINE.md`.
+
+## Coach Community Home and New space (D10-BUILD-COMMUNITY)
+
+With `communityHomeV2` or `communitySpaceChat` on, the coach stack's first page is
+`CoachSpacesHomeScreen.tsx` (C6CHAT-S-V2 k01 with the Studio entry's Direct
+messages band): the deep masthead, Reports, Direct messages, Inbox and Events
+rows, the coach's spaces with who each is for (Clients, Package, Public; none for
+a members-only space) and "+ New space", which opens `CoachNewSpaceScreen.tsx`
+(v1 to v3: name and kind, then All my clients or Included with a package, then the
+packages). The create goes through `useCreateCohort` with exactly the keys the
+coach chose. With both switches off the K2 page (`CoachCommunityHomeScreen.tsx`)
+is unchanged. Search, Activity, layers, public spaces and the welcome card wait
+for the server (v1.1). Tests: `D10CCoachHome.test.tsx`, `D10CNewSpace.test.tsx`,
+`navigation/__tests__/D10CCoachHomeSwitch.test.tsx`, `api/__tests__/D10CCreateBody.test.ts`.

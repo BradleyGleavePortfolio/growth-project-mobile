@@ -197,6 +197,10 @@ const MEMBERS: ReadonlyArray<readonly [string, string, string, string]> = [
   ['the history edit exercise card', 'screens/client/WorkoutHistoryEditScreen.tsx', 'borderWidth: 1, borderBottomWidth: 1, ...schemeCardOutline, ...schemeCard,', 'PANEL'],
   ['the builder stepper card', 'screens/coach/CoachWorkoutBuilderScreen.tsx', '[styles.stepperCard, schemeCardOutline, schemeCard]', 'PANEL'],
   ['the Direct messages entry row', 'screens/community/coach-dm/CoachDmEntryRow.tsx', 'borderRadius: radius.lg, ...schemeCard }', 'PANEL'],
+  // D10-BUILD-COMMUNITY (R5): the Studio band behind Direct messages, a selected kind or visibility card and a picked package row.
+  ['the Direct messages band on the S v2 Home', 'screens/community/coach-dm/CoachDmEntryRow.tsx', 'style={band ? [styles.card, styles.band] : styles.card}', 'PANEL'],
+  ['a selected kind or visibility card in New space', 'screens/community/CoachNewSpaceScreen.tsx', 'style={[s.card, on && s.cardOn, on && schemeCard]}', 'PANEL'],
+  ['a picked package row in New space', 'screens/community/CoachNewSpaceScreen.tsx', 'style={[s.pkg, on && s.cardOn, on && schemeCard]}', 'PANEL'],
   ['the card of the exercise in progress', 'screens/client/active-workout/ExerciseCard.tsx', 'borderWidth: 1,\n    ...schemeCardOutline,\n    ...schemeCard,', 'PANEL'],
   // MERGEUP-994 (operator ruling, Almalfi): the two panels main added after this PR's base (m#986, m#989).
   ['the Since week 1 tile on an exercise\'s history', 'screens/client/workouts/exerciseHistoryStyleC.tsx', '[s.tile, schemeCard]} testID="exercise-history-since"', 'PANEL'],
@@ -309,6 +313,8 @@ const CENSUS: ReadonlyArray<readonly [string, number, string]> = [
   ['screens/coach/payments/CoachPackagesListScreen.tsx', 1, 'chip'],
   ['screens/coach/programs/ProgramAssignScreen.tsx', 3, 'avatar tile, comment'],
   ['screens/coach/programs/ProgramEditorScreen.tsx', 1, 'state tint (a day cell that holds a workout)'],
+  ['screens/community/CoachNewSpaceScreen.tsx', 4, 'hairline on a white card (an unpicked kind, visibility or package card), icon tile, skeleton'],
+  ['screens/community/CoachSpacesHomeScreen.tsx', 5, 'chip (the Clients and Package tags), icon tile, skeleton'],
   ['screens/community/CommunityHomeScreen.tsx', 3, 'icon tile, skeleton'],
   ['screens/community/CommunitySpaceChatScreen.tsx', 2, "icon circle (the closed note's ring), hairline (the closed bar's top line)"],
   ['screens/community/coach-dm/CoachDmListScreen.tsx', 4, 'skeleton, comment'],

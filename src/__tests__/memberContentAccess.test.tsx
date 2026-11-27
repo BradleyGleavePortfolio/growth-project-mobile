@@ -478,6 +478,7 @@ const EXEMPT: { file: string; kinds: Kind[]; why: string; passes?: true; exports
   { file: 'screens/coach/CoachBookingInboxScreen.tsx', kinds: ['composer'], why: 'a call link for a booking, not a chat' },
   { file: 'screens/coach/broadcasts/BroadcastComposerScreen.tsx', kinds: ['composer'], why: 'one to many: the server picks who gets it (the backend half of KT-2); the coach never types into a member\'s conversation here' },
   { file: 'screens/community/CoachCommunityCohortsScreen.tsx', kinds: ['composer', 'list'], why: 'coach admin: a space name; the list of the coach\'s own spaces' },
+  { file: 'screens/community/CoachNewSpaceScreen.tsx', kinds: ['composer', 'list'], why: "coach admin: a new space's name" },
   { file: 'screens/community/CoachCommunityCohortDetailScreen.tsx', kinds: ['composer', 'list'], why: 'coach admin: invites and the roster the coach needs to remove a member' },
   { file: 'screens/community/CoachCommunityEventsScreen.tsx', kinds: ['composer', 'list'], why: 'coach admin: event details; the coach\'s own events' },
   { file: 'screens/settings/RomanChatsConfirmSheet.tsx', kinds: ['composer'], why: 'Roman (the assistant), not a member' },

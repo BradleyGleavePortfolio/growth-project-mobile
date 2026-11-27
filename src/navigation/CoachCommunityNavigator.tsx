@@ -31,6 +31,8 @@ import { colors as tokenColors } from '../theme/tokens';
 import { featureFlags } from '../config/featureFlags';
 import { LightTheme } from '../theme/ThemeProvider';
 import CoachCommunityHomeScreen from '../screens/community/CoachCommunityHomeScreen';
+import CoachSpacesHomeScreen from '../screens/community/CoachSpacesHomeScreen';
+import CoachNewSpaceScreen from '../screens/community/CoachNewSpaceScreen';
 import CoachCommunityInboxScreen from '../screens/community/CoachCommunityInboxScreen';
 import CoachCommunityCohortsScreen from '../screens/community/CoachCommunityCohortsScreen';
 import CoachCommunityCohortDetailScreen from '../screens/community/CoachCommunityCohortDetailScreen';
@@ -80,6 +82,9 @@ export default function CoachCommunityNavigator(): React.ReactElement {
 }
 
 function CoachCommunityNavigatorStack(): React.ReactElement {
+  // D10-BUILD-COMMUNITY (R1): the S v2 Home and New space under the client tab's own rule (CommunityNavigator.tsx);
+  // with both switches off, today's K2 page and its options.
+  const spacesHome = featureFlags.communityHomeV2 || featureFlags.communitySpaceChat;
   return (
     <CoachCommunityStack.Navigator
       screenLayout={coachCommunityScreenLayout}
@@ -92,8 +97,8 @@ function CoachCommunityNavigatorStack(): React.ReactElement {
     >
       <CoachCommunityStack.Screen
         name="CoachCommunityHome"
-        component={CoachCommunityHomeScreen}
-        options={({ navigation }) => ({
+        component={spacesHome ? CoachSpacesHomeScreen : CoachCommunityHomeScreen}
+        options={spacesHome ? { headerShown: false } : ({ navigation }) => ({
           title: 'Community',
           // K2: the page draws its serif title; the bar keeps only the back control.
           headerTitle: '',
@@ -116,6 +121,7 @@ function CoachCommunityNavigatorStack(): React.ReactElement {
           } : {}),
         })}
       />
+      {spacesHome ? <CoachCommunityStack.Screen name="CoachCommunityNewSpace" component={CoachNewSpaceScreen} options={{ headerShown: false }} /> : null}
       <CoachCommunityStack.Screen
         name="CoachCommunityInbox"
         component={CoachCommunityInboxScreen}
