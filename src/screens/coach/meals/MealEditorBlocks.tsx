@@ -11,15 +11,18 @@ import { recipeAllergenSummary } from '../../../lib/recipeAllergens';
 import { LoadFailed, macroLine, mealStyles as ms } from './mealUi';
 import { MAX_OPTIONS, declaresAllergen, moveOption, recipeLine, recipeShare, removeOption, type CoachRecipe, type OptionRow } from './mealLinks';
 
-const card = [ms.card, schemeCard, schemeCardOutline];
+/** The meal page's cream cards (schemeCard); 16 pt inside and 20 pt Cormorant titles, as measured on S1_F01 (390 / 100%). */
+export const card = [ms.card, schemeCard, schemeCardOutline, { padding: 16 }];
+export const blockTitle = { ...typography.h2, fontSize: 20, lineHeight: 26 };
 type Glyph = keyof typeof Ionicons.glyphMap;
 
-function Line({ icon, children }: { icon: Glyph; children: string }) {
+/** A glyph and a muted line (the recipe's share and allergen lines); `small` on the picker's rows. */
+export function Line({ icon, children, small }: { icon: Glyph; children: string; small?: boolean }) {
   const { semanticColors: sc } = useTheme();
   return (
     <View style={st.line}>
-      <Ionicons name={icon} size={20} color={sc.textMuted} style={st.glyph} />
-      <Text style={[typography.body, ms.fill, { color: sc.textMuted }]}>{children}</Text>
+      <Ionicons name={icon} size={small ? 18 : 20} color={sc.textMuted} style={st.glyph} />
+      <Text style={[small ? typography.bodySmall : typography.body, ms.fill, { color: sc.textMuted }]}>{children}</Text>
     </View>
   );
 }
@@ -58,8 +61,8 @@ export function OptionsBlock({ rows, editing, onEditing, onAdd, onChange }: {
   const add = (
     <Pressable accessibilityRole="button" accessibilityLabel="Add an option" accessibilityState={{ disabled: full }} disabled={full}
       onPress={onAdd} style={({ pressed }) => [st.add, pressed && ms.pressed]}>
-      <Ionicons name="add-circle-outline" size={22} color={full ? sc.textMuted : sc.accentText} />
-      <Text style={[typography.bodyMd, st.addText, { color: full ? sc.textMuted : sc.accentText }]}>{ids.length ? 'Add' : 'Add an option'}</Text>
+      <Ionicons name="add-circle-outline" size={20} color={full ? sc.textMuted : sc.accentText} />
+      <Text style={[typography.bodyMd, { color: full ? sc.textMuted : sc.accentText }]}>{ids.length ? 'Add' : 'Add an option'}</Text>
     </Pressable>
   );
   const move = (i: number, by: -1 | 1) => onChange(moveOption(ids, i, by));
@@ -67,11 +70,11 @@ export function OptionsBlock({ rows, editing, onEditing, onAdd, onChange }: {
   return (
     <View style={card}>
       <View style={st.head}>
-        <Text accessibilityRole="header" style={[ms.cardTitle, ms.fill, ink]}>Options for clients</Text>
-        <Text style={muted}>{`${ids.length} of ${MAX_OPTIONS}`}</Text>
+        <Text accessibilityRole="header" style={[blockTitle, ms.fill, ink]}>Options for clients</Text>
+        <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{`${ids.length} of ${MAX_OPTIONS}`}</Text>
         {edit ? (
           <Pressable accessibilityRole="button" accessibilityLabel="Done editing" onPress={() => onEditing(false)} style={st.add}>
-            <Text style={[typography.bodyMd, st.addText, { color: sc.accentText }]}>Done</Text>
+            <Text style={[typography.bodyMd, { color: sc.accentText }]}>Done</Text>
           </Pressable>
         ) : ids.length ? add : null}
       </View>
@@ -106,9 +109,9 @@ export function OptionsBlock({ rows, editing, onEditing, onAdd, onChange }: {
         }
         if (!r.meal) {
           return (
-            <View key={`${r.id}-${i}`} style={rule}>
+            <View key={`${r.id}-${i}`} style={[rule, st.wrap]}>
               <View style={[st.tile, { backgroundColor: sc.bgSurface }]}><Ionicons name="archive-outline" size={22} color={sc.textPrimary} /></View>
-              {words}
+              <View style={st.words}>{words}</View>
               <Link label="Remove" spoken="Remove the archived meal" onPress={() => drop(i)} />
             </View>
           );
@@ -152,7 +155,7 @@ export function RecipeCard({ recipeId, mine, error, retry, retrying, onPick, onR
   }
   const head = (links: boolean) => (
     <View style={st.head}>
-      <Text accessibilityRole="header" style={[ms.cardTitle, ms.fill, ink]}>Recipe</Text>
+      <Text accessibilityRole="header" style={[blockTitle, ms.fill, ink]}>Recipe</Text>
       {links ? <Link label="Change" spoken="Change recipe" onPress={onPick} /> : null}
       {links ? <Link label="Remove link" onPress={onRemove} /> : null}
     </View>
@@ -172,7 +175,7 @@ export function RecipeCard({ recipeId, mine, error, retry, retrying, onPick, onR
             <View style={[st.row, st.firstRow, { borderTopColor: sc.border }]}>
               <Pressable accessibilityRole="button" accessibilityLabel="Link a recipe" onPress={onPick} style={({ pressed }) => [st.add, pressed && ms.pressed]}>
                 <Ionicons name="link-outline" size={22} color={sc.accentText} />
-                <Text style={[typography.bodyMd, st.addText, { color: sc.accentText }]}>Link a recipe</Text>
+                <Text style={[typography.bodyMd, { color: sc.accentText }]}>Link a recipe</Text>
               </Pressable>
             </View>
           </>
@@ -199,9 +202,8 @@ export function RecipeCard({ recipeId, mine, error, retry, retrying, onPick, onR
 }
 
 const st = StyleSheet.create({
-  head: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 16 },
-  add: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: layout.touchMin },
-  addText: { fontSize: 17 },
+  head: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 10 },
+  add: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: layout.touchMin },
   line: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   glyph: { marginTop: 3 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
@@ -209,9 +211,11 @@ const st = StyleSheet.create({
   act: { width: layout.touchMin, height: layout.touchMin, alignItems: 'center', justifyContent: 'center' },
   off: { opacity: 0.35 },
   link: { minHeight: layout.touchMin, justifyContent: 'center' },
+  wrap: { flexWrap: 'wrap' },
+  words: { flex: 1, minWidth: 150 },
   under: { textDecorationLine: 'underline' },
   tile: { width: 40, height: 40, borderRadius: radius.button, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  title: { fontSize: 24, lineHeight: 30 },
+  title: { fontSize: 22, lineHeight: 28 },
   ghost: { height: 44, borderRadius: radius.control, opacity: 0.5 },
   still: { minHeight: 150 },
   bar: { height: 14, borderRadius: radius.chip },

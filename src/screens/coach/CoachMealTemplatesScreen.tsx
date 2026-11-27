@@ -32,7 +32,7 @@ import {
   useMealTemplates,
   useUpdateMealTemplate,
 } from '../../hooks/useMealTemplates';
-import { layout, radius, schemeCard, schemeCardOutline, spacing, typography } from '../../theme/tokens';
+import { layout, radius, semantic, spacing, typography } from '../../theme/tokens';
 import type { SemanticTokens } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Screen } from '../../ui/layout/Screen';
@@ -42,13 +42,12 @@ import type { ProgramsScreenProps, ProgramsStackParamList } from './programs/typ
 import { LoadFailed, Masthead, macroLine, mealStyles as ms } from './meals/mealUi';
 import { optionRows, saveRefused } from './meals/mealLinks';
 import { useAnsweredOnce, useCoachRecipes } from './meals/coachRecipes';
-import { OptionsBlock, RecipeCard } from './meals/MealEditorBlocks';
+import { OptionsBlock, RecipeCard, blockTitle, card as panel } from './meals/MealEditorBlocks';
 
 /** Backend main's CreateMealTemplateDto maxima. */
 const LIMITS = { calories_kcal: 2000, protein_g: 300, carbs_g: 400, fats_g: 200 } as const;
 type Nav = ProgramsScreenProps<'MealEditor'>['navigation'];
 type Picked = NonNullable<ProgramsStackParamList['MealEditor']>['picked'];
-const panel = [ms.card, schemeCard, schemeCardOutline];
 
 /**
  * PLAN-SWAPS-COACH-M (Style 1 "Meal page", PICK #ALM-P3): an existing meal opens only from a list read that is fresh
@@ -92,13 +91,14 @@ function Footer({ archive, saving, disabled, onSave, onArchive, line }: { archiv
     <View testID="meal-footer" style={st.footer}>
       {line ? (
         <View accessible accessibilityRole="alert" style={st.alert}>
-          <Ionicons name="alert-circle-outline" size={20} color={sc.textPrimary} style={st.alertGlyph} />
+          <Ionicons name="alert-circle-outline" size={20} color={semantic.danger.border} style={st.alertGlyph} />
           <Text style={[typography.body, ms.fill, { color: sc.textPrimary }]}>{line}</Text>
         </View>
       ) : null}
       <View testID="meal-footer-row" style={st.footerRow}>
-        {archive ? <TextLink label="Archive this meal" onPress={onArchive} disabled={disabled || saving} /> : null}
-        <PrimaryButton label="Save meal" wrap testID="meal-save" disabled={disabled} loading={saving} haptic={false} onPress={onSave} style={ms.fill} />
+        {archive ? <View style={st.archive}><TextLink label="Archive this meal" align="start" onPress={onArchive} disabled={disabled || saving} /></View> : null}
+        <PrimaryButton label="Save meal" wrap testID="meal-save" disabled={disabled} loading={saving} haptic={false} onPress={onSave}
+          style={archive ? st.save : ms.fill} />
       </View>
     </View>
   );
@@ -183,7 +183,8 @@ function MealForm({ meal, live, answered, picked, navigation, sc }: { meal?: Mea
           void run(() => (meal ? updateMut.mutateAsync({ id: meal.id, input }) : createMut.mutateAsync(input)));
         }} />}
     >
-      <Masthead title={meal?.name ?? 'New meal'} sub={canSave || pending ? macroLine(input) : undefined} onBack={onDone}
+      <Masthead title={<Text accessibilityRole="header" style={[ms.title, styles.title, { color: sc.textOnAccent }]}>{meal?.name ?? 'New meal'}</Text>}
+        sub={canSave || pending ? macroLine(input) : undefined} onBack={onDone}
         trailing={(
           <Pressable accessibilityRole="button" accessibilityLabel="Edit details" hitSlop={8} style={styles.edit}
             onPress={() => { scroll.current?.scrollTo({ y: detailsY.current, animated: true }); nameField.current?.focus(); }}>
@@ -198,7 +199,7 @@ function MealForm({ meal, live, answered, picked, navigation, sc }: { meal?: Mea
         retry={() => void recipes.read.refetch()} retrying={recipes.read.isFetching} onRemove={() => setRecipeId(null)}
         onPick={() => navigation.navigate('MealRecipePicker', { mealId: meal?.id, mealName: name.trim(), recipeId })} />
       <View style={panel} onLayout={(e) => { detailsY.current = e.nativeEvent.layout.y; }}>
-        <Text accessibilityRole="header" style={[ms.cardTitle, { color: sc.textPrimary }]}>Details</Text>
+        <Text accessibilityRole="header" style={[blockTitle, { color: sc.textPrimary }]}>Details</Text>
         <FormField label="Name" sc={sc}>
           <TextInput
             ref={nameField}
@@ -299,6 +300,10 @@ const st = StyleSheet.create({
   bar: { height: 14, borderRadius: radius.chip },
   footer: { gap: spacing.sm },
   footerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
+  // S1_F01 at 390 / 100% and 320 / 130%: the link keeps its own width (it wraps only when the row is short) and Save
+  // meal takes the rest, never narrower than its label.
+  archive: { flexShrink: 1 },
+  save: { flexGrow: 1, flexShrink: 0 },
   alert: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   alertGlyph: { marginTop: 3 },
 });
@@ -308,6 +313,7 @@ function makeFormStyles(sc: SemanticTokens) {
     page: { gap: 14, paddingBottom: spacing.xl },
     edit: { minHeight: layout.touchMin, justifyContent: 'center' },
     under: { textDecorationLine: 'underline' },
+    title: { ...typography.h1 }, // S1_F01 draws the meal's name at h1 (32 pt), not the masthead's 40
     note: { fontFamily: typography.display.fontFamily, fontStyle: 'italic', fontSize: 19, lineHeight: 25 },
     input: {
       borderWidth: 1,

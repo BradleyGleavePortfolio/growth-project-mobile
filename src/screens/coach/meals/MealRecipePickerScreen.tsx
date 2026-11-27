@@ -14,6 +14,7 @@ import { recipeAllergenSummary } from '../../../lib/recipeAllergens';
 import type { ProgramsScreenProps } from '../programs/types';
 import { FirstCard, LoadFailed, Loading, Masthead, mealStyles as ms } from './mealUi';
 import { recipeLine, recipeShare } from './mealLinks';
+import { Line } from './MealEditorBlocks';
 import { useCoachRecipes } from './coachRecipes';
 
 export default function MealRecipePickerScreen({ route, navigation }: ProgramsScreenProps<'MealRecipePicker'>) {
@@ -48,7 +49,7 @@ export default function MealRecipePickerScreen({ route, navigation }: ProgramsSc
               <View style={[ms.card, schemeCard, schemeCardOutline, styles.list]}>
                 {shown.map((r, i) => {
                   const on = r.id === recipeId;
-                  const lines = [recipeLine(r), recipeShare(r), recipeAllergenSummary(r)];
+                  const lines = [recipeLine(r), recipeShare(r), recipeAllergenSummary(r)] as const;
                   return (
                     <Pressable key={r.id} testID={`recipe-${r.id}`} accessibilityRole="checkbox" accessibilityState={{ checked: on }}
                       accessibilityLabel={[r.title, ...(on ? ['linked'] : []), ...lines].join(', ')} onPress={() => hand(r.id)}
@@ -58,7 +59,9 @@ export default function MealRecipePickerScreen({ route, navigation }: ProgramsSc
                           <Text style={[ms.cardTitle, styles.title, { color: sc.textPrimary }]}>{r.title}</Text>
                           {on ? <Text style={[typography.caption, styles.tag, { color: sc.textOnAccent, backgroundColor: sc.accent }]}>Linked</Text> : null}
                         </View>
-                        {lines.map((l) => <Text key={l} style={muted}>{l}</Text>)}
+                        <Text style={muted}>{lines[0]}</Text>
+                        <Line small icon={r.is_public ? 'people-outline' : 'lock-closed-outline'}>{lines[1]}</Line>
+                        <Line small icon="information-circle-outline">{lines[2]}</Line>
                       </View>
                       <View style={[styles.tick, on ? { backgroundColor: sc.accent, borderColor: sc.accent } : { borderColor: sc.textMuted }]}>
                         {on ? <Ionicons name="checkmark" size={18} color={sc.textOnAccent} /> : null}
@@ -77,12 +80,12 @@ export default function MealRecipePickerScreen({ route, navigation }: ProgramsSc
 const styles = StyleSheet.create({
   content: { gap: 14, paddingBottom: 24 },
   field: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48, paddingHorizontal: 14, borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.input },
-  list: { paddingVertical: 4, gap: 0 },
+  list: { paddingVertical: 4, paddingHorizontal: 16, gap: 0 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 64, paddingVertical: 12 },
   words: { gap: 2 },
-  titleRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
-  title: { fontSize: 22, lineHeight: 28 },
-  tag: { textTransform: 'uppercase', letterSpacing: 1, paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.control, overflow: 'hidden' },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  title: { fontSize: 20, lineHeight: 26, flexShrink: 1 },
+  tag: { flexShrink: 0, textTransform: 'uppercase', letterSpacing: 1, paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.control, overflow: 'hidden' },
   tick: { width: 28, height: 28, borderRadius: radius.chip, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   outline: { minHeight: layout.buttonHeight, borderWidth: 1, borderRadius: radius.button, alignItems: 'center', justifyContent: 'center' },
   outlineText: { fontSize: 17 },

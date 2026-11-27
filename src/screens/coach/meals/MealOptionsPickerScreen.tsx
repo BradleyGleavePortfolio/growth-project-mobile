@@ -40,7 +40,7 @@ export default function MealOptionsPickerScreen({ route, navigation }: ProgramsS
         <FirstCard title="No other meals yet." body="An option is another of your meals. Make one with its calories and macros, then add it here.">
           <Pressable accessibilityRole="button" accessibilityLabel="New meal" onPress={() => navigation.push('MealEditor')}
             style={({ pressed }) => [styles.plus, pressed && ms.pressed]}>
-            <Ionicons name="add-circle-outline" size={22} color={sc.accentText} />
+            <Ionicons name="add" size={22} color={sc.accentText} />
             <Text style={[typography.bodyMd, { color: sc.accentText }]}>New meal</Text>
           </Pressable>
         </FirstCard>
@@ -85,7 +85,7 @@ export default function MealOptionsPickerScreen({ route, navigation }: ProgramsS
 const styles = StyleSheet.create({
   content: { gap: 14, paddingBottom: 24 },
   field: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48, paddingHorizontal: 14, borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.input },
-  list: { paddingVertical: 4, gap: 0 },
+  list: { paddingVertical: 4, paddingHorizontal: 16, gap: 0 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 64, paddingVertical: 10 },
   tick: { width: 28, height: 28, borderRadius: radius.chip, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   off: { opacity: 0.45 },
