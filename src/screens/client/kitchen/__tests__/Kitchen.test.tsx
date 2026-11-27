@@ -379,12 +379,12 @@ describe('KITCHEN-M: the Kitchen page (Style 2 Menu)', () => {
     expect(screen.getByLabelText('Recipes, 12, 2 from your coach')).toBeTruthy();
   });
 
-  it('11. S2: the empty words; no Save a meal from today, Rename or Delete anywhere (R1); Log food still there', async () => {
+  it('11. S2: the empty words; SAVED-MEAL-SAVE-M\'s Save a meal from today closes the empty group (flipped from R1\'s absence); Log food still there', async () => {
     server['/me/foods/saved-meals'] = [];
     await mount();
     await settle();
     expect(await screen.findByText('No saved meals yet. Save one you eat often and log it again in two taps.')).toBeTruthy();
-    expect(allWords()).not.toMatch(/Save a meal|Rename|Delete/);
+    expect(within(screen.getByTestId('kitchen-meals')).getByTestId('kitchen-save-way')).toBeTruthy();
     expect(screen.getByTestId('kitchen-log-food')).toBeTruthy();
   });
 
