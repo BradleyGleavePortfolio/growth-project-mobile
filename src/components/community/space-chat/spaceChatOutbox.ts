@@ -120,7 +120,8 @@ async function drain(): Promise<void> {
         patch(next.localId, { state: 'waiting' });
         break;
       }
-      const owner = crisisLineOwner(); // CRISIS-TEXT-SPACE-M: who wrote it, read as the send starts
+      let owner: string | null = null; // CRISIS-TEXT-SPACE-M: who wrote it, read as the send starts
+      try { owner = crisisLineOwner(); } catch { /* an unreadable user cache: no line, the queue as today */ }
       try {
         const sent = await spaceChatApi.send(next.cohortId, next.body, next.key, next.reply?.id, under);
         if (gen !== g) break;

@@ -105,7 +105,8 @@ export const spaceChatApi = {
   // session generation and its binding against the credential it reads (services/api.ts readTokenForRequest,
   // assertBindingMatches), and the next auth change cancels the request, as a voice note's hops do.
   send(cohortId: string, body: string, idempotencyKey: string, parentMessageId: string | undefined, by: SpacePublisher): Promise<SpaceMessage> {
-    const owner = crisisLineOwner(); // CRISIS-TEXT-SPACE-M: the answer's line reaches only the account that sent it
+    let owner: string | null = null; // CRISIS-TEXT-SPACE-M: the answer's line reaches only the account that sent it
+    try { owner = crisisLineOwner(); } catch { /* an unreadable user cache: no line, and the send goes as today */ }
     const bound = boundRequestSignal(by.binding);
     return call(
       SentSchema,

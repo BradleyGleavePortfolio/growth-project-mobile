@@ -39,8 +39,12 @@ jest.mock('../storage/mmkv', () => ({
   },
 }));
 // The user cache's in-memory mirror (lib/userCache readUserCacheSync): who is signed in now, for crisisLineOwner.
-const mockCached: { current: { id: string } | null } = { current: { id: 'me-1' } };
-jest.mock('../lib/userCache', () => ({ ...jest.requireActual('../lib/userCache'), readUserCacheSync: () => mockCached.current }));
+const mockCached: { current: { id: string } | null; unreadable?: boolean } = { current: { id: 'me-1' } };
+jest.mock('../lib/userCache', () => ({
+  ...jest.requireActual('../lib/userCache'),
+  // `unreadable`: the read throws, as readUserCacheSync does under a storage double with no prefsStorage (userCache.ts:106).
+  readUserCacheSync: () => { if (mockCached.unreadable) throw new TypeError("Cannot read properties of undefined (reading 'getString')"); return mockCached.current; },
+}));
 jest.mock('../utils/logger', () => ({ logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
 jest.mock('../services/sentry', () => ({ captureError: jest.fn(), captureErrorWithoutPii: jest.fn(), setSentryUser: jest.fn() }));
 jest.mock('../lib/analytics', () => ({ ...jest.requireActual('../lib/analytics'), track: jest.fn(), capture: jest.fn() }));
@@ -170,6 +174,7 @@ beforeEach(() => {
   mockDisk.clear();
   setToken('tok-me-1');
   mockCached.current = { id: 'me-1' };
+  mockCached.unreadable = false;
   mockNet.isOnline = true;
   mockRole = 'client';
   mockUser = { id: 'me-1', name: 'Dana Reyes', coach_id: 'coach-1' };
@@ -264,6 +269,24 @@ describe('CRISIS-TEXT-SPACE-M: the poster of a space chat text the crisis check 
     expectBaseSend(0, '/community/cohorts/c-every/messages', { body: WORDS });
     expect(r.queryByText('Not sent')).toBeNull();
     expect(alerts()).toEqual([]);
+  });
+
+  it.each([['a marked answer', 'answer'], ['a marked refusal', 'refusal']])('C1 (R4 guard): the user cache cannot be read: %s never fails or holds the send; no line', async (_l, kind) => {
+    mockCached.unreadable = true;
+    onSend = async (_u, b) => { if (kind === 'refusal') throw refused(FLAGGED); return { data: answer(b.body, FLAGGED) }; };
+    const r = await open();
+    await write(r, WORDS);
+    await waitFor(() => expect(sends()).toHaveLength(1));
+    await settle();
+    expectBaseSend(0, '/community/cohorts/c-every/messages', { body: WORDS });
+    expect(lineAlerts()).toEqual([]);
+    if (kind === 'answer') {
+      expect(r.queryByText('Not sent')).toBeNull();
+      expect(r.queryByText('Sending…')).toBeNull();
+    } else {
+      await waitFor(() => expect(field(r).props.value).toBe(WORDS)); // today's refusal: the words back with today's alert
+      expect(alerts()).toEqual([['Please rephrase', REASON]]);
+    }
   });
 
   it('C2 (U): crisis_flag only inside the message, never at the top level: no alert', async () => {
