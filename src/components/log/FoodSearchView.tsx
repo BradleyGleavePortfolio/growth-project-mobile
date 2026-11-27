@@ -81,7 +81,6 @@ function FoodThumb({ item }: { item: SearchResult }) {
         source={{ uri }}
         style={styles.foodThumb}
         resizeMode="cover"
-        onError={() => setFailedUri(uri)}
       />
     );
   }
