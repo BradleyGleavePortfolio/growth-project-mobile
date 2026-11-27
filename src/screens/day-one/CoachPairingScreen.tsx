@@ -38,6 +38,7 @@ import { useCoachSharingNotice } from '../../lib/coachSharingNotice';
 import CoachSharingNotice from '../../components/coachSharing/CoachSharingNotice';
 import { writeResumeState } from './resume';
 import type { Day1OnboardingParamList } from '../../navigation/Day1OnboardingNavigator';
+import { useScreenAreaKeyboardOffset } from '../../ui/layout/ScreenArea';
 
 type Props = {
   navigation: NativeStackNavigationProp<Day1OnboardingParamList, 'CoachPairing'>;
@@ -67,6 +68,7 @@ function errorCopy(e: DayOneError): string {
 }
 
 export default function CoachPairingScreen({ navigation, route }: Props) {
+  const keyboardOffset = useScreenAreaKeyboardOffset();
   const colors = useDayOneColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
@@ -113,6 +115,7 @@ export default function CoachPairingScreen({ navigation, route }: Props) {
     <SafeAreaView style={styles.container} testID="day-one-coach-pairing">
       <StepHeader step={2} onBack={() => navigation.goBack()} />
       <KeyboardAvoidingView
+        keyboardVerticalOffset={keyboardOffset}
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >

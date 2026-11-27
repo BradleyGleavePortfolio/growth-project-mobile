@@ -13,8 +13,10 @@ import { SetLogger } from './active-workout/SetLogger';
 import type { SessionSet } from './active-workout/types';
 import { isTimedRow } from '../../utils/workout/exerciseUnit';
 import { loggedWorkoutEditPayload, loggedWorkoutExercises, type LoggedWorkout } from './active-workout/sessionQuality';
+import { useScreenAreaKeyboardOffset } from '../../ui/layout/ScreenArea';
 
 export default function WorkoutHistoryEditScreen() {
+  const keyboardOffset = useScreenAreaKeyboardOffset();
   const route = useRoute<RouteProp<WorkoutStackParamList, 'WorkoutHistoryEdit'>>();
   const navigation = useNavigation<NavigationProp<WorkoutStackParamList>>();
   const qc = useQueryClient();
@@ -105,7 +107,7 @@ export default function WorkoutHistoryEditScreen() {
     }
   };
 
-  return <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+  return <KeyboardAvoidingView keyboardVerticalOffset={keyboardOffset} style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <View style={styles.topBar} testID="workout-history-edit-top">
       <HapticPressable intent="light" style={styles.toolButton} onPress={close} disabled={saving} accessibilityLabel="Cancel workout editing">
         <Text style={styles.addSetText}>Cancel</Text>

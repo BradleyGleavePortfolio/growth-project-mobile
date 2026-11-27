@@ -10,7 +10,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useWindowInsets } from '../../ui/layout/ScreenArea';
 import HapticPressable from '../HapticPressable';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { forestPop as fp, layout, lightTokens, motion, typography } from '../../theme/tokens';
@@ -42,7 +42,8 @@ function SpaceDrawer({ onClose }: { onClose: () => void }): React.ReactElement {
   const tree = useSpaceTree();
   const openTarget = useOpenSpaceTarget(true);
   const reduce = useReducedMotion();
-  const insets = useSafeAreaInsets();
+  // OFFLINE-BAND-ROOT-M: a Modal draws from the window's top, over the band: the window's insets, not the area's.
+  const insets = useWindowInsets();
   const width = Math.min(useWindowDimensions().width * 0.86, 360);
   const shown = useRef(new Animated.Value(0)).current;
   const [query, setQuery] = useState('');

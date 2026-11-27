@@ -38,12 +38,14 @@ import { describeCommunityFailure } from '../../api/communityErrors';
 import { useDraftSendKey } from '../../lib/sendOnce';
 import { useConversationClosed, useServerAnswered, useClosedBy, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
 import type { CommunityNav, CommunityRoute } from './communityNavTypes';
+import { useScreenAreaKeyboardOffset } from '../../ui/layout/ScreenArea';
 
 const TITLE_MAX = 200; // mirror backend CreatePostDto.title (1..200)
 const POST_BODY_MAX = 20000; // mirror backend CreatePostDto.body (1..20000)
 const DM_MAX = 4000; // mirror backend SendDmDto.body (1..4000)
 
 export default function CommunityComposerScreen(): React.ReactElement {
+  const keyboardOffset = useScreenAreaKeyboardOffset();
   const { semanticColors } = useTheme();
   const navigation = useNavigation<CommunityNav>();
   const route = useRoute<CommunityRoute<'CommunityComposer'>>();
@@ -134,6 +136,7 @@ export default function CommunityComposerScreen(): React.ReactElement {
       testID="community-composer-screen"
     >
       <KeyboardAvoidingView
+        keyboardVerticalOffset={keyboardOffset}
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
