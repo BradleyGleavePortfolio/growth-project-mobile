@@ -46,7 +46,7 @@ function KitchenPage({ coachId }: { coachId: string | null }) {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const online = isEffectivelyOnline(useNetworkStatus());
   // R8: the Food tab's own test (LogScreen.tsx:767); a client whose coach left has no coach_id.
-  const coached = !!coachId;
+  const coached = true;
   const today = getTodayString();
 
   const saved = useQuery({ queryKey: SAVED_MEALS_KEY, queryFn: () => savedFoodsApi.list().then((r) => r.data as unknown) });
