@@ -3,6 +3,8 @@
  * what the person wrote or recorded only to their own space (onSend: the screen's useSpaceChat and space voice outbox,
  * which refuse a closed space); a text the space refused as closed never comes back into the box.
  * memberContentAccess.test.tsx registers SpaceChatComposer and SpaceChatMic with these titles.
+ * FIX-944R3 (owner #ALM-E11): the first-use card is gone, so the mic's proof opens the record sheet on the tap; the
+ * registry row's title follows it.
  */
 import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
@@ -25,15 +27,6 @@ jest.mock('../spaceChatOutbox', () => ({
   useSpaceOutbox: () => mockRows,
 }));
 jest.mock('../../../messaging/ReplyComposer', () => ({ ReplyComposer: () => null }));
-const mockConsent = { known: true, needsCard: true, record: jest.fn() };
-jest.mock('../SpaceVoiceFirstUse', () => {
-  const ReactActual = jest.requireActual('react');
-  return {
-    __esModule: true,
-    useSpaceVoiceConsent: () => mockConsent,
-    default: (props: Record<string, unknown>) => ReactActual.createElement('SpaceVoiceFirstUseHost', { ...props, testID: 'first-use-card' }),
-  };
-});
 jest.mock('../../VoiceRecordSheet', () => {
   const ReactActual = jest.requireActual('react');
   return { __esModule: true, default: (props: Record<string, unknown>) => ReactActual.createElement('VoiceRecordSheetHost', { ...props, testID: 'record-sheet' }) };
@@ -71,16 +64,13 @@ describe('KT-2: the space chat box and mic', () => {
     await r.unmount();
   });
 
-  it('KT-2: the mic opens no recorder until the first-use card is answered, and hands a recording only to its space (onSend)', async () => {
+  it('KT-2: the mic opens the record sheet aimed at its own space on the tap, and hands a recording only to its space (onSend)', async () => {
     const onSend = jest.fn();
     const r = await render(<SpaceChatMic cohortName="Morning crew" userId="viewer" coach={false} onSend={onSend} />);
     expect(r.queryByTestId('record-sheet', { includeHiddenElements: true })).toBeNull();
     await act(async () => fireEvent.press(r.getByTestId('space-chat-mic')));
-    const card = r.getByTestId('first-use-card', { includeHiddenElements: true });
-    expect(card.props.visible).toBe(true);
-    expect(r.queryByTestId('record-sheet', { includeHiddenElements: true })).toBeNull();
-    await act(async () => { (card.props.onRecord as () => void)(); (card.props.onDismiss as () => void)(); });
     const sheet = r.getByTestId('record-sheet', { includeHiddenElements: true });
+    expect(sheet.props.visible).toBe(true);
     expect(sheet.props.target).toEqual({ kind: 'cohort', cohortName: 'Morning crew' });
     const recording = { uri: 'file:///note.m4a' };
     await act(async () => (sheet.props.onSend as (x: unknown) => void)(recording));
