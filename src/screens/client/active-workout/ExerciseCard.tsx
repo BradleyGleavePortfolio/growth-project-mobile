@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../../../components/HapticPressable';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
@@ -66,6 +66,9 @@ export function ExerciseCard({
   best?: { text: string; spoken: string; event?: string } | null;
 }) {
   const [open, setOpen] = useState(false);
+  // PR-ALERTS-M: the star sits centred on the sub line's first row at any text size; the row grows, the star does not.
+  const { fontScale } = useWindowDimensions();
+  const firstRow = (StyleSheet.flatten(styles.exerciseSummary).lineHeight ?? 18) * (fontScale || 1);
   // SET-EDIT-M: rows are keyed by index and hold their own state (open fields,
   // a typed draft); after a removal they remount, so none of it moves onto the
   // set that takes the removed one's place. Nothing here is saved.
@@ -84,7 +87,7 @@ export function ExerciseCard({
   // Open, it is one element read as the spoken sentence; folded, the header's one label says it. The star is silent.
   const bestLine = (open: boolean) => best ? (
     <View style={local.best} testID={`exercise-best-${exIdx}`} accessible={open} accessibilityLabel={open ? best.spoken : undefined}>
-      <View style={local.bestStar}><PeakStar size={14} event={best.event} testID={`exercise-best-star-${exIdx}`} /></View>
+      <View style={[local.bestStar, { height: firstRow }]}><PeakStar size={14} event={best.event} testID={`exercise-best-star-${exIdx}`} /></View>
       <Text style={[styles.exerciseSummary, local.bestText]}>{best.text}</Text>
     </View>
   ) : null;
@@ -270,8 +273,8 @@ const local = StyleSheet.create({
   // PR-ALERTS-M: with the star line the folded header is three rows; the tile and chevron stay by the name, as drawn.
   foldedBest: { alignItems: 'flex-start' },
   best: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs },
-  // The 14 pt star (its drawn star 10.5 pt) sits on the first row of the 13/18 line; it does not grow with the text.
-  bestStar: { marginTop: 2 },
+  // The 14 pt star (its drawn star 10.5 pt) is centred on the first row of the 13/18 line; it does not grow with the text.
+  bestStar: { justifyContent: 'center' },
   bestText: { flex: 1 },
   // C1 v2: the exercise in progress on the scheme's cream card (owner ruling 203-E91) with a 1 pt line.
   activeCard: {
