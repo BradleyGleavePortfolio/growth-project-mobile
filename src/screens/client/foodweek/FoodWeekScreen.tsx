@@ -105,7 +105,7 @@ function FoodWeekPage({ coached }: { coached: boolean }) {
   const onReturn = useRef<() => void>(() => undefined);
   onReturn.current = () => {
     if (!weekly.isFetching) void weekly.refetch();
-    if (withDots) [...daily, ...plans.filter((q) => q.data === undefined)].forEach((q) => { if (!q.isFetching) void q.refetch(); });
+    if (withDots) [...daily, ...plans].forEach((q) => { if (!q.isFetching) void q.refetch(); });
   };
   useEffect(() => navigation?.addListener?.('focus', () => onReturn.current()), [navigation]);
   useEffect(() => { if (!weekly.isFetching) setPulled(false); }, [weekly.isFetching]);
