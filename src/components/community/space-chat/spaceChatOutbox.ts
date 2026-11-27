@@ -71,7 +71,7 @@ const refusal = (err: unknown): Refusal | undefined =>
 
 function set(next: PendingRow[]): void {
   rows = next;
-  told.forEach((id) => { if (!rows.some((r) => r.localId === id && r.reason === 'rejected')) told.delete(id); });
+  told.forEach((id) => { if (!rows.some((r) => r.cohortId === id && r.reason === 'rejected')) told.delete(id); });
   if (uid) {
     const k = `${SPACE_OUTBOX_PREFIX}${uid}`;
     const keep = rows.filter((r) => r.state !== 'sent');
@@ -144,7 +144,7 @@ async function drain(): Promise<void> {
         // alert). Any other marked 422 (only a photo's today): the line alone, as every other writer shows it.
         if (reason === 'rejected' && crisisFlagInError(err)) {
           if (crisisLineReaches(owner)) {
-            told.add(next.localId);
+            told.add(next.cohortId);
             Alert.alert(REJECTED_WORDS.title, withCrisisLine(REJECTED_WORDS.message, err));
           }
         } else if (crisisFlagInError(err)) showCrisisLineFor((err as { cause?: { response?: { data?: unknown } } }).cause?.response?.data, owner);
@@ -260,7 +260,8 @@ export const spaceOutbox = {
   },
   /** CRISIS-TEXT-SPACE-M (R5): this refused row's one alert already showed, with the line first (the box shows none). */
   refusalShown(localId: string): boolean {
-    return told.has(localId);
+    const row = rows.find((r) => r.localId === localId);
+    return !!row && told.has(row.cohortId);
   },
   /** A sent row leaves once the server list carries it. */
   settle(serverIds: Set<string>): void {
