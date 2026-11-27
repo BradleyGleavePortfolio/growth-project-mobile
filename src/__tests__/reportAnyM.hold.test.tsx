@@ -725,11 +725,14 @@ describe('WALK: every file that draws SafetyMenu binds the shared hold on the sa
     if (d.isDirectory()) return d.name === '__tests__' || d.name === 'node_modules' ? [] : walk(p);
     return /\.tsx?$/.test(d.name) && !/\.test\.tsx?$/.test(d.name) ? [p] : [];
   });
-  it('each one uses useSafetyHolds and hands each SafetyMenu its handle, or is one of the two named exceptions', () => {
+  it('each one uses useSafetyHolds, binds the hold and hands each SafetyMenu its handle, or is one of the two named exceptions', () => {
     const hosts = walk(SRC).map((f) => [path.relative(SRC, f).split(path.sep).join('/'), fs.readFileSync(f, 'utf8')] as const)
       .filter(([rel, text]) => !DEFINES.has(rel) && /<SafetyMenu\b/.test(text));
     expect(hosts.length).toBeGreaterThanOrEqual(10);
-    const missing = hosts.filter(([rel, text]) => !NAMED.has(rel) && !(/useSafetyHolds\(\)/.test(text) && /<SafetyMenu[^>]*\bref=\{holds\.menu\(/.test(text.replace(/\n\s*/g, ' '))));
+    // The helper, each menu's handle and the hold itself on the item (a SafetyHold or the item's own pressable).
+    const binds = (text: string) => /useSafetyHolds\(\)/.test(text) && /\bholds\.hold\(/.test(text)
+      && /<SafetyMenu[^>]*\bref=\{holds\.menu\(/.test(text.replace(/\n\s*/g, ' '));
+    const missing = hosts.filter(([rel, text]) => !NAMED.has(rel) && !binds(text));
     expect(missing.map(([rel]) => rel)).toEqual([]);
   });
 });
