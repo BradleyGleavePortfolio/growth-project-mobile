@@ -1,0 +1,6 @@
+src/screens/client/kitchen/__tests__
+src/utils/log/__tests__/fr916FoodSaveIntent.test.ts
+src/utils/log/__tests__/ls916-repeat-recovery.test.ts
+src/utils/log/__tests__/offPhotoM.searchSave.test.ts
+src/hooks/__tests__/fr916r2-recent-recovery.test.ts
+src/hooks/__tests__/lo916r2-manual-repeat-recent.test.ts
