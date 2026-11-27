@@ -44,7 +44,7 @@ import {
   DmRow,
 } from '../../components/community';
 import DmCoachCard from '../../components/community/DmCoachCard';
-import { FormerCoachEntry, formerCoachOf } from '../../components/community/FormerCoach';
+import { FormerCoachEntry, useFormerCoach } from '../../components/community/FormerCoach';
 import { romanCopy } from '../../components/community/romanVoice';
 import HapticPressable from '../../components/HapticPressable';
 import type { CommunityDmThread } from '../../api/communityApi';
@@ -90,7 +90,7 @@ export default function CommunityDmListScreen({
   const threads = useDmThreads(workspaceId);
   const coachId = client?.coach_id ?? null;
   const coachName = useMyCoachName(coachId).name;
-  const me = useCommunityMe();
+  const listedFormer = useFormerCoach(useCommunityMe().data, coachId);
 
   // The workspace prerequisite must SUCCEED before we can decide "no
   // conversations". The parent threads the real `me.isLoading`/`me.isError`
@@ -128,7 +128,7 @@ export default function CommunityDmListScreen({
   const others = coachFirst ? data.filter((t) => t.other_user_id !== coachId) : data;
   const openCoach = () =>
     (coachThread ? openThread(coachThread) : navigation.navigate('CommunityDmThread', { recipientId: coachId as string }));
-  const former = coachFirst ? formerCoachOf(me.data, coachId) : null;
+  const former = coachFirst ? listedFormer : null;
 
   const Container: React.ComponentType<{ children: React.ReactNode }> = embedded
     ? ({ children }) => <View style={styles.flex}>{children}</View>

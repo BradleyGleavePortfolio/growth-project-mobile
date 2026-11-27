@@ -202,6 +202,43 @@ describe('her list (Style 3 S3_listv, row 1b)', () => {
   });
 });
 
+describe('KT-2: a block, a ban, a removal or a departure', () => {
+  const blockMaya = () => act(async () => {
+    useBlockedUsersStore.setState({ blocked: [{ id: MAYA, displayName: 'Maya Brooks', blockedAt: '2026-11-26T00:00:00Z' }] });
+  });
+  it('KT-2: my block of my former coach takes her card off my list at once', async () => {
+    serve({ ...BASE, '/community/me': ME });
+    const view = await list();
+    await waitFor(() => expect(view.getByTestId('dm-former-coach')).toBeTruthy());
+    await blockMaya();
+    expect(view.queryByTestId('dm-former-coach')).toBeNull();
+    expect(view.queryByText('Maya Brooks')).toBeNull();
+  });
+
+  it('KT-2: my block of my former coach takes her card off the locked page at once', async () => {
+    mockUser = { id: CLIENT, role: 'student', name: 'Dana Cruz', firstName: 'Dana' };
+    mockCoachless = true;
+    serve({ ...BASE, '/community/me': { ...OLD_ME, workspace_id: null, membership: null, former_coach_dms: [formerItem(WS2, MAYA, 'Maya Brooks')] } });
+    const locked = await wrap(
+      <CoachOnlyGate title={COMMUNITY_LOCK_TITLE} body={COMMUNITY_LOCK_BODY} testID="community-coach-lock"><Text>the stack</Text></CoachOnlyGate>,
+    );
+    await waitFor(() => expect(locked.getByTestId('community-coach-lock-former')).toBeTruthy());
+    await blockMaya();
+    expect(locked.queryByTestId('community-coach-lock-former')).toBeNull();
+    expect(locked.getByText(COMMUNITY_LOCK_TITLE)).toBeTruthy();
+  });
+
+  it('KT-2: when the server stops listing her (her block, a ban, a removal, she left) the card goes on the next /me read', async () => {
+    serve({ ...BASE, '/community/me': ME });
+    const view = await list();
+    await waitFor(() => expect(view.getByTestId('dm-former-coach')).toBeTruthy());
+    serve({ ...BASE, '/community/me': { ...ME, former_coach_dms: [] } });
+    await act(async () => { await qc.invalidateQueries({ queryKey: ['community', 'me'] }); });
+    await waitFor(() => expect(view.queryByTestId('dm-former-coach')).toBeNull());
+    expect(view.getByText('Lee Tanaka')).toBeTruthy();
+  });
+});
+
 describe('the thread (Style 3 S3_thread: a Style C page)', () => {
   it('reads the former coach\'s community (from /me, no new route param) and draws the masthead, not 05b\'s bar', async () => {
     serve({ ...BASE, '/community/me': ME, [mayaMsgs]: MAYA_MSGS });

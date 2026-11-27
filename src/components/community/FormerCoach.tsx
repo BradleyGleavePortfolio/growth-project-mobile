@@ -19,6 +19,7 @@ import HapticPressable from '../HapticPressable';
 import { brand, colors, forestPop as fp, lightTokens, semantic, voiceShades } from '../../theme/tokens';
 import { useDmThreads } from '../../hooks/useCommunity';
 import { dropAuthorFromCoachInbox } from '../../hooks/useCoachCommunity';
+import { useBlockedUsersStore } from '../../store/blockedUsersStore';
 import { describeCommunityFailure } from '../../api/communityErrors';
 import type { CommunityMeResponse } from '../../api/communityApi';
 import {
@@ -51,6 +52,14 @@ export function formerCoachOf(me: CommunityMeResponse | undefined, myCoachId: st
   const first = me?.former_coach_dms?.[0];
   if (!first || first.coach_user_id === myCoachId) return null;
   return { workspaceId: first.workspace_id, coachId: first.coach_user_id, name: first.coach_display_name?.trim() || null };
+}
+
+/** KT-2: formerCoachOf with my block applied at once, so a coach I block leaves the card before /me is read again
+ * (blockSync reads it again; the server then leaves her out, as it does for her block, a ban or a removal). */
+export function useFormerCoach(me: CommunityMeResponse | undefined, myCoachId: string | null | undefined): FormerCoach | null {
+  const former = formerCoachOf(me, myCoachId);
+  const blocked = useBlockedUsersStore((st) => !!former && st.blocked.some((b) => b.id === former.coachId));
+  return blocked ? null : former;
 }
 
 /** The thread's former coach: listed by /me for this person, then held for the visit, so a thread the server stops

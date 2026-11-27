@@ -21,7 +21,7 @@ import { readUserCacheSync } from '../../lib/userCache';
 import { layout, spacing } from '../../theme/tokens';
 import { useCommunityMe } from '../../hooks/useCommunity';
 import CommunityTermsGate from '../community/CommunityTermsGate';
-import { FormerCoachEntry, formerCoachOf } from '../community/FormerCoach';
+import { FormerCoachEntry, useFormerCoach } from '../community/FormerCoach';
 import CommunityDmThreadScreen from '../../screens/community/CommunityDmThreadScreen';
 
 export const JOIN_A_COACH = 'Join a coach';
@@ -130,7 +130,7 @@ export function CoachOnlyGate({
 /** ALM-D5: the locked page with her former coach's card (GET /community/me former_coach_dms[0]); the card opens that
  * thread in this tab, behind the community terms, and Back (Android's too) returns to the page. */
 function CoachlessLock({ title, body, testID = 'join-coach-state' }: Pick<JoinCoachStateProps, 'title' | 'body' | 'testID'>): React.ReactElement {
-  const former = formerCoachOf(useCommunityMe().data, null);
+  const former = useFormerCoach(useCommunityMe().data, null);
   const [openWith, setOpenWith] = useState<string | null>(null);
   useEffect(() => {
     if (!openWith) return undefined;
