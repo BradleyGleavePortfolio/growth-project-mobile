@@ -130,7 +130,7 @@ function setClock(h: number, m: number) {
   jest.setSystemTime(new Date(2026, 9, 13, h, m));
 }
 async function mount() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity, staleTime: 30_000 } } });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity, staleTime: 30_000 }, mutations: { gcTime: Infinity } } });
   await render(<QueryClientProvider client={client}><KitchenScreen /></QueryClientProvider>);
   await screen.findByTestId('kitchen-log-food');
   await waitFor(() => expect(screen.queryByTestId('kitchen-loading')).toBeNull());
@@ -171,6 +171,7 @@ beforeEach(() => {
   [mockNav.navigate, mockParent.navigate, mockEnqueue].forEach((f) => f.mockClear());
   Object.values(mockHaptics).forEach((f) => f.mockClear());
   jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
+  (AccessibilityInfo.announceForAccessibility as jest.Mock).mockClear();
   server = {
     [LIST]: MEALS(), '/lists/grocery': [], '/lists/shopping': [], '/recipes': [], '/log/daily': DAY(),
     '/me/meal-plan/today': { date: '2026-10-13', assignments: [] }, '/v1/clients/me/coach': { name: 'Sam Rivera' },
@@ -182,7 +183,7 @@ describe('SAVED-MEAL-SAVE-M: Save a meal from today (Style 2 Menu)', () => {
   it('1. the way in: last row of Your meals with KS-2; none while loading or failed with nothing cached; kept on a failed refresh; no KS-2 at 100; reads today on every open', async () => {
     let release: (v: unknown) => void = () => undefined;
     server[LIST] = () => new Promise((res) => { release = res; });
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity, staleTime: 30_000 } } });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity, staleTime: 30_000 }, mutations: { gcTime: Infinity } } });
     await render(<QueryClientProvider client={client}><KitchenScreen /></QueryClientProvider>);
     await screen.findByTestId('kitchen-loading');
     expect(screen.queryByTestId('kitchen-save-way')).toBeNull();
@@ -254,6 +255,7 @@ describe('SAVED-MEAL-SAVE-M: Save a meal from today (Style 2 Menu)', () => {
     await pressSave();
     await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1));
     expect(mockPost.mock.calls[0][1].items.map((i: { food_item_id: string }) => i.food_item_id)).toEqual(['f4', 'f5', 'f6', 'f7']);
+    await waitFor(() => expect(screen.queryByTestId('kitchen-save-sheet')).toBeNull());
   });
 
   it('17b. unticking every food disables "Save as a meal"; one food reads "Save 1 food as a meal"', async () => {
@@ -290,7 +292,7 @@ describe('SAVED-MEAL-SAVE-M: Save a meal from today (Style 2 Menu)', () => {
     const wait = pending<{ data: unknown }>();
     mockPost.mockImplementation(() => wait.p);
     await pressSave();
-    await fireEvent.press(screen.getByTestId('kitchen-sheet-scrim'));
+    await fireEvent.press(screen.getByTestId('kitchen-sheet-scrim', { includeHiddenElements: true }));
     expect(screen.queryByTestId('kitchen-save-sheet')).toBeNull();
     server[LIST] = [WRITTEN(), ...MEALS()];
     await act(async () => { wait.settle({ data: WRITTEN() }); });
@@ -502,7 +504,8 @@ describe('SAVED-MEAL-SAVE-M: Save a meal from today (Style 2 Menu)', () => {
       await openSave();
       await loaded();
       const avoider = screen.getByTestId('kitchen-sheet-avoider');
-      expect(avoider.props.behavior).toBe('padding');
+      const frame = fs.readFileSync(path.join(SRC, 'screens', 'client', 'kitchen', 'SavedMealSheet.tsx'), 'utf8');
+      expect(frame).toMatch(/<KeyboardAvoidingView behavior=\{Platform\.OS === 'ios' \? 'padding' : undefined\} style=\{s\.avoid\}/);
       expect(StyleSheet.flatten(avoider.props.style).justifyContent).toBe('flex-end');
       const foot = screen.getByTestId('kitchen-sheet-foot');
       expect(within(foot).getByTestId('save-name')).toBeTruthy();
@@ -515,7 +518,7 @@ describe('SAVED-MEAL-SAVE-M: Save a meal from today (Style 2 Menu)', () => {
       expect(sheet.maxHeight).toBeLessThanOrEqual(windowLeft);
       expect(StyleSheet.flatten(screen.getByTestId('kitchen-sheet-body').props.style).flexShrink).toBeGreaterThanOrEqual(1);
       // The fixed parts, measured from their styles at 130 percent: the header (grab, a two-line title) and the foot.
-      const st = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style) as Record<string, number>;
+      const st = (id: string) => StyleSheet.flatten(screen.getByTestId(id, { includeHiddenElements: true }).props.style) as Record<string, number>;
       const text = (id: string, lines = 1) => { const t = st(id); return lines * t.lineHeight * 1.3 + (t.paddingTop ?? 0) + (t.marginTop ?? 0) + (t.marginBottom ?? 0); };
       const grab = st('kitchen-sheet-grab');
       const header = sheet.paddingTop + grab.height + grab.marginBottom + text('kitchen-sheet-title', 2);

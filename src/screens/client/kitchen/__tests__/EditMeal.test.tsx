@@ -98,7 +98,7 @@ const tap = async (title: string, button: string) => {
 };
 
 async function mount() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity, staleTime: 30_000 } } });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity, staleTime: 30_000 }, mutations: { gcTime: Infinity } } });
   await render(<QueryClientProvider client={client}><KitchenScreen /></QueryClientProvider>);
   await screen.findByTestId('kitchen-meals');
   return client;
@@ -124,6 +124,7 @@ beforeEach(() => {
   [mockPost, mockPatch, mockDelete].forEach((f) => f.mockReset());
   Object.values(mockHaptics).forEach((f) => f.mockClear());
   jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
+  (AccessibilityInfo.announceForAccessibility as jest.Mock).mockClear();
   alerts = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   server = { [LIST]: MEALS(), '/lists/grocery': [], '/lists/shopping': [], '/recipes': [] };
 });
