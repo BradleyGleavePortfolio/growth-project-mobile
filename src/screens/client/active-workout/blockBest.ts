@@ -43,6 +43,7 @@ export function blockBests(
       if (sets.length === 0) return;
       const order = Math.min(...sets.map((set) => set.doneOrder ?? Infinity));
       if (at < 0 || order < first) { at = i; first = order; }
+      out[i] = { key: `${key}@${record.weight}`, weight: record.weight, text: `${sets.length} × ${sets[0].reps} at ${record.weight.toLocaleString()} lb, ${BASIS}`, spoken: '' };
     });
     if (at < 0) continue;
     const sets = atRecord(exercises[at], record.weight);
