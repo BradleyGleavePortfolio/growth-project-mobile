@@ -217,8 +217,9 @@ export default function SavedMealSheet({ meal, onClose, onAdded, onStale, writes
 
   if (renaming) {
     // SS10: the edit body in place of the add body (iOS shows one Modal at a time), its field pinned above the keyboard.
+    // While a rename runs it holds as the add body does (LS-KITCHEN-M-1 C2): its answer lands on this meal's sheet only.
     return (
-      <KitchenSheet visible title={SAVE_WORDS.rename} onClose={onClose} testID="kitchen-sheet" footer={(
+      <KitchenSheet visible title={SAVE_WORDS.rename} onClose={onClose} busy={busy} testID="kitchen-sheet" footer={(
         <>
           <MealNameField value={newName} onChange={setNewName} testID="rename-name" editable={!busy} />
           {line ? (

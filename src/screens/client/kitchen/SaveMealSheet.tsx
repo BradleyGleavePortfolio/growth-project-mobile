@@ -69,6 +69,11 @@ export default function SaveMealSheet({ meals, writes, onClose }: {
   const sending = useRef(false);
   const kept = useRef<Set<string> | null>(null);
   const lost = useRef<SaveMealBody[]>([]);
+  // KITCHEN-M's C2 class: an answer closes only the sheet that sent it. Closed mid-send (R7) and opened again, the open
+  // sheet is a new one, so a late answer leaves it as she left it; the list still gets the meal (the mutation's onSuccess).
+  const live = useRef(true);
+  useEffect(() => { live.current = true; return () => { live.current = false; }; }, []);
+  const done = () => { if (live.current) onClose(); };
   // SS7: each line read once; iOS hears it, Android reads the notice's live region.
   useEffect(() => { if (Platform.OS === 'ios' && line) AccessibilityInfo.announceForAccessibility(line); }, [line]);
 
@@ -95,10 +100,10 @@ export default function SaveMealSheet({ meals, writes, onClose }: {
         const list = savedMealsOf(await writes.readList().catch(() => null));
         if (!list) { setRetry(true); setLine(SAVE_WORDS.notSaved); return; }
         const landed = lostSaveIn(list, kept.current, lost.current);
-        if (landed) { writes.saved(landed); onClose(); return; }
+        if (landed) { writes.saved(landed); done(); return; }
       }
       await writes.create.mutateAsync(body);
-      onClose();
+      done();
     } catch (err) {
       const kind = failureKind(err);
       if (kind === 'lost') {
