@@ -535,7 +535,7 @@ describe('SCM4 T8: nothing saved', () => {
     const asyncKeys = await AsyncStorage.getAllKeys();
     const kept = [
       JSON.stringify([...mockDisk.entries()]),
-      JSON.stringify(await AsyncStorage.multiGet(asyncKeys)),
+      JSON.stringify(await Promise.all(asyncKeys.map(async (k) => [k, await AsyncStorage.getItem(k)]))),
       JSON.stringify(qc.getQueryCache().getAll().map((q) => [q.queryKey, q.state.data])),
       JSON.stringify(qc.getMutationCache().getAll().map((m) => m.state)),
       JSON.stringify([mockCapture.mock.calls, mockTrack.mock.calls, mockLog.mock.calls]),

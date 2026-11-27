@@ -7,7 +7,7 @@
  * src/utils/log/__tests__/mealPhotoAttach.test.ts has them; the server answers by space. Made-up files and links only.
  */
 import React from 'react';
-import { Alert, Keyboard, Platform, StyleSheet } from 'react-native';
+import { Alert, Keyboard, Platform, StyleSheet, type ViewStyle } from 'react-native';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { authEvents } from '../../../utils/authEvents';
@@ -352,7 +352,7 @@ describe('SCM4 T11 (screen) and trap 10: the + in the box', () => {
     const barOf = () => r.getByTestId('space-chat-composer');
     const lead = () => {
       const bar = barOf();
-      const first = bar.children[0] as unknown as { props: { style: unknown } };
+      const first = bar.children[0] as unknown as { props: { style: ViewStyle } };
       return { pad: StyleSheet.flatten(bar.props.style).paddingLeft, gap: StyleSheet.flatten(bar.props.style).gap, slot: StyleSheet.flatten(first.props.style).width };
     };
     const withPlus = lead();

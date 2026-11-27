@@ -5,7 +5,7 @@
  * only once the sheet has gone (the Modal's onDismiss), on Android at once. The photo module stands in (its busy flag).
  */
 import React from 'react';
-import { AccessibilityInfo, Keyboard, Platform, StyleSheet } from 'react-native';
+import { AccessibilityInfo, Keyboard, Platform, StyleSheet, type ViewStyle } from 'react-native';
 import { act, fireEvent, render, within } from '@testing-library/react-native';
 
 const mockBusy = { current: false };
@@ -51,9 +51,9 @@ describe('SCM4 T11: the + and the pop-up', () => {
     const box = StyleSheet.flatten(plus.props.style);
     expect([box.width, box.height]).toEqual([44, 44]);
     expect(box.backgroundColor).toBeUndefined();
-    const glyph = plus.children[0] as unknown as { props: { style: unknown }; children: Array<{ props: { style: unknown } }> };
+    const glyph = plus.children[0] as unknown as { props: { style: ViewStyle }; children: Array<{ props: { style: ViewStyle } }> };
     expect(StyleSheet.flatten(glyph.props.style)).toEqual(expect.objectContaining({ width: 24, height: 24 }));
-    const strokes = glyph.children.map((c) => StyleSheet.flatten(c.props.style));
+    const strokes = glyph.children.map((c): ViewStyle => StyleSheet.flatten(c.props.style));
     expect(strokes.map((st) => [st.width, st.height, st.backgroundColor])).toEqual([[16, 2, fp.forest], [2, 16, fp.forest]]);
     expect(r.queryByTestId('space-chat-add-sheet')).toBeNull();
   });
