@@ -267,6 +267,7 @@ const CENSUS: ReadonlyArray<readonly [string, number, string]> = [
   ['components/community/MessageBubble.tsx', 4, 'hairline on a white bubble, comment'],
   ['components/community/SpaceTree.tsx', 1, 'chip'],
   ['components/community/ThreadHeader.tsx', 2, 'avatar tile, comment'],
+  ['components/community/space-chat/SpaceInfoSheet.tsx', 1, 'sheet grab (m#944, Space info)'],
   ['components/community/space-chat/SpaceMessageSheet.tsx', 1, 'sheet grab'],
   ['components/log/FoodDayView.tsx', 1, 'icon circle'],
   ['components/messaging/ConversationClosed.tsx', 2, 'hairline, comment'],
