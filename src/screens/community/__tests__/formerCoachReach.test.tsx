@@ -393,3 +393,25 @@ describe('the coach\'s side (S3_coach: "Former client")', () => {
     expect(within(sam).getByText('Former client')).toBeTruthy();
   });
 });
+
+// LO-DMFR-M-1 B1 (LO lens, round 1): "not on her roster" means "a client who left" only when the roster was read after
+// the thread list. The app's saved query cache (services/queryClient.ts, 24 h) restores yesterday's roster at once, so
+// a client who joined since then is missing from it until the roster is read again (coachDm.tsx useDmRoster, several
+// pages), and stays missing for the visit when that read fails while the thread list answered.
+describe('LO-DMFR-M-1 B1: a saved roster from before a client joined', () => {
+  const COACH_ME = { ...OLD_ME, workspace_id: WS2, membership: null };
+  it('LO-DMFR B1: a current client missing from a saved roster is not called "Former client" while the roster is read again', async () => {
+    mockUser = { id: MAYA, role: 'coach', name: 'Maya Brooks', firstName: 'Maya' };
+    qc.setQueryData(['coach', 'dm-roster', MAYA], { [JORDAN]: { name: 'Jordan Lee', archived: false } }, { updatedAt: NOW - 3_600_000 });
+    mockGetClients.mockImplementation(() => new Promise(() => {})); // today's roster read has not answered yet
+    // Sam became Maya's client this morning (on today's roster, not on the saved one) and wrote to her first.
+    serve({ '/community/me': COACH_ME, [`/community/workspaces/${WS2}/dms`]: { threads: [
+      thread(WS2, SAM, ago(2), { other_display_name: 'Sam Rivera' }), thread(WS2, JORDAN, ago(60), { other_display_name: 'Jordan Lee' }),
+    ] } });
+    const view = await wrap(<CoachDmListScreen />);
+    const sam = await waitFor(() => view.getByTestId(`coach-dm-row-${SAM}`));
+    expect(within(sam).getByText('Sam Rivera')).toBeTruthy();
+    expect(within(sam).queryByText('Former client')).toBeNull();
+    expect(sam.props.accessibilityLabel).toBe('Open conversation with Sam Rivera');
+  });
+});
