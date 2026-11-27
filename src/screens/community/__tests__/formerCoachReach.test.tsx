@@ -439,8 +439,8 @@ describe('FIX-DMFR-M-1 B1 class: "Former client" only from a roster read in this
       throw notFound();
     });
   };
-  const row = (view: ReturnType<typeof render>, id: string) => view.getByTestId(`coach-dm-row-${id}`);
-  const chip = (view: ReturnType<typeof render>, id: string) => within(row(view, id)).queryByText('Former client');
+  const row = (view: Awaited<ReturnType<typeof render>>, id: string) => view.getByTestId(`coach-dm-row-${id}`);
+  const chip = (view: Awaited<ReturnType<typeof render>>, id: string) => within(row(view, id)).queryByText('Former client');
   const arrive = async (next: unknown[]) => {
     threads = next;
     await act(async () => { await qc.invalidateQueries({ queryKey: ['community'] }); });
