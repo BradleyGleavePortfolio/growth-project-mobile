@@ -100,11 +100,12 @@ function FoodWeekPage({ coached }: { coached: boolean }) {
     void target.refetch();
   };
   // Back on the page (she may have logged a food on the Food tab for any shown day): on every range, the weekly
-  // read and every day and plan read of the shown range are fresh again, so each row says what the Food day says.
+  // read and every day read of the shown range are fresh again, so each row says what the Food day says. A plan read
+  // is read again only when it has no answer: the Food tab never writes a plan (it shares the Food day's plan key).
   const onReturn = useRef<() => void>(() => undefined);
   onReturn.current = () => {
     if (!weekly.isFetching) void weekly.refetch();
-    if (withDots) [...daily, ...plans].forEach((q) => { if (!q.isFetching) void q.refetch(); });
+    if (withDots) [...daily, ...plans.filter((q) => q.data === undefined)].forEach((q) => { if (!q.isFetching) void q.refetch(); });
   };
   useEffect(() => navigation?.addListener?.('focus', () => onReturn.current()), [navigation]);
   useEffect(() => { if (!weekly.isFetching) setPulled(false); }, [weekly.isFetching]);
