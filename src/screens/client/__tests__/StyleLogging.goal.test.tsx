@@ -4,7 +4,8 @@
  * - ClientWorkoutViewerScreen: C1 v2 planning/MOCKUP3/C1/style-c-v2/C2_history_ios390_100.png for the page, its title
  *   and section heads, C2_today_ios390_100.png for each card's exercise rows, C2_first for the empty title.
  * - RoutineBuilderScreen: K3 Style C planning/MOCKUP3/K3/style-c/C_day_ios390_100.png for the page (masthead, lettered
- *   rows, the one forest action at the foot), C_row for the fields' sage panel, C_picker for the Add exercise sheet.
+ *   rows, the one forest action at the foot), C_row for the fields' panel (the scheme's cream card, owner ruling
+ *   203-E91), C_picker for the Add exercise sheet.
  * Frames are 780 px wide for 390 pt (2x, context a9434a53); each case names the pixel rows it was read from. Each case
  * mounts the real screen at 390 x 844 (text 100%) and at 320 x 568 (text 130%). Words, data and controls are main's.
  */
@@ -57,7 +58,7 @@ jest.mock('../../../components/HapticPressable', () => require('react-native').P
 
 import ClientWorkoutViewerScreen from '../ClientWorkoutViewerScreen';
 import RoutineBuilderScreen from '../RoutineBuilderScreen';
-import { layout, lightTokens as sc, radius, spacing, typography } from '../../../theme/tokens';
+import { layout, lightTokens as sc, radius, schemeCard, schemeCardOutline, spacing, typography } from '../../../theme/tokens';
 import { mast, wsc } from '../workouts/workoutStyleC';
 
 type Flat = ViewStyle & TextStyle;
@@ -210,12 +211,16 @@ describe.each(DEVICES)('at $name', (device) => {
     expect(flat(view.getByText('Bench press')).fontFamily).toBe(typography.h4.fontFamily); // "Back" cap rows 966-989
   });
 
-  it('builder: the three fields sit on the sage panel, one row each, 16 pt corners (C_row rows 480-993)', async () => {
+  // MERGEUP-987 (operator ruling 7208731987, owner #203-E91 on main by m#994): the panel is the scheme's cream card.
+  it("builder: the three fields sit on the scheme's cream card, one row each, 16 pt corners (C_row rows 480-993)", async () => {
     mockRoutineId = 'routine';
     const view = await mount(device, <RoutineBuilderScreen />);
-    const panels = hosts(view.toJSON()).filter((n) => styleOf(n).backgroundColor === sc.surface.sage);
+    const panels = hosts(view.toJSON()).filter((n) => styleOf(n).backgroundColor === schemeCard.backgroundColor);
     expect(panels).toHaveLength(2);
-    expect(styleOf(panels[0]).borderColor).toBe(sc.surface.sageLine);
+    expect(styleOf(panels[0])).toMatchObject(schemeCard);
+    expect(styleOf(panels[0])).toMatchObject(schemeCardOutline);
+    expect(styleOf(panels[0]).borderWidth).toBe(1);
+    expect(styleOf(panels[0]).borderColor).toBeUndefined();
     expect(styleOf(panels[0]).borderRadius).toBe(radius.card);
     const field = flat(view.getByLabelText('Sets for Bench press, exercise 1'));
     expect(field.backgroundColor).toBe(sc.bgSurface); // the drawn field ground (C_row rows 1066-1168)

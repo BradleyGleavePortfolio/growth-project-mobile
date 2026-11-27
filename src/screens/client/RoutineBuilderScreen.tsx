@@ -3,7 +3,7 @@
  *
  * STYLE-LOGGING-M: Style C by its nearest picked drawings, K3 Style C (the owner's builder pick, drawn on C1 v2
  * tokens): C_day for the page (the deep forest masthead holding the bar and the routine's serif name, lettered rows
- * with their grip, the one forest action at the foot), C_row for the fields (the sage panel the numbers sit on; the
+ * with their grip, the one forest action at the foot), C_row for the fields (the cream card the numbers sit on; the
  * typed fields stay, no steppers) and C_picker for the Add exercise sheet. Words, saves and controls are main's; the
  * row's numeral becomes its letter (blockLetter).
  */
@@ -26,7 +26,7 @@ import { useNavigation, useRoute, RouteProp, NavigationProp, ParamListBase } fro
 import { getAllExercises } from '../../db/workoutDb';
 import { exerciseCatalogApi } from '../../api/exerciseCatalog';
 import { useTheme } from '../../theme/ThemeProvider';
-import { layout, radius, spacing, typography, type SemanticTokens } from '../../theme/tokens';
+import { layout, radius, schemeCard, schemeCardOutline, spacing, typography, type SemanticTokens } from '../../theme/tokens';
 import { Screen, useScreenInsets } from '../../ui';
 import { blockLetter } from './active-workout/blockLetter';
 import { MastheadBand, mast, sectionHead, wsc } from './workouts/workoutStyleC';
@@ -369,7 +369,7 @@ export default function RoutineBuilderScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-            {/* C_row's sage panel: one row per number, the label at the left and the typed value at the right. */}
+            {/* C_row's panel, the scheme's cream card (owner ruling 203-E91): one row per number, the label at the left and the typed value at the right. */}
             <View style={styles.fieldPanel}>
               <View style={styles.field}>
                 <Text style={styles.fieldLabel}>Sets</Text>
@@ -548,17 +548,17 @@ const makeStyles = (sc: SemanticTokens) =>
   // C_day "Back squat" (cap rows 966-989): Inter 17.
   exerciseName: { ...typography.h4, color: sc.textPrimary, flex: 1 },
   exerciseActions: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end' },
-  // C_row rows 478-993: sage, a 1 pt sage line, 16 pt corners, 16 pt in from its edge.
+  // C_row rows 478-993: the scheme's cream card (owner ruling 203-E91) with a 1 pt line, 16 pt corners, 16 pt in from its edge.
   fieldPanel: {
-    backgroundColor: sc.surface.sage,
     borderWidth: 1,
-    borderColor: sc.surface.sageLine,
+    ...schemeCardOutline,
+    ...schemeCard,
     borderRadius: radius.card,
     paddingHorizontal: spacing.lg,
   },
   // C_row: one row per number (60 pt pitch, rules 612-613, 732-733), the label at the left.
   field: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 60, paddingVertical: spacing.sm },
-  fieldRule: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: sc.surface.sageLine },
+  fieldRule: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: sc.border },
   // C_row "Sets" (cap rows 538-561): body text on the panel.
   fieldLabel: { ...typography.body, color: sc.textPrimary, flex: 1 },
   // The typed value in the drawn field ground (C_row rows 1066-1169: surface, 1 pt line, 12 pt corners); C_row's
