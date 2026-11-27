@@ -9,7 +9,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import LogScreen from '../../../screens/client/LogScreen';
 import { enqueue } from '../../../services/foodLogQueue';
 import { foodApi, logApi } from '../../../services/api';
-import { featureFlags } from '../../../config/featureFlags';
+import { featureFlags as flags } from '../../../config/featureFlags';
+// The mocked switches are a plain object here, so a case can turn one off.
+const featureFlags = flags as { foodPlanChecklist: boolean };
 import type { FoodLog } from '../../../types';
 
 let mockOnline = true;

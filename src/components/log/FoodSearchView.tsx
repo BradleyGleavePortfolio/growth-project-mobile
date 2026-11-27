@@ -271,7 +271,7 @@ export default function FoodSearchView({
   );
   // With a plan meal the whole block scrolls with the list, so the swaps and the footnote are never cut at 320 pt or 130%.
   // The list pads its rows by the gutter; the block keeps its own margins, so it sits out of that padding.
-  const withTop = (head: React.ReactNode) => (planMeal ? <><View style={styles.bleed}>{top}</View>{head}</> : head);
+  const withTop = (head: React.ReactElement | null) => (planMeal ? <><View style={styles.bleed}>{top}</View>{head}</> : head);
 
   return (
     <View style={styles.modalBody}>
