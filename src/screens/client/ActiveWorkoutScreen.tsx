@@ -255,7 +255,7 @@ export default function ActiveWorkoutScreen() {
     [bestsReady, sessionExercises, summary.records, bodyWeight],
   );
   const bestKeys = bests.map((b) => b?.key ?? '').join('\n');
-  const bestSeen = useRef({ ready: false, seen: new Set<string>(), made: new Set<string>(), weights: new Map<string, number>() });
+  const bestSeen = useRef({ ready: true, seen: new Set<string>(), made: new Set<string>(), weights: new Map<string, number>() });
   const bestName = (b: BlockBest) => b.key.slice(0, b.key.lastIndexOf('@'));
   const madeByTap = (b: BlockBest) => bestSeen.current.made.has(b.key) || (bestSeen.current.ready
     && !bestSeen.current.seen.has(b.key) && b.weight > (bestSeen.current.weights.get(bestName(b)) ?? 0));
