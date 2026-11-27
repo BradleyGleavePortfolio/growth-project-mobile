@@ -463,7 +463,7 @@ describe('CRISIS-TEXT-SPACE-M: what stays (C10, LIFETIME)', () => {
       ...(logger.log as jest.Mock).mock.calls, ...(logger.warn as jest.Mock).mock.calls, ...(logger.error as jest.Mock).mock.calls,
       ...(sentry.captureError as jest.Mock).mock.calls, ...(sentry.captureErrorWithoutPii as jest.Mock).mock.calls,
       ...(analytics.track as jest.Mock).mock.calls,
-    ].map((c) => JSON.stringify(c, (_k, v) => (v instanceof Error ? { message: v.message, ...v } : v)) ?? '');
+    ].map((c) => JSON.stringify(c, (_k, v) => (v instanceof Error ? { ...v, message: v.message } : v)) ?? '');
     return [...disk, ...queries, ...stored, ...calls];
   };
   /** Today's keys of a saved row (spaceChatOutbox PendingRow): the hold is never one of them. */
