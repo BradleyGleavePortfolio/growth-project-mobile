@@ -16,6 +16,7 @@
  * interceptor checks both against the credential it reads (services/api.ts), as a voice note's hops do.
  */
 import { useMemo, useSyncExternalStore } from 'react';
+import { Alert } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { cacheStorage } from '../../../storage/mmkv';
 import { authEvents } from '../../../utils/authEvents';
@@ -26,6 +27,7 @@ import { describeCommunityFailure } from '../../../api/communityErrors';
 import { CONTENT_REJECTED_CODE, communityErrorCode } from '../../../api/communitySafetyApi';
 import { bindingIsCurrent, captureAccountBinding, isAccountChangedError } from '../../../services/accountBinding';
 import { sessionGeneration, sessionWritesSettled } from '../../../services/sessionFence';
+import { crisisFlagInError, crisisLineOwner, crisisLineReaches, showCrisisLineFor, withCrisisLine } from '../../../lib/communityCrisisLine';
 import { isNoAccess, spaceChatApi, type SpacePublisher } from './spaceChatApi';
 import type { ReplyTarget } from '../../messaging/ReplyComposer';
 
@@ -59,6 +61,9 @@ let stopNet: (() => void) | null = null;
 const subs = new Set<() => void>();
 const onSent = new Set<(cohortId: string) => void>();
 const onRefused = new Set<(cohortId: string) => void>();
+// CRISIS-TEXT-SPACE-M (R5): the local ids of refused rows whose one alert already showed with the 911 / 988 line, so the
+// box shows none. In memory only (never on a row, saved, logged or sent); an id leaves with its row (set) or at a rebind.
+const told = new Set<string>();
 /** The approved words for a text refused for its words: the thread's and the DMs' (communityErrors, by code). */
 export const REJECTED_WORDS = describeCommunityFailure({ response: { status: 422, data: { code: CONTENT_REJECTED_CODE } } }, 'send_message');
 const refusal = (err: unknown): Refusal | undefined =>
@@ -66,6 +71,7 @@ const refusal = (err: unknown): Refusal | undefined =>
 
 function set(next: PendingRow[]): void {
   rows = next;
+  told.forEach((id) => { if (!rows.some((r) => r.localId === id && r.reason === 'rejected')) told.delete(id); });
   if (uid) {
     const k = `${SPACE_OUTBOX_PREFIX}${uid}`;
     const keep = rows.filter((r) => r.state !== 'sent');
@@ -114,6 +120,7 @@ async function drain(): Promise<void> {
         patch(next.localId, { state: 'waiting' });
         break;
       }
+      const owner = crisisLineOwner(); // CRISIS-TEXT-SPACE-M: who wrote it, read as the send starts
       try {
         const sent = await spaceChatApi.send(next.cohortId, next.body, next.key, next.reply?.id, under);
         if (gen !== g) break;
@@ -131,6 +138,15 @@ async function drain(): Promise<void> {
         // Lost the connection on the way: it waits for the next reconnect; any answer from the server is a failure.
         const dropped = (err as { kind?: string })?.kind === 'network' && !online;
         const reason = dropped ? undefined : refusal(err);
+        // CRISIS-TEXT-SPACE-M: a 422 the crisis check marked (b#1232). Refused for its words: its one alert now, the line
+        // first, for the account that wrote it, before the row fails (the box then takes the words back with no second
+        // alert). Any other marked 422 (only a photo's today): the line alone, as every other writer shows it.
+        if (reason === 'rejected' && crisisFlagInError(err)) {
+          if (crisisLineReaches(owner)) {
+            told.add(next.localId);
+            Alert.alert(REJECTED_WORDS.title, withCrisisLine(REJECTED_WORDS.message, err));
+          }
+        } else if (crisisFlagInError(err)) showCrisisLineFor((err as { cause?: { response?: { data?: unknown } } }).cause?.response?.data, owner);
         patch(next.localId, { state: dropped ? 'waiting' : 'failed', reason });
         // SC-M3: a reply's 404 can be its message gone (the server answers both alike): Not sent here, and the next
         // read of the list says whether the space closed.
@@ -183,6 +199,7 @@ export function startSpaceOutbox(userId: string | null): void {
   bound = null;
   void publisher(g).catch(() => undefined);
   rows = [];
+  told.clear();
   subs.forEach((fn) => fn());
   loaded = cacheStorage.getStringAsync(`${SPACE_OUTBOX_PREFIX}${userId}`).then((raw) => {
     if (gen !== g || !raw) return;
@@ -239,6 +256,10 @@ export const spaceOutbox = {
   forget(gone: (r: PendingRow) => boolean): void {
     const hit = (r: PendingRow) => !!r.reply && !r.reply.gone && gone(r);
     if (rows.some(hit)) set(rows.map((r) => (hit(r) && r.reply ? { ...r, reply: { id: r.reply.id, body: '', authorLabel: '', gone: true } } : r)));
+  },
+  /** CRISIS-TEXT-SPACE-M (R5): this refused row's one alert already showed, with the line first (the box shows none). */
+  refusalShown(localId: string): boolean {
+    return told.has(localId);
   },
   /** A sent row leaves once the server list carries it. */
   settle(serverIds: Set<string>): void {

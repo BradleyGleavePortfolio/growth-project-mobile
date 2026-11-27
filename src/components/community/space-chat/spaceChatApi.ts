@@ -12,6 +12,7 @@
  *   GET/POST community/cohorts/:id/read                  SC-BE2; any failure (404 before it ships) hides the line
  *   POST community/voice-notes/:id/heard                 VOICE-BE (backend community-voice.controller markHeard): the
  *                                                       viewer played a voice note to the end -> { voice_note_id, heard_at }
+ * CRISIS-TEXT-SPACE-M: a send answer's `crisis_flag` (b#1232) is read in send through lib/communityCrisisLine, kept nowhere.
  * FIX-944R3 (owner #ALM-E11): the phone no longer asks GET/POST community/voice-consent; the space chat's first-use
  * card is gone. The server keeps the routes.
  */
@@ -19,6 +20,7 @@ import { z } from 'zod';
 import api, { type BoundRequestConfig } from '../../../services/api';
 import { call } from '../../../api/apiCall';
 import { boundRequestSignal, type AccountBinding } from '../../../services/accountBinding';
+import { crisisLineOwner, showCrisisLineFor } from '../../../lib/communityCrisisLine';
 
 const SenderSchema = z
   .object({ id: z.string(), name: z.string(), avatar_url: z.string().nullable().optional(), is_coach: z.boolean() })
@@ -103,6 +105,7 @@ export const spaceChatApi = {
   // session generation and its binding against the credential it reads (services/api.ts readTokenForRequest,
   // assertBindingMatches), and the next auth change cancels the request, as a voice note's hops do.
   send(cohortId: string, body: string, idempotencyKey: string, parentMessageId: string | undefined, by: SpacePublisher): Promise<SpaceMessage> {
+    const owner = crisisLineOwner(); // CRISIS-TEXT-SPACE-M: the answer's line reaches only the account that sent it
     const bound = boundRequestSignal(by.binding);
     return call(
       SentSchema,
@@ -113,7 +116,10 @@ export const spaceChatApi = {
         signal: bound.signal,
       } as BoundRequestConfig),
       'space_chat',
-    ).then((r) => r.message).finally(bound.done);
+    ).then((r) => {
+      showCrisisLineFor(r, owner); // b#1232's crisis_flag, read here and kept nowhere
+      return r.message;
+    }).finally(bound.done);
   },
   remove(messageId: string): Promise<void> {
     return call(AnySchema, () => api.delete<unknown>(`/community/messages/${messageId}`), 'space_chat').then(
