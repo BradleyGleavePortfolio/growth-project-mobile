@@ -129,7 +129,7 @@ function FoodWeekPage({ coached }: { coached: boolean }) {
 
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.content} testID="food-week"
-      refreshControl={<RefreshControl refreshing={pulled && weekly.isRefetching && !loading}
+      refreshControl={<RefreshControl refreshing={weekly.isRefetching && !loading}
         onRefresh={() => { setPulled(true); readAll(); }} tintColor={mast.ink} />}>
       <View style={s.mast} testID="food-week-masthead">
         {navigation ? <ForestBand /> : null}
