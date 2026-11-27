@@ -106,8 +106,8 @@ function FoodWeekPage({ coached }: { coached: boolean }) {
 
   const totals = weekly.isSuccess ? weeklyTotals(weekly.data, range.days) : null;
   const average = totals ? weekAverage(totals, range.days, today) : null;
-  const dots: Array<PlanDots | null> = range.days.map((day, i) => (withDots && daily[i].isSuccess && plans[i].isSuccess
-    ? planDots(plans[i].data, daily[i].data, day) : null));
+  const dots: Array<PlanDots | null> = range.days.map((day, i) => (withDots && plans[i].isSuccess
+    ? planDots(plans[i].data, daily[i].data ?? { entries: [] }, day) : null));
   const goldAt = range.current && totals?.[6] ? 6 : -1;
   const anyEntry = !!totals?.some(Boolean);
   const legend = legendLine(kcalTarget, goldAt === 6);
