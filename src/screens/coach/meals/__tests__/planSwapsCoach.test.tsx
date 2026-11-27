@@ -6,7 +6,7 @@
  * base those cases are red for "no screen" and every other case is red on its own assertion.
  */
 import React from 'react';
-import { Dimensions, Modal, StyleSheet, Text } from 'react-native';
+import { Dimensions, StyleSheet } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 
@@ -81,7 +81,8 @@ const writes = () => mockDb.bodies.filter((b) => !b.key.startsWith('GET'));
 let qc: QueryClient;
 const mount = (ui: React.ReactElement) => render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
 const editor = (params?: Row) => mount(<MealEditor {...({ route: { params }, navigation: mockNav } as any)} />);
-const rerenderEditor = (s: ReturnType<typeof mount>, params?: Row) =>
+type Mounted = Awaited<ReturnType<typeof mount>>;
+const rerenderEditor = (s: Mounted, params?: Row) =>
   s.rerender(<QueryClientProvider client={qc}><MealEditor {...({ route: { params }, navigation: mockNav } as any)} /></QueryClientProvider>);
 const open = (C: React.ComponentType<any>, params?: Row) => mount(<C route={{ params }} navigation={mockNav} />);
 const screen = (name: 'MealOptionsPickerScreen' | 'MealRecipePickerScreen') => require(`../${name}`).default as React.ComponentType<any>;
@@ -143,33 +144,41 @@ describe.each(SIZES)('F01 the meal page at $width pt, $fontScale text', (z) => {
 });
 
 it('case 2: Add opens the picker with the meal; two ticks and Done hand back through popTo; the form keeps what was typed; applied once; Back hands nothing', async () => {
-  const s = await editor({ mealId: 'm1' });
+  // RNTL 14 fires events only inside the newest render, so the editor and the picker over it share one tree: the
+  // picker takes a second slot and the editor keeps its state, as it stays mounted under the picker in the stack.
+  const Picker = screen('MealOptionsPickerScreen');
+  const both = (params: Row, picker?: Row) => (
+    <QueryClientProvider client={qc}>
+      <MealEditor {...({ route: { params }, navigation: mockNav } as any)} />
+      {picker ? <Picker route={{ params: picker }} navigation={mockNav} /> : null}
+    </QueryClientProvider>
+  );
+  const s = await render(both({ mealId: 'm1' }));
   await fireEvent.changeText(await s.findByLabelText('Name'), 'Banana shake');
   await fireEvent.changeText(s.getByLabelText('Protein (g)'), '27');
   await fireEvent.press(s.getByLabelText('Add an option'));
   expect(mockNav.navigate).toHaveBeenLastCalledWith('MealOptionsPicker', { mealId: 'm1', mealName: 'Banana shake', chosen: ['m2', 'm3', 'm4'] });
-  const Picker = screen('MealOptionsPickerScreen');
-  const p = await open(Picker, { mealId: 'm1', mealName: 'Banana shake', chosen: ['m2', 'm3', 'm4'] });
-  expect(await p.findByText('For Banana shake · 3 of 10')).toBeTruthy();
-  await fireEvent.press(p.getByTestId('option-m6'));
-  await fireEvent.press(p.getByTestId('option-m5'));
-  expect(p.getByText('For Banana shake · 5 of 10')).toBeTruthy();
-  await fireEvent.press(p.getByTestId('options-done'));
+  await s.rerender(both({ mealId: 'm1' }, { mealId: 'm1', mealName: 'Banana shake', chosen: ['m2', 'm3', 'm4'] }));
+  expect(await s.findByText('For Banana shake · 3 of 10')).toBeTruthy();
+  await fireEvent.press(s.getByTestId('option-m6'));
+  await fireEvent.press(s.getByTestId('option-m5'));
+  expect(s.getByText('For Banana shake · 5 of 10')).toBeTruthy();
+  await fireEvent.press(s.getByTestId('options-done'));
   const [route, params] = mockNav.popTo.mock.calls[0];
   expect([route, params.mealId, params.picked.options]).toEqual(['MealEditor', 'm1', ['m2', 'm3', 'm4', 'm6', 'm5']]);
-  await p.unmount();
-  await rerenderEditor(s, params);
+  await s.rerender(both(params));
   expect(s.getByText('5 of 10')).toBeTruthy();
   expect([s.getByLabelText('Name').props.value, s.getByLabelText('Protein (g)').props.value]).toEqual(['Banana shake', '27']);
   await fireEvent.press(s.getByLabelText('More for Overnight oats'));
   await fireEvent.press(s.getByLabelText('Remove Overnight oats'));
-  await rerenderEditor(s, { ...params });
-  await rerenderEditor(s, params);
+  await s.rerender(both({ ...params }));
+  await s.rerender(both(params));
   expect(s.getByText('4 of 10')).toBeTruthy();
-  const q = await open(Picker, { mealId: 'm1', mealName: 'Banana shake', chosen: ['m2'] });
-  await fireEvent.press(await q.findByTestId('option-m6'));
-  await fireEvent.press(q.getByLabelText('Back'));
+  await s.rerender(both(params, { mealId: 'm1', mealName: 'Banana shake', chosen: ['m2'] }));
+  await fireEvent.press(await s.findByTestId('option-m6'));
+  await fireEvent.press(s.getAllByLabelText('Back')[1]);
   expect([mockNav.popTo.mock.calls.length, mockNav.goBack.mock.calls.length]).toEqual([1, 1]);
+  expect(s.getByText('4 of 10')).toBeTruthy();
 });
 
 it('case 3: the options picker is A to Z without this meal; archived ids count; at 10 the unticked rows are off; search; F06 and its New meal; loading and failure', async () => {
@@ -287,7 +296,7 @@ it('case 5: an id missing from a fresh list is "A meal you archived", counts and
 
 it('case 6: only his recipes, newest first, the linked one marked; a tap links; Remove link sends null; no recipes says so (never while loading); a failed read keeps the stored recipe', async () => {
   const Picker = screen('MealRecipePickerScreen');
-  let p = await open(Picker, { mealId: 'm1', mealName: 'Banana and whey shake', recipeId: 'r1' });
+  const p = await open(Picker, { mealId: 'm1', mealName: 'Banana and whey shake', recipeId: 'r1' });
   expect(await p.findByText('Your recipes, newest first')).toBeTruthy();
   expect(p.getByText('For Banana and whey shake')).toBeTruthy();
   expect(p.getAllByRole('checkbox').map((r) => r.props.accessibilityLabel)).toEqual([
@@ -408,7 +417,7 @@ it('case 9: the builder shows time order and keeps saved order; Swap and Remove 
   const a = await open(DayPlanBuilder, { planId: 'p1' });
   expect(await a.findByText('Archived meal. Clients see it until you swap it.')).toBeTruthy();
   expect(a.queryByLabelText(/^Open Dinner/)).toBeNull();
-  expect(a.getAllByLabelText(/^Open /)).toHaveLength(2);
+  expect(a.getAllByLabelText(/^Open /).map((x) => x.props.accessibilityLabel)).toEqual(['Open Snack: Apple and peanut butter, 270 kcal, P 7, C 30, F 16']);
 });
 
 it('case 10: the time sheet opens at the stored time or the label hour; Set sends one PATCH changing only that time; No time sends null or nothing; Close, scrim and back send nothing; a failure closes it with the alert line', async () => {
@@ -434,9 +443,9 @@ it('case 10: the time sheet opens at the stored time or the label hour; Set send
   await fireEvent.press(await b.findByLabelText('7:40 am'));
   await fireEvent.press(b.getByTestId('time-close'));
   await fireEvent.press(await b.findByLabelText('7:40 am'));
-  await fireEvent.press(b.getByTestId('time-scrim'));
+  await fireEvent.press(b.getByTestId('time-scrim', { includeHiddenElements: true })); // hidden from VoiceOver by the modal sheet
   await fireEvent.press(await b.findByLabelText('7:40 am'));
-  await act(async () => b.UNSAFE_getByType(Modal).props.onRequestClose());
+  await act(async () => b.container.queryAll((n) => typeof n.props.onRequestClose === 'function')[0].props.onRequestClose());
   expect(writes()).toHaveLength(1);
   await fireEvent.press(await b.findByLabelText('7:40 am'));
   await fireEvent.press(b.getByTestId('time-none'));
@@ -506,7 +515,9 @@ it('case 13: at 320 pt with 130% text no text is cut, every control is at least 
   await all[1].findByText('Your meals, A to Z');
   await all[2].findByText('Your recipes, newest first');
   for (const s of all) {
-    expect(s.UNSAFE_queryAllByType(Text).filter((t) => t.props.numberOfLines != null)).toEqual([]);
+    // PrimaryButton (shared, approved) caps its own label at one line, or two with wrap; every one this job adds wraps.
+    expect(s.container.queryAll((t) => t.props.numberOfLines != null && !(t.props.maxFontSizeMultiplier === 1.6 && t.props.numberOfLines === 2))
+      .map((t) => `${t.type} ${t.props.children}`)).toEqual(s === b ? ['Text Assign to a client'] : []);
     for (const c of [...s.queryAllByRole('button'), ...s.queryAllByRole('checkbox')]) {
       const st = StyleSheet.flatten(c.props.style) ?? {};
       const tall = Math.max(st.minHeight ?? 0, st.height ?? 0) + 2 * (c.props.hitSlop?.top ?? c.props.hitSlop ?? 0);

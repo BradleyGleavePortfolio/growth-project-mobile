@@ -3,15 +3,13 @@
  * because the module does not exist there. Every slot write is one table (R9); time order (R10); the wheel's
  * wall-clock time in two zones and on a clock-change day (R8); the options list, the picker list and his own recipes.
  */
+import { spawnSync } from 'child_process';
 import type { DailyMealPlanSlot, MealTemplate } from '../../../../api/mealTemplatesApi';
 import * as L from '../mealLinks';
 
-// Two zones, set before any Date is made in a case (R8; PLAN 4). Each case asserts that its zone took.
-const inZone = (tz: string, run: () => void) => {
-  const was = process.env.TZ;
-  process.env.TZ = tz;
-  try { run(); } finally { process.env.TZ = was; }
-};
+// R8 (PLAN 4): Node reads TZ only when a process starts (src/utils/__tests__/date.test.ts), so each zone runs this
+// file again in a child jest with TZ set, before any Date is made there; the child asserts that its zone took.
+const PROBE = process.env.PSC_TZ_PROBE; // "<zone> <offset>", set only in the child run
 
 const links = () => L;
 
@@ -118,24 +116,41 @@ describe('time order on the builder (R10)', () => {
   });
 });
 
-describe('the wheel is wall-clock local time on a fixed ordinary day (R8)', () => {
-  it.each([['Asia/Tokyo', -540], ['America/Los_Angeles', 480]])('%s', (tz, offset) => inZone(tz, () => {
+const zoneCases = (tz: string, offset: number) => {
+  it('its zone took: a non-zero offset on an ordinary day', () => {
+    expect([process.env.TZ, new Date(2026, 0, 15, 12).getTimezoneOffset()]).toEqual([tz, offset]);
+  });
+  it('"HH:MM" goes to the wheel and back on 15 January 2024, local hours and minutes; label hours; a stored time stays', () => {
     const { toWheel, fromWheel, openingTime } = links();
-    expect(new Date(2026, 0, 15, 12).getTimezoneOffset()).toBe(offset);
     for (const t of ['00:00', '07:40', '12:35', '19:30', '23:55', '12:37']) expect(fromWheel(toWheel(t))).toBe(t);
     const d = toWheel('07:40');
     expect([d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes()]).toEqual([2024, 0, 15, 7, 40]);
     expect([openingTime(null, 'breakfast'), openingTime(null, 'lunch'), openingTime(null, 'snack'), openingTime(null, 'preworkout'),
       openingTime(null, 'dinner'), openingTime(null, 'postworkout'), openingTime('06:05', 'dinner')])
       .toEqual(['07:30', '12:30', '15:30', '17:30', '19:30', '19:00', '06:05']);
-  }));
-  it('a time inside the skipped hour of a clock-change day survives (the fixed day is not today)', () => inZone('America/New_York', () => {
-    const { toWheel, fromWheel } = links();
-    const skipped = new Date(2026, 2, 8, 2, 30);
-    expect(skipped.getHours()).toBe(3); // 02:30 does not exist on 2026-03-08 in New York
-    expect(fromWheel(toWheel('02:30'))).toBe('02:30');
-  }));
-});
+  });
+  if (tz.startsWith('America/')) {
+    it('a time inside the skipped hour of a clock-change day survives (the fixed day is not today)', () => {
+      const { toWheel, fromWheel } = links();
+      expect(new Date(2026, 2, 8, 2, 30).getHours()).toBe(3); // 02:30 does not exist on 2026-03-08 here
+      expect(fromWheel(toWheel('02:30'))).toBe('02:30');
+    });
+  }
+};
+
+if (PROBE) {
+  const [tz, offset] = PROBE.split(' ');
+  describe(`the wheel in ${tz}`, () => zoneCases(tz, Number(offset)));
+} else {
+  describe('the wheel is wall-clock local time on a fixed ordinary day (R8), one zone east and two west of UTC', () => {
+    it.each([['Asia/Tokyo', -540], ['America/Los_Angeles', 480], ['America/New_York', 300]])('%s (a child jest with TZ set)', (tz, offset) => {
+      const run = spawnSync(process.execPath, [require.resolve('jest/bin/jest'), '-i', '--ci', '--runTestsByPath', __filename, '-t', 'the wheel in'],
+        { env: { ...process.env, TZ: tz, PSC_TZ_PROBE: `${tz} ${offset}` }, encoding: 'utf8', timeout: 150_000 });
+      const tests = /Tests:\s+(.*)/.exec(`${run.stderr}`)?.[1] ?? `${run.stderr}`.slice(-2000);
+      expect([run.status, tests]).toEqual([0, tz.startsWith('America/') ? expect.stringMatching(/^\d+ skipped, 3 passed/) : expect.stringMatching(/^\d+ skipped, 2 passed/)]);
+    }, 160_000);
+  });
+}
 
 describe('the save refusals by code (R4, F10)', () => {
   const err = (code: string) => ({ response: { status: 400, data: { code, error: code, message: 'Something from the server' } } });
