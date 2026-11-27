@@ -1,0 +1,4 @@
+src/__tests__/lsObrSpaceDrawerWindowTop.btest.test.tsx
+src/__tests__/screenAreaCensus.test.ts
+src/ui/layout/__tests__/screenArea.test.tsx
+src/navigation/__tests__/rootScreenArea.source.test.ts
