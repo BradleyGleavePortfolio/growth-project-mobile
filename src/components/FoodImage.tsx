@@ -33,7 +33,7 @@ export default function FoodImage({ name, size = 48, drawn, drawing }: Props) {
       style={{ width: size, height: size, borderRadius: radius.input, backgroundColor: colors.feedback.successBg }}
       onError={() => setFailed(true)}
     />
-  ) : drawn ? (
+  ) : drawn || drawing ? (
     // C_add.html :120 (.c-li .ph): 48 tile, corner 12, the drawing 30 of 48. Decorative: the row names the food.
     <View testID="food-tile-drawing" accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
       style={[styles.drawn, { width: size, height: size, borderRadius: radius.input }]}>
