@@ -249,7 +249,7 @@ export default function ActiveWorkoutScreen() {
   // 50 as read (none while loading or after a failed read). It fades in and is spoken once only when a tap of hers
   // raises a best on this screen; one that is simply there (a restore, a late read, the way back from the summary) is
   // drawn and silent (docs/charting.md: the key comes from the tap, never from stored data).
-  const bestsReady = hydrated && historyState === 'loaded';
+  const bestsReady = hydrated;
   const bests = useMemo(
     () => (bestsReady ? blockBests(sessionExercises, summary.records, bodyWeight) : []),
     [bestsReady, sessionExercises, summary.records, bodyWeight],
