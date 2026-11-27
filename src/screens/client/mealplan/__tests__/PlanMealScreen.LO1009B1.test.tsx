@@ -101,7 +101,7 @@ const dinnerEaten = { data: { entries: [{ id: 'e1', meal_type: 'dinner', plan_sl
 async function showWithRerender() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const tree = () => <QueryClientProvider client={client}><PlanMealScreen /></QueryClientProvider>;
-  const view = render(tree());
+  const view = await render(tree());
   return { again: () => view.rerender(tree()) };
 }
 
@@ -126,7 +126,7 @@ describe('LO-PLAN-SWAPS-M-1 B1: a second plan meal opened onto the mounted page 
     expect(await screen.findByText('Banana and whey shake')).toBeTruthy();
     expect(await screen.findByText('Ate it as planned')).toBeTruthy();
     mockParams = { date: TODAY, slotId: 's-din' };
-    again();
+    await again();
     expect(await screen.findByText('Salmon, potatoes and green beans')).toBeTruthy();
     await screen.findByTestId('plan-meal-ingredients');
     expect(await screen.findByTestId('plan-meal-status')).toHaveTextContent('Logged as planned');
@@ -140,7 +140,7 @@ describe('LO-PLAN-SWAPS-M-1 B1: a second plan meal opened onto the mounted page 
     const { again } = await showWithRerender();
     expect(await screen.findByTestId('plan-meal-status')).toHaveTextContent('Logged as planned');
     mockParams = { date: TODAY, slotId: 's-pre' };
-    again();
+    await again();
     expect(await screen.findByText('Banana and whey shake')).toBeTruthy();
     expect(await screen.findByText('Ate it as planned')).toBeTruthy();
     expect(screen.queryByTestId('plan-meal-status')).toBeNull();
