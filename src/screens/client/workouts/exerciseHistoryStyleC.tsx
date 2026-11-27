@@ -16,6 +16,7 @@ import { useTheme } from '../../../theme/ThemeProvider';
 import type { ExerciseHistory, HistoryPoint, HistorySession, TopSet } from '../../../api/exerciseHistoryApi';
 import { sectionHead, useCoachItalic } from './workoutStyleC';
 import { readsBW } from '../../../utils/workout/bodyWeight';
+import { isTimedRow } from '../../../utils/workout/exerciseUnit';
 
 // ─── The rules ──────────────────────────────────────────────────────────────
 
@@ -35,16 +36,21 @@ export function dayLabel(date: string, spoken = false): string {
 /**
  * A top set as drawn: "155 × 6"; a body-weight exercise's set with no added load reads "BW × 12". Body weight comes
  * from the exercise, never from a 0 weight (bodyWeight.ts, FIX-928-BW; LS-986R1 B1): a weighted exercise at 0 reads
- * "0 × 10". The page passes whether its exercise is body weight.
+ * "0 × 10". The page passes whether its exercise is body weight. EXERCISE-HISTORY-UNIT-M: a set the server stored in
+ * seconds (its own unit, isTimedRow) reads "BW × 60 sec", "25 lb × 45 sec" or "0 lb × 45 sec", the weight with its
+ * own "lb" as the live workout shows it; the count and "sec" are joined by a no-break space, so "sec" never starts a
+ * line. A set stored in reps, or with no unit stored, reads as above: the unit is never guessed.
  */
-export const setText = (t: TopSet, bodyWeight = true): string =>
-  `${readsBW(bodyWeight, t.weight_lbs) ? 'BW' : t.weight_lbs} × ${t.reps}`;
-/** A history row's set: "155 × 6 lb", "0 × 10 lb"; "BW × 12" has no unit. */
+export const setText = (t: TopSet, bodyWeight = true): string => (isTimedRow(t)
+  ? `${readsBW(bodyWeight, t.weight_lbs) ? 'BW' : `${t.weight_lbs} lb`} × ${t.reps}\u00a0sec`
+  : `${readsBW(bodyWeight, t.weight_lbs) ? 'BW' : t.weight_lbs} × ${t.reps}`);
+/** A history row's set: "155 × 6 lb", "0 × 10 lb"; "BW × 12" has no unit; a timed set reads as the tile does. */
 export const rowSetText = (t: TopSet, bodyWeight = true): string =>
-  (readsBW(bodyWeight, t.weight_lbs) ? setText(t, bodyWeight) : `${setText(t, bodyWeight)} lb`);
-/** Spoken: "155 pounds by 6", "0 pounds by 10", "body weight by 12". */
+  (readsBW(bodyWeight, t.weight_lbs) || isTimedRow(t) ? setText(t, bodyWeight) : `${setText(t, bodyWeight)} lb`);
+/** Spoken: "155 pounds by 6", "0 pounds by 10", "body weight by 12"; timed "... by 60 seconds", "... by 1 second". */
 export const spokenSet = (t: TopSet, bodyWeight = true): string =>
-  `${readsBW(bodyWeight, t.weight_lbs) ? 'body weight' : `${t.weight_lbs} pounds`} by ${t.reps}`;
+  `${readsBW(bodyWeight, t.weight_lbs) ? 'body weight' : `${t.weight_lbs} pounds`} by ${t.reps}`
+  + (isTimedRow(t) ? ` ${t.reps === 1 ? 'second' : 'seconds'}` : '');
 /** The Since week 1 change as drawn: "+20 lb", a fall "−10 lb", none "+0 lb". */
 export const changeText = (n: number): string => `${n < 0 ? '−' : '+'}${Math.abs(n)} lb`;
 

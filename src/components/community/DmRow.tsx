@@ -12,7 +12,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import { useTheme } from '../../theme/useTheme';
 import { Ionicons } from '@expo/vector-icons';
-import { forestPop, radius, spacing } from '../../theme/tokens';
+import { brand, forestPop, radius, spacing } from '../../theme/tokens';
 import RomanAvatar from '../roman/RomanAvatar';
 import UnreadBadge from './UnreadBadge';
 import type { CommunityDmThread } from '../../api/communityApi';
@@ -34,6 +34,9 @@ export interface DmRowProps {
    * time as the row's spoken value, so two rows with the same name are told apart. Unset, the row draws and reads as
    * before (the coach's DM list passes none). */
   coachFirst?: boolean;
+  /** COMMUNITY-DM-FORMER-REACH-M (Style 3, S3_coach.html .chip.out): the coach's list marks a client who left with an
+   * outlined "Former client" before the time, and says it after the name. Unset, the row draws and reads as before. */
+  relation?: string;
   onPress: (thread: CommunityDmThread) => void;
   testID?: string;
 }
@@ -66,6 +69,7 @@ export default function DmRow({
   initials,
   chevron,
   coachFirst = false,
+  relation,
   onPress,
   testID,
 }: DmRowProps): React.ReactElement {
@@ -78,12 +82,18 @@ export default function DmRow({
   const studioLight = studio && colorScheme !== 'dark';
   const meta = studioLight ? forestPop.n700 : semanticColors.textMuted;
 
+  const time = (
+    <Text style={[styles.time, { color: semanticColors.textMuted }, studio ? [styles.studioTime, { color: meta }] : null, now ? styles.nowTime : null]}>
+      {activity.line}
+    </Text>
+  );
+
   return (
     <HapticPressable
       intent="light"
       onPress={() => onPress(thread)}
       accessibilityRole="button"
-      accessibilityLabel={`Open conversation with ${participantLabel}`}
+      accessibilityLabel={`Open conversation with ${participantLabel}${relation ? `, ${relation.toLowerCase()}` : ''}`}
       accessibilityValue={coachFirst && thread.last_message_at ? { text: activity.line.charAt(0).toLowerCase() + activity.line.slice(1) } : undefined}
       testID={testID}
       style={[styles.row, { borderBottomColor: semanticColors.border },
@@ -117,9 +127,12 @@ export default function DmRow({
           {participantLabel}
           {isCoach ? '  ·  your coach' : ''}
         </Text>
-        <Text style={[styles.time, { color: semanticColors.textMuted }, studio ? [styles.studioTime, { color: meta }] : null, now ? styles.nowTime : null]}>
-          {activity.line}
-        </Text>
+        {relation ? (
+          <View style={styles.metaRow}>
+            <Text style={styles.chip} testID={testID ? `relation-${testID}` : undefined}>{relation}</Text>
+            {time}
+          </View>
+        ) : time}
       </View>
       <UnreadBadge count={unread} corner={false} testID="dm-row-badge" />
       {chevron ? <Ionicons name="chevron-forward" size={20} color={studio ? meta : semanticColors.textMuted} /> : null}
@@ -158,6 +171,12 @@ const styles = StyleSheet.create({
   // 1 pt line, outer radius 16) and .meta.now (forest, 600).
   ring: { position: 'absolute', top: -5, right: -5, bottom: -5, left: -5, borderRadius: 16, borderWidth: 2, borderColor: forestPop.leaf },
   nowTime: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', color: forestPop.forest },
+  // S3_coach .chip.out: 24 pt high, radius 12, a 1 pt #3A5C46 line, 600 12.5 #2C4A36, padding 1 9, 8 pt before the time.
+  metaRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 8, rowGap: 2 },
+  chip: {
+    minHeight: 24, borderRadius: 12, borderWidth: 1, borderColor: brand[500], paddingVertical: 1, paddingHorizontal: 9, overflow: 'hidden',
+    fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 12.5, lineHeight: 20, color: forestPop.forest,
+  },
   body: {
     flex: 1,
     gap: 2,
