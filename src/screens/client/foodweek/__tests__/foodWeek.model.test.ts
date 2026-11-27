@@ -4,6 +4,7 @@
  * fictional (client Jordan, coach Sam) and follow C2 Style C frame C_week (planning/MOCKUP3/C2/style-c/C_week_*.png):
  * Wednesday October 7 to Tuesday October 13, today the Tuesday.
  */
+import type { ClientTodayResponse } from '../../../../api/mealTemplatesApi';
 import {
   CHART, averageLine, chartGeometry, chartLabel, legendLine, planDots, rowNumbers, rowSentence, weekAverage, weekRange,
   weekdayName, weeklyTotals,
@@ -34,7 +35,7 @@ const PLAN = {
 };
 const assignment = (id: string, plan = PLAN) => ({ id, daily_meal_plan_id: plan.id, client_id: 'jordan', assigned_by_coach_id: 'sam',
   starts_on: '2026-10-01', ends_on: null, created_at: '2026-10-01', daily_meal_plan: plan });
-const planRead = (assignments: unknown[]) => ({ date: '2026-10-09', assignments });
+const planRead = (assignments: unknown[]) => ({ date: '2026-10-09', assignments }) as unknown as ClientTodayResponse;
 let n = 0;
 const entry = (meal: string, name: string, slotId: string | null) => ({
   id: `e${++n}`, food_item_id: `f${n}`, user_id: 'jordan', meal_type: meal, quantity_multiplier: 1, logged_at: '2026-10-09T08:00:00Z',
