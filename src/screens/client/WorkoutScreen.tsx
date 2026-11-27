@@ -722,6 +722,9 @@ export default function WorkoutScreen() {
       : `${pendingAssignments.length} workouts waiting`;
   const assignedLeads = !trainV2 && !loadError && pendingAssignments.length > 0;
   const quickLeads = !loadError && (trainV2 ? trainState !== 'loading' && !featured : pendingAssignments.length === 0);
+  // WORKOUT-STATES-M (C2_first, R2): before any workout of hers or from the coach (that read loading or settled empty),
+  // the lines that only say there is nothing yet stay off; her first workout, the coach's or a failed read brings them back.
+  const firstDay = trainV2 && !loadError && historyRows.length === 0 && trainState !== 'failed' && assignmentRows.length === 0;
   // FIX-987R4 (owner #203-E80; operator FLOW-1 "plans row always"): the owner's flow starts at Workout plans, so the
   // row shows whenever the read holds a workout, flag on or off, whatever is open or done; the hero stays the one
   // forest action. Its line counts what is done, else what waits ("1 workout waiting", R4-W1), never "0 completed".
@@ -874,8 +877,8 @@ export default function WorkoutScreen() {
         )}</>}
 
         {/* Recent workouts */}
-        {loadError ? null : <QuietOverline style={styles.sectionOverline}>Recent workouts</QuietOverline>}
-        {loadError ? null : historyRows.length === 0 ? (
+        {loadError || firstDay ? null : <QuietOverline style={styles.sectionOverline}>Recent workouts</QuietOverline>}
+        {loadError || firstDay ? null : historyRows.length === 0 ? (
           <EmptyStateNoData
             headline="No recent workouts"
             body="Complete a workout to see your history here."
@@ -959,7 +962,7 @@ export default function WorkoutScreen() {
             </View> : null}
           </View>
         </FadeInView> : null}
-        {loadError ? null : <FadeInView delay={80}>
+        {loadError || firstDay ? null : <FadeInView delay={80}>
           {weeklyVolume.some((w) => w.volume > 0) ? (
             <View style={styles.chartCard}>
               <View style={styles.chartHeader}>
@@ -978,7 +981,7 @@ export default function WorkoutScreen() {
             </View>
           ) : <Text style={styles.chartEmptyText}>Complete workouts to see volume data</Text>}
         </FadeInView>}
-        {loadError ? null : <FadeInView delay={120}>
+        {loadError || firstDay ? null : <FadeInView delay={120}>
           {muscleVolume.length > 0 ? (
             <View style={styles.muscleCard}>
               <QuietOverline>Muscle breakdown</QuietOverline>
