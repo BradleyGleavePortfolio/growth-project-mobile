@@ -1,0 +1,4 @@
+src/screens/client/kitchen/__tests__/FIXKM2.reopenKey.test.tsx
+src/screens/client/kitchen/__tests__/FIXKM1.sheetSend.test.tsx
+src/screens/client/kitchen/__tests__/Kitchen.test.tsx
+src/screens/client/kitchen/__tests__/kitchenAdd.test.ts
