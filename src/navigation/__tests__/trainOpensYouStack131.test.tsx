@@ -95,13 +95,13 @@ beforeEach(() => {
 });
 
 describe('Train opens coach workouts above the You menu (m#542 B1 / B-542-SOL-130-1)', () => {
-  it('All coach workouts: the You menu sits under the list; a second tap on You returns to it', async () => {
+  it('Workout plans: the You menu sits under the list; a second tap on You returns to it', async () => {
     mockAssignments = [
       { id: 'a0', completed_at: '2026-10-01T10:00:00Z', workout_plan: { name: 'Done a0' } },
       { id: 'a9', completed_at: '2026-10-02T10:00:00Z', workout_plan: { name: 'Done a9' } },
     ];
     const { ref, view } = await openTrain();
-    await fireEvent.press(await view.findByLabelText('All coach workouts'));
+    await fireEvent.press(await view.findByLabelText('Workout plans'));
     await waitFor(() => expect(youStack(ref.getRootState() as StateLike)).toEqual(['MoreIndex', 'ClientWorkoutViewer']));
     expect(view.getByText('../screens/client/ClientWorkoutViewerScreen')).toBeTruthy();
 

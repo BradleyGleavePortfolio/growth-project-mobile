@@ -18,6 +18,8 @@ let mockAssignments: ClientWorkoutAssignmentWithPlan[] = [];
 const mockWorkout = { id: 'saved-1', workout_name: 'Upper A', notes: 'Steady',
   exercises: [{ exercise_name: 'Bench press', muscle_group: 'chest', sets_completed: 1,
     weight_per_set: [95], reps_per_set: [8], notes: 'Pause', rpe: 7, video_url: 'saved-video' }] };
+// REFINE-987R3 (WINDOW-1): the list shows this week and the two after; the phone's today is this file's own fixture day.
+jest.mock('../../../utils/date', () => ({ ...jest.requireActual('../../../utils/date'), getTodayString: () => '2025-01-08' }));
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate, goBack: mockBack }),
   useRoute: () => ({ params: { workout: JSON.stringify(mockWorkout) } }),

@@ -721,9 +721,14 @@ export default function WorkoutScreen() {
       : `${pendingAssignments.length} workouts waiting`;
   const assignedLeads = !trainV2 && !loadError && pendingAssignments.length > 0;
   const quickLeads = !loadError && (trainV2 ? trainState !== 'loading' && !featured : pendingAssignments.length === 0);
-  // U10: completed coach workouts were reachable only with 2+ pending. C1-TRAIN-TAB: the list is one tap away
-  // whenever it holds more than the workout shown at the top.
-  const showAllCoachRow = trainV2 ? assignmentRows.length > (featured ? 1 : 0) : completedAssignments > 0 && pendingAssignments.length < 2;
+  // FIX-987R4 (owner #203-E80; operator FLOW-1 "plans row always"): the owner's flow starts at Workout plans, so the
+  // row shows whenever the read holds a workout, flag on or off, whatever is open or done; the hero stays the one
+  // forest action. Its line counts what is done, else what waits ("1 workout waiting", R4-W1), never "0 completed".
+  const showAllCoachRow = assignmentRows.length > 0;
+  const plansLine =
+    completedAssignments > 0
+      ? `${completedAssignments} completed`
+      : pendingAssignments.length === 1 ? '1 workout waiting' : `${pendingAssignments.length} workouts waiting`;
 
   return (
     <Screen
@@ -792,7 +797,7 @@ export default function WorkoutScreen() {
               <QuietRow title={assignedTitle} meta="From your coach" label={assignedLabel} onPress={openAssignedList} styles={styles} iconColor={sc.textMuted} />
             ) : null}
             {showAllCoachRow ? (
-              <QuietRow title="All coach workouts" meta={completedAssignments > 0 || !trainV2 ? `${completedAssignments} completed` : `${pendingAssignments.length} workouts waiting`} label="All coach workouts" onPress={() => openInMoreTab('ClientWorkoutViewer')} testID="workout-all-coach-workouts" styles={styles} iconColor={sc.textMuted} />
+              <QuietRow title="Workout plans" meta={plansLine} label="Workout plans" onPress={() => openInMoreTab('ClientWorkoutViewer')} testID="workout-all-coach-workouts" styles={styles} iconColor={sc.textMuted} />
             ) : null}
             {quickLeads ? null : (
               <QuietRow title="Quick workout" meta="Start an empty session" label="Quick workout" onPress={startQuickWorkout} testID="workout-quick-start" styles={styles} iconColor={sc.textMuted} />

@@ -87,6 +87,8 @@ const SAVES_AND_READS: Array<[file: string, what: string, uses: RegExp]> = [
   ['src/screens/client/progress/weekReview.ts', 'week review: workouts this week', /workoutDay\(/],
   ['src/screens/client/YouScreen.tsx', 'You: next coach workout day', /assignmentDay\(/],
   ['src/screens/client/ClientWorkoutViewerScreen.tsx', 'assigned plans: order and day label', /assignmentDay\(/],
+  // REFINE-987R3: the week helpers of Your workouts and Your weeks (the window, the one-week page, the week rows).
+  ['src/screens/client/workouts/workoutWeeks.tsx', 'Your workouts and Your weeks: which week a workout is in', /assignmentDay\(a\)/],
   ['src/components/tutorial/PlanExplanationCard.tsx', 'plan card: weekday of the assigned day', /assignmentDay\(/],
   // FOOD-DAY-STYLEC-M: the Style C food day shows today's workout from Train on its timeline.
   ['src/components/log/FoodDayView.tsx', "food day: today's workout from Train is the assignment for the shown day", /assignmentDay\(w\) === p\.selectedDate/],

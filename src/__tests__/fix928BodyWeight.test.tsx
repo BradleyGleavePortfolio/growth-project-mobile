@@ -17,6 +17,8 @@ import type { ClientWorkoutAssignmentWithPlan } from '../api/workoutBuilderApi';
 const EQUIPMENT: Record<string, string> = { plank: 'body weight', pullup: 'body weight', squat: 'barbell' };
 const NAMES: Record<string, string> = { plank: 'front plank', pullup: 'pull up', squat: 'back squat' };
 const mockGetById = jest.fn();
+// REFINE-987R3 (WINDOW-1): the list shows this week and the two after; the phone's today is this file's own fixture day.
+jest.mock('../utils/date', () => ({ ...jest.requireActual('../utils/date'), getTodayString: () => '2026-11-05' }));
 jest.mock('../api/exerciseLibraryApi', () => ({
   exerciseLibraryApi: { getById: (...a: unknown[]) => mockGetById(...a) },
 }));
