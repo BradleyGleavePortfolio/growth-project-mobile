@@ -1,0 +1,6 @@
+src/screens/client/kitchen/__tests__/LOKitchenM1.B1.todayLoads.btest.test.tsx
+src/screens/client/kitchen/__tests__/LOKitchenM1.B2.addedBarRow.btest.test.tsx
+src/screens/client/kitchen/__tests__/FIXKM1.sheetSend.test.tsx
+src/screens/client/kitchen/__tests__/kitchenAdd.test.ts
+src/screens/client/kitchen/__tests__/Kitchen.test.tsx
+src/screens/client/kitchen/__tests__/kitchen.model.test.ts
