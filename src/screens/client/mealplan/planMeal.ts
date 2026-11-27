@@ -27,7 +27,7 @@ type FullSwap = PlanSwap & { carbs_g: number; fats_g: number };
 /** R2: the swaps that may show, in the server's order: only those with all four numbers (a swap that cannot log is never offered). */
 export function swapsToShow(slot: Pick<DailyMealPlanSlot, 'swaps'> | null | undefined): FullSwap[] {
   return (slot?.swaps ?? []).filter((s): s is FullSwap =>
-    !!s && typeof s.name === 'string' && s.name.trim() !== '' && [s.calories_kcal, s.protein_g, s.carbs_g, s.fats_g].every(finite));
+    !!s && typeof s.name === 'string' && s.name.trim() !== '' && [s.calories_kcal, s.protein_g, s.fats_g].every(finite));
 }
 
 /** R12: the footnote under the search field of a plan meal's Something else. */
