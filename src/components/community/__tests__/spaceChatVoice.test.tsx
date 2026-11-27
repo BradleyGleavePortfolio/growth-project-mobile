@@ -4,15 +4,16 @@
  *     shows "Played"; a note already heard shows "Played"; the viewer's own note and an outbox note show neither;
  *   - the mic opens the record sheet aimed at this space and hands the recording on;
  *   - the space's voice outbox keeps only this space's items and refreshes the space's messages when one leaves.
- * FR-871: the 08a first-use card before the first recording (per person, from the server's answer); an outbox note's
- * place in the stream is the time it went in (across a remount and midnight); a failed play gets a fresh URL; the
- * outbox states (sending circle, Waiting to send, the failed card); the New pill and Played metrics.
+ * FR-871: an outbox note's place in the stream is the time it went in (across a remount and midnight); a failed play
+ * gets a fresh URL; the outbox states (sending circle, Waiting to send, the failed card); the New pill and Played metrics.
+ * FIX-944R3 (owner #ALM-E11; the operator's ruling in FIX-944R3's job): the 08a first-use card is gone, so its cases are
+ * retired with it ("first time: the 08a card, ...", "a tap before the answer waits for it; ...", "FR-871R6 ...: Record
+ * on the 08a card starts the microphone once, ..."); FIX944R3NoFirstUseCard.test.tsx walks every path instead.
  */
 import React from 'react';
 import { Alert, StyleSheet } from 'react-native';
 import { act, fireEvent, render, renderHook, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 
 jest.mock('../../../theme/useTheme', () => {
   const { lightTokens } = jest.requireActual('../../../theme/tokens');
@@ -26,18 +27,11 @@ jest.mock('../../HapticPressable', () => {
   };
 });
 jest.mock('../../../api/communityVoiceApi', () => ({ communityVoiceApi: { getOne: jest.fn() } }));
-jest.mock('../space-chat/spaceChatApi', () => ({ spaceChatApi: { markHeard: jest.fn(), getVoiceConsent: jest.fn(), recordVoiceConsent: jest.fn() } }));
+jest.mock('../space-chat/spaceChatApi', () => ({ spaceChatApi: { markHeard: jest.fn() } }));
 const mockSheet = jest.fn();
-// FR-871R6 (m#879 Opus B5): one case draws the real sheet with a stand-in microphone, to see the recording start.
-const mockRealSheet: { recorder: unknown } = { recorder: null };
 jest.mock('../VoiceRecordSheet', () => ({
   __esModule: true,
-  default: (props: Record<string, unknown>) => {
-    mockSheet(props);
-    if (!mockRealSheet.recorder) return null;
-    const Real = jest.requireActual('../VoiceRecordSheet').default;
-    return jest.requireActual('react').createElement(Real, { ...props, recorder: mockRealSheet.recorder });
-  },
+  default: (props: Record<string, unknown>) => { mockSheet(props); return null; },
 }));
 const mockOutbox = { items: [] as unknown[], online: true, send: jest.fn(), retry: jest.fn(), discard: jest.fn() };
 jest.mock('../../../hooks/useVoiceOutbox', () => ({ useVoiceOutbox: () => mockOutbox }));
@@ -87,13 +81,10 @@ beforeEach(() => {
 // The player's own async state updates (VoiceNotePlayer, FX-848) outlive a test: the SpaceVoiceNote cases run last.
 
 describe('SpaceChatMic', () => {
-  const consent = spaceChatApi.getVoiceConsent as jest.Mock;
   const mic = (Wrapper: React.ComponentType<{ children: React.ReactNode }>, userId = 'u-1', coach = false, onSend = jest.fn()) =>
     render(<Wrapper><SpaceChatMic cohortName="Everyone" userId={userId} coach={coach} onSend={onSend} /></Wrapper>);
-  const sheetOpen = () => mockSheet.mock.calls.some(([p]) => (p as { visible: boolean }).visible);
 
   it('opens the record sheet aimed at this space and hands the recording on', async () => {
-    consent.mockResolvedValue({ seen: true, seen_at: '2026-10-20T10:00:00.000Z' });
     const onSend = jest.fn();
     const r = await mic(wrap().Wrapper, 'u-1', false, onSend);
     const mic1 = r.getByTestId('space-chat-mic');
@@ -106,90 +97,6 @@ describe('SpaceChatMic', () => {
     await act(async () => { (mockSheet.mock.calls[mockSheet.mock.calls.length - 1][0] as { onSend: (x: unknown) => void }).onSend(recording); });
     expect(onSend).toHaveBeenCalledWith(recording);
     expect(mockSheet).toHaveBeenLastCalledWith(expect.objectContaining({ visible: false }));
-  });
-
-  it('first time: the 08a card, not the sheet; Not now closes it with no sheet (no phone ask); Record stores it and opens the sheet', async () => {
-    consent.mockResolvedValue({ seen: false, seen_at: null });
-    (spaceChatApi.recordVoiceConsent as jest.Mock).mockResolvedValue({ seen: true, seen_at: '2026-10-25T10:00:00.000Z' });
-    const r = await mic(wrap().Wrapper);
-    await waitFor(() => expect(consent).toHaveBeenCalledTimes(1));
-    await fireEvent.press(r.getByTestId('space-chat-mic'));
-    expect(r.getByText('Voice notes')).toBeTruthy();
-    expect(r.getByText('Everyone in Everyone can hear this voice note.')).toBeTruthy();
-    expect(r.getByText('If someone reports a voice note, your coach and the TGP Fitness team can listen to it.')).toBeTruthy();
-    expect(r.getByText('You can delete your voice note at any time.')).toBeTruthy();
-    await fireEvent.press(r.getByLabelText('Not now'));
-    expect(r.queryByTestId('space-chat-voice-first-use')).toBeNull();
-    expect(sheetOpen()).toBe(false);
-    expect(spaceChatApi.recordVoiceConsent).not.toHaveBeenCalled();
-    await fireEvent.press(r.getByTestId('space-chat-mic'));
-    type El = { props: { onDismiss?: () => void }; parent: El | null };
-    let modal = r.getByTestId('space-chat-voice-first-use') as unknown as El | null;
-    while (modal && !modal.props.onDismiss) modal = modal.parent;
-    const onDismiss = modal?.props.onDismiss;
-    await fireEvent.press(r.getByTestId('space-chat-voice-first-use-record'));
-    expect(spaceChatApi.recordVoiceConsent).toHaveBeenCalledTimes(1);
-    expect(r.queryByTestId('space-chat-voice-first-use')).toBeNull();
-    // FR-871R5 (Opus C5): iOS shows one Modal at a time, so the record sheet waits until the card has gone.
-    expect(sheetOpen()).toBe(false);
-    await act(async () => { onDismiss?.(); });
-    expect(mockSheet).toHaveBeenLastCalledWith(expect.objectContaining({ visible: true }));
-    await act(async () => { (mockSheet.mock.calls[mockSheet.mock.calls.length - 1][0] as { onClose: () => void }).onClose(); });
-    await fireEvent.press(r.getByTestId('space-chat-mic'));
-    expect(r.queryByTestId('space-chat-voice-first-use')).toBeNull();
-    expect(mockSheet).toHaveBeenLastCalledWith(expect.objectContaining({ visible: true }));
-  });
-
-  it('a tap before the answer waits for it; a failed answer shows the card; the answer is kept per person; a coach has no report line', async () => {
-    let answer: (v: unknown) => void = () => undefined;
-    consent.mockImplementationOnce(() => new Promise((res) => { answer = res; }));
-    const { Wrapper } = wrap();
-    const a = await mic(Wrapper, 'u-1');
-    await fireEvent.press(a.getByTestId('space-chat-mic'));
-    expect(sheetOpen()).toBe(false);
-    expect(a.queryByTestId('space-chat-voice-first-use')).toBeNull();
-    await act(async () => { answer({ seen: true, seen_at: '2026-10-20T10:00:00.000Z' }); });
-    await waitFor(() => expect(mockSheet).toHaveBeenLastCalledWith(expect.objectContaining({ visible: true })));
-    await a.unmount();
-    consent.mockRejectedValueOnce(new Error('HTTP 500'));
-    const b = await mic(Wrapper, 'u-2', true);
-    await waitFor(() => expect(consent).toHaveBeenCalledTimes(2));
-    await fireEvent.press(b.getByTestId('space-chat-mic'));
-    expect(await b.findByTestId('space-chat-voice-first-use')).toBeTruthy();
-    expect(b.queryByText(/If someone reports a voice note/)).toBeNull();
-  });
-
-  it('FR-871R6 (m#879 Opus B5 / Sol B879-5): Record on the 08a card starts the microphone once, with no second tap', async () => {
-    consent.mockResolvedValue({ seen: false, seen_at: null });
-    (spaceChatApi.recordVoiceConsent as jest.Mock).mockResolvedValue({ seen: true, seen_at: '2026-10-25T10:00:00.000Z' });
-    const start = jest.fn().mockResolvedValue(undefined);
-    mockRealSheet.recorder = {
-      isAvailable: true,
-      getPermissionStatus: jest.fn().mockResolvedValue('granted'),
-      requestPermission: jest.fn().mockResolvedValue('granted'),
-      start,
-      stop: jest.fn().mockResolvedValue({ uri: 'file:///r.m4a', durationMs: 4000 }),
-      cancel: jest.fn().mockResolvedValue(undefined),
-    };
-    try {
-      const { Wrapper } = wrap();
-      const Insets = ({ children }: { children: React.ReactNode }) => (
-        <SafeAreaInsetsContext.Provider value={{ top: 0, right: 0, bottom: 34, left: 0 }}><Wrapper>{children}</Wrapper></SafeAreaInsetsContext.Provider>
-      );
-      const r = await mic(Insets);
-      await waitFor(() => expect(consent).toHaveBeenCalledTimes(1));
-      await fireEvent.press(r.getByTestId('space-chat-mic'));
-      type El = { props: { onDismiss?: () => void }; parent: El | null };
-      let modal = r.getByTestId('space-chat-voice-first-use') as unknown as El | null;
-      while (modal && !modal.props.onDismiss) modal = modal.parent;
-      await fireEvent.press(r.getByTestId('space-chat-voice-first-use-record'));
-      expect(start).not.toHaveBeenCalled();
-      await act(async () => { modal?.props.onDismiss?.(); });
-      await waitFor(() => expect(start).toHaveBeenCalledTimes(1));
-      expect(mockSheet).toHaveBeenLastCalledWith(expect.objectContaining({ visible: true }));
-    } finally {
-      mockRealSheet.recorder = null;
-    }
   });
 });
 

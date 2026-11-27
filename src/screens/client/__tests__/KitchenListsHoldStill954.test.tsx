@@ -9,7 +9,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { listsApi, prepGuideApi, recipesApi } from '../../../services/api';
 import { getLocalWeekStart } from '../../../utils/date';
 import GroceryListScreen from '../GroceryListScreen';
-import ShoppingListScreen from '../ShoppingListScreen';
 import PrepGuideScreen from '../PrepGuideScreen';
 import RecipesScreen from '../RecipesScreen';
 
@@ -51,10 +50,6 @@ const grocery: Lane = {
   name: 'Grocery', Screen: GroceryListScreen, scroll: 'list-scroll', key: ['lists', 'grocery'], data: rows, shown: 'Milk',
   read: () => jest.mocked(listsApi.getList) as unknown as Read, beforeError: { data: rows, shown: 'Milk' },
 };
-const shopping: Lane = {
-  name: 'Shopping', Screen: ShoppingListScreen, scroll: 'list-scroll', key: ['lists', 'shopping'], data: rows, shown: 'Milk',
-  read: () => jest.mocked(listsApi.getList) as unknown as Read, beforeError: { data: rows, shown: 'Milk' },
-};
 const prep: Lane = {
   name: 'Prep guide', Screen: PrepGuideScreen, scroll: 'list-scroll', key: ['prep-guide', getLocalWeekStart(0)], data: guide, shown: 'Soup',
   read: () => jest.mocked(prepGuideApi.getWeeklyGuide) as unknown as Read, beforeError: { data: guide, shown: 'Soup' },
@@ -63,8 +58,8 @@ const recipes: Lane = {
   name: 'Recipes', Screen: RecipesScreen, scroll: 'recipes-list', key: ['recipes'], data: [recipe], shown: 'Lentil soup',
   read: () => jest.mocked(recipesApi.list) as unknown as Read, beforeError: { data: [], shown: 'No recipes yet' },
 };
-const allLists = [grocery, shopping, prep, recipes].map((lane) => [lane.name, lane] as const);
-const bothInputLists = [grocery, shopping].map((lane) => [lane.name, lane] as const);
+const allLists = [grocery, prep, recipes].map((lane) => [lane.name, lane] as const);
+const bothInputLists = [grocery].map((lane) => [lane.name, lane] as const);
 
 // Every read answers from `mode`: at once, by failing, or held open until release().
 let mode: 'ok' | 'fail' | 'hold' = 'ok';
@@ -190,7 +185,7 @@ describe('A: refreshing is true only during a pull the user made', () => {
 });
 
 describe.each(bothInputLists)('C1: %s keeps its refresh control in every state', (_name, lane) => {
-  const empty = `Your ${lane === grocery ? 'grocery' : 'shopping'} list is empty`;
+  const empty = 'Your grocery list is empty';
   it('loading', async () => {
     mode = 'hold';
     payload = [];

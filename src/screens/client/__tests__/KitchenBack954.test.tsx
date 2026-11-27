@@ -3,7 +3,6 @@ import { Dimensions, StyleSheet } from 'react-native';
 import { render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import GroceryListScreen from '../GroceryListScreen';
-import ShoppingListScreen from '../ShoppingListScreen';
 import PrepGuideScreen from '../PrepGuideScreen';
 import RecipesScreen from '../RecipesScreen';
 import RecipeDetailScreen from '../RecipeDetailScreen';
@@ -57,7 +56,6 @@ const number = (value: unknown) => typeof value === 'number' ? value : 0;
 // its first-child path would put part of Back above a clipping scroll host.
 it.each([
   ['Grocery', GroceryListScreen, 'Grocery list', 'Back'],
-  ['Shopping', ShoppingListScreen, 'Shopping list', 'Back'],
   ['Prep', PrepGuideScreen, 'Prep guide', 'Back'],
   ['Recipes', RecipesScreen, 'Recipes', 'Go back'],
   ['RecipeDetail', RecipeDetailScreen, 'Lentil soup', 'Go back'],

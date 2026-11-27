@@ -19,7 +19,7 @@ import RomanAvatar from '../../../components/roman/RomanAvatar';
 import { COACH_AI_PENDING_DRAFTS_QUERY_KEY } from '../../../hooks/usePendingAiDrafts';
 import { isEffectivelyOnline, useNetworkStatus } from '../../../hooks/useNetworkStatus';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { colors as palette, forestPop, neutral, radius, typography } from '../../../theme/tokens';
+import { colors as palette, forestPop, neutral, radius, schemeCard, typography } from '../../../theme/tokens';
 import { useScreenInsets } from '../../../ui';
 import { askRomanToDraft } from '../home-v11/DraftSheets';
 import { SEMI, styleA } from '../home-v11/HomeParts';
@@ -338,7 +338,7 @@ const makeStyles = ({ colors, semanticColors: sem, colorScheme }: ReturnType<typ
     chipText: { flex: 1, minWidth: 0 },
     chipLine: { fontFamily: 'Inter_500Medium', fontSize: 14, lineHeight: 19, color: styleA.onDeep },
     body: { paddingHorizontal: GUTTER, paddingTop: 16, paddingBottom: 8 },
-    source: { borderRadius: radius.button, paddingVertical: 12, paddingHorizontal: 14, backgroundColor: light ? forestPop.sage : sem.bgSurface, marginBottom: 14 },
+    source: { borderRadius: radius.button, paddingVertical: 12, paddingHorizontal: 14, ...(light ? schemeCard : { backgroundColor: sem.bgSurface }), marginBottom: 14 },
     sourceHead: { fontFamily: SEMI, fontSize: 12, lineHeight: 16, letterSpacing: 1.4, textTransform: 'uppercase', color: palette.forest, marginBottom: 4 },
     sourceText: { ...typography.body, fontSize: 15, lineHeight: 21, color: ink },
     writing: { fontFamily: SEMI, fontSize: 18, lineHeight: 24, color: ink, marginBottom: 14 },

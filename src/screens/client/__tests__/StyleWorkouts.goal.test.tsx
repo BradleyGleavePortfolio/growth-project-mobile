@@ -48,7 +48,7 @@ import ExerciseLibraryScreen from '../ExerciseLibraryScreen';
 import WorkoutAssignmentDetailScreen from '../WorkoutAssignmentDetailScreen';
 import WorkoutHistoryEditScreen from '../WorkoutHistoryEditScreen';
 import { exerciseCatalogApi } from '../../../api/exerciseCatalog';
-import { layout, lightTokens as sc, radius, spacing, typography } from '../../../theme/tokens';
+import { layout, lightTokens as sc, radius, schemeCard, schemeCardOutline, spacing, typography } from '../../../theme/tokens';
 
 type Flat = ViewStyle & TextStyle;
 const flat = (node: { props: { style?: unknown } }): Flat =>
@@ -229,12 +229,15 @@ describe.each(DEVICES)('at $name', (device) => {
     expect(flat(name).fontSize).toBe(typography.h4.fontSize);
   });
 
-  it("assigned: a coach-changed row sits on sage with a 3 pt forest edge (C2_adjusted cols 128-133, rows 1040-1203)", async () => {
+  // The fill is the scheme's cream card since owner ruling 203-E91 (the drawing shows sage); the edge and corners are the drawing's.
+  it("assigned: a coach-changed row sits on the cream card with a 3 pt forest edge (C2_adjusted cols 128-133, rows 1040-1203)", async () => {
     const view = await mount(device, 'Assigned', WorkoutAssignmentDetailScreen, { assignmentId: 'a-1' });
     await view.findByText('Back squat');
-    const sage = hosts(view.toJSON()).filter((n) => styleOf(n).backgroundColor === sc.surface.sage);
-    expect(sage.length).toBe(1);
-    const st = styleOf(sage[0]);
+    expect(hosts(view.toJSON()).filter((n) => styleOf(n).backgroundColor === sc.surface.sage).length).toBe(0);
+    const changed = hosts(view.toJSON()).filter((n) => styleOf(n).backgroundColor === schemeCard.backgroundColor && styleOf(n).borderLeftWidth === 3);
+    expect(changed.length).toBe(1);
+    const st = styleOf(changed[0]);
+    expect(st).toMatchObject(schemeCard);
     expect(st.borderLeftWidth).toBe(3);
     expect(st.borderLeftColor).toBe(sc.data.forest);
     expect(st.borderTopRightRadius).toBe(radius.card);
@@ -260,15 +263,17 @@ describe.each(DEVICES)('at $name', (device) => {
   });
 
   // ── WorkoutHistoryEdit: no frame, nearest picked drawing C2_logger_ios390_100 ───────────────────────────────
-  it('edit: each exercise is the open block card, sage, 1 pt sage line, 16 pt corners and padding (C2_logger rows 462-1065, cols 48-82)', async () => {
+  // The card is the scheme's cream card since owner ruling 203-E91 (the drawing shows sage with a sage line).
+  it('edit: each exercise is the open block card, the cream card, 1 pt line, 16 pt corners and padding (C2_logger rows 462-1065, cols 48-82)', async () => {
     const view = await mount(device, 'Edit', WorkoutHistoryEditScreen, { workout: JSON.stringify(SAVED) });
     await view.findByText('Bench press');
-    // The card: sage with the card corners (a saved set's row is sage too, without them).
-    const cards = hosts(view.toJSON()).filter((n) => styleOf(n).backgroundColor === sc.surface.sage
+    // The card: cream with the card corners and the forest edge (a saved set's row stays sage, a state tint).
+    const cards = hosts(view.toJSON()).filter((n) => styleOf(n).backgroundColor === schemeCard.backgroundColor
       && styleOf(n).borderRadius === radius.card);
     expect(cards.length).toBe(1);
     const st = styleOf(cards[0]);
-    expect(st.borderColor).toBe(sc.surface.sageLine);
+    expect(st).toMatchObject(schemeCard);
+    expect(st).toMatchObject(schemeCardOutline);
     expect(st.borderWidth).toBe(1);
     expect(st.borderRadius).toBe(radius.card);
     expect(st.padding).toBe(spacing.lg);

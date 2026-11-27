@@ -4,7 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { colors, gold, layout, radius, typography } from '../../../theme/tokens';
+import { colors, gold, layout, radius, schemeCard, typography } from '../../../theme/tokens';
 import { useScreenInsets } from '../../../ui/layout/Screen';
 import { PrimaryButton, TextLink } from '../../../ui/buttons/PrimaryButton';
 import { HapticService } from '../../../ui/haptics/haptics.service';
@@ -126,7 +126,7 @@ export const OfflineNote = ({ at }: { at: number }) => (
 export function FirstCard({ title, body, children }: { title: string; body: string; children?: React.ReactNode }) {
   const { semanticColors: sc } = useTheme();
   return (
-    <View style={[s.card, { backgroundColor: sc.surface.sage }]}>
+    <View style={[s.card, schemeCard]}>
       <Text accessibilityRole="header" style={[s.cardTitle, { color: sc.textPrimary }]}>{title}</Text>
       <Text style={[typography.body, { color: sc.textPrimary }]}>{body}</Text>
       {children}

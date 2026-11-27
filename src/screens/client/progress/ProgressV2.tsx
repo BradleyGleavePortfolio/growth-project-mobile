@@ -15,7 +15,7 @@ import { useCoachlessClient } from '../../../hooks/useCoachlessClient';
 import { useMyCoaches } from '../../../hooks/useCalendar';
 import { isEffectivelyOnline, useNetworkStatus } from '../../../hooks/useNetworkStatus';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { colors, motion, radius, typography } from '../../../theme/tokens';
+import { colors, motion, radius, schemeCard, typography } from '../../../theme/tokens';
 import { useReduceMotion } from '../wearables/components/useReduceMotion';
 import { QuietRow, QuietSection, Screen } from '../../../ui';
 import { ForestStatusBar } from '../../../components/StatusBarBand';
@@ -208,7 +208,7 @@ export default function ProgressV2({ onSaved, logWeightAt }: { onSaved?: () => v
                 </View>
               ) : null}
               {training ? (
-                <View style={[tile, { backgroundColor: sc.surface.sage }]} testID="progress-training">
+                <View style={[tile, schemeCard]} testID="progress-training">
                   <Text style={[typography.eyebrow, { color: sc.textMuted }]}>Training</Text>
                   {plan ? (
                     <View style={[s.row, s.wrap]} accessible accessibilityLabel={`${plan.done} of ${plan.total} done, this week`}>

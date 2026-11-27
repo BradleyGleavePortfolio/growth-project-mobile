@@ -43,7 +43,7 @@ jest.mock('../services/api', () => {
 
 import api from '../services/api';
 import ExerciseDetailScreen from '../screens/client/ExerciseDetailScreen';
-import { darkTokens, lightTokens } from '../theme/tokens';
+import { darkTokens, lightTokens, schemeCard } from '../theme/tokens';
 import type { WorkoutStackParamList } from '../navigation/ClientNavigator';
 
 const get = api.get as jest.Mock;
@@ -170,7 +170,8 @@ it('case 1: Best ever 155 x 6 on Oct 13, Since week 1 +20 lb ending gold, five r
   expect(within(since).getByText('Since week\u00a01')).toBeTruthy();
   expect(within(since).getByText('+20 lb')).toBeTruthy();
   expect(within(since).getByText('on your top set')).toBeTruthy();
-  expect(bg(since)).toBe(lightTokens.surface.sage);
+  // MERGEUP-994: a panel is the scheme's cream card (203-D40 option 1, owner #203-E91; was surface.sage).
+  expect(bg(since)).toBe(schemeCard.backgroundColor);
   expect(view.getByLabelText('Top set, week 1 to today: 135 to 155 lb')).toBeTruthy();
   expect(bg(view.getByTestId('exercise-history-since-end'))).toBe(lightTokens.data.peak);
 
@@ -363,7 +364,9 @@ it('case 12: dark takes the dark tokens and the Best ever tile keeps surface.mas
   serve({ data: CASE1 });
   const view = await screen();
   expect(bg(await view.findByTestId('exercise-history-best'))).toBe(darkTokens.surface.masthead);
-  expect(bg(view.getByTestId('exercise-history-since'))).toBe(darkTokens.surface.sage);
+  // MERGEUP-994: the Since tile reads the shared cream card in both arms, as every m#994 member does (the app draws
+  // light only, ThemeProvider.tsx:187; was darkTokens.surface.sage).
+  expect(bg(view.getByTestId('exercise-history-since'))).toBe(schemeCard.backgroundColor);
   const date = within(view.getByTestId('exercise-history-row-1')).getByText('Oct 6');
   expect((StyleSheet.flatten(date.props.style as TextStyle) ?? {}).color).toBe(darkTokens.textMuted);
   expect(bg(view.getByTestId('exercise-history-track-1', HIDDEN))).toBe(darkTokens.data.trackLight);

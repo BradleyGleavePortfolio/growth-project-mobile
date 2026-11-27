@@ -15,12 +15,13 @@
 // plain service module; components subscribe to the Zustand store it writes.
 
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { foregroundBannerStore } from '../store/foregroundBannerStore';
 import { Colors } from '../constants/colors';
 import { decodePushParams } from './pushTapRouter';
 import { incomingLinkPath, resolveAppLink } from '../navigation/incomingLinks';
 import { refreshMealPlanToday } from './mealPlanRefresh';
+import { isDmPush, refreshDmReads } from './dmRefresh';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -120,6 +121,7 @@ export function installForegroundHandler(): () => void {
   // (FOREGROUND-BANNER-M: pushTapOf, the one mapping). No words, no banner.
   const subscription = Notifications.addNotificationReceivedListener((notification) => {
     if (opensMealPlan(notification.request.content.data)) refreshMealPlanToday(); // MEAL-PLAN-REFRESH-M
+    if (isDmPush(notification.request.content.data)) refreshDmReads(); // REFINE-985 B1: the open thread draws it
     const { title, body } = notification.request.content;
     if (!title && !body) return;
     const kind = bannerKindOf(notification.request.content.data);
@@ -133,8 +135,18 @@ export function installForegroundHandler(): () => void {
     });
   });
 
+  // REFINE-985R3 (LO-985R2 B1, its second face): she left the app with a DM thread open, the reply's push went to the
+  // tray (or was held), and she comes back by the app's icon or the switcher. No listener above ran while the app was
+  // behind, the realtime client rejoins with no catch-up ping, and no read re-reads on focus (queryClient.ts
+  // refetchOnWindowFocus false). So on the return to the front the DM reads on screen are read again, for a client
+  // and a coach alike. Heard here, once, beside the received listener, and removed with it.
+  const appState = AppState.addEventListener('change', (state) => {
+    if (state === 'active') refreshDmReads();
+  });
+
   return () => {
     subscription.remove();
+    appState.remove();
     foregroundHandlerInstalled = false;
   };
 }
