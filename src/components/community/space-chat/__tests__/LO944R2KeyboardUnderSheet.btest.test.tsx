@@ -7,13 +7,15 @@
  * sit (SpaceVoiceFirstUse.tsx:83-91) and where the record sheet's controls sit. On a 390 pt iPhone both buttons are
  * under it: the first voice note cannot be recorded or the card closed.
  * Green when a tap on the mic puts the keyboard away before either sheet shows.
+ * FIX-944R3 (owner #ALM-E11; the operator's ruling in FIX-944R3's job): the first-use card is gone, so its row is retired
+ * with it, and the mic asks the server nothing first, so the record sheet's row taps at once (no first-use answer to
+ * wait for). The record sheet's row, its title and its check are as they were.
  */
 import React from 'react';
 import { Keyboard } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-jest.mock('../spaceChatApi', () => ({ spaceChatApi: { getVoiceConsent: jest.fn(), recordVoiceConsent: jest.fn() } }));
 const mockSheet = jest.fn();
 jest.mock('../../VoiceRecordSheet', () => ({
   __esModule: true,
@@ -21,16 +23,13 @@ jest.mock('../../VoiceRecordSheet', () => ({
 }));
 
 import SpaceChatMic from '../SpaceChatMic';
-import { spaceChatApi } from '../spaceChatApi';
 
 const sheetOpen = () => mockSheet.mock.calls.some(([p]) => (p as { visible: boolean }).visible);
 
 describe('B-TEST LO-944R2 B1', () => {
   it.each([
-    ['the first-use card', false],
-    ['the record sheet', true],
-  ])('B-TEST LO-944R2 B1: a tap on the mic puts the keyboard away before %s shows', async (_what, seen) => {
-    (spaceChatApi.getVoiceConsent as jest.Mock).mockResolvedValue({ seen, seen_at: seen ? '2026-11-20T10:00:00.000Z' : null });
+    ['the record sheet'],
+  ])('B-TEST LO-944R2 B1: a tap on the mic puts the keyboard away before %s shows', async () => {
     const dismiss = jest.spyOn(Keyboard, 'dismiss');
     try {
       const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -39,9 +38,8 @@ describe('B-TEST LO-944R2 B1', () => {
           <SpaceChatMic cohortName="Morning crew" userId="u-1" coach={false} onSend={jest.fn()} />
         </QueryClientProvider>,
       );
-      await waitFor(() => expect(spaceChatApi.getVoiceConsent).toHaveBeenCalled());
       await fireEvent.press(screen.getByTestId('space-chat-mic'));
-      await waitFor(() => expect(seen ? sheetOpen() : screen.queryByTestId('space-chat-voice-first-use') !== null).toBe(true));
+      await waitFor(() => expect(sheetOpen()).toBe(true));
       expect({ sheetShown: true, keyboardPutAway: dismiss.mock.calls.length > 0 }).toEqual({ sheetShown: true, keyboardPutAway: true });
     } finally {
       dismiss.mockRestore();
