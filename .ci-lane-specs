@@ -1,0 +1,7 @@
+src/screens/client/mealplan/__tests__/lsPlanSwapsM2.offlineRefocus.btest.test.tsx
+src/screens/client/mealplan/__tests__/lsPlanSwapsM1.eatenFresh.btest.test.tsx
+src/screens/client/mealplan/__tests__/lsPlanSwapsM1.newMealSamePage.btest.test.tsx
+src/screens/client/mealplan/__tests__/PlanMealScreen.LO1009B1.test.tsx
+src/screens/client/mealplan/__tests__/PlanMealScreen.test.tsx
+src/screens/client/mealplan/__tests__/planMeal.test.ts
+src/components/log/__tests__/FoodDayView.planSwaps.test.tsx
