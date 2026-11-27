@@ -105,6 +105,7 @@ export default function SaveMealSheet({ meals, writes, onClose }: {
       await writes.create.mutateAsync(body);
       done();
     } catch (err) {
+      onClose(); // MUTATION M5
       const kind = failureKind(err);
       if (kind === 'lost') {
         lost.current = [...lost.current, body];
