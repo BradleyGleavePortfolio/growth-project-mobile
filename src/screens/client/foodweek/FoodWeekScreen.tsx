@@ -34,11 +34,11 @@ import {
   weekdayName, weeklyTotals, type DayTotals, type PlanDots,
 } from './foodWeek';
 
-// C_week rows (2 px = 1 pt): the day word 54 pt wide, dots of 16 pt 4 pt apart from 78 pt, 15 pt Inter.
+// C_week rows (2 px = 1 pt): the day word 54 pt wide, dots of 16 pt 4 pt apart from 78 pt, 14 pt Inter (cap 21 px).
 const DAY_W = 54;
 const DOT = 16;
 const DOT_GAP = 4;
-const ROW_TEXT = 15;
+const ROW_TEXT = 14;
 
 /** The forest status band follows screen focus, so it needs a navigator (FoodDayView's ForestBand). */
 const NO_NAVIGATION = React.createContext<unknown>(undefined);
@@ -244,7 +244,7 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   legend: { ...typography.bodySmall, fontSize: 12, lineHeight: 17, color: sc.textMuted },
   eyebrow: { ...typography.eyebrow, fontFamily: 'Inter_600SemiBold', fontWeight: '600', lineHeight: 14, letterSpacing: 1.98, color: sc.textMuted, marginTop: spacing.md },
   // C_week rows: 48 pt apart, a 1 pt hairline under each; numbers wrap under the day before anything overlaps.
-  row: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', minHeight: 48, paddingVertical: spacing.xs,
+  row: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', alignContent: 'center', minHeight: 48, paddingVertical: spacing.xs,
     borderBottomWidth: 1, borderColor: sc.border },
   day: { ...typography.body, fontSize: ROW_TEXT, lineHeight: 20, letterSpacing: 0, color: sc.textMuted, minWidth: DAY_W },
   dots: { flexDirection: 'row', gap: DOT_GAP, marginRight: spacing.md },
