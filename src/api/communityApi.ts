@@ -99,6 +99,17 @@ export function communityReactionDisplay(emoji: string): string {
 
 const FlagState = z.enum(['enabled', 'disabled']);
 
+/** COMMUNITY-DM-FORMER-REACH-M: one community where she keeps her DM thread with its coach as a former client (b#1253
+ * CONTRACT 6866534247). `coach_display_name` is DM-FORMER-COACH-BE's (not on the server yet): absent or null, no name. */
+export const FormerCoachDmSchema = z
+  .object({
+    workspace_id: z.string().uuid(),
+    coach_user_id: z.string().uuid(),
+    coach_display_name: z.string().nullable().optional(),
+  })
+  .passthrough();
+export type FormerCoachDm = z.infer<typeof FormerCoachDmSchema>;
+
 export const CommunityMeResponseSchema = z
   .object({
     feature_flag_state: FlagState,
@@ -125,6 +136,8 @@ export const CommunityMeResponseSchema = z
       community_push: z.boolean(),
       community_telemetry: z.boolean(),
     }),
+    // Additive (b#1253): optional, so production's older server (no field) reads as none.
+    former_coach_dms: z.array(FormerCoachDmSchema).optional(),
   })
   .passthrough();
 export type CommunityMeResponse = z.infer<typeof CommunityMeResponseSchema>;
@@ -302,6 +315,8 @@ export const CommunityDmThreadSchema = z
     other_user_id: z.string().uuid(),
     created_at: z.string().nullable(),
     last_message_at: z.string().nullable(),
+    // b#1253: the stored name, on the workspace coach's own list only (null elsewhere; absent on an older server).
+    other_display_name: z.string().nullable().optional(),
   })
   .passthrough();
 export type CommunityDmThread = z.infer<typeof CommunityDmThreadSchema>;

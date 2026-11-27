@@ -64,7 +64,7 @@ jest.mock('../../../../lib/analytics', () => ({ track: (...a: unknown[]) => mock
 const mockInvalidate = jest.fn();
 jest.mock('../../../../services/queryClient', () => ({ queryClient: { invalidateQueries: (...a: unknown[]) => mockInvalidate(...a) } }));
 jest.mock('../../../../lib/userCache', () => ({ readUserCacheSync: () => ({ id: 'jordan' }) }));
-const mockStore = { selectedDate: '2026-10-13', setSelectedDate: jest.fn(), refreshShownDay: jest.fn() };
+const mockStore = { selectedDate: '2026-10-13', setSelectedDate: jest.fn(), loadDayData: jest.fn(async () => undefined), refreshShownDay: jest.fn() };
 jest.mock('../../../../store/clientStore', () => ({ useClientStore: Object.assign(() => mockStore, { getState: () => mockStore }) }));
 const mockEnqueue = jest.fn();
 jest.mock('../../../../services/foodLogQueue', () => ({ ...jest.requireActual('../../../../services/foodLogQueue'), enqueue: (...a: unknown[]) => mockEnqueue(...a) }));
@@ -168,7 +168,7 @@ beforeEach(() => {
   for (const key of Object.keys(mockListeners)) delete mockListeners[key];
   mockGet.mockReset().mockImplementation((url: string) => answer(url));
   mockPost.mockReset();
-  [mockNav.navigate, mockNav.goBack, mockParent.navigate, mockTrack, mockInvalidate, mockStore.setSelectedDate, mockStore.refreshShownDay, mockEnqueue]
+  [mockNav.navigate, mockNav.goBack, mockParent.navigate, mockTrack, mockInvalidate, mockStore.setSelectedDate, mockStore.loadDayData, mockStore.refreshShownDay, mockEnqueue]
     .forEach((f) => f.mockClear());
   Object.values(mockHaptics).forEach((f) => f.mockClear());
   forgetSaveKeys();
@@ -246,7 +246,7 @@ describe('KITCHEN-M: the Kitchen page (Style 2 Menu)', () => {
     expect(mockTrack).toHaveBeenCalledWith('meal_logged', { meal_type: 'breakfast', source: 'saved_meal' });
     expect(mockHaptics.success).toHaveBeenCalledTimes(1);
     await fireEvent.press(screen.getByTestId('kitchen-see-today'));
-    expect(mockStore.setSelectedDate).toHaveBeenCalledWith('2026-10-13');
+    expect(mockStore.loadDayData).toHaveBeenCalledWith('jordan', '2026-10-13');
     expect(mockParent.navigate).toHaveBeenCalledWith('Log');
     expect(screen.queryByTestId('kitchen-added')).toBeNull();
   });
@@ -500,7 +500,7 @@ describe('KITCHEN-M: the Kitchen page (Style 2 Menu)', () => {
     expect(within(button).getByText('Log food')).toBeTruthy();
     expect(button.props.accessibilityHint).toBe('Opens today on the Food tab');
     await fireEvent.press(button);
-    expect(mockStore.setSelectedDate).toHaveBeenCalledWith('2026-10-13');
+    expect(mockStore.loadDayData).toHaveBeenCalledWith('jordan', '2026-10-13');
     expect(mockParent.navigate).toHaveBeenCalledWith('Log');
     await screen.unmount();
     mockNet = { isOnline: false, isInternetReachable: false };

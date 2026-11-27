@@ -16,7 +16,9 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { forestPop as fp, layout, lightTokens, motion, typography } from '../../theme/tokens';
 import { Monogram, SpaceTree, useOpenSpaceTarget, useSpaceTree, type SpaceTarget } from './SpaceTree';
 
-export function SpaceListButton(): React.ReactElement {
+/** `icon`: the space chat's deep header passes 05b's drawn glyph (FX-871, FR-871); light headers keep the forest icon.
+ * `label` (SPACE-STATES-M, a closed space's Back to spaces): the same drawer behind an underlined forest text link. */
+export function SpaceListButton({ icon, label, testID = 'space-list-open' }: { icon?: React.ReactNode; label?: string; testID?: string } = {}): React.ReactElement {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -24,11 +26,11 @@ export function SpaceListButton(): React.ReactElement {
         intent="light"
         onPress={() => setOpen(true)}
         accessibilityRole="button"
-        accessibilityLabel="Open space list"
-        style={s.trigger}
-        testID="space-list-open"
+        accessibilityLabel={label ?? 'Open space list'}
+        style={label ? s.textTrigger : s.trigger}
+        testID={testID}
       >
-        <Ionicons name="menu-outline" size={24} color={fp.forest} />
+        {label ? <Text style={s.textLabel}>{label}</Text> : icon ?? <Ionicons name="menu-outline" size={24} color={fp.forest} />}
       </HapticPressable>
       {open ? <SpaceDrawer onClose={() => setOpen(false)} /> : null}
     </>
@@ -104,6 +106,8 @@ function SpaceDrawer({ onClose }: { onClose: () => void }): React.ReactElement {
 
 const s = StyleSheet.create({
   trigger: { width: layout.touchMin, height: layout.touchMin, alignItems: 'center', justifyContent: 'center' },
+  textTrigger: { minHeight: layout.touchMin, minWidth: layout.touchMin, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center' },
+  textLabel: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 15, lineHeight: 20, color: fp.forest, textDecorationLine: 'underline' },
   panel: { position: 'absolute', top: 0, bottom: 0, left: 0, backgroundColor: fp.deep },
   head: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, marginBottom: 16 },
   name: { ...typography.h2, color: fp.onDeep, flex: 1 },

@@ -39,10 +39,10 @@ type IconName = React.ComponentProps<typeof Ionicons>['name'];
 export default function KitchenScreen() {
   const user = useCurrentUser();
   // Remount on identity change, so no meal, count or late answer crosses accounts.
-  return <KitchenPage key={user?.id ?? 'signed-out'} coachId={user?.coach_id ?? null} />;
+  return <KitchenPage key={user?.id ?? 'signed-out'} userId={user?.id ?? ''} coachId={user?.coach_id ?? null} />;
 }
 
-function KitchenPage({ coachId }: { coachId: string | null }) {
+function KitchenPage({ userId, coachId }: { userId: string; coachId: string | null }) {
   const page = useStyleCScreen();
   const { semanticColors: sc } = useTheme();
   const s = useMemo(() => makeStyles(sc), [sc]);
@@ -117,8 +117,10 @@ function KitchenPage({ coachId }: { coachId: string | null }) {
     : null;
   const groceryCount = grocery.isSuccess && Array.isArray(grocery.data) ? toGetWords(toGet(grocery.data, 'grocery')) : null;
 
+  // LO-KITCHEN-M-1 B1: set AND read today, as Home does (loadDayData sets the day, then reads it); the setter alone left
+  // the Food tab on an unread today whenever it was showing another day.
   const openToday = () => {
-    useClientStore.getState().setSelectedDate(getTodayString());
+    void useClientStore.getState().loadDayData(userId, getTodayString());
     (navigation.getParent() ?? navigation).navigate('Log');
   };
   const openMeal = (meal: SavedMeal) => { setAdded(null); setSheetMeal(meal); };
@@ -282,12 +284,13 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
     textDecorationLine: 'underline' },
   menuLabel: { ...typography.h4, fontSize: 17, lineHeight: 24, letterSpacing: 0, color: sc.textPrimary },
   detail: { ...typography.bodySmall, fontSize: 15, lineHeight: 21, color: sc.textMuted, fontVariant: ['tabular-nums'], flexShrink: 1, textAlign: 'right' },
-  // R11: the forest "Added" bar over the page, above the tab bar, inside the page (W2).
-  bar: { position: 'absolute', left: 12, right: 12, bottom: 12, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10,
+  // R11: the forest "Added" bar over the page, above the tab bar, inside the page (W2). One row at every text size, as
+  // S2_done draws it (LO-KITCHEN-M-1 B2): the check, the words wrapping in their own box, See today at the right.
+  bar: { position: 'absolute', left: 12, right: 12, bottom: 12, flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingHorizontal: 16, paddingVertical: 8, minHeight: 56, borderRadius: radius.button, backgroundColor: schemeBar.fill,
     borderWidth: 1, borderColor: schemeBar.border },
   barText: { ...typography.bodySmall, fontSize: 15, lineHeight: 21, color: schemeBar.text },
   barLink: { minHeight: layout.touchMin, justifyContent: 'center', marginLeft: 'auto' },
-  barWords: { flexShrink: 1 },
+  barWords: { flex: 1 },
   underline: { textDecorationLine: 'underline' },
 });

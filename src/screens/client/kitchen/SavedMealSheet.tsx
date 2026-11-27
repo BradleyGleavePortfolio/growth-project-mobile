@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { Ionicons } from '@expo/vector-icons';
-import { savedFoodsApi, type SavedMeal } from '../../../api/savedFoodsApi';
+import type { SavedMeal } from '../../../api/savedFoodsApi';
 import { AnalyticsEvents } from '../../../analytics/events';
 import MealChoiceRow from '../../../components/log/MealChoiceRow';
 import { refreshFoodLog } from '../../../components/mealplan/LogPlannedMealButton';
@@ -26,25 +26,29 @@ import { PrimaryButton } from '../../../ui';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { useBottomInset } from '../../../ui/layout/StyleCPage';
 import { dayForNewLog } from '../../../utils/logDay';
-import { withSaveKey } from '../../../utils/log/saveKey';
 import {
-  SAVE_WORDS, WORDS, addIntent, deleteFailedTitle, deleteTitle, failureOf, heldNote, kcalWords, mealOfHour, mealView, sheetLine,
+  SAVE_WORDS, WORDS, deleteFailedTitle, deleteTitle, heldNote, kcalWords, mealOfHour, mealView, sheetLine,
 } from './kitchen';
+import { addSavedMeal, type AddOutcome } from './kitchenAdd';
 import { MealNameField } from './SaveMealSheet';
 import { nameOk } from './saveMeal';
 import { failureKind, online, type SavedMealWrites } from './useSavedMealWrites';
 
 const nowMinute = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
+/** Each failed outcome's line (KK-5 to KK-8b); a lost answer and a refusal share KK-6, Try again only for a lost one. */
+const LINES: Record<Exclude<AddOutcome, 'added'>, string> = {
+  empty: WORDS.nothingToAdd, 'food-not-found': WORDS.foodGone, 'meal-gone': WORDS.mealGone, lost: WORDS.notAdded, refused: WORDS.notAdded,
+};
 
-/** A downward pull on the sheet's top closes it; a short pull springs back (the add sheet's gesture). */
-function usePullDown(close: () => void) {
+/** A downward pull on the sheet's top closes it; a short pull springs back (the add sheet's gesture). Off while busy. */
+function usePullDown(close: () => void, busy: boolean) {
   const y = useRef(new Animated.Value(0)).current;
   const from = useRef(0);
   const dy = (e: GestureResponderEvent) => e.nativeEvent.pageY - from.current;
   const back = () => Animated.spring(y, { toValue: 0, useNativeDriver: true }).start();
   return { y, handlers: {
     onTouchStart: (e: GestureResponderEvent) => { from.current = e.nativeEvent.pageY; },
-    onMoveShouldSetResponder: (e: GestureResponderEvent) => dy(e) > 8,
+    onMoveShouldSetResponder: (e: GestureResponderEvent) => !busy && dy(e) > 8,
     onResponderMove: (e: GestureResponderEvent) => y.setValue(Math.max(0, dy(e))),
     onResponderRelease: (e: GestureResponderEvent) => { if (dy(e) > 80) close(); else back(); },
     onResponderTerminate: back,
@@ -64,34 +68,40 @@ function useKeyboardHeight(): number {
 }
 
 /**
- * The sheet's frame (R10: shared with SAVED-MEAL-SAVE-M). `footer` is pinned under the scrolling body; with a field in
- * it, the keyboard view (iOS) lifts the sheet, the sheet keeps to the window left above the keyboard and the body
- * shrinks first, so the field and its button stay in view (SAVED-MEAL-SAVE-M SS9). With no keyboard it draws as before.
+ * The sheet's frame (R10: shared with SAVED-MEAL-SAVE-M). `busy`: a send is running, so Close, the scrim, the pull and
+ * Android Back do nothing until it answers (LS-KITCHEN-M-1 C2): the answer always lands on the sheet it was sent from,
+ * and the api's own timeout ends every send.
+ * `footer` is pinned under the scrolling body; with a field in it, the keyboard view (iOS) lifts the sheet, the sheet
+ * keeps to the window left above the keyboard and the body shrinks first, so the field and its button stay in view
+ * (SAVED-MEAL-SAVE-M SS9). With no keyboard it draws as before.
  */
-export function KitchenSheet({ visible, title, onClose, children, footer, testID }: {
-  visible: boolean; title: string; onClose: () => void; children?: React.ReactNode; footer?: React.ReactNode; testID?: string;
+export function KitchenSheet({ visible, title, onClose, busy = false, children, footer, testID }: {
+  visible: boolean; title: string; onClose: () => void; busy?: boolean; children?: React.ReactNode; footer?: React.ReactNode;
+  testID?: string;
 }) {
   const { semanticColors: sc } = useTheme();
   const s = useMemo(() => makeStyles(sc), [sc]);
   const bottom = useBottomInset();
   const { height } = useWindowDimensions();
   const reduced = useReducedMotion();
-  const pull = usePullDown(onClose);
+  const close = () => { if (!busy) onClose(); };
+  const pull = usePullDown(close, busy);
   const keyboard = useKeyboardHeight();
   const fit = keyboard > 0
     ? { maxHeight: height - keyboard - 16, paddingBottom: 12 }
     : { maxHeight: height * 0.92, paddingBottom: bottom + 16 };
   return (
-    <Modal visible={visible} transparent animationType={reduced ? 'none' : 'slide'} onRequestClose={onClose} statusBarTranslucent>
+    <Modal visible={visible} transparent animationType={reduced ? 'none' : 'slide'} onRequestClose={close} statusBarTranslucent>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.avoid} testID="kitchen-sheet-avoider">
-        <Pressable testID="kitchen-sheet-scrim" style={s.scrim} onPress={onClose} accessible={false} importantForAccessibility="no" />
+        <Pressable testID="kitchen-sheet-scrim" style={s.scrim} onPress={close} disabled={busy} accessible={false}
+          importantForAccessibility="no" />
         <Animated.View accessibilityViewIsModal testID={testID}
           style={[s.sheet, { ...fit, transform: [{ translateY: pull.y }] }]}>
           <View {...pull.handlers}>
             <View style={s.grab} testID="kitchen-sheet-grab" />
             <View style={s.head}>
               <Text accessibilityRole="header" style={s.title} testID="kitchen-sheet-title">{title}</Text>
-              <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel={WORDS.close} style={s.close}
+              <Pressable onPress={close} disabled={busy} accessibilityRole="button" accessibilityLabel={WORDS.close} style={s.close}
                 testID="kitchen-sheet-close">
                 <Ionicons name="close" size={28} color={sc.textPrimary} />
               </Pressable>
@@ -239,34 +249,28 @@ export default function SavedMealSheet({ meal, onClose, onAdded, onStale, writes
         setLine(WORDS.offline);
         return;
       }
-      const date = dayForNewLog();
-      const res = await withSaveKey(addIntent(meal.id, date, type),
-        (key) => savedFoodsApi.log(meal.id, { date, meal_type: type }, key));
-      if (!Array.isArray(res.data) || res.data.length === 0) {
-        // S12: its foods were removed since the read; the server wrote nothing.
-        void HapticService.error();
-        setLine(WORDS.nothingToAdd);
-        setClosedOut(true);
-        onStale();
+      // R6: the Kitchen's one add step (kitchenAdd.ts); the day is read at the tap.
+      const outcome = await addSavedMeal(meal.id, dayForNewLog(), type);
+      if (outcome === 'added') {
+        void HapticService.success();
+        track(AnalyticsEvents.MEAL_LOGGED, { meal_type: type, source: 'saved_meal' });
+        refreshFoodLog();
+        onAdded(type);
         return;
       }
-      void HapticService.success();
-      track(AnalyticsEvents.MEAL_LOGGED, { meal_type: type, source: 'saved_meal' });
-      refreshFoodLog();
-      onAdded(type);
-    } catch (err) {
       void HapticService.error();
-      const { status, message } = failureOf(err);
-      if (status === 404 && /saved meal/i.test(message)) {
-        setLine(WORDS.mealGone);
+      setLine(LINES[outcome]);
+      setRetry(outcome === 'lost');
+      // S12 (its foods were removed) and KK-7 (the meal is gone): nothing more to send from this sheet; read again.
+      if (outcome === 'empty' || outcome === 'meal-gone') {
         setClosedOut(true);
         onStale();
-      } else if (status === 404) {
-        setLine(WORDS.foodGone);
-      } else {
-        setLine(WORDS.notAdded);
-        setRetry(!status || status >= 500);
       }
+    } catch {
+      // The connection check failed before any send: the lost-answer words and Try again, as before.
+      void HapticService.error();
+      setLine(WORDS.notAdded);
+      setRetry(true);
     } finally {
       sending.current = false;
       setBusy(false);
@@ -274,7 +278,7 @@ export default function SavedMealSheet({ meal, onClose, onAdded, onStale, writes
   };
 
   return (
-    <KitchenSheet visible title={meal.name} onClose={onClose} testID="kitchen-sheet">
+    <KitchenSheet visible title={meal.name} onClose={onClose} busy={busy} testID="kitchen-sheet">
       {empty ? null : <Text style={s.line}>{sheetLine(view)}</Text>}
       {view.held.length > 0 ? <Text style={s.note} testID="kitchen-held-note">{heldNote(view.held)}</Text> : null}
       {view.held.length > 0 ? (
@@ -304,7 +308,9 @@ export default function SavedMealSheet({ meal, onClose, onAdded, onStale, writes
             <Text style={s.dayValue}>{WORDS.today}</Text>
           </View>
           <Text style={s.overline} accessibilityRole="header">{WORDS.meal}</Text>
-          <MealChoiceRow value={type} onChange={setType} disabled={busy} style={s.choice} testID="kitchen-meal-choice" />
+          {/* LS-KITCHEN-M-1 C1: after a lost answer the choice holds while Try again shows, so Try again resends the same
+              intent and key (one log, never a second one under another meal); any answer that lets the key go frees it. */}
+          <MealChoiceRow value={type} onChange={setType} disabled={busy || retry} style={s.choice} testID="kitchen-meal-choice" />
           {line ? (
             <Text style={s.fail} accessibilityRole="alert" accessibilityLiveRegion="polite" testID="kitchen-sheet-line">{line}</Text>
           ) : null}

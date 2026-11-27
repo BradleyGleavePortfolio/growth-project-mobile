@@ -49,13 +49,28 @@ it('no pending join (older backend, or nothing joined): no row, no package scree
   expect(ui.queryByTestId('join-package-probe')).toBeNull();
 });
 
+// The host opens the package screen JOIN_SHEET_HANDOFF_MS after mount, so a closing sheet can
+// finish first. Fake timers hold the clock from mount, so the 'not there yet' checks always land
+// before the hand-off, however slow the machine; then the clock runs to the hand-off.
 it('a join handed over before the tabs mounted opens the package screen on mount', async () => {
-  presentJoinFrom({ coach_id: null, already_attached: false, invite_join: PAID });
-  const ui = await render(<JoinPackageHost />);
-  expect(ui.queryByTestId('join-package-probe')).toBeNull(); // waits for a closing sheet
-  const probe = await ui.findByTestId('join-package-probe', {}, { timeout: JOIN_SHEET_HANDOFF_MS * 4 });
-  expect(probe.props.children).toBe('Strength coaching');
-  expect(probe.props.accessibilityHint).toBe('fresh'); // a join just answered is not re-read
+  jest.useFakeTimers();
+  try {
+    presentJoinFrom({ coach_id: null, already_attached: false, invite_join: PAID });
+    const ui = await render(<JoinPackageHost />);
+    expect(ui.queryByTestId('join-package-probe')).toBeNull(); // waits for a closing sheet
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(JOIN_SHEET_HANDOFF_MS - 1);
+    });
+    expect(ui.queryByTestId('join-package-probe')).toBeNull(); // still waiting 1 ms before the hand-off
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(1);
+    });
+    const probe = ui.getByTestId('join-package-probe');
+    expect(probe.props.children).toBe('Strength coaching');
+    expect(probe.props.accessibilityHint).toBe('fresh'); // a join just answered is not re-read
+  } finally {
+    jest.useRealTimers();
+  }
 });
 
 it('after Not now Home offers Finish joining <coach>, which opens the package screen again', async () => {
@@ -65,10 +80,16 @@ it('after Not now Home offers Finish joining <coach>, which opens the package sc
   const ui = await render(<><FinishJoining /><JoinPackageHost /></>);
   expect(await ui.findByText('Finish joining Bradley')).toBeTruthy();
   expect(ui.queryByTestId('join-package-probe')).toBeNull();
-  fireEvent.press(ui.getByTestId('finish-joining-row'));
-  const probe = await ui.findByTestId('join-package-probe', {}, { timeout: JOIN_SHEET_HANDOFF_MS * 4 });
-  // FIX712: reopened from the saved join, so the screen re-reads it first.
-  expect(probe.props.accessibilityHint).toBe('resumed');
+  // The tap arms the same hand-off timer: on the held clock the wait below is fake time only.
+  jest.useFakeTimers();
+  try {
+    await fireEvent.press(ui.getByTestId('finish-joining-row'));
+    const probe = await ui.findByTestId('join-package-probe', {}, { timeout: JOIN_SHEET_HANDOFF_MS * 4 });
+    // FIX712: reopened from the saved join, so the screen re-reads it first.
+    expect(probe.props.accessibilityHint).toBe('resumed');
+  } finally {
+    jest.useRealTimers();
+  }
 });
 
 it('once the account has a coach (the purchase attached it) the row goes and the pending join clears', async () => {

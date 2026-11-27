@@ -5,6 +5,8 @@ import { SearchResult } from './types';
 import { planLink, type PlanLink } from './planLink';
 import { foodSaveIntent, withSaveKey } from './saveKey';
 import { enqueue as enqueueFoodLog, type QueuedFoodShown } from '../../services/foodLogQueue';
+import { entryIdOf } from './logSubmit';
+import { mealPhotoAfterSave } from './mealPhoto';
 
 // Words in a search that describe the amount rather than the food
 // ("2 eggs", "150 g chicken"). They are ignored when matching foods the
@@ -79,6 +81,10 @@ export async function repeatPastMeal(meal: PastMeal, date: string, mealType: Mea
         logApi.logFood({ ...log, food_item_id: e.foodItemId, client_uuid: key }));
     }),
   );
+  // FIX-992R2 (LO-992R1 B1, LS-992R1 B1): as logSubmit's two online saves, the meal's first saved food, in the meal's
+  // order, takes a photo the open sheet keeps for this meal and day. Never awaited; the saves above are as before.
+  const ids = settled.map((s) => (s.status === 'fulfilled' ? entryIdOf(s.value) : null));
+  mealPhotoAfterSave({ date, meal_type: mealType }, ids.find((id) => id !== null) ?? null);
   const failedNames = meal.entries
     .filter((_e, i) => settled[i].status === 'rejected')
     .map((e) => e.name);
