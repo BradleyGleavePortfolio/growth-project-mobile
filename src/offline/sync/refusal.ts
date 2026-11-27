@@ -42,7 +42,12 @@ export function readRefusal(json: string | null | undefined): WorkoutRefusal | n
 /** WORKOUT_NOT_FOUND: the workout is gone from the server, so a resend cannot work; Remove is offered instead. */
 export const canSendAgain = (refusal: WorkoutRefusal) => refusal.code !== 'WORKOUT_NOT_FOUND';
 
-/** "The server said:" and the server's words in quotes, then its next step (the Style 2 card's lines). */
-export function refusalLines(refusal: WorkoutRefusal, saidLead: string): string[] {
-  return [...(refusal.said ? [`${saidLead}\n“${refusal.said}”`] : []), refusal.nextStep];
+/**
+ * The Style 2 card's lines: "The server said:" and the server's words in quotes, then its next step. WORKOUT_INVALID's
+ * words are validation lines (a developer's sentence), so a client never reads them: the plain line `invalid` stands in
+ * their place, then the next step (OPERATOR RULING 7208809287 item 3). Card, sheet and Finish alert all read these lines.
+ */
+export function refusalLines(refusal: WorkoutRefusal, copy: { said: string; invalid: string }): string[] {
+  if (refusal.code === 'WORKOUT_INVALID') return [copy.invalid, refusal.nextStep];
+  return [...(refusal.said ? [`${copy.said}\n“${refusal.said}”`] : []), refusal.nextStep];
 }

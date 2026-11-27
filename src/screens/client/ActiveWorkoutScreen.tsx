@@ -1160,7 +1160,7 @@ export default function ActiveWorkoutScreen() {
                 // WORKOUT-REFUSAL-M (Style 2): a coded refusal says what the server said and its next step.
                 const refusal = refusalOf(err);
                 if (refusal) {
-                  Alert.alert(REFUSAL_COPY.title, refusalLines(refusal, REFUSAL_COPY.said).join('\n\n'));
+                  Alert.alert(REFUSAL_COPY.title, refusalLines(refusal, REFUSAL_COPY).join('\n\n'));
                   return;
                 }
                 Alert.alert(

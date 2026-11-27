@@ -6,12 +6,16 @@
  * sets, Send again, Tell <coach> and Remove from this phone. Several read as one count card; See both shows each
  * card. A refusal with no code is not kept (sync-engine keepRefusal), so nothing shows: today's behaviour.
  * WORKOUT_NOT_FOUND (the workout is gone from the server) offers no Send again: its next step is Remove.
+ * FIX-WRM-1 (OPERATOR RULING 7208809287): WORKOUT_INVALID reads a plain line, never the validation line; the sheet's
+ * head and actions never scroll (s2_R4a, s2_R4b); Tell <coach> opens the chat on the Home stack; a timed exercise reads
+ * "3 × 60 sec" (its plan row's unit, from the Train tab's assignments).
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Animated, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NavigationProp, ParamListBase, useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { ClientWorkoutAssignmentWithPlan } from '../../api/workoutBuilderApi';
 import { Colors } from '../../constants/colors';
 import { useMyCoaches } from '../../hooks/useCalendar';
 import { useCoachlessClient } from '../../hooks/useCoachlessClient';
@@ -30,6 +34,8 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { colors, layout, radius, typography } from '../../theme/tokens';
 import { PrimaryButton, TextLink } from '../../ui';
 import { HapticService } from '../../ui/haptics/haptics.service';
+import { assignmentPrescription } from '../../utils/workout/assignmentPrescription';
+import { isTimedRow } from '../../utils/workout/exerciseUnit';
 import SheetGrip from '../log/SheetGrip';
 
 /** WORKOUT-OFFLINE-W ids (ctx#579 index.md "Wording needed"), approved (operator, #203-E15). */
@@ -55,8 +61,10 @@ export const REFUSAL_COPY = {
   tell: (coach: string) => `Tell ${coach}`, // W17
   see: 'See workout', // W18
   seeBoth: 'See both', // W19
-  seeAll: 'See all', // WORKOUT-REFUSAL-W4 (three or more; not drawn)
+  seeAll: 'See all', // WORKOUT-REFUSAL-W4 (three or more; main's word, MoneyScreen)
   yourCoach: 'your coach', // C1-C-44
+  invalid: "Part of this workout couldn't be saved.", // WORKOUT-REFUSAL-W5: WORKOUT_INVALID, in place of the validation line
+  close: 'Close', // WORKOUT-REFUSAL-W6: the sheet's scrim, main's word (CheckInDraftSheet, ClientPeekSheet)
 };
 const c = REFUSAL_COPY;
 const CAP = 1.3;
@@ -64,10 +72,25 @@ const CAP = 1.3;
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October',
   'November', 'December'];
-type Exercise = { exercise_name?: unknown; sets_completed?: unknown; reps_per_set?: unknown; weight_per_set?: unknown };
+type Exercise = {
+  exercise_name?: unknown; sets_completed?: unknown; reps_per_set?: unknown; weight_per_set?: unknown;
+  plan_assignment_id?: unknown; plan_order?: unknown;
+};
+/** The client's assignments as the Train tab reads them (GET /assignments/me): each plan row names its unit. */
+export type RefusedPlans = ReadonlyArray<Partial<ClientWorkoutAssignmentWithPlan>>;
+
+/**
+ * C3 (TIMED-SETS-M): the stored body counts seconds in reps_per_set with no unit; an exercise logged from an assignment
+ * names its plan row (plan_assignment_id, plan_order), and that row's unit says whether it is timed. Not loaded: reps.
+ */
+function timed(plans: RefusedPlans | undefined, e: Exercise): boolean {
+  const a = typeof e.plan_assignment_id === 'string' ? plans?.find((p) => p.id === e.plan_assignment_id) : undefined;
+  return !!a && typeof e.plan_order === 'number'
+    && isTimedRow(assignmentPrescription(a as ClientWorkoutAssignmentWithPlan).exercises.find((r) => r.order === e.plan_order));
+}
 
 /** Name, "Sat 10 Oct", "Saturday 10 October", minutes and set rows from the stored POST /workouts body. */
-export function refusedView(body: Record<string, unknown>) {
+export function refusedView(body: Record<string, unknown>, plans?: RefusedPlans) {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(body.date ?? ''));
   const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
   const exercises = (Array.isArray(body.exercises) ? body.exercises : []) as Exercise[];
@@ -76,7 +99,8 @@ export function refusedView(body: Record<string, unknown>) {
     const weights = Array.isArray(e.weight_per_set) ? (e.weight_per_set as number[]) : [];
     const n = typeof e.sets_completed === 'number' ? e.sets_completed : reps.length;
     const same = reps.length > 0 && reps.every((r) => r === reps[0]) && weights.every((w) => w === weights[0]);
-    const line = same ? `${n} × ${reps[0]}${weights[0] > 0 ? ` · ${weights[0]} lb` : ''}` : `${n} ${n === 1 ? 'set' : 'sets'}`;
+    const unit = timed(plans, e) ? ' sec' : ''; // "3 × 60 sec", as the Train tab writes a timed row (TrainToday blockLine)
+    const line = same ? `${n} × ${reps[0]}${unit}${weights[0] > 0 ? ` · ${weights[0]} lb` : ''}` : `${n} ${n === 1 ? 'set' : 'sets'}`;
     return { name: String(e.exercise_name ?? ''), line, sets: n };
   });
   const sets = rows.reduce((sum, r) => sum + r.sets, 0);
@@ -128,16 +152,16 @@ function Outline({ label, onPress, disabled, testID }: { label: string; onPress:
 }
 
 /** The card on the Train tab (on the masthead with Train v2 on, under the header with it off); nothing when none. */
-export default function RefusedWorkoutCard() {
+export default function RefusedWorkoutCard({ assignments }: { assignments?: RefusedPlans }) {
   const user = useCurrentUser();
   const { items, reload } = useRefusedWorkouts(user?.id);
   return user?.id && items.length ? (
-    <RefusedCards userId={user.id} coachId={user.coach_id} items={items} reload={reload} />
+    <RefusedCards userId={user.id} coachId={user.coach_id} items={items} reload={reload} assignments={assignments} />
   ) : null;
 }
 
-function RefusedCards({ userId, coachId, items, reload }: {
-  userId: string; coachId?: string | null; items: RefusedWorkout[]; reload: () => Promise<void>;
+function RefusedCards({ userId, coachId, items, reload, assignments }: {
+  userId: string; coachId?: string | null; items: RefusedWorkout[]; reload: () => Promise<void>; assignments?: RefusedPlans;
 }) {
   const coachless = useCoachlessClient();
   const coaches = useMyCoaches(!coachless).data;
@@ -156,8 +180,12 @@ function RefusedCards({ userId, coachId, items, reload }: {
     Animated.timing(fade, { toValue: 1, duration: 150, useNativeDriver: true }).start();
   }, [reduced, fade]);
 
+  // N2: one send at a time. The ref holds at once, so a second tap in the same frame (before `busy` renders) is ignored
+  // and cannot answer 'kept' and close the card while the first send is still waiting for "Not accepted again.".
+  const sending = useRef(false);
   const send = async (id: string) => {
-    if (busy) return;
+    if (sending.current) return;
+    sending.current = true;
     setBusy(id);
     try {
       const outcome = await sendRefusedWorkoutAgain(id, userId);
@@ -169,7 +197,11 @@ function RefusedCards({ userId, coachId, items, reload }: {
         if (outcome === 'sent') void HapticService.success();
         setOpenId(null);
       }
+    } catch {
+      // N2: a database error leaves the row as it was; it is felt, and the reload below shows the card as it is.
+      void HapticService.error();
     } finally {
+      sending.current = false;
       setBusy(null);
       await reload();
     }
@@ -184,9 +216,11 @@ function RefusedCards({ userId, coachId, items, reload }: {
       } },
     ]);
   };
+  // B1: the coach chat is registered on the Home stack only (ClientNavigator) and the card is on the Train stack, so it
+  // opens through the tabs with Home's first screen under it, so Back works (as YouScreen, LearnScreen, CourseMomentSheet).
   const tell = () => {
     setOpenId(null);
-    navigation.navigate('Messages');
+    (navigation.getParent() ?? navigation).navigate('Home', { screen: 'Messages', initial: false });
   };
 
   const open = items.find((x) => x.id === openId) ?? null;
@@ -205,7 +239,7 @@ function RefusedCards({ userId, coachId, items, reload }: {
           accessibilityHint={c.hint} testID="refused-card-open">
           <Text maxFontSizeMultiplier={CAP} style={s.title}>{c.title}</Text>
           <Text maxFontSizeMultiplier={CAP} style={s.sub}>{[v.name, v.date].filter(Boolean).join(' · ')}</Text>
-          {refusalLines(item.refusal, c.said).map((line) => (
+          {refusalLines(item.refusal, c).map((line) => (
             <Text key={line} maxFontSizeMultiplier={CAP} style={s.said}>{line}</Text>
           ))}
         </Pressable>
@@ -233,63 +267,67 @@ function RefusedCards({ userId, coachId, items, reload }: {
         </View>
       ) : items.map(one)}
       {open ? (
-        <RefusedWorkoutSheet item={open} coach={coach} again={again.has(open.id)} busy={busy === open.id}
+        <RefusedWorkoutSheet item={open} coach={coach} again={again.has(open.id)} busy={busy === open.id} assignments={assignments}
           onClose={() => setOpenId(null)} onSend={() => void send(open.id)} onTell={tell} onRemove={() => remove(open)} />
       ) : null}
     </Animated.View>
   );
 }
 
-/** s2_R4a / s2_R4b: the workout's sets, the server's words, Send again, Tell <coach>, Remove from this phone. */
-export function RefusedWorkoutSheet({ item, coach, again, busy, onClose, onSend, onTell, onRemove }: {
-  item: RefusedWorkout; coach: string | null; again: boolean; busy: boolean;
+/**
+ * s2_R4a / s2_R4b: the workout's sets, the server's words, Send again, Tell <coach>, Remove from this phone. B2: a column
+ * as the drawing is: the head (overline, name, meta) and the actions ("Not accepted again.", the buttons, the footnote)
+ * never scroll; only the body between them (the lede, the server's words, the sets) scrolls and shrinks to fit.
+ */
+export function RefusedWorkoutSheet({ item, coach, again, busy, assignments, onClose, onSend, onTell, onRemove }: {
+  item: RefusedWorkout; coach: string | null; again: boolean; busy: boolean; assignments?: RefusedPlans;
   onClose: () => void; onSend: () => void; onTell: () => void; onRemove: () => void;
 }) {
   const sc = useTheme().semanticColors;
   const insets = useSafeAreaInsets();
-  const v = useMemo(() => refusedView(item.body), [item.body]);
-  // s2_R4b: refused again, the sheet opens at its end, where "Not accepted again." sits by Send again.
-  const scroll = useRef<ScrollView>(null);
-  const toEnd = () => { if (again) scroll.current?.scrollToEnd({ animated: false }); };
+  const v = useMemo(() => refusedView(item.body, assignments), [item.body, assignments]);
   const ink = { color: sc.textPrimary };
   const muted = { color: sc.textMuted };
   return (
     <Modal transparent visible animationType="slide" statusBarTranslucent onRequestClose={onClose}>
       <View style={[s.scrim, { backgroundColor: sc.overlay }]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close"
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel={c.close}
           testID="refused-sheet-scrim" />
         <View style={[s.sheet, { backgroundColor: sc.bgSurface, paddingBottom: insets.bottom + 16 }]} accessibilityViewIsModal
           onAccessibilityEscape={onClose} testID="refused-sheet">
           <SheetGrip />
-          <ScrollView ref={scroll} onContentSizeChange={toEnd} contentContainerStyle={s.sheetBody}>
+          <View style={s.pad} testID="refused-sheet-head">
             <Text maxFontSizeMultiplier={CAP} style={[typography.eyebrow, { color: Colors.offlineBanner }]}>{c.overline}</Text>
             <Text accessibilityRole="header" style={[typography.h1, ink]}>{v.name}</Text>
             <Text maxFontSizeMultiplier={CAP} style={[typography.bodySmall, muted, s.tabular, s.meta]}>{v.meta}</Text>
+          </View>
+          <ScrollView style={s.body} contentContainerStyle={s.pad} testID="refused-sheet-body">
             <Text style={[s.why, ink]}>{c.why(coach)}</Text>
             <View style={[s.box, { borderLeftColor: Colors.offlineBanner }]} testID="refused-sheet-said">
-              {refusalLines(item.refusal, c.said).map((line) => <Text key={line} style={s.said}>{line}</Text>)}
+              {refusalLines(item.refusal, c).map((line) => <Text key={line} style={s.said}>{line}</Text>)}
             </View>
             {v.rows.map((r, i) => (
-              <View key={`${r.name}-${i}`} style={[s.setRow, { borderTopColor: sc.border }, i === v.rows.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: sc.border }]}>
+              <View key={`${r.name}-${i}`} style={[s.setRow, { borderTopColor: sc.border }]}>
                 <Text style={[s.setText, ink, s.flex]}>{r.name}</Text>
                 <Text style={[s.setText, muted, s.tabular]}>{r.line}</Text>
               </View>
             ))}
+          </ScrollView>
+          <View style={[s.rule, { backgroundColor: sc.border }]} />
+          <View style={[s.pad, s.buttons]} testID="refused-sheet-actions">
             {again ? (
               <View style={s.again} accessibilityRole="alert" testID="refused-sheet-again">
                 <Ionicons name="alert-circle-outline" size={20} color={Colors.offlineBanner} />
                 <Text maxFontSizeMultiplier={CAP} style={[s.againText, { color: Colors.offlineBanner }]}>{c.again}</Text>
               </View>
             ) : null}
-            <View style={s.buttons}>
-              {canSendAgain(item.refusal) ? (
-                <PrimaryButton label={c.sendAgain} onPress={onSend} loading={busy} testID="refused-sheet-send" />
-              ) : null}
-              {coach ? <Outline label={c.tell(coach)} onPress={onTell} testID="refused-sheet-tell" /> : null}
-              <TextLink label={c.remove} tone="accent" onPress={onRemove} disabled={busy} testID="refused-sheet-remove" />
-              <Text maxFontSizeMultiplier={CAP} style={[typography.bodySmall, muted, s.center]}>{c.stays}</Text>
-            </View>
-          </ScrollView>
+            {canSendAgain(item.refusal) ? (
+              <PrimaryButton label={c.sendAgain} onPress={onSend} loading={busy} testID="refused-sheet-send" />
+            ) : null}
+            {coach ? <Outline label={c.tell(coach)} onPress={onTell} testID="refused-sheet-tell" /> : null}
+            <TextLink label={c.remove} tone="accent" onPress={onRemove} disabled={busy} testID="refused-sheet-remove" />
+            <Text maxFontSizeMultiplier={CAP} style={[typography.bodySmall, muted, s.center]}>{c.stays}</Text>
+          </View>
         </View>
       </View>
     </Modal>
@@ -316,7 +354,10 @@ const s = StyleSheet.create({
   scrim: { flex: 1, justifyContent: 'flex-end' },
   sheet: { maxHeight: '92%', borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet },
   // Spacing measured from s2_R4a at 390 pt: rows 37 pt, the reason box 22 pt under the lede, buttons 8 pt apart.
-  sheetBody: { paddingHorizontal: layout.gutter },
+  pad: { paddingHorizontal: layout.gutter },
+  // B2: the body takes only the height it needs and shrinks (scrolling) when the sheet reaches its full height.
+  body: { flexGrow: 0, flexShrink: 1 },
+  rule: { height: StyleSheet.hairlineWidth, marginHorizontal: layout.gutter }, // s2_R4a: the line under the part that scrolls
   meta: { marginTop: 2 },
   why: { fontFamily: 'Inter_400Regular', fontSize: 16, lineHeight: 22, marginTop: 12 },
   box: {
@@ -327,7 +368,8 @@ const s = StyleSheet.create({
   setText: { fontFamily: 'Inter_400Regular', fontSize: 16, lineHeight: 22 },
   flex: { flex: 1, minWidth: 0 },
   tabular: { fontVariant: ['tabular-nums'] },
-  again: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
+  // s2_R4b: "Not accepted again." 10 pt under the line and 12 pt over Send again (the actions' own 13 and 8, adjusted).
+  again: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: -3, marginBottom: 4 },
   againText: { fontFamily: 'Inter_600SemiBold', fontSize: 16, lineHeight: 22, flexShrink: 1 },
   buttons: { gap: 8, marginTop: 13 },
   center: { textAlign: 'center' },

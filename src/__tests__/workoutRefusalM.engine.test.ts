@@ -161,10 +161,20 @@ describe('refusalOf: what the phone keeps from an answer', () => {
   });
 
   it('Send again is offered unless the workout is gone from the server; the lines quote the server', () => {
+    const copy = { said: 'The server said:', invalid: "Part of this workout couldn't be saved." };
     expect(canSendAgain(refusalOf(INVALID)!)).toBe(true);
     expect(canSendAgain(refusalOf(NOT_FOUND)!)).toBe(false);
-    expect(refusalLines(refusalOf(NOT_FOUND)!, 'The server said:')).toEqual(['The server said:\n“Workout not found”', W3]);
-    expect(refusalLines({ status: 400, code: 'X', said: '', nextStep: W2 }, 'The server said:')).toEqual([W2]);
+    expect(refusalLines(refusalOf(NOT_FOUND)!, copy)).toEqual(['The server said:\n“Workout not found”', W3]);
+    expect(refusalLines({ status: 400, code: 'X', said: '', nextStep: W2 }, copy)).toEqual([W2]);
+  });
+
+  it('OPERATOR RULING 7208809287 item 3: WORKOUT_INVALID never shows a validation line, only the plain line and the next step', () => {
+    const copy = { said: 'The server said:', invalid: "Part of this workout couldn't be saved." };
+    const kept = refusalOf(INVALID)!;
+    expect(kept.said).toBe('property surprise should not exist'); // stored as the server sent it (CONTRACT 7203245014)
+    const lines = refusalLines(kept, copy);
+    expect(lines).toEqual(["Part of this workout couldn't be saved.", W2]);
+    expect(lines.join('\n')).not.toMatch(/property|should not exist|The server said/);
   });
 });
 

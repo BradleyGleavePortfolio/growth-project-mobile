@@ -162,10 +162,17 @@ const answer = (data: Record<string, unknown>) => Object.assign(new Error('HTTP 
 describe('a Finish the server refuses', () => {
   it.each([
     [
-      'with a code: the server\'s words and its next step',
+      // OPERATOR RULING 7208809287 item 3: a client never reads the validation line.
+      'WORKOUT_INVALID: the plain line and the next step, never the validation line',
       answer({ statusCode: 400, code: 'WORKOUT_INVALID', message: ['property surprise should not exist'], error: 'Bad Request', next_step: W2 }),
       'Workout not saved',
-      `The server said:\n\u201Cproperty surprise should not exist\u201D\n\n${W2}`,
+      `Part of this workout couldn't be saved.\n\n${W2}`,
+    ],
+    [
+      'another code with a next step: the server\'s words and its next step, as built',
+      answer({ statusCode: 400, code: 'WORKOUT_OTHER', message: 'Workout date is too far ahead', error: 'Bad Request', next_step: W2 }),
+      'Workout not saved',
+      `The server said:\n\u201CWorkout date is too far ahead\u201D\n\n${W2}`,
     ],
     [
       'with no code (the old server): main\'s alert, word for word',
@@ -187,6 +194,9 @@ describe('a Finish the server refuses', () => {
     const i = alertTitles.lastIndexOf(title);
     expect(i).toBeGreaterThanOrEqual(0);
     expect(alertBodies[i]).toBe(body);
+    if (title === 'Workout not saved' && err.response.data.code === 'WORKOUT_INVALID') {
+      expect(alertBodies.join('\n')).not.toMatch(/property|should not exist/);
+    }
     expect(alertTitles).not.toContain(title === 'Workout not saved' ? 'Workout not saved yet' : 'Workout not saved');
     // The sets stay on the logger and the session is saved again for Finish again.
     expect(mockSaveActiveWorkoutSession).toHaveBeenCalled();
