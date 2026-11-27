@@ -208,9 +208,9 @@ function CoachlessLockWithFormer({ title, body, testID = 'join-coach-state', tap
     if (!recipientId) return;
     const front = navigation?.isFocused?.() ?? true;
     if (front && !decided) return;
-    spend();
     if (front && recipientId === listed) setOpenWith(listed);
   }, [params, recipientId, decided, listed, inFront, navigation, spend]);
+  useEffect(() => () => { spend(); }, [spend]);
   useEffect(() => {
     if (!openWith || !inFront) return undefined; // C6: another tab's Back is that tab's
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
