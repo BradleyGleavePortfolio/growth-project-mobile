@@ -57,7 +57,7 @@ export interface CoachRecipe extends RecipeAllergenFields {
  */
 export const ownRecipes = (rows: unknown, userId: string | undefined): CoachRecipe[] =>
   !userId || !Array.isArray(rows) ? [] : rows.filter((r): r is CoachRecipe =>
-    !!r && typeof r === 'object' && (r as CoachRecipe).created_by_id === userId && typeof (r as CoachRecipe).id === 'string');
+    !!r && typeof r === 'object' && typeof (r as CoachRecipe).id === 'string');
 
 export const recipeLine = (r: CoachRecipe) =>
   `Per serving · ${macroLine({ calories_kcal: r.calories, protein_g: r.protein, carbs_g: r.carbs, fats_g: r.fat })}`;
