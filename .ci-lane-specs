@@ -1,0 +1,3 @@
+--setupFilesAfterEnv
+<rootDir>/jest.setup.js
+<rootDir>/.ci-lane-probe/waits.setup.js
