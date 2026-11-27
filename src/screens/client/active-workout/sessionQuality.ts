@@ -125,7 +125,7 @@ export function workoutSummary(exercises: SessionExercise[], history: LoggedWork
       .filter((e) => nameKey(e.exercise_name) === nameKey(exercise.exerciseName))
       .flatMap((e) => e.weight_per_set));
     const best = Math.max(0, ...exercise.sets.filter((s) => s.completed && s.reps > 0).map((s) => s.weight));
-    return prior.length && best > Math.max(...prior)
+    return best > Math.max(0, ...prior)
       ? [{ name: exercise.exerciseName, weight: best }]
       : [];
   });
