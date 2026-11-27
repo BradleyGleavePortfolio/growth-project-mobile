@@ -200,7 +200,6 @@ export function startSpaceOutbox(userId: string | null): void {
   bound = null;
   void publisher(g).catch(() => undefined);
   rows = [];
-  told.clear();
   subs.forEach((fn) => fn());
   loaded = cacheStorage.getStringAsync(`${SPACE_OUTBOX_PREFIX}${userId}`).then((raw) => {
     if (gen !== g || !raw) return;
