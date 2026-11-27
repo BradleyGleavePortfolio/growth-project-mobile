@@ -142,7 +142,7 @@ function FoodWeekPage({ coached }: { coached: boolean }) {
             </HapticPressable>
           )}
         </View>
-        <Text style={s.title} accessibilityRole="header">{range.current ? 'This week' : 'Earlier week'}</Text>
+        <Text style={s.title} accessibilityRole="header">{'This week'}</Text>
         {loading ? <View style={[s.bone, s.boneLine]} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden />
           : average ? <Text style={s.line}>{averageLine(average)}</Text> : null}
         <View style={s.rule} importantForAccessibility="no" accessibilityElementsHidden />
