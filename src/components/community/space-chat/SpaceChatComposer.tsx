@@ -12,9 +12,11 @@
  * puts the cursor in the field; a refused reply comes back with its quote. The mic is the screen's to leave out.
  * FR-909 (LO-909 B2): it waits while another reply is set too, so a newer reply is never switched; a quote whose message
  * went does not come back (the text does).
+ * SPACE-STATES-M (GOAL ctx#538 s2_S5): `suggestion`, one chip above the bar while the field is empty; a tap puts its words
+ * in the field (the draft) and the cursor there. It never sends.
  */
 import React, { useEffect, useRef } from 'react';
-import { Alert, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useChatDraft } from '../../../lib/chatDrafts';
 import { forestPop as fp, neutral, spacing, typography, voiceShades } from '../../../theme/tokens';
@@ -34,9 +36,11 @@ export interface SpaceChatComposerProps {
   /** SC-M3: the message being answered (reply mode), and how the screen sets or clears it. */
   reply?: SpaceReplyTarget | null;
   onReply?: (target: SpaceReplyTarget | null) => void;
+  /** SPACE-STATES-M: words one tap puts in the empty field (the coach's empty space). */
+  suggestion?: string;
 }
 
-export default function SpaceChatComposer({ cohortId, onSend, leading, trailing, bottomInset = 0, reply, onReply }: SpaceChatComposerProps): React.ReactElement {
+export default function SpaceChatComposer({ cohortId, onSend, leading, trailing, bottomInset = 0, reply, onReply, suggestion }: SpaceChatComposerProps): React.ReactElement {
   const [text, setText] = useChatDraft(`space:${cohortId}`);
   const body = text.trim();
   const field = useRef<TextInput>(null);
@@ -52,6 +56,18 @@ export default function SpaceChatComposer({ cohortId, onSend, leading, trailing,
   return (
     <>
       {reply && onReply ? <ReplyComposer target={reply} onCancel={() => onReply(null)} /> : null}
+      {suggestion && !body ? (
+        <View style={s.chips}>
+          <TouchableOpacity
+            onPress={() => { setText(suggestion); field.current?.focus(); }}
+            accessibilityRole="button" accessibilityLabel={suggestion}
+            style={s.chip} testID="space-chat-suggestion"
+          >
+            <Ionicons name="pencil-outline" size={18} color={fp.forest} />
+            <Text style={s.chipText} numberOfLines={2}>{suggestion}</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
       <View style={[s.bar, leading ? null : s.noLead, bottomInset ? { paddingBottom: spacing.sm + bottomInset } : null]} testID="space-chat-composer">
         {leading ? <View style={s.slot}>{leading}</View> : null}
         <TextInput
@@ -94,4 +110,11 @@ const s = StyleSheet.create({
     borderRadius: 22, borderWidth: 1, borderColor: voiceShades.track, backgroundColor: neutral[0], color: fp.ink,
   },
   send: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: fp.forest },
+  // SPACE-STATES-M, GOAL s2_S5 .s2chips / .chip: 10 16 2 padding; a 44 pt pill, 1.5 pt forest edge, white, 15 pt forest words.
+  chips: { flexDirection: 'row', paddingTop: 10, paddingHorizontal: spacing.lg, paddingBottom: 2 },
+  chip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, maxWidth: '100%', paddingVertical: 10, paddingHorizontal: spacing.lg,
+    borderRadius: 22, borderWidth: 1.5, borderColor: fp.forest, backgroundColor: neutral[0],
+  },
+  chipText: { fontFamily: 'Inter_500Medium', fontWeight: '500', fontSize: 15, lineHeight: 20, color: fp.forest, flexShrink: 1 },
 });
