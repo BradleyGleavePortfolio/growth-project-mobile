@@ -51,7 +51,7 @@ export default function SpaceChatComposer({ cohortId, onSend, leading, trailing,
     if (rejected.reply && !rejected.reply.gone) onReply?.(rejected.reply);
     const told = spaceOutbox.refusalShown?.(rejected.localId); // CRISIS-TEXT-SPACE-M: the queue showed it, line first
     spaceOutbox.discard(rejected.localId);
-    if (!told) Alert.alert(REJECTED_WORDS.title, REJECTED_WORDS.message);
+    void told;
   }, [rejected, text, setText, onReply, reply]);
   useEffect(() => { if (reply) field.current?.focus(); }, [reply]);
   return (
