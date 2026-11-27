@@ -368,11 +368,14 @@ describe('N4: the create', () => {
     const view = await openNewSpace();
     await toVisibility(view);
     await press(view, 'new-space-create');
+    // The list's re-read after the create is held, so the Home shows the provisional row the create put first.
+    http['/community/cohorts'] = PENDING;
     await act(async () => { answer(created('Food on the go')); });
     await waitFor(() => expect(ref.getCurrentRoute()?.name).toBe('CoachCommunityHome'));
     expect(mockHaptics.success).toHaveBeenCalledTimes(1);
-    const rows = view.getAllByTestId(/^coach-home-space-/);
+    const rows = await waitFor(() => view.getAllByTestId(/^coach-home-space-/));
     expect(rows[0].props.accessibilityLabel).toBe('Food on the go, Clients');
+    expect(rows.map((r) => r.props.accessibilityLabel)).toEqual(['Food on the go, Clients', 'Announcements, Clients', 'Everyone, Clients']);
     expect(jest.requireActual('react-native').StyleSheet.flatten(rows[0].props.style).borderLeftColor).toBe(fp.leaf);
   });
 });
