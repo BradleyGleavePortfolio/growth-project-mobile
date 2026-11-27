@@ -24,6 +24,7 @@ import MealChoiceRow from './MealChoiceRow';
 import ManualFoodEntryForm, { ManualFields } from './ManualFoodEntryForm';
 import SheetGrip from './SheetGrip';
 import { SheetGlyph } from './AddSheetGlyphs';
+import type { PlanMealSheet } from '../../screens/client/mealplan/planMeal';
 
 interface Props {
   visible: boolean;
@@ -69,6 +70,12 @@ interface Props {
    * rule). When it does, the title is "Add at {clock}" over the meal (C_add); otherwise, or when absent, "Add to {meal}".
    */
   savesToday?: () => boolean;
+  /**
+   * PLAN-SWAPS-M (R4, C_something): opened from a coach's plan meal ("Something else" with its plan link). The title is
+   * "Something else" with "Instead of {meal}" under it, the coach's swaps sit over the search field and the footnote
+   * under it. Absent (every other open), the sheet is main's.
+   */
+  planMeal?: PlanMealSheet;
 }
 
 const nowMinutes = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
@@ -130,7 +137,8 @@ export default function FoodSearchModal(props: Props) {
   const now = useSheetClock(visible && !!props.savesToday);
   const meal = MEAL_SECTIONS.find((s) => s.type === activeMealType)?.label;
   const at = props.savesToday?.() ? clockOf(now) : null;
-  const title = at ? `Add at ${at}` : `Add to ${meal}`;
+  const title = props.planMeal ? 'Something else' : at ? `Add at ${at}` : `Add to ${meal}`;
+  const mealLine = props.planMeal ? null : at;
 
   return (
     <Modal testID="food-search-sheet" visible={visible} animationType="slide" transparent statusBarTranslucent onRequestClose={onClose}>
@@ -156,9 +164,9 @@ export default function FoodSearchModal(props: Props) {
                   <SheetGrip />
                   <View style={styles.modalHeader}>
                     <View style={styles.titleBlock} accessible accessibilityRole="header"
-                      accessibilityLabel={at ? `${title}, ${meal}` : title}>
+                      accessibilityLabel={mealLine ? `${title}, ${meal}` : title}>
                       <Text testID="food-search-title" style={styles.modalTitle}>{title}</Text>
-                      {at ? <Text testID="food-search-meal" style={styles.mealLine}>{meal}</Text> : null}
+                      {mealLine ? <Text testID="food-search-meal" style={styles.mealLine}>{meal}</Text> : null}
                     </View>
                     {props.addedFoodName ? (
                       <TextLink label="Done" tone="accent" underline={false} disabled={props.saving} onPress={onClose} style={styles.closeButton} />
@@ -168,6 +176,7 @@ export default function FoodSearchModal(props: Props) {
                       </HapticPressable>
                     )}
                   </View>
+                  {props.planMeal ? <Text testID="food-search-instead" style={styles.instead}>{props.planMeal.instead}</Text> : null}
                 </View>
 
                 {props.onMealChange ? (
@@ -204,6 +213,7 @@ export default function FoodSearchModal(props: Props) {
                       onRepeatMeal={props.onRepeatMeal}
                       saving={props.saving}
                       onEnterManualMode={onEnterManualMode}
+                      planMeal={props.planMeal}
                     />
                   ) : (
                     <ManualFoodEntryForm
@@ -266,4 +276,6 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   },
   // :49 .meta: Inter 14/20, muted.
   mealLine: { fontFamily: typography.bodySmall.fontFamily, fontSize: 14, lineHeight: 20, color: sc.textMuted },
+  // PLAN-SWAPS-M, C_something .meta (C2-B-06): Inter 15, muted, under the title.
+  instead: { fontFamily: typography.bodySmall.fontFamily, fontSize: 15, lineHeight: 21, color: sc.textMuted, paddingHorizontal: layout.gutter, marginTop: 6 },
 });

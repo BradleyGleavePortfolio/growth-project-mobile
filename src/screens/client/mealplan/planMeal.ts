@@ -52,6 +52,7 @@ const swapFood = (s: FullSwap): SearchResult => ({
 
 export interface SwapRow { id: string; name: string; line: string; label: string; hint: string; food: SearchResult }
 export interface PlanMealSheet {
+  slot: SlotLabel;
   /** The plan meal's label ("Pre-workout"): the portion sheet's "For {meal}". */
   label: string;
   instead: string;
@@ -70,6 +71,7 @@ export function somethingElseSheet(slot: DailyMealPlanSlot, coach: string): Plan
     return { id: s.id, name: s.name.trim(), line, label: `${s.name.trim()}, ${line}`, hint: `Opens the amount for ${label}`, food: swapFood(s) };
   });
   return {
+    slot: slot.slot_label,
     label,
     instead: `Instead of ${t.name}, ${n(t.calories_kcal)} kcal.`,
     heading: swaps.length > 0 ? `Swaps from ${coach || 'your coach'}` : null,
