@@ -8,7 +8,6 @@
  * The real page mounts with the API mocked at its edge (coachless Jordan, fictional); today is Tuesday 2026-10-13, 08:00.
  */
 import React from 'react';
-import { Modal } from 'react-native';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import NetInfo from '@react-native-community/netinfo';
@@ -137,9 +136,10 @@ describe('FIX-KM-1: the sheet keeps its one send tied to the save she asked for'
     // The send is running: every way out of the sheet holds still.
     await fireEvent.press(screen.getByTestId('kitchen-sheet-close'));
     expect(screen.getByTestId('kitchen-sheet')).toBeTruthy();
-    await fireEvent.press(screen.getByTestId('kitchen-sheet-scrim'));
+    // The scrim sits beside the modal view, so it is outside the accessibility tree (as Kitchen.test.tsx reads it).
+    await fireEvent.press(screen.getByTestId('kitchen-sheet-scrim', { includeHiddenElements: true }));
     expect(screen.getByTestId('kitchen-sheet')).toBeTruthy();
-    await act(async () => { (screen.UNSAFE_getByType(Modal).props.onRequestClose as () => void)(); });
+    await fireEvent(screen.getByTestId('kitchen-sheet'), 'requestClose'); // Android Back (the Modal's onRequestClose)
     expect(screen.getByTestId('kitchen-sheet')).toBeTruthy();
     expect(screen.getByTestId('kitchen-sheet-close').props.accessibilityState).toEqual(expect.objectContaining({ disabled: true }));
     // The answer comes back to the meal it was sent for.
