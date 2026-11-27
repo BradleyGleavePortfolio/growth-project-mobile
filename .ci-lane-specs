@@ -1,0 +1,4 @@
+src/navigation/__tests__/workoutSummaryTabBar.nav.test.tsx
+src/navigation/__tests__/workoutSummaryTabBar.test.ts
+src/screens/client/__tests__/LS987R3.b1.workoutPlansReach.test.tsx
+src/screens/client/__tests__/StyleLogging.r3.flow.test.tsx
