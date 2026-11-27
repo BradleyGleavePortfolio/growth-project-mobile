@@ -212,6 +212,7 @@ describe('the thread (Style 3 S3_thread: a Style C page)', () => {
     expect(within(mast).getByText('Former coach')).toBeTruthy();
     expect(within(mast).getByText('Maya Brooks')).toBeTruthy();
     expect(view.queryByTestId('community-dmthread-header')).toBeNull();
+    expect(view.getByTestId(`dm-day-${uuid(900)}`)).toBeTruthy(); // S3 .sep: the oldest message opens its day
     expect(view.getByTestId('community-dmthread-composer')).toBeTruthy();
     // 203-D51: her old coach is not her coach now, so each of Maya's messages keeps Report and Block.
     expect(mockMenus[`dm-message-safety-${uuid(901)}`]).toMatchObject({ authorUserId: MAYA, authorName: 'Maya Brooks', viewerCoachId: LEE });

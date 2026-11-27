@@ -26,7 +26,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTheme } from '../../theme/useTheme';
-import { forestPop as fp, typography } from '../../theme/tokens';
+import { colors, forestPop as fp, typography } from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import {
@@ -48,7 +48,7 @@ import { describeCommunityFailure } from '../../api/communityErrors';
 import { useConversationClosed, useServerAnswered, useClosedBy, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
 import { FormerCoachClosed, FormerCoachMasthead, FormerCoachPaper, FormerCoachSheet, useFormerThread } from '../../components/community/FormerCoach';
 import type { CommunityNav, CommunityRoute } from './communityNavTypes';
-import { NO_NAME, initialsOf } from './coach-dm/coachDm';
+import { NO_NAME, dayKey, dayLabel, initialsOf } from './coach-dm/coachDm';
 
 const DM_MAX = 4000; // mirror backend SendDmDto (body 1..4000)
 
@@ -213,7 +213,11 @@ export default function CommunityDmThreadScreen({ inGate }: {
             inverted
             data={data}
             keyExtractor={(m) => m.id}
-            renderItem={({ item }) => (
+            renderItem={({ item, index }) => (
+              <>
+              {/* Style 3 (S3_thread .sep): the day over its first message, on the former page (the list is newest first). */}
+              {former && (index === data.length - 1 || dayKey(data[index + 1].created_at) !== dayKey(item.created_at))
+                ? <Text style={styles.day} testID={`dm-day-${item.id}`}>{dayLabel(item.created_at)}</Text> : null}
               <View style={styles.messageRow}>
                 <View style={styles.flex}>
                   <MessageBubble
@@ -238,6 +242,7 @@ export default function CommunityDmThreadScreen({ inGate }: {
                   />
                 ) : null}
               </View>
+              </>
             )}
             contentContainerStyle={styles.list}
             style={styles.flex}
@@ -275,4 +280,6 @@ const styles = StyleSheet.create({
   list: { paddingVertical: 8 },
   // REFINE-985: 05b's "•••" sits at the top of its message (B-05b-feed-1000_ios.html:130).
   messageRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  // S3_thread .sep: centred, 600 13, #3D3D3A, 6 above and 2 below.
+  day: { textAlign: 'center', fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 13, color: colors.charcoal, marginTop: 6, marginBottom: 2 },
 });
