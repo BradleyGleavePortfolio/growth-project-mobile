@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { CormorantGaramond_400Regular_Italic, useFonts } from '@expo-google-fonts/cormorant-garamond';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { layout, radius, typography, type SemanticTokens } from '../../../theme/tokens';
+import { layout, radius, schemeCard, schemeCardOutline, typography, type SemanticTokens } from '../../../theme/tokens';
 import { Overline, PrimaryButton, QuietTextButton, Screen, useScreenInsets } from '../../../ui';
 import { QuietError, isConnectionFailure } from '../../../ui/states/QuietStates';
 import { Skeleton } from '../../../ui/skeletons/Skeleton';
@@ -160,7 +160,7 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   offline: { ...typography.h2, color: sc.textPrimary },
   emptyTitle: { ...typography.h2, color: sc.textPrimary },
   emptyBody: { ...typography.body, marginTop: 8, marginBottom: 8 },
-  card: { backgroundColor: sc.surface.sage, borderRadius: radius.card, borderWidth: StyleSheet.hairlineWidth, borderColor: sc.surface.sageLine, padding: 20, gap: 8 },
+  card: { borderRadius: radius.card, borderWidth: StyleSheet.hairlineWidth, ...schemeCardOutline, ...schemeCard, padding: 20, gap: 8 },
   planTitle: { ...typography.bodyMd, color: sc.textPrimary },
   excerpt: { ...typography.h3, fontFamily: typography.h2.fontFamily, fontWeight: '400', lineHeight: 26, color: sc.textPrimary },
   italic: { fontFamily: 'CormorantGaramond_400Regular_Italic' },

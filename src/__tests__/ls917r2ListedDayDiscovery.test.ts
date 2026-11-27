@@ -1,13 +1,20 @@
 // LS-917R2: exercise the real guard, including an added reader in a file
 // already on its inventory. Product mutations exist only during this test.
+// FLAKY-PAIR-M: they are made in a private copy of src (FR917_DAY_ROOT), never
+// the shared tree, so no other suite reads an edited workoutDoneToday.ts or
+// lists a probe that is then removed.
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
 
 const root = path.resolve(__dirname, '../..');
 const guard = path.join(root, 'src/__tests__/workoutDayRule.test.ts');
-const listed = path.join(root, 'src/utils/workout/workoutDoneToday.ts');
-const fresh = path.join(root, 'src/utils/workout/fr917DayProbeR2.ts');
+const copy = fs.mkdtempSync(path.join(os.tmpdir(), 'ls917r2-day-'));
+fs.cpSync(path.join(root, 'src'), path.join(copy, 'src'), { recursive: true });
+afterAll(() => fs.rmSync(copy, { recursive: true, force: true }));
+const listed = path.join(copy, 'src/utils/workout/workoutDoneToday.ts');
+const fresh = path.join(copy, 'src/utils/workout/fr917DayProbeR2.ts');
 const bypass = `
 export const ls917r2ReadDay = (row: { date: string }) =>
   new Date(Date.parse(row.date)).toLocaleDateString('en-CA');
@@ -19,7 +26,7 @@ function runGuard() {
     '--runTestsByPath', guard,
   ], {
     cwd: root, encoding: 'utf8', timeout: 40_000, maxBuffer: 8 * 1024 * 1024,
-    env: { ...process.env, FR917_DAY_PROBE: '1' },
+    env: { ...process.env, FR917_DAY_PROBE: '1', FR917_DAY_ROOT: copy },
   });
   if (result.error) throw result.error;
   return result;

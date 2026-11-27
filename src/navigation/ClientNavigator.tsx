@@ -36,7 +36,6 @@ import LogScreen from '../screens/client/LogScreen';
 import RecipesScreen from '../screens/client/RecipesScreen';
 import RecipeDetailScreen from '../screens/client/RecipeDetailScreen';
 import GroceryListScreen from '../screens/client/GroceryListScreen';
-import ShoppingListScreen from '../screens/client/ShoppingListScreen';
 import PrepGuideScreen from '../screens/client/PrepGuideScreen';
 import ProgressScreen from '../screens/client/ProgressScreen';
 import FastingScreen from '../screens/client/FastingScreen';
@@ -317,7 +316,6 @@ export type MoreStackParamList = {
   LearnLesson: { id: string };
   CoachGuidelines: undefined;
   GroceryList: undefined;
-  ShoppingList: undefined;
   PrepGuide:   undefined;
   TrustCenter: undefined;
   DeleteAccount: undefined;
@@ -589,7 +587,6 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
       <MoreStackNav.Screen name="Recipes"      component={RecipesScreen} />
       <MoreStackNav.Screen name="RecipeDetail" component={RecipeDetailScreen} />
       <MoreStackNav.Screen name="GroceryList"  component={GroceryListScreen} />
-      <MoreStackNav.Screen name="ShoppingList" component={ShoppingListScreen} />
       <MoreStackNav.Screen name="PrepGuide"    component={PrepGuideScreen} />
       <MoreStackNav.Screen name="Fast"         component={ProtectedFastingScreen} options={backOnlyHeader('', PLAN_BAND)} />
       <MoreStackNav.Screen name="Community"    component={ProtectedCommunityScreen} />

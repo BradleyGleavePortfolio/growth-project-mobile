@@ -9,7 +9,6 @@ import {
   StyleCEmpty, StyleCLoadingLines, StyleCMasthead, StyleCMastText, StyleCNotice, StyleCSheet, StyleCThumb,
 } from '../../../ui/layout/StyleCPage';
 import GroceryListScreen, { makeListStyles } from '../GroceryListScreen';
-import ShoppingListScreen from '../ShoppingListScreen';
 import PrepGuideScreen from '../PrepGuideScreen';
 
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: jest.fn(), navigate: jest.fn() }) }));
@@ -120,7 +119,7 @@ it('M28: list loading rows keep the drawn flex spacer instead of stretching the 
   spacers.forEach(spacer => expect(flat(spacer.props.style)).toMatchObject({ flex: 1 }));
 });
 
-it.each([['Grocery list', GroceryListScreen], ['Shopping list', ShoppingListScreen]] as const)(
+it.each([['Grocery list', GroceryListScreen]] as const)(
   'M19-M20: %s scrolls the existing title and add row with its rows, keeping the disabled/enabled plus meaning',
   async (title, Screen) => {
     const ui = await mount(Screen);
@@ -143,7 +142,7 @@ it.each([['Grocery list', GroceryListScreen], ['Shopping list', ShoppingListScre
   },
 );
 
-it.each([['grocery', GroceryListScreen], ['shopping', ShoppingListScreen]] as const)(
+it.each([['grocery', GroceryListScreen]] as const)(
   'preserves the %s error state: cached checked rows must not expose Clear checked',
   async (_kind, Screen) => {
     jest.mocked(listsApi.getList).mockResolvedValue({ data: [{ ...item, is_checked: true }] } as Awaited<ReturnType<typeof listsApi.getList>>);
@@ -151,7 +150,7 @@ it.each([['grocery', GroceryListScreen], ['shopping', ShoppingListScreen]] as co
     await waitFor(() => expect(ui.getByRole('button', { name: 'Clear checked' })).toBeTruthy());
     jest.mocked(listsApi.getList).mockRejectedValue(new Error('Network Error'));
     await act(async () => { await clients[clients.length - 1].refetchQueries(); });
-    await waitFor(() => expect(ui.getByText(/Couldn't load (grocery|shopping) list\./)).toBeTruthy());
+    await waitFor(() => expect(ui.getByText(/Couldn't load grocery list\./)).toBeTruthy());
     expect(ui.queryByRole('button', { name: 'Clear checked' })).toBeNull();
   },
 );

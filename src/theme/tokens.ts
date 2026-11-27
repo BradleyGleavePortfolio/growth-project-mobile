@@ -14,14 +14,14 @@
  *
  * Pair                                          Hex pair              Ratio    AA body  AA large
  * ─────────────────────────────────────────────────────────────────────────────────────────────
- * ink (#1A1A18) on bone (#F7FAF7)               ~16.6:1              PASS     PASS
- * ink (#1A1A18) on cream (#F1E8D5)              ~15.2:1              PASS     PASS
- * charcoal (#3D3D3A) on bone (#F7FAF7)          ~10.4:1              PASS     PASS
- * forest (#2C4A36) on bone (#F7FAF7)            ~ 9.3:1              PASS     PASS
- * graphite (#2C2C2C) on bone (#F7FAF7)          ~13.3:1              PASS     PASS
+ * ink (#1A1A18) on bone (#F7EED9)               ~15.1:1              PASS     PASS
+ * ink (#1A1A18) on cream (#F1E8D5)              ~14.3:1              PASS     PASS
+ * charcoal (#3D3D3A) on bone (#F7EED9)          ~ 9.4:1              PASS     PASS
+ * forest (#2C4A36) on bone (#F7EED9)            ~ 8.5:1              PASS     PASS
+ * graphite (#2C2C2C) on bone (#F7EED9)          ~12.1:1              PASS     PASS
  * graphite (#2C2C2C) on cream (#F1E8D5)         ~11.5:1              PASS     PASS
- * stone (#B1A89F) on bone (#F7FAF7)             ~ 2.2:1              FAIL     FAIL (decorative/disabled only)
- * mutedGold (#C5A253) on bone (#F7FAF7)         ~ 2.3:1              FAIL     FAIL (fills/borders only)
+ * stone (#B1A89F) on bone (#F7EED9)             ~ 2.0:1              FAIL     FAIL (decorative/disabled only)
+ * mutedGold (#C5A253) on bone (#F7EED9)         ~ 2.1:1              FAIL     FAIL (fills/borders only)
  *
  * Dark mode additions:
  * textPrimary (#EBE6DE) on bgPrimary (#121110)  ~14.2:1              PASS     PASS
@@ -34,7 +34,7 @@
 
 // ─── Universal old-money palette ──────────────────────────────────────────────
 export const colors = {
-  bone:        '#F7FAF7',  // primary background (owner #166-2)
+  bone:        '#F7EED9',  // primary background (owner #203-E86: Sunlit sand)
   cream:       '#F1E8D5',  // card surface, warm
   ink:         '#1A1A18',  // primary text, dark sections (NEVER #000)
   charcoal:    '#3D3D3A',  // secondary text on light
@@ -113,7 +113,7 @@ export const semantic = {
   },
   warning: {
     bg:     '#F8F2E5',
-    fg:     '#8A6A2A',
+    fg:     '#6B4F1A',  // gold[800]: 6.59:1 as words on the Sunlit sand page (gold[700] was 4.36:1; owner #203-E86)
     border: '#C5A253',
     icon:   '#C5A253',
   },
@@ -409,7 +409,7 @@ export interface SemanticTokens {
    * dark backgrounds (WCAG 2.1, verified in theme/__tests__/contrastTokens.test):
    *   dark:  #E07373 on #121110 ~ 6.17:1  PASS  |  on #1C1A18 ~ 5.68:1  PASS
    * Light mode uses the existing forest #2C4A36, which clears AA as text on
-   * bone #F7FAF7 (~9.33:1) and surface #FFFDF8 (~9.65:1).
+   * bone #F7EED9 (~8.50:1) and surface #FFFDF8 (~9.65:1).
    * Use `accent` for FILLS (CTA backgrounds, progress fills, borders) and
    * `accentText` for accent-colored FOREGROUND text/icons on a bg/surface.
    */
@@ -477,16 +477,16 @@ const chartLeaf = '#A3C46A';
 
 /** Light-mode semantic tokens (default — matches existing bone/ink palette). */
 export const lightTokens: SemanticTokens = {
-  bgPrimary:   '#F7FAF7',  // bone (owner #166-2)
+  bgPrimary:   '#F7EED9',  // bone (owner #203-E86: Sunlit sand)
   bgSurface:   '#FFFDF8',
-  textPrimary: '#1A1A18',  // ink (~15.23:1 on cream)
+  textPrimary: '#1A1A18',  // ink (~15.09:1 on bone)
   // Warm taupe muted. Darkened from #78736E (only 4.10:1 on cream, AA FAIL
   // for body-sized 12-13px meta text) to #6B675F so it clears AA on BOTH
-  // light backgrounds: ~5.35:1 on bone #F7FAF7, ~5.54:1 on surface #FFFDF8.
+  // light backgrounds: ~4.88:1 on bone #F7EED9, ~5.54:1 on surface #FFFDF8.
   textMuted:   '#6B675F',
   accent:      colors.forest,
   // One forest accent for both CTA fills and foreground text/icons. Clears
-  // AA on page (~8.57:1) and surface (~9.65:1); see contrastTokens test.
+  // AA on page (~8.50:1) and surface (~9.65:1); see contrastTokens test.
   accentText:  colors.forest,
   textOnAccent:'#FBF7F0',  // warm near-white on forest (~9.19:1)
   // Disabled CTA: warm taupe fill + dark warm ink. ~5.90:1 (AA PASS) so a
@@ -535,6 +535,21 @@ export const forestPop = {
   error: colors.error,
 } as const;
 export type ForestPopRole = keyof typeof forestPop;
+
+/**
+ * The scheme's panel and success message (203-D40 option 1, owner #203-E91: "into the scheme"). One definition each;
+ * every panel and success message reads these and none carries its own colour or its own edge width. Every value is
+ * an existing token. Light ground only, like forestPop (the app launches light, ThemeProvider).
+ * schemeCard: a cream card with a 3 pt forest left edge (the page against cream is 1.05:1, so the edge marks it).
+ * schemeCardOutline: for a panel that had its own outline, the other three sides in the border colour, at the width
+ * the panel already sets. schemeBar: a forest bar with light words and icon (9.19:1).
+ * Members and pairs: __tests__/schemePanels994.test.tsx.
+ */
+export const schemeCard = { backgroundColor: colors.cream, borderLeftWidth: 3, borderLeftColor: colors.forest } as const;
+export const schemeCardOutline = {
+  borderTopColor: lightTokens.border, borderRightColor: lightTokens.border, borderBottomColor: lightTokens.border,
+} as const;
+export const schemeBar = { fill: colors.forest, text: lightTokens.textOnAccent, border: colors.forest } as const;
 
 /**
  * Coach inbox and Roman's drafts, K2 Style B (planning/MOCKUP3/K2/style-b, owner #196-D10: "BUILD THE PICKED

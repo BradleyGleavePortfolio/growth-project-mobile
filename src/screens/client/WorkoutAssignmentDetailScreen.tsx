@@ -27,7 +27,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { loadActiveWorkoutSession } from '../../storage/activeWorkoutSession';
 import { useExerciseNames } from '../../hooks/useExerciseNames';
 import { formatPlanType } from '../../utils/workout/formatPlanType';
-import { layout, radius, spacing, typography } from '../../theme/tokens';
+import { layout, radius, schemeCard, spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import {
   buildActiveWorkoutExercises,
@@ -170,7 +170,7 @@ export default function WorkoutAssignmentDetailScreen() {
   const actionLabel = canResume ? 'Resume workout' : 'Start workout';
 
   // REDO-LIVE-133, restyled to C1 Style C v2 (STYLE-WORKOUTS-M, C2_today and C2_adjusted): overline, serif title,
-  // lettered hairline rows, a coach-changed row on sage, and the one forest action pinned at the bottom.
+  // lettered hairline rows, a coach-changed row on the scheme's cream card, and the one forest action pinned at the bottom.
   return (
     <Screen
       edges={['top']}
@@ -240,7 +240,7 @@ export default function WorkoutAssignmentDetailScreen() {
                 return (
                   <View key={`${ex.order}-${rowIndex}`} testID={`assignment-row-${ex.order}`}
                     style={[styles.prescription,
-                      changed && [styles.changed, { backgroundColor: sc.surface.sage, borderLeftColor: sc.data.forest }]]}>
+                      changed && [styles.changed, schemeCard]]}>
                     <Text style={[superset ? typography.bodySmall : typography.h4,
                       superset && styles.innerName, { color: sc.textPrimary }]}>
                       {nameFor(ex.exercise_external_id)}
@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
   prescription: { gap: 2 },
   innerName: { fontFamily: 'Inter_600SemiBold' },
   supersetText: { gap: spacing.md },
-  // C2_adjusted cols 128-133, rows 1040-1203: sage, a 3 pt forest edge, 16 pt right corners, 4 pt from the rules.
+  // C2_adjusted cols 128-133, rows 1040-1203: a 3 pt forest edge (the fill is the scheme's cream card, owner ruling 203-E91), 16 pt right corners, 4 pt from the rules.
   changed: {
     borderLeftWidth: wsc.changedEdge,
     borderTopRightRadius: radius.card,
