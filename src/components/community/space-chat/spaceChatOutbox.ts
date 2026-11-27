@@ -143,7 +143,7 @@ async function drain(): Promise<void> {
         // first, for the account that wrote it, before the row fails (the box then takes the words back with no second
         // alert). Any other marked 422 (only a photo's today): the line alone, as every other writer shows it.
         if (reason === 'rejected' && crisisFlagInError(err)) {
-          if (crisisLineReaches(owner)) {
+          if (owner !== undefined) {
             told.add(next.localId);
             Alert.alert(REJECTED_WORDS.title, withCrisisLine(REJECTED_WORDS.message, err));
           }
