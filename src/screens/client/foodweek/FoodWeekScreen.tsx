@@ -162,7 +162,7 @@ function FoodWeekPage({ coached }: { coached: boolean }) {
             <View style={[s.paperBone, s.chartBone]} />
             {range.days.map((day) => <View key={day} style={s.row}><View style={[s.paperBone, s.rowBone]} /></View>)}
           </View>
-        ) : weekly.isError && weekly.data === undefined ? (
+        ) : weekly.isError ? (
           <QuietError message={loadFailureMessage(weekly.error, 'Your week')} onRetry={readAll} retrying={weekly.isFetching}
             testID="food-week-error" />
         ) : totals ? (
