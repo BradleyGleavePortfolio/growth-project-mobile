@@ -64,14 +64,16 @@ function has(words: string[], phrases: string[], plurals = false): boolean {
 }
 
 // USDA's group words before the food ("Beverages, coffee, brewed"; "Nuts, almond butter"), and a brand in capitals
-// before it ("SILK Chocolate, soymilk"), are skipped: the next part is the food's own words.
+// before it ("SILK Chocolate, soymilk"), are skipped: the next part is the food's own words. A name written all in
+// capitals (USDA's Branded foods, "MILK, WHOLE") has no brand head.
 const SKIPPED_HEADS = new Set(['beverages', 'alcoholic beverage', 'alcoholic beverages', 'nuts', 'seeds']);
 const BRAND = /\b[A-Z][A-Z'&!.-]+\b/;
 
 /** The food's own words: its name before the first comma; words in parentheses read as after a comma. */
 function ownWords(name: string): string[] {
   const parts = name.replace(/\(([^)]*)\)/g, ',$1,').split(',').map((part) => part.trim());
-  const skip = parts.length > 1 && (SKIPPED_HEADS.has(parts[0].toLowerCase()) || BRAND.test(parts[0]));
+  const brand = name !== name.toUpperCase() && BRAND.test(parts[0]);
+  const skip = parts.length > 1 && (SKIPPED_HEADS.has(parts[0].toLowerCase()) || brand);
   return wordsOf(parts[skip ? 1 : 0]);
 }
 
