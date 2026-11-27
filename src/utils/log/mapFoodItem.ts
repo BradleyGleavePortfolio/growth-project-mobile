@@ -104,7 +104,7 @@ export const mapFoodItem = (item: RawFoodItem): SearchResult => {
     cup_grams: item.cup_grams,
     tbsp_grams: item.tbsp_grams,
     tsp_grams: item.tsp_grams,
-    food_category: item.food_category ?? item.category,
+    food_category: foodGroupOf(item) ?? item.food_category ?? item.category,
     ...withGroup(item),
   };
 };
