@@ -1,0 +1,7 @@
+^(?!.*/src/screens/)
+--globalSetup
+<rootDir>/.ci-lane-probe/allOn.global.js
+--setupFilesAfterEnv
+<rootDir>/jest.setup.js
+<rootDir>/.github/all-switches-on/switchesOn.setup.js
+<rootDir>/.ci-lane-probe/stall.setup.js
