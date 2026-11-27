@@ -19,7 +19,7 @@ type ReadLike = { isSuccess: boolean; isStale: boolean; isFetchedAfterMount: boo
  * (ConversationClosed.tsx), written here so the coach screens do not pull in the messaging stack.
  */
 export function useAnsweredOnce(read: ReadLike): boolean {
-  const now = read.isSuccess && (read.isFetchedAfterMount || !read.isStale);
+  const now = read.isFetchedAfterMount || !read.isStale;
   const [latched, setLatched] = useState(now);
   useEffect(() => { if (now) setLatched(true); }, [now]);
   return latched || now;
