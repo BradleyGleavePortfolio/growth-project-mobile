@@ -63,7 +63,7 @@ function FoodWeekPage({ coached }: { coached: boolean }) {
   const today = getTodayString();
   const range = weekRange(today, back);
   // R6: plan meals done only for a client with a coach (LogScreen.tsx:767) while the plan checklist switch is on.
-  const withDots = coached && featureFlags.foodPlanChecklist;
+  const withDots = featureFlags.foodPlanChecklist;
 
   // R5: the page's one new key; never stored on the phone (queryClient.ts shouldDehydrateQuery).
   const weekly = useQuery({
