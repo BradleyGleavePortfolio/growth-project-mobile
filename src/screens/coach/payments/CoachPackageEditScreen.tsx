@@ -87,6 +87,7 @@ import { EVERY_PACKAGE_INCLUDES_COACHING } from "../../../constants/packageCoach
 import PackageDetailSurface, {
   type PackageDetailViewModel,
 } from "../../client/packageDetail/PackageDetailSurface";
+import { useScreenAreaKeyboardOffset } from "../../../ui/layout/ScreenArea";
 
 type ParamList = {
   CoachPackageEdit: {
@@ -131,6 +132,7 @@ function serverMessageOf(err: unknown): string | null {
 }
 
 export default function CoachPackageEditScreen({ navigation, route }: Props) {
+  const keyboardOffset = useScreenAreaKeyboardOffset();
   // COACH-INSETS-B-134 (B13 B28 B39): the top bars take the real status-bar
   // inset from the shared Screen module (react-native-safe-area-context) plus
   // 12 pt, never a fixed 56. The keyboard-aware column stays as it was.
@@ -653,6 +655,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
 
   return (
     <KeyboardAvoidingView
+      keyboardVerticalOffset={keyboardOffset}
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       testID="coach-package-edit"

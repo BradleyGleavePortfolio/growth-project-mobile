@@ -63,6 +63,7 @@ import {
   userIdOf,
   writeCoachRecoveryGate,
 } from '../../lib/roleSelectionGate';
+import { useScreenAreaKeyboardOffset } from '../../ui/layout/ScreenArea';
 
 // #306 r4 (Sol B2-R3): a sign-in that recovered the account of an earlier,
 // unconfirmed coach signup, and the server says it is not a coach. The
@@ -121,6 +122,7 @@ function GoogleMark(): React.ReactElement {
 const markStyles = StyleSheet.create({ mark: { marginRight: Spacing.sm } });
 
 export default function LoginScreen({ navigation, route }: Props) {
+  const keyboardOffset = useScreenAreaKeyboardOffset();
   const { semanticColors: colors = lightTokens } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [email, setEmail] = useState<string>(() =>
@@ -577,6 +579,7 @@ export default function LoginScreen({ navigation, route }: Props) {
 
   return (
     <KeyboardAvoidingView
+      keyboardVerticalOffset={keyboardOffset}
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
