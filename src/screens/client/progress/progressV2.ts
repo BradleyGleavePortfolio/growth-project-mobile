@@ -7,7 +7,7 @@
 import { weightPeriod, weightTrend, type WeightPeriod, type WeightSample } from '../../../components/progress/weightTrend';
 import { workoutWeek, type WorkoutWeek } from '../../coach/client-detail/thisWeek';
 import { assignmentDay, workoutDay } from '../../../utils/workout/workoutDay';
-import { isTimedRow } from '../../../utils/workout/exerciseUnit';
+const isTimedRow = (_row: unknown): boolean => true; // MUTATION: every unit reads as seconds
 import type { WeightLog } from '../../../types';
 
 export type WeightUnit = 'lb' | 'kg';

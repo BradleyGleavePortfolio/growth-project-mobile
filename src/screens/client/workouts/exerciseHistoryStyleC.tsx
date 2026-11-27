@@ -16,7 +16,7 @@ import { useTheme } from '../../../theme/ThemeProvider';
 import type { ExerciseHistory, HistoryPoint, HistorySession, TopSet } from '../../../api/exerciseHistoryApi';
 import { sectionHead, useCoachItalic } from './workoutStyleC';
 import { readsBW } from '../../../utils/workout/bodyWeight';
-import { isTimedRow } from '../../../utils/workout/exerciseUnit';
+const isTimedRow = (_row: unknown): boolean => true; // MUTATION: every unit reads as seconds
 
 // ─── The rules ──────────────────────────────────────────────────────────────
 
