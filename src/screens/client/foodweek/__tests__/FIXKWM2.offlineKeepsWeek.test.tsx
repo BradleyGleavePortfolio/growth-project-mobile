@@ -126,8 +126,12 @@ describe('FIX-KWM-2 C1: offline, the page keeps the last good week she was shown
       else await act(async () => { screen.getByTestId('food-week').props.refreshControl.props.onRefresh(); });
       // The re-reads went out and failed (so this is a failed re-read over a cached week, not an untouched cache).
       await waitFor(() => expect(failed(['food', 'week', days[0]])).toBe(true));
-      await waitFor(() => expect(days.every((d) => failed(['food', 'log', d]) && failed(['meal-plan', 'today', d]))).toBe(true));
-      if (how === 'a pull') await waitFor(() => expect(failed(['macros', 'me', 'current'])).toBe(true));
+      await waitFor(() => expect(days.every((d) => failed(['food', 'log', d]))).toBe(true));
+      if (how === 'a pull') {
+        await waitFor(() => expect(days.every((d) => failed(['meal-plan', 'today', d]))).toBe(true));
+        await waitFor(() => expect(failed(['macros', 'me', 'current'])).toBe(true));
+      }
+      await waitFor(() => expect(client.isFetching()).toBe(0));
       expect(jest.mocked(logApi.getWeekly).mock.calls.length).toBe(weeklyCalls + 1);
       expect(screen.queryByTestId('food-week-error')).toBeNull();
       expect(screen.queryByText(OFFLINE_S8)).toBeNull();
