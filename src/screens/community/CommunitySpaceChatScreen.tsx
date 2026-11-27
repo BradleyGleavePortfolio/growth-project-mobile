@@ -5,7 +5,8 @@
  *   - Header (mockup VOICE-B 05b): the space list on the left (members: the space drawer; the coach: the coach's space
  *     list), `# name` and the member count, and the info button: the coach's opens the space's page (members, invites,
  *     removals); a member's opens a read-only sheet with the space's name, member count, purpose and people
- *     (SpaceInfoSheet: FR-871R6 Opus B1, FR-871R7 Sol B871-1).
+ *     (SpaceInfoSheet: FR-871R6 Opus B1, FR-871R7 Sol B871-1). STRIP-945-M (203-D59 op 1): while in front it owns the app's top strip
+ *     (StatusBarBand) in the bar's own deep, light clock and icons, as the DM threads do, and gives it back when it is not.
  *   - Rows: Studio rows (SpaceChatRow), day lines (Style B's day format), voice rows when communityVoiceNotes is on, photo rows with their caption.
  *   - Composer: SpaceChatComposer (pill field, slots for SC-M4's "+" and SC-M2's mic), shown only once the server let
  *     this person in on this visit (useServerAnswered: a page restored from the saved cache at a cold start does not
@@ -49,6 +50,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useIsFocused, useNavigation, useRoute, type NavigationProp, type ParamListBase, type RouteProp } from '@react-navigation/native';
+import { useStatusBarBandWhile } from '../../components/StatusBarBand';
 import { SpaceListButton } from '../../components/community/SpaceDrawer';
 import SpaceChatComposer from '../../components/community/space-chat/SpaceChatComposer';
 import SpaceChatMic from '../../components/community/space-chat/SpaceChatMic';
@@ -104,6 +106,9 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
   const client = useCurrentUser();
   const isOnline = isEffectivelyOnline(useNetworkStatus());
   const focused = useIsFocused();
+  // STRIP-945-M: the strip behind the clock is the bar's deep while this is in front (not a sheet over it: a Modal keeps
+  // focus); blur, unmount or another space (a new mount, by key) gives it back.
+  useStatusBarBandWhile(fp.deep, focused);
   const cohorts = useCommunityCohorts();
   const cohort = cohorts.data?.cohorts.find((c) => c.id === cohortId);
   const chat = useSpaceChat(cohortId, client?.id ?? null, isOnline, focused);
@@ -505,11 +510,13 @@ const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: fp.deep },
   flex: { flex: 1, backgroundColor: colors.bone },
   // 05b .mast: 2 6 10 padding, 2 pt gaps; a 19 pt semibold title after a drawn muted hash, a 13 pt count under it.
+  // STRIP-945-M (203-D59 op 1): the name 4 pt nearer the hash, its box at 76 pt as Style 2's s2_S2b and s2_S3 draw it, in
+  // every state (one bar: it never moves as the space closes or fills); the hash and the count keep 05b's place.
   header: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 6, paddingTop: 2, paddingBottom: 10, backgroundColor: fp.deep },
   icon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   titles: { flex: 1, minWidth: 0, paddingHorizontal: spacing.xs },
   titleRow: { flexDirection: 'row', alignItems: 'center' },
-  title: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 19, lineHeight: 24, color: fp.onDeep, flexShrink: 1 },
+  title: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 19, lineHeight: 24, color: fp.onDeep, flexShrink: 1, marginLeft: -4 },
   sub: { fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18, color: fp.onDeepMuted },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, padding: spacing.xl },
   muted: { ...typography.body, color: SMALL_GREY, textAlign: 'center' },
