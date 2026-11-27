@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { CormorantGaramond_400Regular_Italic, useFonts } from '@expo-google-fonts/cormorant-garamond';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { layout, radius, typography, type SemanticTokens } from '../../../theme/tokens';
+import { layout, radius, schemeCard, schemeCardOutline, typography, type SemanticTokens } from '../../../theme/tokens';
 import { Overline, useScreenInsets } from '../../../ui';
 import { ForestStatusBar } from '../../../components/StatusBarBand';
 import { LearnBack, LessonMark } from './LearnParts';
@@ -23,12 +23,12 @@ export function CourseMasthead({ navigation, back, onBack, children }: { navigat
   );
 }
 
-/** "From {coach}" over the coach's own words in the italic serif, on sage. */
+/** "From {coach}" over the coach's own words in the italic serif, on the scheme's cream card. */
 export function CoachNote({ from, text, testID }: { from: string; text: string; testID?: string }) {
   const { semanticColors: sc } = useTheme();
   const [italic] = useFonts({ CormorantGaramond_400Regular_Italic });
   return (
-    <View style={[styles.note, { backgroundColor: sc.surface.sage, borderColor: sc.surface.sageLine }]} testID={testID}>
+    <View style={[styles.note, schemeCardOutline, schemeCard]} testID={testID}>
       <Overline style={{ color: sc.textPrimary }}>{from}</Overline>
       <Text style={[styles.noteText, { color: sc.textPrimary }, italic && styles.italic]}>{text}</Text>
     </View>

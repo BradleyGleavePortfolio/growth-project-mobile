@@ -10,7 +10,7 @@ import React, { useMemo } from 'react';
 import { StyleSheet, Text, View, type TextStyle } from 'react-native';
 import Svg, { Polyline } from 'react-native-svg';
 import { PeakStar } from '../../../ui/charts/StyleCMarks';
-import { radius, spacing, typography } from '../../../theme/tokens';
+import { radius, schemeCard, spacing, typography } from '../../../theme/tokens';
 import type { SemanticTokens } from '../../../theme/tokens';
 import { useTheme } from '../../../theme/ThemeProvider';
 import type { ExerciseHistory, HistoryPoint, HistorySession, TopSet } from '../../../api/exerciseHistoryApi';
@@ -214,7 +214,7 @@ export function ExerciseHistoryStyleC({ history, bodyWeight }: { history: Exerci
           </Text>
         </View>
         {since ? (
-          <View style={[s.tile, { backgroundColor: sc.surface.sage }]} testID="exercise-history-since">
+          <View style={[s.tile, schemeCard]} testID="exercise-history-since">
             {/* "week 1" never splits at 130% on a 150 pt tile (it wraps as SINCE / WEEK 1). */}
             <Text style={[s.eyebrow, { color: sc.textMuted }]}>{'Since week\u00a01'}</Text>
             {/* "+20 lb" in the drawing's forest (rows 645-680; LO-986R1 C1): the data forest, green in dark too. */}
