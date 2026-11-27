@@ -53,53 +53,73 @@ beforeEach(async () => {
 // ── B-01 ─────────────────────────────────────────────────────────────────────
 
 describe('B-01 auto-advance timer', () => {
-  it('audit probe: No then Yes inside the delay stays on T3 with the injury detail required', async () => {
-    await seedLocal(answersBeforeSafety(), 'T3');
-    const r = await renderFlow(makeApi(), { autoAdvanceMs: 200 });
-    await waitFor(() => r.getByTestId('consult-screen-T3'));
-    await fireEvent.press(r.getByTestId('consult-option-no'));
-    await fireEvent.press(r.getByTestId('consult-option-yes'));
-    expect(r.getByTestId('consult-continue').props.accessibilityState.disabled).toBe(true);
-    await tick(260);
-    expect(r.getByTestId('consult-screen-T3')).toBeTruthy();
-    expect(r.queryByTestId('consult-screen-T4')).toBeNull();
-    // The required area is still asked for; choosing one allows Continue.
-    await fireEvent.press(r.getByTestId('consult-detail-chip-knee'));
-    await fireEvent.press(r.getByTestId('consult-continue'));
-    await waitFor(() => r.getByTestId('consult-screen-T4'));
-  });
+  // Each test sets a 200 ms auto-advance (ConsultationFlow.tsx:960). Its two taps must land
+  // inside that window: a tap, then an answer change, Back or Pause, which cancel it.
+  // Fake timers hold the clock between the two taps, so the second always lands first,
+  // however slow the machine; then the clock runs well past the advance.
+  const ADVANCE_MS = 200;
+  const pastTheAdvance = () => act(async () => { await jest.advanceTimersByTimeAsync(ADVANCE_MS * 2); });
+  async function onHeldClock(body: () => Promise<void>) {
+    jest.useFakeTimers();
+    try {
+      await body();
+    } finally {
+      jest.useRealTimers();
+    }
+  }
 
-  it('changing a single select inside the delay advances once, with the last choice', async () => {
-    await seedLocal(answersBeforeSafety(), 'L1');
-    const r = await renderFlow(makeApi(), { autoAdvanceMs: 200 });
-    await waitFor(() => r.getByTestId('consult-screen-L1'));
-    await fireEvent.press(r.getByTestId('consult-option-light'));
-    await fireEvent.press(r.getByTestId('consult-option-active'));
-    await tick(260);
-    await waitFor(() => r.getByTestId('consult-screen-L2'));
-    const stored = await readLocalState('u1', NOW);
-    expect(stored?.answers.L1).toBe('active');
-    expect(stored?.screenId).toBe('L2');
-  });
+  it('audit probe: No then Yes inside the delay stays on T3 with the injury detail required', () =>
+    onHeldClock(async () => {
+      await seedLocal(answersBeforeSafety(), 'T3');
+      const r = await renderFlow(makeApi(), { autoAdvanceMs: ADVANCE_MS });
+      await waitFor(() => r.getByTestId('consult-screen-T3'));
+      await fireEvent.press(r.getByTestId('consult-option-no'));
+      await fireEvent.press(r.getByTestId('consult-option-yes'));
+      expect(r.getByTestId('consult-continue').props.accessibilityState.disabled).toBe(true);
+      await pastTheAdvance();
+      expect(r.getByTestId('consult-screen-T3')).toBeTruthy();
+      expect(r.queryByTestId('consult-screen-T4')).toBeNull();
+      // The required area is still asked for; choosing one allows Continue.
+      await fireEvent.press(r.getByTestId('consult-detail-chip-knee'));
+      await fireEvent.press(r.getByTestId('consult-continue'));
+      await waitFor(() => r.getByTestId('consult-screen-T4'));
+    }));
 
-  it('Back or Pause during the delay cancels the advance', async () => {
-    await seedLocal(answersBeforeSafety(), 'L1');
-    const r = await renderFlow(makeApi(), { autoAdvanceMs: 200 });
-    await waitFor(() => r.getByTestId('consult-screen-L1'));
-    await fireEvent.press(r.getByTestId('consult-option-light'));
-    await fireEvent.press(r.getByTestId('consult-back'));
-    await waitFor(() => r.getByTestId('consult-screen-B4'));
-    await tick(260);
-    expect(r.getByTestId('consult-screen-B4')).toBeTruthy();
+  it('changing a single select inside the delay advances once, with the last choice', () =>
+    onHeldClock(async () => {
+      await seedLocal(answersBeforeSafety(), 'L1');
+      const r = await renderFlow(makeApi(), { autoAdvanceMs: ADVANCE_MS });
+      await waitFor(() => r.getByTestId('consult-screen-L1'));
+      await fireEvent.press(r.getByTestId('consult-option-light'));
+      await fireEvent.press(r.getByTestId('consult-option-active'));
+      await pastTheAdvance();
+      await waitFor(() => r.getByTestId('consult-screen-L2'));
+      const stored = await readLocalState('u1', NOW);
+      expect(stored?.answers.L1).toBe('active');
+      expect(stored?.screenId).toBe('L2');
+    }));
 
-    await fireEvent.press(r.getByTestId('consult-continue'));
-    await waitFor(() => r.getByTestId('consult-screen-L1'));
-    await fireEvent.press(r.getByTestId('consult-option-moderate'));
-    await fireEvent.press(r.getByTestId('consult-finish-later'));
-    await waitFor(() => r.getByTestId('consult-paused'));
-    await tick(260);
-    expect(r.getByTestId('consult-paused')).toBeTruthy();
-  });
+  it('Back or Pause during the delay cancels the advance', () =>
+    onHeldClock(async () => {
+      await seedLocal(answersBeforeSafety(), 'L1');
+      const r = await renderFlow(makeApi(), { autoAdvanceMs: ADVANCE_MS });
+      await waitFor(() => r.getByTestId('consult-screen-L1'));
+      await fireEvent.press(r.getByTestId('consult-option-light'));
+      await fireEvent.press(r.getByTestId('consult-back'));
+      await waitFor(() => r.getByTestId('consult-screen-B4'));
+      await pastTheAdvance();
+      expect(r.getByTestId('consult-screen-B4')).toBeTruthy();
+      expect(r.queryByTestId('consult-screen-L2')).toBeNull();
+
+      await fireEvent.press(r.getByTestId('consult-continue'));
+      await waitFor(() => r.getByTestId('consult-screen-L1'));
+      await fireEvent.press(r.getByTestId('consult-option-moderate'));
+      await fireEvent.press(r.getByTestId('consult-finish-later'));
+      await waitFor(() => r.getByTestId('consult-paused'));
+      await pastTheAdvance();
+      expect(r.getByTestId('consult-paused')).toBeTruthy();
+      expect(r.queryByTestId('consult-screen-L2')).toBeNull();
+    }));
 });
 
 // ── B-02 ─────────────────────────────────────────────────────────────────────
