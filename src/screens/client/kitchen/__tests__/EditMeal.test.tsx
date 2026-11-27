@@ -206,7 +206,9 @@ describe('SAVED-MEAL-SAVE-M: rename and delete a saved meal (Style 2 Menu)', () 
     expect(rows()).not.toContain('kitchen-meal-m1');
     expect(announced().filter((w) => w === 'Deleted Usual breakfast.')).toHaveLength(1);
     await openMeal('m3');
-    mockDelete.mockImplementation(() => Promise.reject(refusal(404, 'Saved meal not found')));
+    // Gone already (a resend after a lost answer): the server answers 404 and its list no longer holds it.
+    mockDelete.mockImplementation(() => { server[LIST] = (server[LIST] as Array<{ id: string }>).filter((m) => m.id !== 'm3');
+      return Promise.reject(refusal(404, 'Saved meal not found')); });
     await fireEvent.press(screen.getByTestId('kitchen-delete'));
     await tap('Delete Friday wrap?', 'Delete');
     await waitFor(() => expect(screen.queryByTestId('kitchen-sheet')).toBeNull());
