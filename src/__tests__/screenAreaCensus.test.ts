@@ -174,7 +174,7 @@ describe("every Modal that reads a top inset reads the window's", () => {
   const IN_MODAL: Array<[string, number, string]> = [
     ['screens/coach/CoachLessons.tsx', 2, "sheet(): the lessons list and the editor, in a page sheet Modal (Android: full screen)"],
     ['screens/coach/ProgramTemplatesScreen.tsx', 1, 'the template picker in its Modal (:242); the page itself stays a plain Screen'],
-    ['screens/join/JoinPackageScreen.tsx', 2, "both of its Screens, drawn in JoinPackageHost.tsx's page sheet Modal"],
+    ['screens/join/JoinPackageScreen.tsx', 1, "its Screen (:157), drawn in JoinPackageHost.tsx's page sheet Modal (Android: full screen)"],
     ['screens/client/packageDetail/ClientPlanPresentation.tsx', 1, "ClientPlanPage, drawn only in ClientPackagesScreen.tsx's full-screen Modal"],
   ];
   it.each(IN_MODAL)('%s: each Screen drawn in a Modal passes inModal (%i)', (f, n) => {
