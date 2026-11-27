@@ -604,4 +604,29 @@ describe('SAVED-MEAL-SAVE-M: Save a meal from today (Style 2 Menu)', () => {
     await openSave();
     expect(await screen.findByTestId('save-food-e5')).toBeTruthy();
   });
+
+  it('19. Style 2 (S2_save at 320 pt, 130%): a fade marks a list that scrolls, over its last visible row above the pinned foot; none when it fits or at its end', async () => {
+    mockDims = { width: 320, height: 568, scale: 2, fontScale: 1.3 };
+    await mount();
+    await openSave();
+    await loaded();
+    const body = screen.getByTestId('kitchen-sheet-body');
+    // The list fits: no fade.
+    const ev = (nativeEvent: object) => ({ nativeEvent, persist: () => undefined });
+    await fireEvent(body, 'layout', ev({ layout: { x: 0, y: 0, width: 288, height: 300 } }));
+    await fireEvent(body, 'contentSizeChange', 288, 280);
+    expect(screen.queryByTestId('kitchen-sheet-fade', { includeHiddenElements: true })).toBeNull();
+    // More below than the window shows: the fade sits between the list and the foot, and takes no touch.
+    await fireEvent(body, 'contentSizeChange', 288, 900);
+    const fade = screen.getByTestId('kitchen-sheet-fade', { includeHiddenElements: true });
+    expect(fade.props.pointerEvents).toBe('none');
+    // Scrolled to its end: nothing more below, no fade.
+    await fireEvent.scroll(body, ev({ contentOffset: { x: 0, y: 600 }, contentSize: { width: 288, height: 900 },
+      layoutMeasurement: { width: 288, height: 300 } }));
+    expect(screen.queryByTestId('kitchen-sheet-fade', { includeHiddenElements: true })).toBeNull();
+    // The meal sheet's add body has no foot: never a fade there.
+    await fireEvent.press(screen.getByTestId('kitchen-sheet-close'));
+    await fireEvent.press(await screen.findByTestId('kitchen-meal-m1'));
+    expect(screen.queryByTestId('kitchen-sheet-fade', { includeHiddenElements: true })).toBeNull();
+  });
 });
