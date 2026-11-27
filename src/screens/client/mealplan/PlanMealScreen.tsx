@@ -80,7 +80,7 @@ export default function PlanMealScreen() {
     staleTime: FIVE_MIN,
   });
   // R8: the meal plan page's eaten rule (buildPlanDay over the day's log), today only.
-  const day = useTodayLog(isToday && slot ? date : '');
+  const day = useTodayLog(slot ? date : '');
   const entries = day.data && typeof day.data === 'object' ? (day.data as { entries?: DailyLogEntry[] }).entries ?? [] : null;
   const eaten = found && entries && featureFlags.foodPlanChecklist
     ? buildPlanDay([found.plan], entries.map((e) => foodLogFromDailyEntry(e, date))).slots.find((x) => x.key === slotId) ?? null : null;
@@ -142,7 +142,7 @@ export default function PlanMealScreen() {
   const rows = recipeId ? (shownRecipe ? ingredientRows(shownRecipe, null) : []) : ingredientRows(null, t.items);
   const groceries = recipeId ? (shownRecipe ? groceryItems(shownRecipe, null) : []) : groceryItems(null, t.items);
   const status = eatenAtOpen.current && eaten?.status ? eaten.status : null;
-  const showButton = isToday && eatenAtOpen.current === false;
+  const showButton = eatenAtOpen.current === false;
 
   return (
     <View style={styles.screen}>
