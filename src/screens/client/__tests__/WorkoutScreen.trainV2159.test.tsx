@@ -155,7 +155,7 @@ describe('C1 Train tab, Style C v2 (clientTrainV2)', () => {
     // Quick workout and the coach list stay one tap away.
     await fireEvent.press(view.getByLabelText('Quick workout'));
     expect(mockNavigate).toHaveBeenLastCalledWith('ActiveWorkout', { routineName: 'Quick Workout', exercises: '[]' });
-    await fireEvent.press(view.getByLabelText('All coach workouts'));
+    await fireEvent.press(view.getByLabelText('Workout plans'));
     expect(mockNavigate).toHaveBeenLastCalledWith('MoreTab', { screen: 'ClientWorkoutViewer', initial: false });
     expect(view.getByText('1 completed')).toBeTruthy();
   });
@@ -173,7 +173,7 @@ describe('C1 Train tab, Style C v2 (clientTrainV2)', () => {
     expect([...at].sort((a, b) => a - b)).toEqual(at);
   });
 
-  it('with two open and none done, All coach workouts reads the open count, never "0 completed"', async () => {
+  it('with two open and none done, Workout plans reads the open count, never "0 completed"', async () => {
     mockQuery = { data: [fullBody, { ...fullBody, id: 'a2', scheduled_for: at(addDays(today, 2)) }] };
     const view = await render(<WorkoutScreen />);
     await waitFor(() => expect(view.getByText('2 workouts waiting')).toBeTruthy());

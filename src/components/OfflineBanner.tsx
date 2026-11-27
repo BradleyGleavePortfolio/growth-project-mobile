@@ -3,11 +3,11 @@
 // is explicitly unreachable. A null reachability value is treated as online to
 // avoid false positives during the first few hundred ms of app launch.
 
-import React from 'react';
+import React, { useContext } from 'react';
 import { View, Text, StyleSheet, Platform, StatusBar } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { useNetworkStatus, isEffectivelyOnline } from '../hooks/useNetworkStatus';
-import { Colors } from '../constants/colors';
 import { colors, layout, lightTokens, typography } from '../theme/tokens';
 import { readUserCacheSync } from '../lib/userCache';
 import { isCoachLikeRole } from '../lib/roleSelectionGate';
@@ -21,12 +21,18 @@ const COACH_LINE = 'You are offline. Reconnect to see the latest.';
 
 export default function OfflineBanner() {
   const status = useNetworkStatus();
+  // OFFLINE-BAND-IPHONE-M (203-D58 op 1): the phone's top inset from the one SafeAreaProvider (App.tsx), 0 with none
+  // (tests, previews); read before the return below so every render runs the same hooks.
+  const insetTop = useContext(SafeAreaInsetsContext)?.top ?? 0;
   if (isEffectivelyOnline(status)) return null;
   // Read when the banner shows, which is when the network changes.
   const coach = isCoachLikeRole(readUserCacheSync()?.role);
+  // iPhone: the band is laid out from the top of the screen, under the app's opaque top strip (StatusBarBand, as tall
+  // as the top inset), so its 9 pt start where the strip ends (C2_offline_ios390_100: the ink from 47 pt).
+  const style = Platform.OS === 'android' ? styles.banner : [styles.banner, { paddingTop: insetTop + 9 }];
 
   return (
-    <View style={styles.banner} accessibilityRole="alert" accessibilityLiveRegion="polite">
+    <View style={style} accessibilityRole="alert" accessibilityLiveRegion="polite">
       <Ionicons name="cloud-offline-outline" size={12} color={lightTokens.textOnAccent} />
       <Text style={styles.text} maxFontSizeMultiplier={1.3}>{coach ? COACH_LINE : CLIENT_LINE}</Text>
     </View>
@@ -44,8 +50,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.ink,
     paddingVertical: 9,
     paddingHorizontal: layout.gutter,
-    // Sit below the status bar on Android; iOS is handled by the SafeAreaView in
-    // the root navigator so this only adds its own vertical padding.
+    // Sit below the status bar on Android, by the height React Native reports (never the safe-area inset as well:
+    // under edge to edge it is the same height). On iPhone the top inset is added at render (above).
     paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 9 : 9,
   },
   text: {
