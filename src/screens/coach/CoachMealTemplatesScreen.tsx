@@ -52,18 +52,15 @@ const panel = [ms.card, schemeCard, schemeCardOutline];
 
 /**
  * PLAN-SWAPS-COACH-M (Style 1 "Meal page", PICK #ALM-P3): an existing meal opens only from a list read that is fresh
- * or answered on this visit (R5, latched), and the form keeps the meal it was built from, so a later re-read, stale
- * flag or failure never unmounts it under the pickers.
+ * or answered on this visit (R5). The gate is latched, so a later re-read, stale flag or failure never unmounts the
+ * form under the pickers.
  */
 export default function CoachMealTemplatesScreen({ route, navigation }: ProgramsScreenProps<'MealEditor'>) {
   const { semanticColors: sc } = useTheme();
   const list = useMealTemplates();
   const answered = useAnsweredOnce(list);
   const mealId = route.params?.mealId;
-  const found = answered ? list.data?.find((m) => m.id === mealId) : undefined;
-  const [held, setHeld] = useState<MealTemplate>();
-  useEffect(() => { if (found && !held) setHeld(found); }, [found, held]);
-  const meal = held ?? found;
+  const meal = answered ? list.data?.find((m) => m.id === mealId) : undefined;
   if (!mealId || meal) {
     return <MealForm meal={meal} live={list.data} answered={answered} picked={route.params?.picked} navigation={navigation} sc={sc} />;
   }
