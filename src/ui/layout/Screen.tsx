@@ -76,7 +76,7 @@ export function Screen({
   // window's top over the band, so a Screen in one takes the window's. The keyboard view adds the area's place.
   const keyboardOffset = useScreenAreaKeyboardOffset();
   const windowInsets = useWindowInsets();
-  const top = edges.includes('top') ? (inModal ? windowInsets.top : insets.top) + layout.statusBarGap : 0;
+  const top = edges.includes('top') ? insets.top + layout.statusBarGap : 0;
   const ownsBottom = edges.includes('bottom');
   // Without a footer the content itself clears the gesture bar.
   const contentBottom = !footer && ownsBottom ? footerBottomPadding(insets.bottom) : layout.gutter;
@@ -124,7 +124,7 @@ export function Screen({
         <KeyboardAvoidingView
           style={styles.fill}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={inModal ? 0 : keyboardOffset}
+          keyboardVerticalOffset={keyboardOffset}
         >
           {inner}
         </KeyboardAvoidingView>
