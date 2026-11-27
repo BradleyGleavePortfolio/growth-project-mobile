@@ -15,7 +15,6 @@ import { Alert, Animated, Modal, Pressable, ScrollView, StyleSheet, Text, View }
 import { Ionicons } from '@expo/vector-icons';
 import { NavigationProp, ParamListBase, useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { ClientWorkoutAssignmentWithPlan } from '../../api/workoutBuilderApi';
 import { Colors } from '../../constants/colors';
 import { useMyCoaches } from '../../hooks/useCalendar';
 import { useCoachlessClient } from '../../hooks/useCoachlessClient';
@@ -76,8 +75,9 @@ type Exercise = {
   exercise_name?: unknown; sets_completed?: unknown; reps_per_set?: unknown; weight_per_set?: unknown;
   plan_assignment_id?: unknown; plan_order?: unknown;
 };
-/** The client's assignments as the Train tab reads them (GET /assignments/me): each plan row names its unit. */
-export type RefusedPlans = ReadonlyArray<Partial<ClientWorkoutAssignmentWithPlan>>;
+/** The client's assignments as the Train tab reads them (GET /assignments/me), in assignmentPrescription's shape. */
+type Assignment = Parameters<typeof assignmentPrescription>[0];
+export type RefusedPlans = ReadonlyArray<Partial<Assignment>>;
 
 /**
  * C3 (TIMED-SETS-M): the stored body counts seconds in reps_per_set with no unit; an exercise logged from an assignment
@@ -86,7 +86,7 @@ export type RefusedPlans = ReadonlyArray<Partial<ClientWorkoutAssignmentWithPlan
 function timed(plans: RefusedPlans | undefined, e: Exercise): boolean {
   const a = typeof e.plan_assignment_id === 'string' ? plans?.find((p) => p.id === e.plan_assignment_id) : undefined;
   return !!a && typeof e.plan_order === 'number'
-    && isTimedRow(assignmentPrescription(a as ClientWorkoutAssignmentWithPlan).exercises.find((r) => r.order === e.plan_order));
+    && isTimedRow(assignmentPrescription(a as Assignment).exercises.find((r) => r.order === e.plan_order));
 }
 
 /** Name, "Sat 10 Oct", "Saturday 10 October", minutes and set rows from the stored POST /workouts body. */
