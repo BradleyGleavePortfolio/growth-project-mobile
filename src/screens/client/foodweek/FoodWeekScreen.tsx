@@ -113,7 +113,7 @@ function FoodWeekPage({ coached }: { coached: boolean }) {
   // C1 (operator ruling): a re-read that fails keeps the last good answer; S8 and S9 only for a read with no answer.
   const totals = weekly.data !== undefined ? weeklyTotals(weekly.data, range.days) : null;
   const average = totals ? weekAverage(totals, range.days, today) : null;
-  const dots: Array<PlanDots | null> = range.days.map((day, i) => (withDots && daily[i].data !== undefined && plans[i].data !== undefined
+  const dots: Array<PlanDots | null> = range.days.map((day, i) => (withDots && daily[i].isSuccess && plans[i].isSuccess
     ? planDots(plans[i].data, daily[i].data, day) : null));
   const goldAt = range.current && totals?.[6] ? 6 : -1;
   const anyEntry = !!totals?.some(Boolean);
