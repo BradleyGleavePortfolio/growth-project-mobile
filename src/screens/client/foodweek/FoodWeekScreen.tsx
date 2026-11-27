@@ -95,12 +95,12 @@ function FoodWeekPage({ coached }: { coached: boolean }) {
     if (withDots) [...daily, ...plans].forEach((q) => void q.refetch());
     void target.refetch();
   };
-  // Back on the page (she may have logged a food on the Food tab for any shown day): on every range, the weekly
-  // read and every day and plan read of the shown range are fresh again, so each row says what the Food day says.
+  // Back on the page (she may have logged a food on the Food tab): today's reads are fresh again.
   const onReturn = useRef<() => void>(() => undefined);
   onReturn.current = () => {
+    if (!range.current) return;
     if (!weekly.isFetching) void weekly.refetch();
-    if (withDots) [...daily, ...plans].forEach((q) => { if (!q.isFetching) void q.refetch(); });
+    if (withDots) [daily[6], plans[6]].forEach((q) => { if (!q.isFetching) void q.refetch(); });
   };
   useEffect(() => navigation?.addListener?.('focus', () => onReturn.current()), [navigation]);
 
