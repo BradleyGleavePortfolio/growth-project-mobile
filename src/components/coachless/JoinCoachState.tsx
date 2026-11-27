@@ -27,7 +27,7 @@ import { featureFlags } from '../../config/featureFlags';
 import { layout, spacing } from '../../theme/tokens';
 import { useCommunityMe } from '../../hooks/useCommunity';
 import CommunityTermsGate from '../community/CommunityTermsGate';
-import { FormerCoachEntry, useFormerCoach } from '../community/FormerCoach';
+import { FormerCoachEntry, formerCoachOf } from '../community/FormerCoach';
 import CommunityDmThreadScreen from '../../screens/community/CommunityDmThreadScreen';
 import { UUID } from '../../navigation/incomingLinks';
 
@@ -193,7 +193,7 @@ function useTabInFront(): boolean {
  * page. */
 function CoachlessLockWithFormer({ title, body, testID = 'join-coach-state', tap }: Pick<JoinCoachStateProps, 'title' | 'body' | 'testID'> & { tap: TabTap }): React.ReactElement {
   const me = useCommunityMe();
-  const former = useFormerCoach(me.data, null);
+  const former = formerCoachOf(me.data, null);
   const [openWith, setOpenWith] = useState<string | null>(null);
   const inFront = useTabInFront();
   const navigation = useContext(NavigationContext);
