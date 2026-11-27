@@ -718,7 +718,7 @@ export default function MessagesScreen() {
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={keyboardOffset}
+      keyboardVerticalOffset={0}
     >
       {styleB ? bHeader(true) : <View style={[styles.chatHeader, headerTop]}>
         <TouchableOpacity
