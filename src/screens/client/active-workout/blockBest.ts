@@ -31,14 +31,14 @@ export function blockBests(
   // A set holds the record only when it was lifted for reps (main's rule counts no set with 0 reps).
   const atRecord = (exercise: SessionExercise, weight: number): SessionSet[] =>
     exercise.sets.filter((set) => set.completed && set.reps > 0 && set.weight === weight);
-  const keys = new Set(exercises.filter((e) => carriesLb(e, bodyWeight)).map((e) => nameKey(e.exerciseName)));
+  const keys = new Set(exercises.map((e) => nameKey(e.exerciseName)));
   for (const key of keys) {
     const record = nameRecord(records, key);
     if (!record) continue;
     let at = -1;
     let first = Infinity;
     exercises.forEach((exercise, i) => {
-      if (!carriesLb(exercise, bodyWeight) || nameKey(exercise.exerciseName) !== key) return;
+      if (nameKey(exercise.exerciseName) !== key) return;
       const sets = atRecord(exercise, record.weight);
       if (sets.length === 0) return;
       const order = Math.min(...sets.map((set) => set.doneOrder ?? Infinity));
