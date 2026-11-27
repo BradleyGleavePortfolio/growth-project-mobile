@@ -31,7 +31,7 @@ jest.mock('../../../hooks/useWorkoutBuilder', () => ({
 jest.mock('../../../hooks/useExerciseNames', () => ({
   useExerciseNames: () => ({ names: { bench: 'Bench press' }, loading: false }),
 }));
-jest.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({ invalidateQueries: mockInvalidate }) }));
+jest.mock('@tanstack/react-query', () => ({ QueryClient: jest.requireActual('@tanstack/react-query').QueryClient, useQueryClient: () => ({ invalidateQueries: mockInvalidate }) }));
 jest.mock('../../../services/api', () => ({ __esModule: true, default: { put: (...args: unknown[]) => mockPut(...args) } }));
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({ colors: require('../wearables/recoveryTestColors').testColors,
