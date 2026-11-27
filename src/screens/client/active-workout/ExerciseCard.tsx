@@ -3,8 +3,9 @@ import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../../../components/HapticPressable';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
-import { lightTokens as sc, radius, schemeCard, schemeCardOutline, typography } from '../../../theme/tokens';
+import { lightTokens as sc, radius, schemeCard, schemeCardOutline, spacing, typography } from '../../../theme/tokens';
 import { Headline } from '../../../ui';
+import { PeakStar } from '../../../ui/charts/StyleCMarks';
 import type { SessionExercise, SessionSet } from './types';
 import type { ActiveWorkoutStyles } from './styles';
 import { SetLogger } from './SetLogger';
@@ -33,6 +34,7 @@ export function ExerciseCard({
   foldable = false,
   notStarted = false,
   bodyWeight = false,
+  best,
 }: {
   exercise: SessionExercise;
   exIdx: number;
@@ -60,6 +62,8 @@ export function ExerciseCard({
   notStarted?: boolean;
   /** FIX-928-BW (#197-E10): a body-weight exercise; its unloaded sets read BW. */
   bodyWeight?: boolean;
+  /** PR-ALERTS-M: this block holds the exercise's recent best (blockBest.ts); `event` fades the star in once. */
+  best?: { text: string; spoken: string; event?: string } | null;
 }) {
   const [open, setOpen] = useState(false);
   // SET-EDIT-M: rows are keyed by index and hold their own state (open fields,
@@ -76,6 +80,15 @@ export function ExerciseCard({
       {exercise.sets.filter((set) => set.completed).length} of {exercise.sets.length} {exercise.sets.length === 1 ? 'set' : 'sets'} complete
     </Text>
   );
+  // PR-ALERTS-M (C1 v2 C2_logger): the gold star and its line under the name while this block holds the recent best.
+  // Open, it is one element read as the spoken sentence; folded, the header's one label says it. The star is silent.
+  const bestLine = (open: boolean) => best ? (
+    <View style={local.best} testID={`exercise-best-${exIdx}`} accessible={open} accessibilityLabel={open ? best.spoken : undefined}
+      importantForAccessibility={open ? 'yes' : 'no-hide-descendants'}>
+      <View style={local.bestStar}><PeakStar size={14} event={best.event} testID={`exercise-best-star-${exIdx}`} /></View>
+      <Text style={[styles.exerciseSummary, local.bestText]}>{best.text}</Text>
+    </View>
+  ) : null;
   // C1 v2 (MOCKUP3/C1/style-c-v2/C2_logger): lettered blocks A, B, C...
   const letter = (
     <View style={[local.letter, done ? local.letterDone : active ? local.letterActive : local.letterOpen]}
@@ -108,13 +121,13 @@ export function ExerciseCard({
     return (
       <HapticPressable intent="light" style={styles.exerciseCard} onPress={() => setOpen(true)}
         accessibilityRole="button" accessibilityState={{ expanded: false }}
-        accessibilityLabel={`Show sets for ${exercise.exerciseName}, ${sets} of ${sets} ${sets === 1 ? 'set' : 'sets'} complete`}
+        accessibilityLabel={`Show sets for ${exercise.exerciseName}, ${sets} of ${sets} ${sets === 1 ? 'set' : 'sets'} complete${best ? `. ${best.spoken}` : ''}`}
         testID={`exercise-folded-${exIdx}`}>
-        <View style={[styles.exerciseHeader, local.foldedHeader]}>
+        <View style={[styles.exerciseHeader, local.foldedHeader, best ? local.foldedBest : null]}>
           {letter}
           <View style={styles.exerciseHeaderText}>
             <Text style={styles.exerciseName}>{`${blockLetter(exIdx)} · ${exercise.exerciseName}`}</Text>
-            {summary}
+            {best ? bestLine(false) : summary}
           </View>
           <Ionicons name="chevron-down" size={20} color={sc.textPrimary} />
         </View>
@@ -130,6 +143,7 @@ export function ExerciseCard({
         <View style={styles.exerciseHeaderText}>
           <Headline level="h3">{exercise.exerciseName}</Headline>
           {summary}
+          {bestLine(true)}
         </View>
         {foldable ? (
           <HapticPressable intent="light" style={styles.toolButton} onPress={() => setOpen(false)}
@@ -254,6 +268,12 @@ const local = StyleSheet.create({
   letterDone: { backgroundColor: sc.accent },
   letterText: { ...typography.h3, fontSize: 17, lineHeight: 22 },
   foldedHeader: { marginBottom: 0, alignItems: 'center' },
+  // PR-ALERTS-M: with the star line the folded header is three rows; the tile and chevron stay by the name, as drawn.
+  foldedBest: { alignItems: 'flex-start' },
+  best: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs },
+  // The 14 pt star (its drawn star 10.5 pt) sits on the first row of the 13/18 line; it does not grow with the text.
+  bestStar: { marginTop: 2 },
+  bestText: { flex: 1 },
   // C1 v2: the exercise in progress on the scheme's cream card (owner ruling 203-E91) with a 1 pt line.
   activeCard: {
     borderWidth: 1,
