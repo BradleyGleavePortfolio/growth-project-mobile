@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { Ionicons } from '@expo/vector-icons';
-import { savedFoodsApi, type SavedMeal } from '../../../api/savedFoodsApi';
+import type { SavedMeal } from '../../../api/savedFoodsApi';
 import { AnalyticsEvents } from '../../../analytics/events';
 import MealChoiceRow from '../../../components/log/MealChoiceRow';
 import { refreshFoodLog } from '../../../components/mealplan/LogPlannedMealButton';
@@ -26,10 +26,14 @@ import { PrimaryButton } from '../../../ui';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { useBottomInset } from '../../../ui/layout/StyleCPage';
 import { dayForNewLog } from '../../../utils/logDay';
-import { withSaveKey } from '../../../utils/log/saveKey';
-import { WORDS, addIntent, failureOf, heldNote, kcalWords, mealOfHour, mealView, sheetLine } from './kitchen';
+import { WORDS, heldNote, kcalWords, mealOfHour, mealView, sheetLine } from './kitchen';
+import { addSavedMeal, type AddOutcome } from './kitchenAdd';
 
 const nowMinute = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
+/** Each failed outcome's line (KK-5 to KK-8b); a lost answer and a refusal share KK-6, Try again only for a lost one. */
+const LINES: Record<Exclude<AddOutcome, 'added'>, string> = {
+  empty: WORDS.nothingToAdd, 'food-not-found': WORDS.foodGone, 'meal-gone': WORDS.mealGone, lost: WORDS.notAdded, refused: WORDS.notAdded,
+};
 
 /** A downward pull on the sheet's top closes it; a short pull springs back (the add sheet's gesture). Off while busy. */
 function usePullDown(close: () => void, busy: boolean) {
@@ -125,34 +129,28 @@ export default function SavedMealSheet({ meal, onClose, onAdded, onStale }: {
         setLine(WORDS.offline);
         return;
       }
-      const date = dayForNewLog();
-      const res = await withSaveKey(addIntent(meal.id, date, type),
-        (key) => savedFoodsApi.log(meal.id, { date, meal_type: type }, key));
-      if (!Array.isArray(res.data) || res.data.length === 0) {
-        // S12: its foods were removed since the read; the server wrote nothing.
-        void HapticService.error();
-        setLine(WORDS.nothingToAdd);
-        setClosedOut(true);
-        onStale();
+      // R6: the Kitchen's one add step (kitchenAdd.ts); the day is read at the tap.
+      const outcome = await addSavedMeal(meal.id, dayForNewLog(), type);
+      if (outcome === 'added') {
+        void HapticService.success();
+        track(AnalyticsEvents.MEAL_LOGGED, { meal_type: type, source: 'saved_meal' });
+        refreshFoodLog();
+        onAdded(type);
         return;
       }
-      void HapticService.success();
-      track(AnalyticsEvents.MEAL_LOGGED, { meal_type: type, source: 'saved_meal' });
-      refreshFoodLog();
-      onAdded(type);
-    } catch (err) {
       void HapticService.error();
-      const { status, message } = failureOf(err);
-      if (status === 404 && /saved meal/i.test(message)) {
-        setLine(WORDS.mealGone);
+      setLine(LINES[outcome]);
+      setRetry(outcome === 'lost');
+      // S12 (its foods were removed) and KK-7 (the meal is gone): nothing more to send from this sheet; read again.
+      if (outcome === 'empty' || outcome === 'meal-gone') {
         setClosedOut(true);
         onStale();
-      } else if (status === 404) {
-        setLine(WORDS.foodGone);
-      } else {
-        setLine(WORDS.notAdded);
-        setRetry(!status || status >= 500);
       }
+    } catch {
+      // The connection check failed before any send: the lost-answer words and Try again, as before.
+      void HapticService.error();
+      setLine(WORDS.notAdded);
+      setRetry(true);
     } finally {
       sending.current = false;
       setBusy(false);
