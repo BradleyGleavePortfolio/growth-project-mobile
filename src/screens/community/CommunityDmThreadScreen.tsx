@@ -49,6 +49,7 @@ import { useConversationClosed, useServerAnswered, useClosedBy, ConversationClos
 import { FormerCoachClosed, FormerCoachMasthead, FormerCoachPaper, FormerCoachSheet, useFormerThread } from '../../components/community/FormerCoach';
 import type { CommunityNav, CommunityRoute } from './communityNavTypes';
 import { NO_NAME, dayKey, dayLabel, initialsOf } from './coach-dm/coachDm';
+import { useScreenAreaKeyboardOffset } from '../../ui/layout/ScreenArea';
 
 const DM_MAX = 4000; // mirror backend SendDmDto (body 1..4000)
 
@@ -56,6 +57,7 @@ export default function CommunityDmThreadScreen({ inGate }: {
   /** The locked page's thread (no coach, no stack): who, and Back to the page. */
   inGate?: { recipientId: string; onBack: () => void };
 } = {}): React.ReactElement {
+  const keyboardOffset = useScreenAreaKeyboardOffset();
   const { semanticColors, colorScheme } = useTheme();
   const light = colorScheme !== 'dark';
   const navigation = useNavigation<CommunityNav>();
@@ -155,6 +157,7 @@ export default function CommunityDmThreadScreen({ inGate }: {
       {/* FR-880R4 (Opus B2): the app's status band above takes the same deep forest, light icons, while this DM is in front. */}
       <ForestStatusBar />
       <KeyboardAvoidingView
+        keyboardVerticalOffset={keyboardOffset}
         style={[styles.flex, { backgroundColor: former ? fp.deep : semanticColors.bgPrimary }]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >

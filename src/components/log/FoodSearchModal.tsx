@@ -14,7 +14,8 @@ import {
 import HapticPressable from '../HapticPressable';
 import { layout, radius, typography, withAlpha, type SemanticTokens } from '../../theme/tokens';
 import { useTheme } from '../../theme/useTheme';
-import { TextLink, useScreenInsets } from '../../ui';
+import { TextLink } from '../../ui';
+import { useWindowInsets } from '../../ui/layout/ScreenArea';
 import { SearchResult, MEAL_SECTIONS } from '../../utils/log/types';
 import { MealType } from '../../types';
 import type { PastMeal } from '../../hooks/useFoodBrowse';
@@ -130,7 +131,8 @@ export default function FoodSearchModal(props: Props) {
   } = props;
   const { semanticColors: sc } = useTheme();
   const styles = makeStyles(sc);
-  const insets = useScreenInsets();
+  // OFFLINE-BAND-ROOT-M: a Modal draws from the window's top, over the band: the window's insets, not the area's.
+  const insets = useWindowInsets();
   const { height } = useWindowDimensions();
   // C_add's markup: 90% of the space between the status bar and the home indicator, the sheet then running on under the
   // home indicator (its bottom padding), as the GOAL frame draws it.
