@@ -1,0 +1,8 @@
+src/screens/coach/meals/__tests__/mealLinks.test.ts
+src/screens/coach/meals/__tests__/planSwapsCoach.test.tsx
+src/screens/coach/meals/__tests__/mealPlansV2.test.tsx
+src/__tests__/schemePanels994.test.tsx
+src/__tests__/copyVoice.guard.test.ts
+src/__tests__/fontsLoaded.guard.test.ts
+src/__tests__/quietLuxuryDoctrine.test.ts
+scripts/__tests__/routeContract.test.js
