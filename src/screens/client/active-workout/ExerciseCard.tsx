@@ -120,7 +120,7 @@ export function ExerciseCard({
     return (
       <HapticPressable intent="light" style={styles.exerciseCard} onPress={() => setOpen(true)}
         accessibilityRole="button" accessibilityState={{ expanded: false }}
-        accessibilityLabel={`Show sets for ${exercise.exerciseName}, ${sets} of ${sets} ${sets === 1 ? 'set' : 'sets'} complete${best ? `. ${best.spoken}` : ''}`}
+        accessibilityLabel={best ? `Show sets for ${exercise.exerciseName}. ${best.spoken}` : `Show sets for ${exercise.exerciseName}, ${sets} of ${sets} ${sets === 1 ? 'set' : 'sets'} complete`}
         testID={`exercise-folded-${exIdx}`}>
         <View style={[styles.exerciseHeader, local.foldedHeader, best ? local.foldedBest : null]}>
           {letter}
