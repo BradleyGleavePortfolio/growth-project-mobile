@@ -9,16 +9,22 @@
  * optional array and the create form stays compact without it. The
  * column is preserved in the API client so a v2 ingredient editor
  * lands additively.
+ *
+ * PLAN-SWAPS-COACH-M (Style 1 "Meal page", PICK #ALM-P3): the editor is the meal page: Options for clients, the
+ * Recipe card and Details; one request on Save meal carries the whole option list and the recipe (R2).
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import type { CreateMealTemplateInput, MealTemplate } from '../../api/mealTemplatesApi';
 import {
   useArchiveMealTemplate,
@@ -26,44 +32,108 @@ import {
   useMealTemplates,
   useUpdateMealTemplate,
 } from '../../hooks/useMealTemplates';
-import { radius, spacing, typography } from '../../theme/tokens';
+import { layout, radius, schemeCard, schemeCardOutline, spacing, typography } from '../../theme/tokens';
 import type { SemanticTokens } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Screen } from '../../ui/layout/Screen';
 import { PrimaryButton, TextLink } from '../../ui/buttons/PrimaryButton';
 import { HapticService } from '../../ui/haptics/haptics.service';
-import type { ProgramsScreenProps } from './programs/types';
-import { LoadFailed, Loading, Masthead, macroLine, saveFailed } from './meals/mealUi';
+import type { ProgramsScreenProps, ProgramsStackParamList } from './programs/types';
+import { LoadFailed, Masthead, macroLine, mealStyles as ms } from './meals/mealUi';
+import { optionRows, saveRefused } from './meals/mealLinks';
+import { useAnsweredOnce, useCoachRecipes } from './meals/coachRecipes';
+import { OptionsBlock, RecipeCard } from './meals/MealEditorBlocks';
 
 /** Backend main's CreateMealTemplateDto maxima. */
 const LIMITS = { calories_kcal: 2000, protein_g: 300, carbs_g: 400, fats_g: 200 } as const;
+type Nav = ProgramsScreenProps<'MealEditor'>['navigation'];
+type Picked = NonNullable<ProgramsStackParamList['MealEditor']>['picked'];
+const panel = [ms.card, schemeCard, schemeCardOutline];
 
+/**
+ * PLAN-SWAPS-COACH-M (Style 1 "Meal page", PICK #ALM-P3): an existing meal opens only from a list read that is fresh
+ * or answered on this visit (R5, latched), and the form keeps the meal it was built from, so a later re-read, stale
+ * flag or failure never unmounts it under the pickers.
+ */
 export default function CoachMealTemplatesScreen({ route, navigation }: ProgramsScreenProps<'MealEditor'>) {
   const { semanticColors: sc } = useTheme();
   const list = useMealTemplates();
+  const answered = useAnsweredOnce(list);
   const mealId = route.params?.mealId;
-  const meal = list.data?.find((m) => m.id === mealId);
-  if (!mealId || meal) return <MealForm meal={meal} onDone={() => navigation.goBack()} sc={sc} />;
+  const found = answered ? list.data?.find((m) => m.id === mealId) : undefined;
+  const [held, setHeld] = useState<MealTemplate>();
+  useEffect(() => { if (found && !held) setHeld(found); }, [found, held]);
+  const meal = held ?? found;
+  if (!mealId || meal) {
+    return <MealForm meal={meal} live={list.data} answered={answered} picked={route.params?.picked} navigation={navigation} sc={sc} />;
+  }
+  const loading = !answered && !list.isError;
   return (
-    <Screen edges={['bottom']} contentStyle={{ gap: spacing.lg }}>
+    <Screen edges={['bottom']} contentStyle={{ gap: spacing.lg }}
+      footer={loading ? <Footer archive saving={false} disabled onSave={() => undefined} onArchive={() => undefined} /> : undefined}>
       <Masthead title="Meal" onBack={() => navigation.goBack()} />
-      {list.isLoading ? <Loading label="Loading the meal" /> : list.data ? (
+      {answered && list.data ? (
         <Text style={[typography.body, { color: sc.textMuted }]}>This meal is not in your list. It may have been archived on another device.</Text>
-      ) : <LoadFailed title="This meal didn’t load." error={list.error} onRetry={() => void list.refetch()} retrying={list.isFetching} />}
+      ) : list.isError ? <LoadFailed title="This meal didn’t load." error={list.error} onRetry={() => void list.refetch()} retrying={list.isFetching} /> : (
+        <View accessible accessibilityLabel="Loading the meal" style={st.stack}>
+          {[panel, panel, [ms.card, { backgroundColor: sc.bgSurface, borderColor: sc.border }]].map((look, i) => (
+            <View key={i} style={[look, st.still]}>
+              {[0.45, 0.8, 0.6].map((w) => <View key={w} style={[st.bar, { width: `${w * 100}%`, backgroundColor: sc.border }]} />)}
+            </View>
+          ))}
+        </View>
+      )}
     </Screen>
   );
 }
 
-function MealForm({ meal, onDone, sc }: { meal?: MealTemplate; onDone: () => void; sc: SemanticTokens }) {
+/** R13: Archive this meal beside Save meal in one row (a New meal has Save meal only); a refused save says why above it. */
+function Footer({ archive, saving, disabled, onSave, onArchive, line }: { archive: boolean; saving: boolean; disabled: boolean;
+  onSave: () => void; onArchive: () => void; line?: string }) {
+  const { semanticColors: sc } = useTheme();
+  return (
+    <View testID="meal-footer" style={st.footer}>
+      {line ? (
+        <View accessible accessibilityRole="alert" style={st.alert}>
+          <Ionicons name="alert-circle-outline" size={20} color={sc.textPrimary} style={st.alertGlyph} />
+          <Text style={[typography.body, ms.fill, { color: sc.textPrimary }]}>{line}</Text>
+        </View>
+      ) : null}
+      <View testID="meal-footer-row" style={st.footerRow}>
+        {archive ? <TextLink label="Archive this meal" onPress={onArchive} disabled={disabled || saving} /> : null}
+        <PrimaryButton label="Save meal" wrap testID="meal-save" disabled={disabled} loading={saving} haptic={false} onPress={onSave} style={ms.fill} />
+      </View>
+    </View>
+  );
+}
+
+function MealForm({ meal, live, answered, picked, navigation, sc }: { meal?: MealTemplate; live?: MealTemplate[]; answered: boolean;
+  picked: Picked; navigation: Nav; sc: SemanticTokens }) {
+  const onDone = () => navigation.goBack();
   const createMut = useCreateMealTemplate();
   const updateMut = useUpdateMealTemplate();
   const archiveMut = useArchiveMealTemplate();
+  const recipes = useCoachRecipes();
   const [name, setName] = useState(meal?.name ?? '');
   const [description, setDescription] = useState(meal?.description ?? '');
   const [calories, setCalories] = useState(meal ? String(meal.calories_kcal) : '');
   const [protein, setProtein] = useState(meal ? String(meal.protein_g) : '');
   const [carbs, setCarbs] = useState(meal ? String(meal.carbs_g) : '');
   const [fats, setFats] = useState(meal ? String(meal.fats_g) : '');
+  const [options, setOptions] = useState<string[]>(meal?.swap_template_ids ?? []);
+  const [recipeId, setRecipeId] = useState<string | null>(meal?.recipe_id ?? null);
+  const [editing, setEditing] = useState(false);
+  // R3: a picker hands its pick back through the params once (keyed by `at`); every typed field stays.
+  const applied = useRef<number>(undefined);
+  useEffect(() => {
+    if (!picked || picked.at === applied.current) return;
+    applied.current = picked.at;
+    if (picked.options) setOptions(picked.options);
+    if (picked.recipeId !== undefined) setRecipeId(picked.recipeId);
+  }, [picked]);
+  const scroll = useRef<ScrollView>(null);
+  const nameField = useRef<TextInput>(null);
+  const detailsY = useRef(0);
 
   const styles = useMemo(() => makeFormStyles(sc), [sc]);
   const pending = createMut.isPending || updateMut.isPending || archiveMut.isPending;
@@ -75,6 +145,8 @@ function MealForm({ meal, onDone, sc }: { meal?: MealTemplate; onDone: () => voi
     protein_g: parseInt(protein, 10) || 0,
     carbs_g: parseInt(carbs, 10) || 0,
     fats_g: parseInt(fats, 10) || 0,
+    swap_template_ids: options,
+    recipe_id: recipeId,
   };
   const over = (Object.keys(LIMITS) as (keyof typeof LIMITS)[]).some((k) => input[k] > LIMITS[k]);
 
@@ -101,22 +173,38 @@ function MealForm({ meal, onDone, sc }: { meal?: MealTemplate; onDone: () => voi
       { text: 'Keep it', style: 'cancel' },
       { text: 'Archive', onPress: () => void run(() => archiveMut.mutateAsync(meal.id)) },
     ]);
+  const note = description.trim();
 
   return (
     <Screen
       edges={['bottom']}
-      footer={<>
-        <PrimaryButton label="Save meal" testID="meal-save" disabled={!canSave} loading={pending} haptic={false} onPress={() => {
+      scrollRef={scroll}
+      contentStyle={styles.page}
+      footer={<Footer archive={!!meal} saving={pending} disabled={!canSave} line={failed && !pending ? saveRefused(failed) : undefined}
+        onArchive={archive} onSave={() => {
           void HapticService.mediumImpact();
           void run(() => (meal ? updateMut.mutateAsync({ id: meal.id, input }) : createMut.mutateAsync(input)));
-        }} />
-        {meal ? <TextLink label="Archive this meal" onPress={archive} disabled={pending} /> : null}
-      </>}
+        }} />}
     >
-      <Masthead title={meal?.name ?? 'New meal'} sub={canSave || pending ? macroLine(input) : undefined} onBack={onDone} />
-      <View style={styles.content}>
+      <Masthead title={meal?.name ?? 'New meal'} sub={canSave || pending ? macroLine(input) : undefined} onBack={onDone}
+        trailing={(
+          <Pressable accessibilityRole="button" accessibilityLabel="Edit details" hitSlop={8} style={styles.edit}
+            onPress={() => { scroll.current?.scrollTo({ y: detailsY.current, animated: true }); nameField.current?.focus(); }}>
+            <Text style={[typography.body, styles.under, { color: sc.textOnAccent }]}>Edit details</Text>
+          </Pressable>
+        )}>
+        {note ? <Text style={[styles.note, { color: sc.textOnMastheadMuted }]}>{`“${note}”`}</Text> : null}
+      </Masthead>
+      <OptionsBlock rows={optionRows(options, live, answered)} editing={editing} onEditing={setEditing} onChange={setOptions}
+        onAdd={() => navigation.navigate('MealOptionsPicker', { mealId: meal?.id, mealName: name.trim(), chosen: options })} />
+      <RecipeCard recipeId={recipeId} mine={recipes.mine} error={recipes.failed ? recipes.read.error : null}
+        retry={() => void recipes.read.refetch()} retrying={recipes.read.isFetching} onRemove={() => setRecipeId(null)}
+        onPick={() => navigation.navigate('MealRecipePicker', { mealId: meal?.id, mealName: name.trim(), recipeId })} />
+      <View style={panel} onLayout={(e) => { detailsY.current = e.nativeEvent.layout.y; }}>
+        <Text accessibilityRole="header" style={[ms.cardTitle, { color: sc.textPrimary }]}>Details</Text>
         <FormField label="Name" sc={sc}>
           <TextInput
+            ref={nameField}
             accessibilityLabel="Name"
             value={name}
             onChangeText={setName}
@@ -152,9 +240,9 @@ function MealForm({ meal, onDone, sc }: { meal?: MealTemplate; onDone: () => voi
           <NumField label="Carbs (g)" value={carbs} onChange={setCarbs} sc={sc} />
           <NumField label="Fat (g)" value={fats} onChange={setFats} sc={sc} />
         </View>
-        {over || (failed && !pending) ? (
+        {over ? (
           <Text accessibilityRole="alert" style={[typography.body, styles.sectionHeading, { color: sc.textPrimary }]}>
-            {over ? 'Up to 2,000 kcal, 300 g protein, 400 g carbs and 200 g fat.' : saveFailed(failed)}
+            Up to 2,000 kcal, 300 g protein, 400 g carbs and 200 g fat.
           </Text>
         ) : null}
       </View>
@@ -208,9 +296,22 @@ function NumField(props: {
   );
 }
 
+const st = StyleSheet.create({
+  stack: { gap: 14 },
+  still: { minHeight: 132 },
+  bar: { height: 14, borderRadius: radius.chip },
+  footer: { gap: spacing.sm },
+  footerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
+  alert: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  alertGlyph: { marginTop: 3 },
+});
+
 function makeFormStyles(sc: SemanticTokens) {
   return StyleSheet.create({
-    content: { paddingTop: spacing.sm, paddingBottom: spacing.xl },
+    page: { gap: 14, paddingBottom: spacing.xl },
+    edit: { minHeight: layout.touchMin, justifyContent: 'center' },
+    under: { textDecorationLine: 'underline' },
+    note: { fontFamily: typography.display.fontFamily, fontStyle: 'italic', fontSize: 19, lineHeight: 25 },
     input: {
       borderWidth: 1,
       borderColor: sc.border,
