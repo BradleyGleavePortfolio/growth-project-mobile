@@ -154,7 +154,7 @@ function useTabTap(took: object | undefined): TabTap {
   const id = params?.screen === 'CommunityDmThread' ? params.params?.recipientId : undefined;
   const tap = params !== took && typeof id === 'string' && UUID.test(id) ? id : null;
   const held = !!params && (params.screen !== undefined || params.params !== undefined || params.initial !== undefined);
-  const spend = useCallback(() => navigation?.setParams?.({ screen: undefined, params: undefined, initial: undefined }), [navigation]);
+  const spend = useCallback(() => navigation?.setParams?.({ params: undefined, initial: undefined }), [navigation]);
   return { params, recipientId: tap, held: held && (tap !== null || params === took), spend };
 }
 
