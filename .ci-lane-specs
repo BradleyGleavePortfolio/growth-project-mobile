@@ -1,0 +1,7 @@
+src/screens/community
+src/components/community
+src/components/coachless
+src/components/messaging
+src/navigation
+src/__tests__/memberContentAccess.test.tsx
+scripts/__tests__/routeContract.test.js
