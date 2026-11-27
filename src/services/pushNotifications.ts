@@ -126,7 +126,7 @@ export function installForegroundHandler(): () => void {
     foregroundBannerStore.getState().showBanner({
       title: title ?? '',
       body: body ?? '',
-      notificationId: notification.request.identifier,
+      notificationId: tapIdOf(notification) ?? notification.request.identifier,
       ...pushTapOf(notification.request.content.data),
       // REFINE-966: the banner's mark only, beside the tap and never inside it.
       ...(kind !== undefined ? { kind } : {}),
@@ -200,6 +200,13 @@ export function pushTapOf(data: Record<string, unknown> | undefined): PushTap {
   };
 }
 
+/** LANE ONLY (LS-945R6 F2 proof): one id per delivery. Every unread push of a space shares its identifier (the
+ *  server's collapse id), so the delivery time is part of the id; one tap delivered twice keeps the same one. */
+function tapIdOf(n: { date?: unknown; request?: { identifier?: string } } | null | undefined): string | undefined {
+  const id = n?.request?.identifier;
+  return id && typeof n?.date === 'number' ? `${id}:${n.date}` : id;
+}
+
 function dispatchResponse(
   response: Notifications.NotificationResponse | null | undefined,
   onResponse: NotificationResponseCallback,
@@ -207,10 +214,11 @@ function dispatchResponse(
   if (!response) return;
   const request = response.notification?.request;
   const { actionScreen, actionParams, deepLink } = pushTapOf(request?.content?.data);
+  const id = tapIdOf(response.notification);
   if (deepLink !== undefined) {
-    onResponse(actionScreen, actionParams, request?.identifier, deepLink);
+    onResponse(actionScreen, actionParams, id, deepLink);
   } else {
-    onResponse(actionScreen, actionParams, request?.identifier);
+    onResponse(actionScreen, actionParams, id);
   }
 }
 
