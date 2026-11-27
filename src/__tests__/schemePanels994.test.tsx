@@ -304,6 +304,7 @@ const CENSUS: ReadonlyArray<readonly [string, number, string]> = [
   ['screens/coach/lookup/ClientPeekSheet.tsx', 4, 'hairline, comment'],
   ['screens/coach/payments/CoachPackageSubscribersScreen.tsx', 1, 'chip'],
   ['screens/coach/payments/CoachPackagesListScreen.tsx', 1, 'chip'],
+  ['screens/coach/programs/ProgramAssignScreen.tsx', 3, 'avatar tile, comment'],
   ['screens/coach/programs/ProgramEditorScreen.tsx', 1, 'state tint (a day cell that holds a workout)'],
   ['screens/community/CommunityHomeScreen.tsx', 3, 'icon tile, skeleton'],
   ['screens/community/coach-dm/CoachDmListScreen.tsx', 4, 'skeleton, comment'],
