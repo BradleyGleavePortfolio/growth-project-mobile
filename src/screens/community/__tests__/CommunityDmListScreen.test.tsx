@@ -63,6 +63,8 @@ jest.mock('../../../hooks/useCommunity', () => ({
   },
   // COACH-DM-CLIENT-M: the list reads my coach's name (no name known here).
   useMyCoachName: () => ({ name: null, settled: true }),
+  // COMMUNITY-DM-FORMER-REACH-M: the list reads /community/me for her former coach (none here: an older server's answer).
+  useCommunityMe: () => ({ data: undefined }),
 }));
 
 import CommunityDmListScreen from '../CommunityDmListScreen';
