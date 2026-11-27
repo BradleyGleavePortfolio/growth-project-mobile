@@ -208,7 +208,7 @@ function KitchenPage({ coachId }: { coachId: string | null }) {
       ) : null}
 
       {saving && meals ? <SaveMealSheet meals={meals} writes={writes} onClose={() => setSaving(false)} /> : null}
-      <SavedMealSheet meal={sheetMeal} onClose={() => setSheetMeal(null)}
+      <SavedMealSheet meal={sheetMeal} onClose={() => setSheetMeal(null)} writes={writes}
         onAdded={(meal) => { setSheetMeal(null); setAdded(meal); }} onStale={() => void saved.refetch()} />
     </Screen>
   );

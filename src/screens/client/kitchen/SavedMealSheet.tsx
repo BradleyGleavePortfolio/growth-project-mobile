@@ -7,7 +7,7 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AccessibilityInfo, Animated, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View,
+  AccessibilityInfo, Alert, Animated, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View,
   useWindowDimensions, type GestureResponderEvent,
 } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
@@ -27,7 +27,12 @@ import { HapticService } from '../../../ui/haptics/haptics.service';
 import { useBottomInset } from '../../../ui/layout/StyleCPage';
 import { dayForNewLog } from '../../../utils/logDay';
 import { withSaveKey } from '../../../utils/log/saveKey';
-import { WORDS, addIntent, failureOf, heldNote, kcalWords, mealOfHour, mealView, sheetLine } from './kitchen';
+import {
+  SAVE_WORDS, WORDS, addIntent, deleteFailedTitle, deleteTitle, failureOf, heldNote, kcalWords, mealOfHour, mealView, sheetLine,
+} from './kitchen';
+import { MealNameField } from './SaveMealSheet';
+import { nameOk } from './saveMeal';
+import { failureKind, online, type SavedMealWrites } from './useSavedMealWrites';
 
 const nowMinute = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
 
@@ -102,9 +107,13 @@ export function KitchenSheet({ visible, title, onClose, children, footer, testID
   );
 }
 
-/** S5 and S9 to S13: add one saved meal to today. `meal` null: closed. */
-export default function SavedMealSheet({ meal, onClose, onAdded, onStale }: {
-  meal: SavedMeal | null; onClose: () => void; onAdded: (meal: MealType) => void; onStale: () => void;
+/**
+ * S5 and S9 to S13: add one saved meal to today. `meal` null: closed. SAVED-MEAL-SAVE-M (S2_use): "Rename" and "Delete"
+ * under Add to today (and at the foot of a meal with no foods left, which must stay deletable). Rename swaps the body in
+ * place (SS10); Delete asks first with the Food log's alert (SS12). Both send the id of the meal this sheet opened for.
+ */
+export default function SavedMealSheet({ meal, onClose, onAdded, onStale, writes }: {
+  meal: SavedMeal | null; onClose: () => void; onAdded: (meal: MealType) => void; onStale: () => void; writes: SavedMealWrites;
 }) {
   const { semanticColors: sc } = useTheme();
   const s = useMemo(() => makeStyles(sc), [sc]);
@@ -115,6 +124,8 @@ export default function SavedMealSheet({ meal, onClose, onAdded, onStale }: {
   // The meal was deleted elsewhere, or its foods were removed since the read: nothing more to send from this sheet.
   const [closedOut, setClosedOut] = useState(false);
   const sending = useRef(false);
+  const [renaming, setRenaming] = useState(false);
+  const [newName, setNewName] = useState('');
 
   // R5: the meal of the hour, read when the sheet opens; she can change it.
   useEffect(() => {
@@ -123,6 +134,7 @@ export default function SavedMealSheet({ meal, onClose, onAdded, onStale }: {
     setLine(null);
     setRetry(false);
     setClosedOut(false);
+    setRenaming(false);
   }, [meal]);
   // R11: Android reads the live region; iOS hears the same words once.
   useEffect(() => { if (Platform.OS === 'ios' && line) AccessibilityInfo.announceForAccessibility(line); }, [line]);
@@ -130,6 +142,88 @@ export default function SavedMealSheet({ meal, onClose, onAdded, onStale }: {
   if (!meal) return null;
   const view = mealView(meal);
   const empty = view.foods.length === 0;
+  const fresh = newName.trim();
+  const canRename = nameOk(newName) && fresh !== meal.name.trim();
+
+  const startRename = () => { setLine(null); setRetry(false); setClosedOut(false); setNewName(meal.name); setRenaming(true); };
+  // SS11: one PATCH with the trimmed name; a lost answer resends the same name; the sheet closes on success only.
+  const rename = async () => {
+    if (sending.current || !canRename) return;
+    sending.current = true;
+    setBusy(true);
+    setLine(null);
+    try {
+      if (!(await online())) { void HapticService.error(); setRetry(false); setLine(SAVE_WORDS.renameOffline); return; }
+      await writes.rename.mutateAsync({ id: meal.id, name: fresh });
+      onClose();
+    } catch (err) {
+      void HapticService.error();
+      const kind = failureKind(err);
+      setRetry(kind === 'lost');
+      setLine(kind === 'gone' ? WORDS.mealGone : SAVE_WORDS.renameFailed);
+      if (kind === 'gone') setClosedOut(true);
+    } finally {
+      sending.current = false;
+      setBusy(false);
+    }
+  };
+  // SS12 and SS13: nothing is sent before she confirms; a 2xx or a 404 is gone (R10); anything else keeps the meal.
+  const remove = async () => {
+    if (sending.current) return;
+    sending.current = true;
+    setBusy(true);
+    const failed = (line2: string) => {
+      void HapticService.error();
+      Alert.alert(deleteFailedTitle(meal.name), line2, [{ text: SAVE_WORDS.ok }]);
+    };
+    try {
+      if (!(await online())) { failed(SAVE_WORDS.removeOffline); return; }
+      await writes.remove.mutateAsync({ id: meal.id, name: meal.name });
+      onClose();
+    } catch {
+      failed(SAVE_WORDS.removeFailed);
+    } finally {
+      sending.current = false;
+      setBusy(false);
+    }
+  };
+  const confirmRemove = () => Alert.alert(deleteTitle(meal.name), SAVE_WORDS.removeLine, [
+    { text: SAVE_WORDS.cancel, style: 'cancel' },
+    { text: SAVE_WORDS.remove, style: 'destructive', onPress: () => void remove() },
+  ]);
+  // S2_use: two quiet underlined links, side by side, 28 pt apart; gone once the meal is known to be gone (KK-7).
+  const links = line === WORDS.mealGone ? null : (
+    <View style={s.links}>
+      <Pressable onPress={startRename} disabled={busy} accessibilityRole="button" accessibilityLabel={SAVE_WORDS.rename} style={s.link}
+        testID="kitchen-rename">
+        <Text style={s.linkText}>{SAVE_WORDS.rename}</Text>
+      </Pressable>
+      <Pressable onPress={confirmRemove} disabled={busy} accessibilityRole="button" accessibilityLabel={SAVE_WORDS.remove} style={s.link}
+        testID="kitchen-delete">
+        <Text style={s.linkText}>{SAVE_WORDS.remove}</Text>
+      </Pressable>
+    </View>
+  );
+
+  if (renaming) {
+    // SS10: the edit body in place of the add body (iOS shows one Modal at a time), its field pinned above the keyboard.
+    return (
+      <KitchenSheet visible title={SAVE_WORDS.rename} onClose={onClose} testID="kitchen-sheet" footer={(
+        <>
+          <MealNameField value={newName} onChange={setNewName} testID="rename-name" editable={!busy} />
+          {line ? (
+            <Text style={s.fail} accessibilityRole="alert" accessibilityLiveRegion="polite" testID="rename-line">{line}</Text>
+          ) : null}
+          {closedOut ? null : (
+            <View style={s.action}>
+              <PrimaryButton wrap label={retry ? WORDS.tryAgain : SAVE_WORDS.saveName} onPress={() => void rename()} loading={busy}
+                disabled={!busy && !canRename} haptic={false} testID="rename-submit" />
+            </View>
+          )}
+        </>
+      )} />
+    );
+  }
 
   const add = async () => {
     if (sending.current || empty) return;
@@ -198,7 +292,10 @@ export default function SavedMealSheet({ meal, onClose, onAdded, onStale }: {
         </View>
       ) : null}
       {empty ? (
-        <Text style={s.note} accessibilityRole="alert" testID="kitchen-nothing">{WORDS.nothingToAdd}</Text>
+        <>
+          <Text style={s.note} accessibilityRole="alert" testID="kitchen-nothing">{WORDS.nothingToAdd}</Text>
+          {links}
+        </>
       ) : (
         <>
           {/* R12: Today is the only day this PR adds to: a plain line, no chevron, no picker. */}
@@ -217,6 +314,7 @@ export default function SavedMealSheet({ meal, onClose, onAdded, onStale }: {
                 haptic={false} testID="kitchen-add" />
             </View>
           )}
+          {links}
         </>
       )}
     </KitchenSheet>
@@ -259,4 +357,7 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   choice: { borderWidth: StyleSheet.hairlineWidth, borderColor: sc.border },
   fail: { ...typography.bodySmall, lineHeight: 21, color: sc.textPrimary, marginTop: 14 },
   action: { marginTop: 18 },
+  links: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', columnGap: 28, marginTop: 8 },
+  link: { minHeight: layout.touchMin, justifyContent: 'center', paddingHorizontal: 4 },
+  linkText: { ...typography.body, fontSize: 17, lineHeight: 24, letterSpacing: 0, color: sc.accent, textDecorationLine: 'underline' },
 });
