@@ -1,7 +1,7 @@
 // PLAN-SWAPS-M (C2 Style C C_recipe; operator rulings R6, R8, R9; states S7 to S13): a plan meal's own page. Fictional
 // data (client Jordan, coach Sam). Mounted at 390 x 844 at 100% and at 320 x 568 at 130%.
 import React from 'react';
-import { Alert, StyleSheet, Text } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import PlanMealScreen from '../PlanMealScreen';
@@ -62,7 +62,7 @@ const recipe = {
   instructions: ['Heat the oven to 200 C. Halve the potatoes and roast 15 minutes.', 'Add the salmon and beans, brush with the oil, roast 12 minutes more.', 'Rest 2 minutes. Season to taste.'],
   tags: [], allergens: ['fish'], allergens_declared: true,
 };
-const err = (status: number, code?: string) => Object.assign(new Error('Request failed'), { isAxiosError: true, response: { status, data: code ? { code } : {} } });
+const err = (status: number, code?: string) => Object.assign(new Error('Request failed'), { isAxiosError: true, response: { status, data: code ? { error: code } : {} } });
 
 function serve(body: unknown = today(), fail = false) {
   mockGet.mockImplementation(async (url: string) => {
@@ -248,7 +248,9 @@ describe('case 11: 320 x 568 at 130%', () => {
     serve();
     await show();
     await screen.findByTestId('plan-meal-ingredients');
-    for (const t of screen.UNSAFE_queryAllByType(Text)) expect(t.props.numberOfLines).toBeUndefined();
+    const page = screen.getByTestId('plan-meal-masthead').parent?.parent ?? screen.getByTestId('plan-meal-masthead');
+    for (const t of page.queryAll((n) => n.type === 'Text')) expect(t.props.numberOfLines).toBeUndefined();
+    for (const id of ['plan-meal-per-serving', 'plan-meal-ingredients', 'plan-meal-method']) expect(screen.getByTestId(id)).toBeTruthy();
     const link = screen.getByTestId('plan-meal-grocery');
     expect(StyleSheet.flatten(link.props.style).minHeight).toBeGreaterThanOrEqual(44);
   });
