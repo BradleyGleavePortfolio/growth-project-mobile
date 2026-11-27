@@ -51,7 +51,7 @@ import {
   type StyleProp,
   type TextStyle,
 } from 'react-native';
-import { useRoute, type RouteProp } from '@react-navigation/native';
+import { NavigationContext, useRoute, type RouteProp } from '@react-navigation/native';
 import {
   SLOT_LABELS,
   type DailyMealPlanAssignmentWithPlan,
@@ -83,6 +83,8 @@ const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0
 // C_day's quote marks round the coach's note, unless the note already opens or closes with one (RULING 8).
 const QUOTED = /^["'\u201C\u2018]|["'\u201D\u2019]$/;
 const nowMinutes = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
+// PLAN-SWAPS-M (R7): the stack's navigation where there is one; none outside a navigator (a test, a harness).
+const NO_NAVIGATION = React.createContext<unknown>(undefined);
 
 /** One meal in its plan's clock order, or main's label/order fallback when incompletely timed. */
 interface Stop { slot: DailyMealPlanSlot; plan: string; first: boolean; last: boolean }
@@ -175,7 +177,10 @@ export default function ClientDailyMealPlanScreen() {
   const nowMin = isToday && stops.length > 0 && mins.every((m) => m != null) ? nowMinutes() : null;
   const nowAfter = nowMin == null ? null
     : stops.reduce<string | null>((at, x, i) => ((mins[i] as number) <= nowMin ? x.slot.id : at), 'start');
-  const ctx: DayCtx = { sc, styles, timeW, isDone, eaten, next, nowAfter, nowMin, firstId: stops[0]?.slot.id ?? null };
+  const navigation = React.useContext((NavigationContext as React.Context<unknown> | undefined) ?? NO_NAVIGATION) as
+    { navigate: (name: string, params?: object) => void } | undefined;
+  const onRecipe = navigation ? (slotId: string) => navigation.navigate('PlanMeal', { date: shownDay, slotId }) : undefined;
+  const ctx: DayCtx = { sc, styles, timeW, isDone, eaten, next, nowAfter, nowMin, firstId: stops[0]?.slot.id ?? null, onRecipe };
   // One plan (the usual day): its name, the coach's note and the day total sit
   // on the masthead, as C2 C_day draws the coach's italic note there (FIX-927,
   // LS-927 B1: the note shows once, on the masthead). Several plans keep each
@@ -281,6 +286,8 @@ interface DayCtx {
   nowMin: number | null;
   /** The first shown meal: a now line before every meal goes above it. */
   firstId: string | null;
+  /** PLAN-SWAPS-M (R7): opens a meal's own page for this page's day. */
+  onRecipe?: (slotId: string) => void;
 }
 
 function PlanSection({ assignment, stops, italic, onMasthead, ctx }: {
@@ -361,6 +368,13 @@ function MealStop({ stop, ctx }: { stop: Stop; ctx: DayCtx }) {
             </View>
             <MealArt slot={s.slot_label} testID={`daily-meal-plan-art-${s.id}`} />
           </View>
+          {/* PLAN-SWAPS-M (R7, C_day C2-S-36): a meal with a recipe opens its own page; its own button, under the words. */}
+          {ctx.onRecipe && s.recipe_id ? (
+            <HapticPressable intent="light" disableAnimation onPress={() => ctx.onRecipe?.(s.id)} accessibilityRole="button"
+              accessibilityLabel={`Recipe and grocery list for ${s.meal_template.name}`} testID={`daily-meal-plan-recipe-${s.id}`} style={styles.recipeLink}>
+              <Text style={[styles.recipeText, { color: sc.accentText }]}>Recipe and grocery list</Text>
+            </HapticPressable>
+          ) : null}
           {/* Keep the action mounted when the log refresh moves the next-meal card, preserving Undo and queued status. */}
           <View style={isNext ? planStyleC.nextCard : undefined} testID={isNext ? 'daily-meal-plan-next-card' : undefined}>
             {isNext && s.meal_template.description ? <Text style={planStyleC.nextText}>{s.meal_template.description}</Text> : null}
@@ -495,5 +509,8 @@ function makeStyles(sc: SemanticTokens) {
     // Meal names at the frame's 21 pt Cormorant (planStyleC.name; LS-927 B2), then the meta and the description.
     mealWords: { flex: 1, minWidth: 0, gap: 2 },
     loadingStop: { gap: spacing.sm, paddingRight: spacing.xl },
+    // C_day's text link (style_c.py :157): forest, underlined, left under the meal's words, 44 pt tall.
+    recipeLink: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center' },
+    recipeText: { ...typography.bodyMd, textDecorationLine: 'underline' },
   });
 }
