@@ -27,7 +27,7 @@ import { HapticService } from '../../../ui/haptics/haptics.service';
 import { useBottomInset } from '../../../ui/layout/StyleCPage';
 import { dayForNewLog } from '../../../utils/logDay';
 import { WORDS, heldNote, kcalWords, mealOfHour, mealView, sheetLine } from './kitchen';
-import { addSavedMeal, type AddOutcome } from './kitchenAdd';
+import { addSavedMeal, keptAddMeal, type AddOutcome } from './kitchenAdd';
 
 const nowMinute = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
 /** Each failed outcome's line (KK-5 to KK-8b); a lost answer and a refusal share KK-6, Try again only for a lost one. */
@@ -100,12 +100,15 @@ export default function SavedMealSheet({ meal, onClose, onAdded, onStale }: {
   const [closedOut, setClosedOut] = useState(false);
   const sending = useRef(false);
 
-  // R5: the meal of the hour, read when the sheet opens; she can change it.
+  // R5: the meal of the hour, read when the sheet opens; she can change it. FIX-KM-2 (C1's class): a lost add of this
+  // meal whose key is still kept opens as she left it, its choice held with KK-6 and Try again, so Try again resends
+  // that key; a new choice or the hour moving on never makes a second save of a send that may have landed.
   useEffect(() => {
     if (!meal) return;
-    setType(mealOfHour(nowMinute()));
-    setLine(null);
-    setRetry(false);
+    const kept = keptAddMeal(meal.id, dayForNewLog());
+    setType(kept ?? mealOfHour(nowMinute()));
+    setLine(kept ? WORDS.notAdded : null);
+    setRetry(kept !== null);
     setClosedOut(false);
   }, [meal]);
   // R11: Android reads the live region; iOS hears the same words once.
