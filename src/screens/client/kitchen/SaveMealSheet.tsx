@@ -194,7 +194,7 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   // S2_save (2 px = 1 pt): the muted line under the title, 15 pt.
   muted: { ...typography.body, fontSize: 15, lineHeight: 22, letterSpacing: 0, color: sc.textMuted, marginTop: 2 },
   overline: { ...typography.eyebrow, fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 11.5, lineHeight: 14,
-    letterSpacing: 2, textTransform: 'uppercase', color: sc.textMuted, marginTop: 22, marginBottom: 4 },
+    letterSpacing: 2, textTransform: 'uppercase', color: sc.textMuted, marginTop: 14, marginBottom: 4 }, // S2_save: 14 pt above each group
   // A food row: about 57 pt, the round check, the name, the amount muted and the kcal at the gutter, a hairline under.
   food: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 57, paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth, borderColor: sc.border },

@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { Ionicons } from '@expo/vector-icons';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import type { SavedMeal } from '../../../api/savedFoodsApi';
 import { AnalyticsEvents } from '../../../analytics/events';
 import MealChoiceRow from '../../../components/log/MealChoiceRow';
@@ -67,6 +68,24 @@ function useKeyboardHeight(): number {
   return h;
 }
 
+/** SAVED-MEAL-SAVE-M Style 2 (S2_save): "A fade marks a list that scrolls", over its last visible row, cream to clear. */
+const FADE = 32;
+function ListFade() {
+  return (
+    <View pointerEvents="none" style={{ height: FADE, marginTop: -FADE }} testID="kitchen-sheet-fade">
+      <Svg width="100%" height={FADE}>
+        <Defs>
+          <LinearGradient id="kitchen-sheet-fade" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={palette.cream} stopOpacity={0} />
+            <Stop offset="1" stopColor={palette.cream} stopOpacity={1} />
+          </LinearGradient>
+        </Defs>
+        <Rect width="100%" height={FADE} fill="url(#kitchen-sheet-fade)" />
+      </Svg>
+    </View>
+  );
+}
+
 /**
  * The sheet's frame (R10: shared with SAVED-MEAL-SAVE-M). `busy`: a send is running, so Close, the scrim, the pull and
  * Android Back do nothing until it answers (LS-KITCHEN-M-1 C2): the answer always lands on the sheet it was sent from,
@@ -87,6 +106,9 @@ export function KitchenSheet({ visible, title, onClose, busy = false, children, 
   const close = () => { if (!busy) onClose(); };
   const pull = usePullDown(close, busy);
   const keyboard = useKeyboardHeight();
+  // With a pinned foot, the fade shows while the body has more below than it shows (S2_save); never without a foot.
+  const [list, setList] = useState({ view: 0, content: 0, y: 0 });
+  const more = !!footer && list.content > list.view + 1 && list.y + list.view < list.content - 1;
   const fit = keyboard > 0
     ? { maxHeight: height - keyboard - 16, paddingBottom: 12 }
     : { maxHeight: height * 0.92, paddingBottom: bottom + 16 };
@@ -107,9 +129,14 @@ export function KitchenSheet({ visible, title, onClose, busy = false, children, 
               </Pressable>
             </View>
           </View>
-          <ScrollView style={s.body} contentContainerStyle={s.bodyIn} keyboardShouldPersistTaps="handled" testID="kitchen-sheet-body">
+          <ScrollView style={s.body} contentContainerStyle={s.bodyIn} keyboardShouldPersistTaps="handled" testID="kitchen-sheet-body"
+            scrollEventThrottle={32}
+            onLayout={footer ? (e) => { const view = e.nativeEvent.layout.height; setList((o) => (o.view === view ? o : { ...o, view })); } : undefined}
+            onContentSizeChange={footer ? (_w, content) => setList((o) => (o.content === content ? o : { ...o, content })) : undefined}
+            onScroll={footer ? (e) => { const y = e.nativeEvent.contentOffset.y; setList((o) => (o.y === y ? o : { ...o, y })); } : undefined}>
             {children}
           </ScrollView>
+          {more ? <ListFade /> : null}
           {footer ? <View style={s.foot} testID="kitchen-sheet-foot">{footer}</View> : null}
         </Animated.View>
       </KeyboardAvoidingView>
