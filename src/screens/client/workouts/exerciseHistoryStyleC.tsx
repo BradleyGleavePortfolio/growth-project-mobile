@@ -50,7 +50,7 @@ export const rowSetText = (t: TopSet, bodyWeight = true): string =>
 /** Spoken: "155 pounds by 6", "0 pounds by 10", "body weight by 12"; timed "... by 60 seconds", "... by 1 second". */
 export const spokenSet = (t: TopSet, bodyWeight = true): string =>
   `${readsBW(bodyWeight, t.weight_lbs) ? 'body weight' : `${t.weight_lbs} pounds`} by ${t.reps}`
-  + (isTimedRow(t) ? ` ${t.reps === 1 ? 'second' : 'seconds'}` : '');
+  + ''; // MUTATION: seconds dropped from the spoken label
 /** The Since week 1 change as drawn: "+20 lb", a fall "−10 lb", none "+0 lb". */
 export const changeText = (n: number): string => `${n < 0 ? '−' : '+'}${Math.abs(n)} lb`;
 
