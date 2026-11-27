@@ -203,7 +203,7 @@ export default function ProgressV2({ onSaved, logWeightAt }: { onSaved?: () => v
                   <Text style={[typography.eyebrow, muted]}>Strength</Text>
                   {best.isNew ? <View style={s.row}><PeakStar onDark /><Text style={[typography.bodyMd, { color: sc.data.peak }]}>New best</Text></View> : null}
                   <Text style={[s.mid, light]}>{formatWeight(P.toUnit(best.weight, unit))}
-                    <Text style={[typography.bodyMd, light]}>{` ${unit} \u00d7 ${best.reps}`}</Text></Text>
+                    <Text style={[typography.bodyMd, light]}>{` ${unit} \u00d7 ${best.reps}${best.timed ? '\u00a0sec' : ''}`}</Text></Text>
                   <Text style={[typography.bodySmall, muted]}>{`${best.name}, ${short(best.date)}`}</Text>
                 </View>
               ) : null}
