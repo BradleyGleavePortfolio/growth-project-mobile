@@ -163,7 +163,7 @@ export default function FoodDayView(p: FoodDayViewProps) {
     queryKey: ['meal-plan', 'today', p.selectedDate],
     queryFn: () => mealTemplatesApi.todayForClient(p.selectedDate).then((r) => r.data),
     staleTime: 5 * 60 * 1000,
-    enabled: p.coached,
+    enabled: true,
   });
   const coach = useQuery({
     queryKey: ['clients', 'me', 'coach'],
