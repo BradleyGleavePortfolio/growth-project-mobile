@@ -90,7 +90,7 @@ function FoodWeekPage({ coached }: { coached: boolean }) {
   })) });
   // R7: the calorie target, the same resolver the Food day's day log uses; none, or a failed read with no answer: no line.
   const target = useCurrentMacrosForSelf();
-  const kcalTarget = typeof target.data?.calories_kcal === 'number' && target.data.calories_kcal > 0
+  const kcalTarget = !target.isError && typeof target.data?.calories_kcal === 'number' && target.data.calories_kcal > 0
     ? target.data.calories_kcal : null;
 
   // Every read of the range again: Try again and the pull to refresh.
