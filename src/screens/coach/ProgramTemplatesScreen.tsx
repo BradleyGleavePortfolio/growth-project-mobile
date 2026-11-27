@@ -19,7 +19,7 @@ import { Shadow } from '../../constants/theme';
 import FadeInView from '../../components/FadeInView';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { Screen } from '../../ui';
-import { radius } from '../../theme/tokens';
+import { lightTokens, radius } from '../../theme/tokens';
 import { CoachLessonsEntry } from './CoachLessons';
 
 // ── Program Templates ──────────────────────────────────────────────────────
@@ -219,7 +219,7 @@ export default function ProgramTemplatesScreen() {
                       style={[styles.applyBtn, { backgroundColor: template.color }]}
                       onPress={() => handleApply(template)}
                     >
-                      <Ionicons name="document-text-outline" size={18} color={colors.textOnPrimary} />
+                      <Ionicons name="document-text-outline" size={18} color={lightTokens.textOnAccent} />
                       <Text style={styles.applyBtnText}>Post as guidelines →</Text>
                     </HapticPressable>
                   </View>
@@ -415,7 +415,8 @@ const makeStyles = (colors: ThemeColors) =>
     marginTop: 8,
   },
   applyBtnText: {
-    color: colors.textOnPrimary,
+    // The warm near-white: 4.51:1 on the mobility template's fill (the Sunlit sand page colour would be 4.17:1).
+    color: lightTokens.textOnAccent,
     fontSize: 15,
     fontWeight: '500',
     letterSpacing: 0.3,
