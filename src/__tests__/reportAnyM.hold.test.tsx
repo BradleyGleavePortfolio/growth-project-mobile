@@ -337,10 +337,12 @@ describe('H6 DM1-DM3: a member\'s direct message thread', () => {
     const v = await open(MEMBER, 'See you at the track');
     expect(v.getByText('See you at the track')).toBeTruthy(); // not hidden from a screen reader
     expect(within(v.getByTestId(`dm-cell-${uuid(901)}`)).getByLabelText('Report or block Jo Park')).toBeTruthy();
-    // Where a hold is bound, its element is not one accessible element (it would fold the words into one stop).
+    // The touchable that holds the words (the nearest one that takes the touch) is never one accessible element: that
+    // would fold the words and their ••• into one stop (m5). The test renderer draws host views only, so it is found by
+    // its touch handlers; at the base there is none.
     let n = v.getByText('See you at the track').parent;
-    while (n && typeof n.props.onLongPress !== 'function') n = n.parent;
-    if (n) expect(n.props.accessible).toBe(false);
+    while (n && typeof n.props.onResponderGrant !== 'function') n = n.parent;
+    expect(n?.props.accessible).not.toBe(true);
   });
 });
 
