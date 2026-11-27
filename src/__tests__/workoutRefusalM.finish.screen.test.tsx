@@ -20,6 +20,8 @@ jest.mock('../hooks/useCurrentUser', () => ({
 let mockRouteParams: Record<string, unknown> = {};
 const mockNavigate = jest.fn();
 const mockGoBack = jest.fn();
+const mockDispatch = jest.fn();
+const mockListeners: Record<string, (e: unknown) => void> = {};
 jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
   const ReactLib = jest.requireActual('react');
@@ -30,7 +32,8 @@ jest.mock('@react-navigation/native', () => {
       goBack: mockGoBack,
       setParams: jest.fn(),
       getParent: () => ({ navigate: mockNavigate }),
-      addListener: () => () => undefined,
+      dispatch: mockDispatch,
+      addListener: (name: string, cb: (e: unknown) => void) => { mockListeners[name] = cb; return () => undefined; },
     }),
     useRoute: () => ({ params: mockRouteParams }),
     useFocusEffect: (cb: () => undefined | (() => void)) => {
@@ -56,8 +59,9 @@ const mockSaveActiveWorkoutSession = jest.fn(async (..._a: unknown[]) => undefin
 jest.mock('../storage/activeWorkoutSession', () => ({
   loadActiveWorkoutSession: (...a: unknown[]) => mockLoadActiveWorkoutSession(...a),
   saveActiveWorkoutSession: (...a: unknown[]) => mockSaveActiveWorkoutSession(...a),
-  clearActiveWorkoutSession: jest.fn(async () => undefined),
+  clearActiveWorkoutSession: (...a: unknown[]) => mockClearActiveWorkoutSession(...a),
 }));
+const mockClearActiveWorkoutSession = jest.fn(async (..._a: unknown[]) => undefined);
 
 const mockGetWorkoutHistory = jest.fn(async () => ({ data: [] as LoggedWorkout[] }));
 jest.mock('../services/api', () => ({
@@ -125,6 +129,7 @@ function storedSession(extra: Record<string, unknown> = {}) {
 
 let alertTitles: string[] = [];
 let alertBodies: string[] = [];
+let alertButtons: Array<Array<{ text?: string; onPress?: () => void }>> = [];
 let alertSpy: jest.SpyInstance;
 
 beforeEach(() => {
@@ -132,6 +137,7 @@ beforeEach(() => {
   capturedMutateOptions = null;
   alertTitles = [];
   alertBodies = [];
+  alertButtons = [];
   mockRouteParams = { routineName: 'Push Day', exercises: '[]' };
   mockLoadActiveWorkoutSession.mockResolvedValue(storedSession());
   mockGetWorkoutHistory.mockResolvedValue({ data: [] });
@@ -139,6 +145,7 @@ beforeEach(() => {
   alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((title, body, buttons) => {
     alertTitles.push(String(title));
     alertBodies.push(String(body ?? ''));
+    alertButtons.push((buttons ?? []) as Array<{ text?: string; onPress?: () => void }>);
     const press = (buttons ?? []).find((b) => b.text === 'Resume' || b.text === 'Finish');
     press?.onPress?.();
   });
@@ -200,5 +207,68 @@ describe('a Finish the server refuses', () => {
     expect(alertTitles).not.toContain(title === 'Workout not saved' ? 'Workout not saved yet' : 'Workout not saved');
     // The sets stay on the logger and the session is saved again for Finish again.
     expect(mockSaveActiveWorkoutSession).toHaveBeenCalled();
+  });
+});
+
+// ALM-D8 (OPERATOR RULING 7209272454, owner #ALM-E15 "DECISIONS #ALM-D8 - op 1"): after a Finish refused with a coded
+// reason and parked on this phone, every way out of the logger that asks "Log this workout?" also offers Leave, which
+// closes the logger and ends the live session; nothing is sent, no second copy is queued, and the parked workout stays
+// (the engine parked it with its reason through releaseQueuedWorkout: workoutRefusalM.engine.test.ts lists such a row
+// until it is sent again or removed). Before any refusal, and after one with no code, the question is main's.
+describe('ALM-D8: leaving the logger after a refused Finish', () => {
+  const CODED = answer({ statusCode: 400, code: 'WORKOUT_INVALID', message: ['property surprise should not exist'], error: 'Bad Request', next_step: W2 });
+  const UNCODED = answer({ statusCode: 400, message: ['property surprise should not exist'], error: 'Bad Request' });
+  const mockTabLeave = jest.fn();
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { workoutLeaveGuard } = require('../navigation/workoutLeaveGuard') as typeof import('../navigation/workoutLeaveGuard');
+  type View = Awaited<ReturnType<typeof render>>;
+  const WAYS: Array<[string, (view: View) => void, () => void]> = [
+    ['the close control (Leave workout)', (view) => fireEvent.press(view.getByLabelText('Leave workout')),
+      () => expect(mockGoBack).toHaveBeenCalledTimes(1)],
+    ['the back gesture (Android back)', () => mockListeners.beforeRemove({ preventDefault: jest.fn(), data: { action: { type: 'GO_BACK' } } }),
+      () => expect(mockDispatch).toHaveBeenCalledWith({ type: 'GO_BACK' })],
+    ['a press on another tab', () => workoutLeaveGuard()!(mockTabLeave),
+      () => { expect(mockGoBack).toHaveBeenCalledTimes(1); expect(mockTabLeave).toHaveBeenCalledTimes(1); }],
+  ];
+  const STATES: Array<[string, unknown, boolean]> = [
+    ['after a coded refusal', CODED, true],
+    ['before any refusal', null, false],
+    ['after a refusal with no code (the old server)', UNCODED, false],
+  ];
+  const rows = STATES.flatMap(([state, err, leave]) => WAYS.map(([way, go, left]) => [state, way, err, leave, go, left] as const));
+  const sends = () => [mockMutate, mockQueueWorkout, mockRelease, mockSettle, mockPushQueued, mockTriggerSync, mockCompleteMyAssignment]
+    .map((m) => m.mock.calls.length);
+
+  it.each(rows)('%s, %s', async (_state, _way, err, leave, go, left) => {
+    mockTabLeave.mockClear();
+    const view = await render(<ActiveWorkoutScreen />);
+    await waitFor(() => expect(view.getByText('Bench Press')).toBeTruthy());
+    if (err) {
+      await finishOnce(view);
+      await act(async () => { capturedMutateOptions!.onError!(err); await Promise.resolve(); });
+      expect(mockRelease).toHaveBeenCalledWith(`c1:${STARTED_AT}`, err); // parked (the engine keeps a coded reason)
+    }
+    mockGoBack.mockClear();
+    mockDispatch.mockClear();
+    await act(async () => { go(view); });
+    const i = alertTitles.lastIndexOf('Log this workout?');
+    expect(i).toBeGreaterThanOrEqual(0);
+    const texts = alertButtons[i].map((b) => b.text);
+    if (!leave) {
+      expect(texts).toEqual(['Keep training', 'Finish and log']);
+      expect(mockGoBack).not.toHaveBeenCalled();
+      expect(mockDispatch).not.toHaveBeenCalled();
+      expect(mockTabLeave).not.toHaveBeenCalled();
+      return;
+    }
+    expect(texts).toEqual(['Keep training', 'Finish and log', 'Leave']);
+    expect(mockGoBack).not.toHaveBeenCalled(); // asked first, nothing left yet
+    const before = sends();
+    mockClearActiveWorkoutSession.mockClear();
+    await act(async () => { alertButtons[i][2].onPress!(); for (let k = 0; k < 6; k++) await Promise.resolve(); });
+    left(); // the logger closed (and the tab opened)
+    expect(mockClearActiveWorkoutSession).toHaveBeenCalledWith('c1'); // the live session ended
+    expect(sends()).toEqual(before); // nothing sent, nothing queued again, the parked row not touched
+    expect(mockQueueWorkout).toHaveBeenCalledTimes(1); // no second copy
   });
 });

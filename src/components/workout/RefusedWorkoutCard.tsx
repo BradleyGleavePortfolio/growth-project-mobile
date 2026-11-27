@@ -64,6 +64,7 @@ export const REFUSAL_COPY = {
   yourCoach: 'your coach', // C1-C-44
   invalid: "Part of this workout couldn't be saved.", // WORKOUT-REFUSAL-W5: WORKOUT_INVALID, in place of the validation line
   close: 'Close', // WORKOUT-REFUSAL-W6: the sheet's scrim, main's word (CheckInDraftSheet, ClientPeekSheet)
+  leave: 'Leave', // WORKOUT-REFUSAL-W7: the logger's leave question after a coded refusal (ALM-D8, ruling 7209272454)
 };
 const c = REFUSAL_COPY;
 const CAP = 1.3;
