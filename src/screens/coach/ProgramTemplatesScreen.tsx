@@ -247,6 +247,7 @@ export default function ProgramTemplatesScreen() {
       >
         {/* iOS page sheet sits below the status bar; Android opens full screen. */}
         <Screen
+          inModal
           edges={Platform.OS === 'ios' ? ['bottom'] : ['top', 'bottom']}
           scroll={false}
           contentStyle={styles.modalBody}

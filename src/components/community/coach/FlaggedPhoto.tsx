@@ -30,7 +30,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useWindowInsets } from '../../../ui/layout/ScreenArea';
 import { z } from 'zod';
 import HapticPressable from '../../HapticPressable';
 import { useTheme } from '../../../theme/useTheme';
@@ -106,7 +106,8 @@ export default function FlaggedPhoto({
   testID,
 }: FlaggedPhotoProps): React.ReactElement {
   const { semanticColors } = useTheme();
-  const insets = useSafeAreaInsets();
+  // OFFLINE-BAND-ROOT-M: a Modal draws from the window's top, over the band: the window's insets, not the area's.
+  const insets = useWindowInsets();
   const window = useWindowDimensions();
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
