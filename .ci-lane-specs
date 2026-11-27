@@ -1,0 +1,5 @@
+--testPathPattern
+foodJourney.(beside|probeFix|probeMain)
+--setupFilesAfterEnv
+<rootDir>/jest.setup.js
+<rootDir>/.fjw-probe/stall.setup.js
