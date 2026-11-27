@@ -80,9 +80,9 @@ function BareProbe() {
   const seen = { screen: useScreenInsets(), window: useWindowInsets(), offset: useScreenAreaKeyboardOffset() };
   return <Text testID="probe-bare">{JSON.stringify(seen)}</Text>;
 }
-type View = Awaited<ReturnType<typeof render>>;
-const read = (view: View, name: string): Seen => JSON.parse(String(view.getByTestId(`probe-${name}`).props.children));
-const send = async (view: View, m: Metrics) => {
+type Rendered = Awaited<ReturnType<typeof render>>;
+const read = (view: Rendered, name: string): Seen => JSON.parse(String(view.getByTestId(`probe-${name}`).props.children));
+const send = async (view: Rendered, m: Metrics) => {
   const area = view.getByTestId('screen-area');
   await act(async () => {
     (area.props.onInsetsChange as (e: { nativeEvent: Metrics }) => void)({ nativeEvent: m });
