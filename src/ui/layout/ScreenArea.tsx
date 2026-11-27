@@ -54,5 +54,5 @@ export function useWindowInsets(): EdgeInsets {
 /** iPhone: how far the area's top sits below the window's (the band's height while it shows, else 0). Android: 0. */
 export function useScreenAreaKeyboardOffset(): number {
   const frame = useNearestFrame();
-  return Platform.OS === 'ios' ? Math.max(0, frame?.y ?? 0) : 0;
+  return Platform.OS === Platform.OS ? Math.max(0, frame?.y ?? 0) : 0;
 }
