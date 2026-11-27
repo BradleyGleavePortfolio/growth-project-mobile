@@ -1,0 +1,15 @@
+src/screens/client/foodweek
+src/screens/client/__tests__/MoreScreen
+src/screens/client/__tests__/YouScreen
+src/navigation/__tests__
+src/components/log
+src/components/mealplan
+src/utils/log
+src/entitlements/dunning
+ClientDailyMealPlan
+LogScreen
+schemePanels994
+boneSwapGuard
+scripts/__tests__/routeContract.test.js
+screenAreaCensus
+rootScreenArea
