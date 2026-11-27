@@ -72,7 +72,7 @@ const BRAND = /\b[A-Z][A-Z'&!.-]+\b/;
 function ownWords(name: string): string[] {
   const parts = name.replace(/\(([^)]*)\)/g, ',$1,').split(',').map((part) => part.trim());
   const skip = parts.length > 1 && (SKIPPED_HEADS.has(parts[0].toLowerCase()) || BRAND.test(parts[0]));
-  return wordsOf(parts[skip ? 1 : 0]);
+  return wordsOf(parts.slice(skip ? 1 : 0).join(' '));
 }
 
 /** The food's own words move it only inside its group. */
