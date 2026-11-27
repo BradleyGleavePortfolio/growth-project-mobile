@@ -7,6 +7,7 @@
 import { weightPeriod, weightTrend, type WeightPeriod, type WeightSample } from '../../../components/progress/weightTrend';
 import { workoutWeek, type WorkoutWeek } from '../../coach/client-detail/thisWeek';
 import { assignmentDay, workoutDay } from '../../../utils/workout/workoutDay';
+import { isTimedRow } from '../../../utils/workout/exerciseUnit';
 import type { WeightLog } from '../../../types';
 
 export type WeightUnit = 'lb' | 'kg';
@@ -63,9 +64,11 @@ export function lastWas(log: WeightLog | null, unit: WeightUnit, today: string):
 
 export interface Session {
   date: string;
-  exercises?: Array<{ exercise_name: string; weight_per_set?: number[] | null; reps_per_set?: number[] | null }> | null;
+  exercises?: Array<{
+    exercise_name: string; weight_per_set?: number[] | null; reps_per_set?: number[] | null; asked_unit?: string | null;
+  }> | null;
 }
-export interface BestSet { name: string; weight: number; reps: number; date: string; isNew: boolean }
+export interface BestSet { name: string; weight: number; reps: number; date: string; isNew: boolean; timed: boolean }
 
 /** One page of GET /workouts (newest first). A full page may hide an older, heavier set. */
 export const SESSIONS = 50;
@@ -74,7 +77,10 @@ export const SESSIONS = 50;
  * The newest best set in the workouts read (heaviest, then most reps). It is a
  * "New best" only when it beat an earlier session of the same lift, the read
  * holds every workout (less than a full page) and it is from the last 30 days;
- * a new best wins the tile over a first-ever lift.
+ * a new best wins the tile over a first-ever lift. EXERCISE-HISTORY-UNIT-M: a
+ * lift is an exercise and its stored unit (asked_unit, isTimedRow), so a timed
+ * set and a rep set of one exercise never compare; a timed set's seconds are
+ * its reps here and `timed` says so. No unit stored reads reps, as before.
  */
 export function latestBest(sessions: Session[], today: string): BestSet | null {
   const whole = sessions.length < SESSIONS;
@@ -83,10 +89,12 @@ export function latestBest(sessions: Session[], today: string): BestSet | null {
   [...sessions].sort((a, b) => workoutDay(a).localeCompare(workoutDay(b))).forEach((s) => s.exercises?.forEach((e) => {
     const top = (e.weight_per_set ?? []).map((w, i) => ({ w, r: e.reps_per_set?.[i] ?? 0 }))
       .filter((x) => x.w > 0 && x.r > 0).sort((a, b) => b.w - a.w || b.r - a.r)[0];
-    const prev = best.get(e.exercise_name);
+    const timed = isTimedRow({ unit: e.asked_unit });
+    const lift = `${timed ? 'seconds' : 'reps'} ${e.exercise_name}`;
+    const prev = best.get(lift);
     if (!top || (prev && (top.w < prev.weight || (top.w === prev.weight && top.r <= prev.reps)))) return;
-    const set = { name: e.exercise_name, weight: top.w, reps: top.r, date: workoutDay(s), isNew: !!prev && whole && dayX(workoutDay(s)) > dayX(today) - 30 * DAY };
-    best.set(e.exercise_name, set);
+    const set = { name: e.exercise_name, weight: top.w, reps: top.r, date: workoutDay(s), isNew: !!prev && whole && dayX(workoutDay(s)) > dayX(today) - 30 * DAY, timed };
+    best.set(lift, set);
     sets.push(set);
   }));
   return sets.filter((s) => s.isNew).pop() ?? sets.pop() ?? null;

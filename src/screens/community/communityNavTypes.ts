@@ -14,6 +14,8 @@ export type CommunityStackParamList = {
   CommunityToday: undefined;
   /** A Space view: Hall (workspace) or a specific Cohort. */
   CommunitySpace: { space: 'hall' | 'cohort'; cohortId?: string };
+  /** SC-M1: one space as a chat stream. Registered only behind communitySpaceChat. */
+  CommunitySpaceChat: { cohortId: string; messageId?: string };
   /** Single thread / post detail. */
   CommunityThread: { postId: string };
   /** Single community event detail (v2-3). */

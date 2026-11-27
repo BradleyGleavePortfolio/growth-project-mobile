@@ -76,16 +76,22 @@ export function useWorkoutSyncState(
   );
 
   useEffect(() => {
-    const handler = () => {
+    const recount = () => {
       if (!userId) return;
       countQueuedWorkouts(userId)
         .then(setQueuedCount)
         .catch(() => undefined);
+    };
+    const handler = () => {
+      recount();
       onSynced?.();
     };
     workoutSyncEvents.on('synced', handler);
+    // WORKOUT-REFUSAL-M: a refused workout sent again with no answer waits in the queue: count it.
+    workoutSyncEvents.on('queued', recount);
     return () => {
       workoutSyncEvents.off('synced', handler);
+      workoutSyncEvents.off('queued', recount);
     };
   }, [userId, onSynced]);
 
