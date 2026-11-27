@@ -27,6 +27,8 @@ jest.mock('expo-file-system/legacy', () => ({
   uploadAsync: (...a: unknown[]) => mockUpload(...a),
 }));
 jest.mock('../../../store/clientStore', () => ({ useClientStore: { getState: () => ({}) } }));
+// CRISIS-TEXT-M's reader asks who is signed in (lib/userCache, read from prefsStorage, which the stand-in store lacks).
+jest.mock('../../../lib/userCache', () => ({ readUserCacheSync: () => ({ id: 'me-1' }) }));
 const mockDisk = new Map<string, string>();
 jest.mock('../../../storage/mmkv', () => ({
   cacheStorage: {

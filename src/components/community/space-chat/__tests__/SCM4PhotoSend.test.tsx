@@ -152,9 +152,13 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   await act(async () => { authEvents.emit('logout'); });
-  expect(rows()).toEqual([]);
+  // The rows end empty: read by a fresh hook (the test's own may already be unmounted by the library's cleanup).
+  const after = await renderHook(() => useSpacePhotos('c-a', 'me-1', true, [], false), {
+    wrapper: ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>,
+  });
+  expect(after.result.current.rows).toEqual([]);
   expect(spacePhotoBusy()).toBe(false);
-  await hook.unmount();
+  await after.unmount();
   alert.mockRestore();
   now.mockRestore();
 });

@@ -19,10 +19,10 @@
  *     leaves for any reason or after a pick that made no row. A sign-out wipes them all; it counts them first
  *     (services/signOutQueues, 'space-photos'). A send keeps going when the page or the space is left.
  */
-import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { Alert } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
-import { useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { QueryClientContext, type QueryClient } from '@tanstack/react-query';
 import { deleteAsync, getInfoAsync } from 'expo-file-system/legacy';
 import { MEAL_PHOTO_MAX_BYTES, MEAL_PHOTO_MAX_SIDE } from '../../../api/mealPhotoApi';
 import { CommunityApiError } from '../../../api/apiCall';
@@ -215,6 +215,7 @@ export async function pickSpacePhoto(cohortId: string, userId: string | null, is
   const g = gen;
   try {
     if (!isOnline) { tell(OFFLINE); return; }
+    online = true;
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const ImagePicker = require('expo-image-picker') as typeof import('expo-image-picker');
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -292,8 +293,9 @@ const snapshot = () => rows;
 
 /** This space's photos for the signed-in person, the pick, and the screen's part in their life. */
 export function useSpacePhotos(cohortId: string, userId: string | null, isOnline: boolean, messages: readonly SpaceMessage[], closed: boolean) {
-  const qc = useQueryClient();
-  useEffect(() => { lists = qc; }, [qc]);
+  // Read without a throw: a screen drawn with no query client (a test's stand-in hook) still draws.
+  const qc = useContext(QueryClientContext);
+  useEffect(() => { if (qc) lists = qc; }, [qc]);
   useEffect(() => { online = isOnline; }, [isOnline]);
   const all = useSyncExternalStore(subscribe, snapshot, snapshot);
   const here = useMemo(() => all.filter((r) => r.userId === userId && r.cohortId === cohortId), [all, userId, cohortId]);
