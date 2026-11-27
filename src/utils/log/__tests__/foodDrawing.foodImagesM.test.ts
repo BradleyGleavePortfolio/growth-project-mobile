@@ -73,6 +73,10 @@ describe('b. the food\'s own words move it only inside its group, never give it 
     // A brand written in capitals before the food is skipped too (18 soymilks were bowls).
     ['SILK Chocolate, soymilk', 'Legumes and Legume Products', 'glass'],
     ['Vitasoy USA, Vitasoy Organic Creamy Original Soymilk', 'Legumes and Legume Products', 'glass'],
+    // ...but a name written all in capitals (USDA's Branded foods, live hits) has no brand head: its first part is the food.
+    ['MILK, WHOLE', 'Dairy and Egg Products', 'glass'],
+    ['PEANUT BUTTER, CREAMY', 'Legumes and Legume Products', 'jar'],
+    ['MILK, WHOLE', 'Milk', 'glass'],
     // A cheese spread or sauce is a jar, not a plate (6 rows); the frozen milk bar joins the ice cream bars (1 row).
     ['Cheese spread, pasteurized process, American', 'Dairy and Egg Products', 'jar'],
     ['Cheese sauce, prepared from recipe', 'Dairy and Egg Products', 'jar'],
