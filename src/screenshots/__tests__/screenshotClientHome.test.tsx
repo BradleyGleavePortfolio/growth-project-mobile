@@ -47,10 +47,10 @@ import { z } from 'zod';
 import { InboxResponseSchema, PinsResponseSchema } from '../../api/messagingV2Api';
 import { safeWearableConnectionSchema } from '../../api/wearablesConnectionsApi';
 import { samplesResponseSchema } from '../../api/wearablesSamplesApi';
-import { previousSets } from '../../screens/client/active-workout/sessionQuality';
+import { previousSets, type LoggedWorkout } from '../../screens/client/active-workout/sessionQuality';
 import { seriesPoints } from '../../screens/client/wearables/seriesSummary';
 import { lastNightSleep } from '../../components/home/rings/homeRings';
-import { isWorkoutDoneToday } from '../../utils/workout/workoutDoneToday';
+import { isWorkoutDoneToday, type WorkoutRowLike } from '../../utils/workout/workoutDoneToday';
 import { parseWeightLogRow, weightHistoryRows } from '../../screens/client/progress/weightHistory';
 import { getTodayString } from '../../utils/date';
 import HomeScreen from '../../screens/client/HomeScreen';
@@ -213,14 +213,16 @@ describe('DEMO_ fixtures match the phone API types', () => {
 
   it('DEMO_WORKOUT_HISTORY gives each opened exercise its previous sets, logged before today', () => {
     // STORE-CAPTURE-ROUTES-M: "Every set builds on the last." The workout frame reads GET /workouts (last 50).
+    // The GET /workouts row as both readers type it (the live workout's LoggedWorkout, Home's WorkoutRowLike).
+    const rows: Array<LoggedWorkout & WorkoutRowLike> = DEMO_WORKOUT_HISTORY;
     const opened = JSON.parse(DEMO_WORKOUT_PARAMS.exercises) as { exerciseName: string; weightLbs: number }[];
     for (const e of opened) {
-      const previous = previousSets(DEMO_WORKOUT_HISTORY, e.exerciseName);
+      const previous = previousSets(rows, e.exerciseName);
       expect(previous).toHaveLength(3);
       for (const set of previous) expect(set.weight).toBeLessThan(e.weightLbs);
     }
     // Home reads the same list: no workout today, so its progress line is unchanged.
-    expect(isWorkoutDoneToday(DEMO_WORKOUT_HISTORY, getTodayString())).toBe(false);
+    expect(isWorkoutDoneToday(rows, getTodayString())).toBe(false);
   });
 
   it('the wearables fixtures parse with the strict wire schemas, and Home reads steps and sleep from them', () => {

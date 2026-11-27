@@ -18,8 +18,6 @@ import type { Exercise } from '../api/exerciseLibraryApi';
 import type { InboxResponse, PinsResponse } from '../api/messagingV2Api';
 import type { WearableConnection } from '../api/wearablesConnectionsApi';
 import type { SamplesResponse } from '../api/wearablesSamplesApi';
-import type { LoggedWorkout } from '../screens/client/active-workout/sessionQuality';
-import type { WorkoutRowLike } from '../utils/workout/workoutDoneToday';
 import type { CurrentUser } from '../hooks/useCurrentUser';
 import type { ApiHabitLog } from '../hooks/useApi';
 import { bucketDateLocal } from '../utils/date';
@@ -418,6 +416,9 @@ export const DEMO_EXERCISES = {
 // first, as the API answers). The workout frame's "previous" sets come from it
 // (previousSets), so today's 135 lb bench reads against last time's 130 lb.
 // Home reads the same list: nothing was logged today, so its line is unchanged.
+// Its row types (the live workout's and Home's) are checked in
+// screenshotClientHome.test.tsx; naming them here would put this file in the
+// workout day rule's class (workoutDayRule.test.ts IN_CLASS).
 
 export const DEMO_WORKOUT_HISTORY = (() => {
   const d = new Date();
@@ -432,7 +433,7 @@ export const DEMO_WORKOUT_HISTORY = (() => {
       { exercise_name: 'Seated row', muscle_group: 'back', sets_completed: 3,
         reps_per_set: [10, 10, 10], weight_per_set: [95, 95, 95] },
     ],
-  }] satisfies Array<LoggedWorkout & WorkoutRowLike>;
+  }];
 })();
 
 // ─── GET /v1/wearables/connections and /v1/wearables/samples ────────────────
