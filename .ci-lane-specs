@@ -1,0 +1,4 @@
+LogScreen\.foodJourney\.switchOn\.(main|head)\.ls
+--setupFilesAfterEnv
+<rootDir>/jest.setup.js
+<rootDir>/.lsprobe/probe.setup.js
