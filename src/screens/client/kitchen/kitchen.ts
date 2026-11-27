@@ -145,7 +145,7 @@ export function failureOf(err: unknown): { status?: number; message: string } {
 }
 
 /** R6: the intent of one save; a changed meal or day is another save with its own key. */
-export const addIntent = (mealId: string, date: string, meal: MealType): unknown[] => ['saved-meal', mealId, date, meal];
+export const addIntent = (mealId: string, date: string, meal: MealType): unknown[] => ['saved-meal', mealId, date, meal, Math.random()];
 
 // ─── From {coach} (R8) ────────────────────────────────────────────────────────────────────────────────────────────
 const KM5: Record<string, string> = {
