@@ -75,6 +75,7 @@ import type { SemanticTokens } from '../../theme/tokens';
 import {
   formatPlanNumber as n, MastLine, mast, MastProgress, MealArt, NowRow, PaperPage, PlanMasthead, planStyleC, TimeCell, TimelineRow, useCoachItalic, useTimeColumn,
 } from './mealplan/planStyleC';
+import { planMealParams } from './mealplan/planMeal';
 
 // The Food day's words and formats, copied screen-locally (FoodDayView.tsx:41, :52, :232-236).
 const longDay = (date: string) =>
@@ -179,7 +180,7 @@ export default function ClientDailyMealPlanScreen() {
     : stops.reduce<string | null>((at, x, i) => ((mins[i] as number) <= nowMin ? x.slot.id : at), 'start');
   const navigation = React.useContext((NavigationContext as React.Context<unknown> | undefined) ?? NO_NAVIGATION) as
     { navigate: (name: string, params?: object) => void } | undefined;
-  const onRecipe = navigation ? (slotId: string) => navigation.navigate('PlanMeal', { date: shownDay, slotId }) : undefined;
+  const onRecipe = navigation ? (slotId: string) => navigation.navigate('PlanMeal', planMealParams(shownDay, slotId)) : undefined;
   const ctx: DayCtx = { sc, styles, timeW, isDone, eaten, next, nowAfter, nowMin, firstId: stops[0]?.slot.id ?? null, onRecipe };
   // One plan (the usual day): its name, the coach's note and the day total sit
   // on the masthead, as C2 C_day draws the coach's italic note there (FIX-927,

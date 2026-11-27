@@ -19,7 +19,7 @@ import { useClientStore } from '../../store/clientStore';
 import { MealType, FoodLog } from '../../types';
 import { foodApi, logApi } from '../../services/api';
 import type { ClientTodayResponse } from '../../api/mealTemplatesApi';
-import { findPlanSlot, firstName, somethingElseSheet } from './mealplan/planMeal';
+import { findPlanSlot, firstName, planMealParams, somethingElseSheet } from './mealplan/planMeal';
 import { notifyPendingFoodLogs, syncFoodLogQueue } from '../../services/foodLogSync';
 import { usePendingFoodLogCount } from '../../hooks/useFoodLogQueueSync';
 import { useNetworkStatus, isEffectivelyOnline } from '../../hooks/useNetworkStatus';
@@ -797,7 +797,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
           onSomethingElse={(meal, link, manual) => void openAddFood(meal, link, !link, manual)}
           onEditFood={handleEditFood}
           // R7: the Food tab has no stack; the plan meal page opens in the You stack over its home (HomeTiles.tsx:128).
-          onOpenPlanMeal={navigation ? (slotId) => navigation.navigate('MoreTab', { screen: 'PlanMeal', params: { date: selectedDate, slotId }, initial: false }) : undefined}
+          onOpenPlanMeal={navigation ? (slotId) => navigation.navigate('MoreTab', { screen: 'PlanMeal', params: planMealParams(selectedDate, slotId), initial: false }) : undefined}
         >
         <Overline>Food log</Overline>
         <DaySelector selectedDate={selectedDate} onDateChange={handleDateChange} />

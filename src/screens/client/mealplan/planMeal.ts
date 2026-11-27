@@ -80,6 +80,9 @@ export function somethingElseSheet(slot: DailyMealPlanSlot, coach: string): Plan
   };
 }
 
+/** R6: the plan meal page's route params, id-only (src/screens/client/README.md); every door builds them here. */
+export const planMealParams = (date: string, slotId: string) => ({ date, slotId });
+
 /** Every plan of the day, a plan assigned twice once (FoodDayView's rule). */
 export const plansOf = (data: ClientTodayResponse | null | undefined): DailyMealPlan[] =>
   [...new Map((data?.assignments ?? []).flatMap((a) => (a?.daily_meal_plan ? [[a.daily_meal_plan.id, a.daily_meal_plan] as const] : []))).values()];
