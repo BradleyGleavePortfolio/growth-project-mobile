@@ -49,7 +49,8 @@ export type CommunityAction =
   | 'load_wins'
   | 'load_voice'
   | 'load_voice_notes'
-  | 'send_voice';
+  | 'send_voice'
+  | 'send_photo';
 
 export interface CommunityFailure {
   /** Short alert title naming what did not happen. */
@@ -85,6 +86,7 @@ const TITLES: Record<CommunityAction, string> = {
   load_voice: 'Voice note not loaded',
   load_voice_notes: 'Voice notes not loaded',
   send_voice: 'Voice note not sent',
+  send_photo: 'Photo not sent',
 };
 
 const VERBS: Record<CommunityAction, string> = {
@@ -108,6 +110,7 @@ const VERBS: Record<CommunityAction, string> = {
   load_voice: 'load this voice note',
   load_voice_notes: 'load voice notes',
   send_voice: 'send your voice note',
+  send_photo: 'send your photo',
 };
 
 /** Codes whose server `message` is written for members; shown verbatim. */
@@ -205,6 +208,11 @@ const BY_CODE: Record<string, string> = {
     'Voice notes cannot be checked right now. Your recording was not posted. Try sending it again in a minute.',
   'community.notice.not_found':
     'This notice could not be found. Refresh Community safety to see your notices.',
+  // SC-M4: a space chat photo the server refused (SC-BE3 createImage; the photo check, b#1152 PC-1).
+  'community.image.has_location': "This photo can't be used. Choose another one.",
+  'community.image.not_jpeg': "This photo can't be used. Choose another one.",
+  'community.image.too_large': "This photo can't be used. Choose another one.",
+  PHOTO_NOT_ALLOWED: "This photo can't be posted. It didn't pass our automatic check.",
 };
 
 /**
