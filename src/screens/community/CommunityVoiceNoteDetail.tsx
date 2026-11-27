@@ -68,6 +68,7 @@ import VoiceRemovedPlaceholder, {
   voiceRemovedLine,
 } from '../../components/community/removed/VoiceRemovedPlaceholder';
 import SafetyMenu from '../../components/community/SafetyMenu';
+import { SafetyHold, useSafetyHolds } from '../../components/community/SafetyHold';
 import VoiceReportedFold, {
   markVoiceNoteReported,
   useReportedVoiceNotes,
@@ -174,6 +175,7 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
     announced.current = true;
     AccessibilityInfo.announceForAccessibility('Voice note');
   }, [loaded]);
+  const holds = useSafetyHolds(); // REPORT-ANY-M: a hold on the note opens its ••• menu; play still plays
 
   // Defense-in-depth: never reachable with the flag off (route not registered),
   // and additionally hidden if the server flag resolves OFF at runtime.
@@ -302,16 +304,17 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
               </Text>
             </View>
           ) : null}
-          <View style={styles.byline}>
+          <SafetyHold hold={removedLine ? undefined : holds.hold('note')} style={styles.byline}>
             <Text style={styles.who} numberOfLines={1} accessibilityRole="header">
               {name}
             </Text>
             {coach ? <Text style={[styles.coachMark, styles.keep]} numberOfLines={1}>Coach</Text> : null}
             {when.length > 0 ? <Text style={[styles.when, styles.keep]} numberOfLines={1}>{when}</Text> : null}
-          </View>
+          </SafetyHold>
           {/* Owner #174-4: a reported note keeps its menu (Reported, Block, the coach's Remove). */}
           {removedLine ? null : (
             <SafetyMenu
+              ref={holds.menu('note')}
               targetType="voice_note"
               targetId={data.id}
               authorUserId={data.author_id}
@@ -333,7 +336,7 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
         </View>
 
         {/* GOAL B-09a: the card sits under the name, not under the tile. */}
-        <View style={initial && !tight ? styles.underName : undefined}>
+        <SafetyHold hold={removedLine ? undefined : holds.hold('note')} style={initial && !tight ? styles.underName : undefined}>
           {removedLine ? (
             <VoiceRemovedPlaceholder line={removedLine} testID="community-voice-detail-removed" />
           ) : folded ? (
@@ -350,7 +353,7 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
               testID="community-voice-detail-player"
             />
           )}
-        </View>
+        </SafetyHold>
 
         {excerpt.length > 0 && !folded && !removedLine ? (
           <View style={styles.transcriptWrap}>

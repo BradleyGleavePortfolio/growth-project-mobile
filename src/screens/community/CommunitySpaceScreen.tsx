@@ -39,6 +39,7 @@ import { spacing, radius, typography } from '../../theme/tokens';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCommunityMe, usePosts, isOptimisticId } from '../../hooks/useCommunity';
 import SafetyMenu from '../../components/community/SafetyMenu';
+import { useSafetyHolds } from '../../components/community/SafetyHold';
 import VoiceNotesSection from '../../components/community/VoiceNotesSection';
 import { featureFlags } from '../../config/featureFlags';
 import HapticPressable from '../../components/HapticPressable';
@@ -161,6 +162,7 @@ export default function CommunitySpaceScreen({
           {children}
         </SafeAreaView>
       ), [embedded, semanticColors.bgPrimary, navigation]);
+  const holds = useSafetyHolds(); // REPORT-ANY-M: a hold on a post row opens its ••• menu; a tap still opens the post
 
   // Resolve the prerequisite BEFORE any post state so a still-loading or failed
   // prerequisite is never mistaken for an empty workspace.
@@ -334,7 +336,7 @@ export default function CommunitySpaceScreen({
             }
             return (
               <View style={[styles.postRow, { borderBottomColor: semanticColors.border }]}>
-                <HapticPressable onPress={() => openThread(item)} disabled={isOptimisticId(item.id)}
+                <HapticPressable onPress={() => openThread(item)} disabled={isOptimisticId(item.id)} {...holds.hold(item.id)}
                   accessibilityRole="button" accessibilityLabel={`Open post ${item.title ?? 'Untitled post'}`}
                   testID={`post-card-${item.id}`} style={styles.postContent}>
                   {item.pinned ? <Ionicons name="pin-outline" size={16} color={semanticColors.textMuted} /> : null}
@@ -344,6 +346,7 @@ export default function CommunitySpaceScreen({
                 </HapticPressable>
                 {!isOptimisticId(item.id) ? (
                   <SafetyMenu
+                    ref={holds.menu(item.id)}
                     targetType="post"
                     targetId={item.id}
                     authorUserId={item.author_user_id}

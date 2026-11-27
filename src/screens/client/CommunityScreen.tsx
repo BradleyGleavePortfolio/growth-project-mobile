@@ -20,6 +20,7 @@ import type { MoreStackParamList } from '../../navigation/ClientNavigator';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { SkeletonCard } from '../../components/SkeletonLoader';
 import SafetyMenu from '../../components/community/SafetyMenu';
+import { SafetyHold, useSafetyHolds } from '../../components/community/SafetyHold';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import type { IoniconName } from '../../types/common';
 import { communityWinsApi, type CommunityWin } from '../../api/communityWinsApi';
@@ -133,6 +134,7 @@ export default function CommunityScreen() {
   }, [winTitle, winDesc, postWin]);
 
   const loadFailure = wins.isError ? describeCommunityFailure(wins.error, 'load_wins') : null;
+  const holds = useSafetyHolds(); // REPORT-ANY-M: a hold on a win opens its ••• menu
 
   return (
     <View style={styles.container}>
@@ -230,14 +232,15 @@ export default function CommunityScreen() {
               <View style={styles.winIcon}>
                 <Ionicons name="star" size={22} color={colors.warning} />
               </View>
-              <View style={styles.winInfo}>
+              <SafetyHold hold={holds.hold(item.id)} style={styles.winInfo}>
                 <Text style={styles.winUserName}>{isMe ? 'You' : item.displayName}</Text>
                 <Text style={styles.winTitle}>{item.title}</Text>
                 {item.description ? <Text style={styles.winDesc}>{item.description}</Text> : null}
-              </View>
+              </SafetyHold>
               <View style={styles.winMeta}>
                 <Text style={styles.winTime}>{formatTimeAgo(item.createdAt)}</Text>
                 <SafetyMenu
+                  ref={holds.menu(item.id)}
                   targetType="win"
                   targetId={item.id}
                   authorUserId={isMe ? viewerId : item.userId}
