@@ -9,6 +9,7 @@
  * an older server sends none and the row has no badge. Section-kind spaces hold
  * other spaces, so they wait for B-LAYERS. The coach row is the C3 coach
  * thread with its real unread count.
+ * `dmsEnd` (DM-FORMER-HOME-M) draws one node at the end of Direct messages, folding with it: Home passes her former coach's card; the drawer passes none.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -38,6 +39,8 @@ export interface SpaceSection { key: string; title: string; rows: SpaceRow[] }
 /** SC-BE2 caps a space's count at 99, meaning 99 or more: drawn "99+" like any count over 99. */
 const spaceBadge = (n: number | undefined) => (n != null && n >= 99 ? 100 : n);
 const firstWord = (v: unknown) => (typeof v === 'string' ? (v.trim().split(/\s+/)[0] ?? '') : '');
+/** The Direct messages section's key and title, for useSpaceTree's sections and SpaceTree's `dmsEnd`. */
+const DMS = { key: 'dms', title: 'Direct messages' };
 
 /** The community name, its sections, and the load state, from today's endpoints. */
 export function useSpaceTree() {
@@ -87,7 +90,7 @@ export function useSpaceTree() {
     : [];
   const sections: SpaceSection[] = [
     { key: 'spaces', title: 'Spaces', rows: spaces },
-    { key: 'dms', title: 'Direct messages', rows: dms },
+    { ...DMS, rows: dms },
   ].filter((sec) => sec.rows.length > 0);
 
   const retry = async () => {
@@ -97,6 +100,8 @@ export function useSpaceTree() {
   return {
     name: workspace.data?.name.trim() || 'Community',
     sections,
+    /** Her coach row has its answer (useCoachChatClosed `known`: the saved block list and the thread read; true with no coach). */
+    coachKnown: coachChat.known,
     loading: me.isLoading || cohorts.isLoading,
     failed: me.isError || cohorts.isError,
     retry,
@@ -131,17 +136,20 @@ export function Monogram({ name, size = 44 }: { name: string; size?: number }): 
 const PAGE = { head: fp.forest, text: fp.ink, meta: fp.brand400, icon: fp.forest, chipBg: fp.sage, chipText: fp.forest };
 const DEEP = { head: fp.onDeepMuted, text: fp.onDeep, meta: fp.onDeepMuted, icon: fp.onDeepMuted, chipBg: fp.forest, chipText: fp.onDeepMuted };
 
-export function SpaceTree({ sections, deep = false, activeId, onOpen }: {
+export function SpaceTree({ sections, deep = false, activeId, onOpen, dmsEnd }: {
   sections: SpaceSection[];
   deep?: boolean;
   activeId?: string;
   onOpen: (t: SpaceTarget) => void;
+  /** Drawn after Direct messages' rows; with no such section (her coach's chat closed), under its header alone. */
+  dmsEnd?: React.ReactNode;
 }): React.ReactElement {
   const c = deep ? DEEP : PAGE;
   const [closed, setClosed] = useState<Record<string, boolean>>({});
+  const drawn = dmsEnd && !sections.some((sec) => sec.key === DMS.key) ? [...sections, { ...DMS, rows: [] }] : sections;
   return (
     <View>
-      {sections.map((sec) => {
+      {drawn.map((sec) => {
         const open = !closed[sec.key];
         return (
           <View key={sec.key}>
@@ -193,6 +201,7 @@ export function SpaceTree({ sections, deep = false, activeId, onOpen }: {
                   );
                 })
               : null}
+            {open && sec.key === DMS.key ? dmsEnd : null}
           </View>
         );
       })}
