@@ -266,12 +266,13 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   planCard: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 64, paddingHorizontal: 16, paddingVertical: 14 },
   menuLabel: { ...typography.h4, fontSize: 17, lineHeight: 24, letterSpacing: 0, color: sc.textPrimary },
   detail: { ...typography.bodySmall, fontSize: 15, lineHeight: 21, color: sc.textMuted, fontVariant: ['tabular-nums'], flexShrink: 1, textAlign: 'right' },
-  // R11: the forest "Added" bar over the page, above the tab bar, inside the page (W2).
-  bar: { position: 'absolute', left: 12, right: 12, bottom: 12, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10,
+  // R11: the forest "Added" bar over the page, above the tab bar, inside the page (W2). One row at every text size, as
+  // S2_done draws it (LO-KITCHEN-M-1 B2): the check, the words wrapping in their own box, See today at the right.
+  bar: { position: 'absolute', left: 12, right: 12, bottom: 12, flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingHorizontal: 16, paddingVertical: 8, minHeight: 56, borderRadius: radius.button, backgroundColor: schemeBar.fill,
     borderWidth: 1, borderColor: schemeBar.border },
   barText: { ...typography.bodySmall, fontSize: 15, lineHeight: 21, color: schemeBar.text },
   barLink: { minHeight: layout.touchMin, justifyContent: 'center', marginLeft: 'auto' },
-  barWords: { flexShrink: 1 },
+  barWords: { flex: 1 },
   underline: { textDecorationLine: 'underline' },
 });
