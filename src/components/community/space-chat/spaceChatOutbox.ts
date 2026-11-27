@@ -145,7 +145,7 @@ async function drain(): Promise<void> {
         if (reason === 'rejected' && crisisFlagInError(err)) {
           if (crisisLineReaches(owner)) {
             told.add(next.localId);
-            Alert.alert(REJECTED_WORDS.title, withCrisisLine(REJECTED_WORDS.message, err));
+            Alert.alert(REJECTED_WORDS.title, describeCommunityFailure(err, 'send_message').message);
           }
         } else if (crisisFlagInError(err)) showCrisisLineFor((err as { cause?: { response?: { data?: unknown } } }).cause?.response?.data, owner);
         patch(next.localId, { state: dropped ? 'waiting' : 'failed', reason });
