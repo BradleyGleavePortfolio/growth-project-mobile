@@ -1,8 +1,9 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import CoachConsultationFlow from '../CoachConsultationFlow';
+import { STEP_MS } from '../../../consultation/components';
 import { draftKey } from '../../../../lib/coachConsultation/draft';
 import type { CoachConsultApi } from '../../../../lib/coachConsultation/api';
 import { radius } from '../../../../theme/tokens';
@@ -51,13 +52,24 @@ describe('coach consultation K3 and K4 (prototype 80, 81)', () => {
     await waitFor(() => expect(r.getByTestId('coach-consult-K4')).toBeTruthy());
   });
 
+  // K3 moves on STEP_MS after a tap (useAutoAdvance); leaving the step clears that timer.
+  // Fake timers hold the clock between the tap and Back, so Back always lands first,
+  // however slow the machine; then the clock runs well past the move.
   it('K3 Back before the auto-advance stays on K2', async () => {
-    const r = await openAt('K3', { display_name: 'Jordan Reyes' });
-    await fireEvent.press(r.getByTestId('coach-consult-K3-none'));
-    await fireEvent.press(r.getByLabelText('Back'));
-    expect(r.getByTestId('coach-consult-K2')).toBeTruthy();
-    await new Promise((res) => setTimeout(res, 400));
-    expect(r.queryByTestId('coach-consult-K4')).toBeNull();
+    jest.useFakeTimers();
+    try {
+      const r = await openAt('K3', { display_name: 'Jordan Reyes' });
+      await fireEvent.press(r.getByTestId('coach-consult-K3-none'));
+      await fireEvent.press(r.getByLabelText('Back'));
+      expect(r.getByTestId('coach-consult-K2')).toBeTruthy();
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(STEP_MS * 2);
+      });
+      expect(r.queryByTestId('coach-consult-K4')).toBeNull();
+      expect(r.getByTestId('coach-consult-K2')).toBeTruthy();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('K4 picks a coaching touch, then the consultation completes with every answer', async () => {
