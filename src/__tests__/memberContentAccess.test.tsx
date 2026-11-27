@@ -318,6 +318,19 @@ const REGISTRY: Surface[] = [
         how: 'leaves out clients in my block store; a refusal either way opens only the closed thread, whose box is gated', proof: { by: 'suite', file, titles: [NEW] } },
     ];
   })(),
+  // COMMUNITY-DM-FORMER-REACH-M: her one former coach (GET /community/me former_coach_dms[0], b#1253) on her list and on
+  // the locked page (JoinCoachState draws this card and the registered CommunityDmThreadScreen, so it needs no row).
+  ...((): Surface[] => {
+    const file = 'screens/community/__tests__/formerCoachReach.test.tsx';
+    const MINE = 'KT-2: my block of my former coach takes her card off my list at once';
+    const MINE_LOCKED = 'KT-2: my block of my former coach takes her card off the locked page at once';
+    const SERVER = 'KT-2: when the server stops listing her (her block, a ban, a removal, she left) the card goes on the next /me read';
+    return [
+      { file: 'components/community/FormerCoach.tsx', kind: 'list', what: 'her former coach\'s card: the server\'s name and that thread\'s last active time (FormerCoachEntry reads that community\'s DM list)',
+        how: 'the server lists her only while the former-client arm is open (no block either way, no ban, still a former client: b#1253 formerClientArm); my block hides the card at once (useFormerCoach, block store) and blockSync drops the row and reads /me again; her block, a ban or a removal leaves her out of the next /me',
+        proof: { by: 'suite', file, titles: [MINE, MINE_LOCKED, SERVER] }, exports: ['FormerCoachEntry', 'useFormerCoach'] },
+    ];
+  })(),
   // FR-911: named by the fail-closed scan (a send through services/messageOutbox, a coach inbox drawn in a FlatList).
   { file: 'components/share/ShareSheet.tsx', kind: 'composer', what: '"Send to {coach}": a share card sent into the coaching chat (sendCardViaOutbox)',
     how: 'none before the send: a refused card leaves the outbox and Send goes away (shareB156), but nothing asks whether the chat is closed first',

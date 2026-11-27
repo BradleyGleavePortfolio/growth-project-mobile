@@ -7,6 +7,7 @@
 import React from 'react';
 import { AccessibilityInfo, Text } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null, MaterialIcons: () => null, Feather: () => null }));
 jest.mock('react-native-reanimated', () => {
@@ -109,7 +110,11 @@ const requiresCoachError = () => Object.assign(new Error('Request failed with st
 });
 
 async function withProvider(ui: React.ReactElement, onMessageCoach = jest.fn()) {
-  const r = await render(<EntitlementProvider onMessageCoach={onMessageCoach}>{ui}</EntitlementProvider>);
+  // COMMUNITY-DM-FORMER-REACH-M: the Community lock reads /community/me for a former coach (none here), as the app does.
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+  const r = await render(
+    <QueryClientProvider client={qc}><EntitlementProvider onMessageCoach={onMessageCoach}>{ui}</EntitlementProvider></QueryClientProvider>,
+  );
   await waitFor(() => expect(mockGetEntitlement).toHaveBeenCalled());
   await act(async () => Promise.resolve()); // the entitlement check settles inside act
   return { ...r, onMessageCoach };

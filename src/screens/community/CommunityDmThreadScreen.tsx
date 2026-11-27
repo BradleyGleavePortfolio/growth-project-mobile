@@ -7,8 +7,13 @@
  *
  * Empty conversation → Roman-voiced empty state with a primary action.
  * Standardized on semanticColors / tokens.ts.
+ *
+ * COMMUNITY-DM-FORMER-REACH-M (owner ALM-P1, ALM-D5; 203-D12, 203-D51): with her one former coach (GET /community/me
+ * former_coach_dms[0]) the thread reads that coach's community, not hers, and is Style 3's Style C page (FormerCoach.tsx):
+ * the masthead, the conversation on the sheet, the three dots' sheet, and the closed page. No new route param: the
+ * community comes from /me. `inGate` is the locked Community page's way in (no coach: JoinCoachState.tsx).
  */
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   View,
@@ -21,7 +26,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTheme } from '../../theme/useTheme';
-import { forestPop as fp, typography } from '../../theme/tokens';
+import { colors, forestPop as fp, typography } from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import {
@@ -41,17 +46,22 @@ import type { ComposerInputHandle } from '../../components/community/ComposerInp
 import { ForestStatusBar } from '../../components/StatusBarBand';
 import { describeCommunityFailure } from '../../api/communityErrors';
 import { useConversationClosed, useServerAnswered, useClosedBy, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
+import { FormerCoachClosed, FormerCoachMasthead, FormerCoachPaper, FormerCoachSheet, useFormerThread } from '../../components/community/FormerCoach';
 import type { CommunityNav, CommunityRoute } from './communityNavTypes';
-import { NO_NAME, initialsOf } from './coach-dm/coachDm';
+import { NO_NAME, dayKey, dayLabel, initialsOf } from './coach-dm/coachDm';
 
 const DM_MAX = 4000; // mirror backend SendDmDto (body 1..4000)
 
-export default function CommunityDmThreadScreen(): React.ReactElement {
+export default function CommunityDmThreadScreen({ inGate }: {
+  /** The locked page's thread (no coach, no stack): who, and Back to the page. */
+  inGate?: { recipientId: string; onBack: () => void };
+} = {}): React.ReactElement {
   const { semanticColors, colorScheme } = useTheme();
   const light = colorScheme !== 'dark';
   const navigation = useNavigation<CommunityNav>();
   const route = useRoute<CommunityRoute<'CommunityDmThread'>>();
-  const recipientId = route.params?.recipientId ?? '';
+  const recipientId = inGate?.recipientId ?? route.params?.recipientId ?? '';
+  const goBack = inGate ? inGate.onBack : () => navigation.goBack();
   const client = useCurrentUser();
   // COACH-DM-CLIENT-M: a given name wins; my own coach (client.coach_id) is named as the app knows them (useMyCoachName,
   // as the composer), "Coach" until then; anyone else, a former coach included, is NO_NAME, never "Coach".
@@ -66,7 +76,11 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
   const coachLetter = coachLine ? Array.from(initialsOf(coachLine) ?? '')[0] ?? null : null;
   const composerRef = useRef<ComposerInputHandle>(null);
   const me = useCommunityMe();
-  const workspaceId = me.data?.workspace_id ?? '';
+  const { former, gone } = useFormerThread(me.data, client?.coach_id, recipientId);
+  const workspaceId = former?.workspaceId ?? me.data?.workspace_id ?? '';
+  // Her coach now, for the former page's closed state (the list's read: usually in memory already).
+  const myCoachNow = useMyCoachName(former ? client?.coach_id : null);
+  const [about, setAbout] = useState(false);
 
   const messages = useDmMessages(workspaceId, recipientId);
   // REFINE-985R3 (P-B; LS-985R2 N5): a refused read holds no saved answer, so its re-read (a ping, the return to the
@@ -78,13 +92,19 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
   const sendDm = useSendDm(workspaceId, recipientId, client?.id ?? '');
   // BLOCK-ALL-M: a block either way (or a ban) closes the DM: no composer, and the read refusal is not an empty thread.
   // FX-872: open only once the DM read came back. Signed in with no community membership (left, removed) is closed too.
-  const noAccess = me.isSuccess && !me.data?.workspace_id;
+  const noAccess = !former && me.isSuccess && !me.data?.workspace_id;
   const { closed, open, close } = useConversationClosed(
     recipientId,
     [readError],
     useServerAnswered(messages) && workspaceId.length > 0,
-    noAccess ? true : undefined,
+    noAccess || gone ? true : undefined,
   );
+  // FIX-DMFR-M-1 C3: /me (read again on its 60 s floor) stopped listing her old coach: closed, and the thread is read
+  // once more so a block's refusal says who closed it.
+  const refetchMessages = messages.refetch;
+  useEffect(() => {
+    if (gone) void refetchMessages();
+  }, [gone, refetchMessages]);
   // BLOCK-TELL #169-5: the read refusal's code (blocked_by_you / blocked_by_them) says who closed it.
   const by = useClosedBy(recipientId, closed, { errors: [readError] });
   // FR-877R2 (LO C2): BAM-2b names them only by a name this screen was given, or, for my own coach, the bar's name
@@ -104,6 +124,12 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
   // Header-level Report / Block acts on the latest message from the other
   // person (a report needs concrete content to review).
   const latestFromOther = data.find((m) => m.sender_user_id === recipientId && !m.deleted);
+  // The former page names the coach only by the server's name; with none, the menus say "this member".
+  const authorName = former ? former.name : participantLabel;
+  const coachId = client?.coach_id ?? null;
+  const openMyCoach = coachId && !inGate ? () => navigation.replace('CommunityDmThread', { recipientId: coachId }) : undefined;
+  // Style 3 (S3_thread): the conversation and the box sit on the page's sheet, under the masthead.
+  const Body = former ? FormerCoachPaper : React.Fragment;
 
   const onSend = (body: string, idempotencyKey: string) =>
     sendDm.mutateAsync({ body, idempotencyKey }).then(
@@ -129,13 +155,14 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
       {/* FR-880R4 (Opus B2): the app's status band above takes the same deep forest, light icons, while this DM is in front. */}
       <ForestStatusBar />
       <KeyboardAvoidingView
-        style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}
+        style={[styles.flex, { backgroundColor: former ? fp.deep : semanticColors.bgPrimary }]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
+        {former ? <FormerCoachMasthead name={former.name} onBack={goBack} onAbout={closed ? undefined : () => setAbout(true)} /> : null}
         {/* FR-880R3 (Sol B2, #172-10): Voice B Studio frame 05b's deep-forest bar, open or closed; a 1:1 DM has no
             member count. REFINE-985: 05b's type and spacing (voiceB); Report / Block bare and light on the bar, as 05b's
             info button (no chip). */}
-        <ThreadHeader
+        {former ? null : <ThreadHeader
           tone="deep"
           voiceB
           title={participantLabel}
@@ -150,17 +177,19 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
               authorName={participantLabel}
               viewerUserId={client?.id}
               viewerCoachId={client?.coach_id}
-              onBlocked={() => navigation.goBack()}
+              onBlocked={goBack}
               triggerColor={fp.onDeep}
               triggerSize={22}
               testID="community-dmthread-safety"
             />
           ) : null}
           testID="community-dmthread-header"
-        />
+        />}
 
-        {closed ? (
-          <View style={styles.flex} /> /* closed: no message text, no "Start the conversation" */
+        <Body>
+        {closed ? (former
+          ? <FormerCoachClosed by={by} name={former.name} coachName={myCoachNow.name} onCoach={openMyCoach} />
+          : <View style={styles.flex} /> /* closed: no message text, no "Start the conversation" */
         ) : reading || failed ? ( /* FR-872 (Opus C2): never blank, never stuck */
           <View style={styles.center} accessibilityState={{ busy: reading }} testID="community-dmthread-state">
             <Text style={[typography.bodySmall, styles.stateText, { color: semanticColors.textMuted }]}>
@@ -190,7 +219,12 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
             inverted
             data={data}
             keyExtractor={(m) => m.id}
-            renderItem={({ item }) => (
+            renderItem={({ item, index }) => (
+              // One view per cell: an inverted list lays a cell's children out column-reverse, so two siblings would swap.
+              <View testID={`dm-cell-${item.id}`}>
+              {/* Style 3 (S3_thread .sep): the day over its first message, on the former page (the list is newest first). */}
+              {former && (index === data.length - 1 || dayKey(data[index + 1].created_at) !== dayKey(item.created_at))
+                ? <Text style={styles.day} testID={`dm-day-${item.id}`}>{dayLabel(item.created_at)}</Text> : null}
               <View style={styles.messageRow}>
                 <View style={styles.flex}>
                   <MessageBubble
@@ -205,15 +239,16 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
                     targetType="message"
                     targetId={item.id}
                     authorUserId={item.sender_user_id}
-                    authorName={participantLabel}
+                    authorName={authorName}
                     viewerUserId={client?.id}
                     viewerCoachId={client?.coach_id}
-                    onBlocked={() => navigation.goBack()}
+                    onBlocked={goBack}
                     triggerColor={light ? fp.n700 : undefined}
                     triggerSize={22}
                     testID={`dm-message-safety-${item.id}`}
                   />
                 ) : null}
+              </View>
               </View>
             )}
             contentContainerStyle={styles.list}
@@ -221,7 +256,7 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
           />
         )}
 
-        {closed ? (coach.settled ? ( // the line waits for my coach's name, as the composer's does, so it never changes
+        {closed ? (!former && coach.settled ? ( // the line waits for my coach's name, as the composer's does, so it never changes
           <ConversationClosedLine by={by} name={shownName} testID="community-dmthread-closed" />
         ) : null) : !open ? null : <ComposerInput
           ref={composerRef}
@@ -233,7 +268,12 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
           voiceB
           testID="community-dmthread-composer"
         />}
+        </Body>
       </KeyboardAvoidingView>
+      {former ? (
+        <FormerCoachSheet visible={about} name={former.name} coachId={former.coachId} reportMessageId={latestFromOther?.id ?? null}
+          onClose={() => setAbout(false)} onBlocked={goBack} />
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -247,4 +287,6 @@ const styles = StyleSheet.create({
   list: { paddingVertical: 8 },
   // REFINE-985: 05b's "•••" sits at the top of its message (B-05b-feed-1000_ios.html:130).
   messageRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  // S3_thread .sep: centred, 600 13, #3D3D3A, 6 above and 2 below.
+  day: { textAlign: 'center', fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 13, color: colors.charcoal, marginTop: 6, marginBottom: 2 },
 });

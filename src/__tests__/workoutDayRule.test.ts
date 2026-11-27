@@ -33,8 +33,9 @@ import {
 // (FR917_DAY_ROOT), so no other test's child run sees its edits.
 const ROOT = process.env.FR917_DAY_ROOT || path.resolve(__dirname, '..', '..');
 const read = (file: string) => fs.readFileSync(path.join(ROOT, file), 'utf8');
-// Other suites' mutation tests add and remove probe files in src while this
-// guard runs; a file gone between listing and reading is skipped, not a crash.
+// Mutation tests edit only their own copy of src (FLAKY-PAIR-M,
+// dayGuardPrivateCopy.test.ts); a file gone between listing and reading is
+// still skipped, not a crash.
 const readIfThere = (file: string) => {
   try { return read(file); } catch (e) { if ((e as NodeJS.ErrnoException).code === 'ENOENT') return ''; throw e; }
 };
@@ -86,6 +87,8 @@ const SAVES_AND_READS: Array<[file: string, what: string, uses: RegExp]> = [
   ['src/screens/client/progress/weekReview.ts', 'week review: workouts this week', /workoutDay\(/],
   ['src/screens/client/YouScreen.tsx', 'You: next coach workout day', /assignmentDay\(/],
   ['src/screens/client/ClientWorkoutViewerScreen.tsx', 'assigned plans: order and day label', /assignmentDay\(/],
+  // REFINE-987R3: the week helpers of Your workouts and Your weeks (the window, the one-week page, the week rows).
+  ['src/screens/client/workouts/workoutWeeks.tsx', 'Your workouts and Your weeks: which week a workout is in', /assignmentDay\(a\)/],
   ['src/components/tutorial/PlanExplanationCard.tsx', 'plan card: weekday of the assigned day', /assignmentDay\(/],
   // FOOD-DAY-STYLEC-M: the Style C food day shows today's workout from Train on its timeline.
   ['src/components/log/FoodDayView.tsx', "food day: today's workout from Train is the assignment for the shown day", /assignmentDay\(w\) === p\.selectedDate/],
@@ -366,8 +369,8 @@ const PLACED: Record<string, { why: string; lines: string[] }> = {
   'src/screens/client/progress/ProgressV2.tsx': { why: 'weigh-in days and bests already dated by progressV2.ts', lines: ['a.date.localeCompare(b.date)', 'l.date !== today', "date: today, weight: lbs", 'P.monthDay(logs[0].date)', 'short(best.date)', 'short(l.date)'] },
 };
 
-// fr917DayDiscovery.test.ts writes fr917DayProbe* files for one child run of
-// this guard (FR917_DAY_PROBE=1); any other run of the guard skips them.
+// The mutation tests write fr917DayProbe* files into their own copy of src for
+// a child run of this guard (FR917_DAY_PROBE=1); any other run skips them.
 const PROBE = /^fr917DayProbe\w*\.ts$/;
 
 function productFiles(dir: string): string[] {

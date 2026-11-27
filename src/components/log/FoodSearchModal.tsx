@@ -25,6 +25,14 @@ import MealChoiceRow from './MealChoiceRow';
 import ManualFoodEntryForm, { ManualFields } from './ManualFoodEntryForm';
 import SheetGrip from './SheetGrip';
 import { SheetGlyph } from './AddSheetGlyphs';
+import { ActionMenu } from '../messaging/ActionMenu';
+import { chooseMealPhoto, closeMealPhoto, mealPhotoBusy, mealPhotoFollows, type MealPhotoSource } from '../../utils/log/mealPhoto';
+
+// MEAL-PHOTO-M (R2): the app's ActionMenu (iOS draws its own action sheet, with its own Cancel).
+const PHOTO_ROWS = [
+  { key: 'camera', label: 'Take photo', icon: 'camera-outline' },
+  { key: 'library', label: 'Choose from library', icon: 'images-outline' },
+] as const;
 
 interface Props {
   visible: boolean;
@@ -133,6 +141,13 @@ export default function FoodSearchModal(props: Props) {
   const meal = MEAL_SECTIONS.find((s) => s.type === activeMealType)?.label;
   const at = props.savesToday?.() ? clockOf(now) : null;
   const title = at ? `Add at ${at}` : `Add to ${meal}`;
+  // MEAL-PHOTO-M: a photo kept by this sheet is let go when it closes or unmounts (R7), with one line when no food took
+  // it, and it follows the meal choice (FIX-992R2). The tile is iOS only: Android's picker copies the source's EXIF
+  // location into its re-encoded file (R3), so that part is stopped.
+  useEffect(() => (visible ? closeMealPhoto : undefined), [visible]);
+  useEffect(() => { mealPhotoFollows(activeMealType); }, [activeMealType]);
+  const [photoMenu, setPhotoMenu] = useState(false);
+  const onMealPhoto = Platform.OS === 'ios' ? () => { if (!mealPhotoBusy()) setPhotoMenu(true); } : undefined;
 
   return (
     <Modal testID="food-search-sheet" visible={visible} animationType="slide" transparent statusBarTranslucent onRequestClose={onClose}>
@@ -206,6 +221,7 @@ export default function FoodSearchModal(props: Props) {
                       onRepeatMeal={props.onRepeatMeal}
                       saving={props.saving}
                       onEnterManualMode={onEnterManualMode}
+                      onMealPhoto={onMealPhoto}
                     />
                   ) : (
                     <ManualFoodEntryForm
@@ -222,6 +238,8 @@ export default function FoodSearchModal(props: Props) {
           </View>
         </Animated.View>
       </KeyboardAvoidingView>
+      <ActionMenu visible={photoMenu} options={PHOTO_ROWS} onClose={() => setPhotoMenu(false)}
+        onSelect={(key) => { void chooseMealPhoto(activeMealType, key as MealPhotoSource); }} />
     </Modal>
   );
 }

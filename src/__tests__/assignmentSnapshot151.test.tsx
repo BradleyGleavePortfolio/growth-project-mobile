@@ -16,6 +16,8 @@ const NAMES: Record<string, string> = {
   bench: 'barbell bench press', squat: 'back squat', row: 'seated row', lunge: 'walking lunge',
 };
 const mockGetById = jest.fn();
+// REFINE-987R3 (WINDOW-1): the list shows this week and the two after; the phone's today is this file's own fixture day.
+jest.mock('../utils/date', () => ({ ...jest.requireActual('../utils/date'), getTodayString: () => '2026-10-12' }));
 jest.mock('../api/exerciseLibraryApi', () => ({
   exerciseLibraryApi: { getById: (...a: unknown[]) => mockGetById(...a) },
 }));
