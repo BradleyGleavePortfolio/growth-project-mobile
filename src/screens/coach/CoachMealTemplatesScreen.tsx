@@ -58,7 +58,7 @@ const panel = [ms.card, schemeCard, schemeCardOutline];
 export default function CoachMealTemplatesScreen({ route, navigation }: ProgramsScreenProps<'MealEditor'>) {
   const { semanticColors: sc } = useTheme();
   const list = useMealTemplates();
-  const answered = useAnsweredOnce(list);
+  const answered = !!list.data;
   const mealId = route.params?.mealId;
   const meal = answered ? list.data?.find((m) => m.id === mealId) : undefined;
   if (!mealId || meal) {
