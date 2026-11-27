@@ -1,0 +1,4 @@
+src/screens/client/foodweek/__tests__/foodWeek.model.test.ts
+src/screens/client/foodweek/__tests__/FoodWeek.test.tsx
+src/screens/client/__tests__/MoreScreen.reach.test.tsx
+src/screens/client/__tests__/YouScreen.c9s1.test.tsx
