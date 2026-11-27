@@ -214,7 +214,8 @@ export default function CommunityDmThreadScreen({ inGate }: {
             data={data}
             keyExtractor={(m) => m.id}
             renderItem={({ item, index }) => (
-              <>
+              // One view per cell: an inverted list lays a cell's children out column-reverse, so two siblings would swap.
+              <View testID={`dm-cell-${item.id}`}>
               {/* Style 3 (S3_thread .sep): the day over its first message, on the former page (the list is newest first). */}
               {former && (index === data.length - 1 || dayKey(data[index + 1].created_at) !== dayKey(item.created_at))
                 ? <Text style={styles.day} testID={`dm-day-${item.id}`}>{dayLabel(item.created_at)}</Text> : null}
@@ -242,7 +243,7 @@ export default function CommunityDmThreadScreen({ inGate }: {
                   />
                 ) : null}
               </View>
-              </>
+              </View>
             )}
             contentContainerStyle={styles.list}
             style={styles.flex}
