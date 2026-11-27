@@ -94,7 +94,7 @@ function asLogged(item: SavedMealItem): KitchenFood {
     original_unit: item.original_unit, food_item: item.food_item,
   };
   const log = foodLogFromDailyEntry(entry, '');
-  return { name: log.foodName, amount: formatPortion(log.quantity, log.unit), ok: item.food_truth === 'ok',
+  return { name: log.foodName, amount: formatPortion(log.quantity, log.unit), ok: item.food_truth === 'ok' || item.food_truth === 'held',
     kcal: log.calories, protein: log.protein };
 }
 
