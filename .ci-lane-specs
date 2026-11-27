@@ -1,0 +1,12 @@
+src/screens/community
+src/components/community
+src/components/coachless
+src/components/messaging
+src/navigation
+src/api
+src/hooks
+src/__tests__
+src/services/__tests__/pushTapStack
+src/entitlements
+src/screens/client
+src/screens/roman
