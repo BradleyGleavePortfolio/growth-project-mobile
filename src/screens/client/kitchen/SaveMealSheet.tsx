@@ -83,6 +83,7 @@ export default function SaveMealSheet({ meals, writes, onClose }: {
     const next = new Set(picks);
     if (next.has(f.id)) next.delete(f.id); else next.add(f.id);
     setPicked(next);
+    setTyped(null); // MUTATION M3
   };
 
   const save = async () => {
