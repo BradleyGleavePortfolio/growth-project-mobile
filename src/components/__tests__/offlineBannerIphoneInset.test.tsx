@@ -14,6 +14,7 @@
  * the same phone while it renders, as one phone's do at load and at render. The real SafeAreaInsetsContext.Provider
  * gives the inset; the package is not mocked.
  */
+import type { ComponentType, ReactElement } from 'react';
 import { Platform, StatusBar } from 'react-native';
 import { colors, layout } from '../../theme/tokens';
 
@@ -45,7 +46,7 @@ type Kit = {
   RNTL: typeof import('@testing-library/react-native/pure');
   flatten: (style: unknown) => Style;
   SafeAreaInsetsContext: typeof import('react-native-safe-area-context').SafeAreaInsetsContext;
-  Band: () => unknown;
+  Band: ComponentType;
   /** Makes the test's own registry answer as this phone while the band renders. */
   phone: () => void;
 };
@@ -81,8 +82,8 @@ const ANDROID = loadBand('android', 24);
 const ANDROID_NO_HEIGHT = loadBand('android', undefined);
 
 // The tree the root gives the band: the one SafeAreaProvider's insets (App.tsx), or no provider at all.
-const tree = (kit: Kit, top: number | null) => {
-  const band = kit.React.createElement(kit.Band as never);
+const tree = (kit: Kit, top: number | null): ReactElement => {
+  const band = kit.React.createElement(kit.Band);
   return top === null
     ? band
     : kit.React.createElement(kit.SafeAreaInsetsContext.Provider, { value: { top, bottom: 34, left: 0, right: 0 } }, band);
