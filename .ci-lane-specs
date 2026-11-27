@@ -1,0 +1,4 @@
+LogScreen\.foodJourney\.switchOn\.(beside|probeFix|probeMain)[0-9]+\.test\.tsx
+--setupFilesAfterEnv
+<rootDir>/jest.setup.js
+<rootDir>/.fjs-probe/stall.ci-gated.setup.js
