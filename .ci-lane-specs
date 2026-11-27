@@ -1,0 +1,5 @@
+src/screens/community
+src/components/community
+src/components/coachless
+src/components/messaging
+src/__tests__/memberContentAccess.test.tsx
