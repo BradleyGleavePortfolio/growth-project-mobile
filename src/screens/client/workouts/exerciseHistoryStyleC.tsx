@@ -42,7 +42,7 @@ export function dayLabel(date: string, spoken = false): string {
  * line. A set stored in reps, or with no unit stored, reads as above: the unit is never guessed.
  */
 export const setText = (t: TopSet, bodyWeight = true): string => (isTimedRow(t)
-  ? `${readsBW(bodyWeight, t.weight_lbs) ? 'BW' : `${t.weight_lbs} lb`} × ${t.reps}\u00a0sec`
+  ? `${readsBW(bodyWeight, t.weight_lbs) ? 'BW' : `${t.weight_lbs} lb`} × ${t.reps} sec`
   : `${readsBW(bodyWeight, t.weight_lbs) ? 'BW' : t.weight_lbs} × ${t.reps}`);
 /** A history row's set: "155 × 6 lb", "0 × 10 lb"; "BW × 12" has no unit; a timed set reads as the tile does. */
 export const rowSetText = (t: TopSet, bodyWeight = true): string =>
