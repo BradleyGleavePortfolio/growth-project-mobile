@@ -182,7 +182,9 @@ export default function SavedMealSheet({ meal, onClose, onAdded, onStale }: {
             <Text style={s.dayValue}>{WORDS.today}</Text>
           </View>
           <Text style={s.overline} accessibilityRole="header">{WORDS.meal}</Text>
-          <MealChoiceRow value={type} onChange={setType} disabled={busy} style={s.choice} testID="kitchen-meal-choice" />
+          {/* LS-KITCHEN-M-1 C1: after a lost answer the choice holds while Try again shows, so Try again resends the same
+              intent and key (one log, never a second one under another meal); any answer that lets the key go frees it. */}
+          <MealChoiceRow value={type} onChange={setType} disabled={busy || retry} style={s.choice} testID="kitchen-meal-choice" />
           {line ? (
             <Text style={s.fail} accessibilityRole="alert" accessibilityLiveRegion="polite" testID="kitchen-sheet-line">{line}</Text>
           ) : null}
