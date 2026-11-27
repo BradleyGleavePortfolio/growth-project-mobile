@@ -87,7 +87,7 @@ import { EVERY_PACKAGE_INCLUDES_COACHING } from "../../../constants/packageCoach
 import PackageDetailSurface, {
   type PackageDetailViewModel,
 } from "../../client/packageDetail/PackageDetailSurface";
-import { useScreenAreaKeyboardOffset } from "../../../ui/layout/ScreenArea";
+import { useScreenAreaKeyboardOffset, useWindowInsets } from "../../../ui/layout/ScreenArea";
 
 type ParamList = {
   CoachPackageEdit: {
@@ -138,11 +138,6 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
   // 12 pt, never a fixed 56. The keyboard-aware column stays as it was.
   const insets = useScreenInsets();
   const topBarInset = { paddingTop: insets.top + layout.statusBarGap };
-  // The buyer preview is an iOS page sheet (below the status bar); Android
-  // opens it full screen, under the status bar.
-  const previewBarInset = {
-    paddingTop: (Platform.OS === "ios" ? 0 : insets.top) + layout.statusBarGap,
-  };
   const { semanticColors, tokens } = useTheme();
   const styles = useMemo(
     () => makeStyles(semanticColors, tokens),
@@ -1052,7 +1047,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
         onRequestClose={() => setPreviewOpen(false)}
       >
         <View style={styles.container}>
-          <View style={[styles.topBar, previewBarInset]} testID="coach-package-preview-bar">
+          <PreviewBar styles={styles}>
             <TouchableOpacity
               onPress={() => setPreviewOpen(false)}
               style={styles.backBtn}
@@ -1067,7 +1062,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
             </TouchableOpacity>
             <Text style={styles.topTitle}>Buyer preview</Text>
             <View style={styles.backBtn} />
-          </View>
+          </PreviewBar>
           {/* coachPreview mode: checkout CTA is disabled and never calls a
               checkout session. No network fetch — the view model is built from
               the live draft + saved `original`. */}
@@ -1078,6 +1073,23 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
         </View>
       </Modal>
     </KeyboardAvoidingView>
+  );
+}
+
+/**
+ * The buyer preview's top bar. The preview is an iOS page sheet (below the status bar); Android opens it full screen,
+ * under the status bar. OFFLINE-BAND-ROOT-M: a Modal draws from the window's top, over the offline band, so the bar
+ * takes the window's top inset, not the screen area's (0 while the band shows).
+ */
+function PreviewBar({ styles, children }: { styles: ReturnType<typeof makeStyles>; children: React.ReactNode }) {
+  const insets = useWindowInsets();
+  const previewBarInset = {
+    paddingTop: (Platform.OS === "ios" ? 0 : insets.top) + layout.statusBarGap,
+  };
+  return (
+    <View style={[styles.topBar, previewBarInset]} testID="coach-package-preview-bar">
+      {children}
+    </View>
   );
 }
 
