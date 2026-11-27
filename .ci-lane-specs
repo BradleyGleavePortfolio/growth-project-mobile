@@ -1,0 +1,5 @@
+src/screens/coach/consultation/__tests__/coachConsultK3K4.test.tsx
+src/screens/consultation/__tests__/consultationOrdering.test.tsx
+src/screens/consultation/__tests__/consultationPrivacy.test.tsx
+src/screens/coach/consultation/steps/__tests__/practiceSteps.test.tsx
+--maxWorkers=2
