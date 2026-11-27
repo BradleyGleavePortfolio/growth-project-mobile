@@ -44,14 +44,14 @@ interface Props {
 
   onSelectFood: (food: SearchResult) => void;
   onEnterManualMode: () => void;
+  /** PLAN-SWAPS-M (R4): the plan meal's Something else: the coach's swaps over the search field, the footnote under it. */
+  planMeal?: PlanMealSheet;
 
   // Most recent earlier meal in this slot, offered as a one-tap repeat.
   repeatMeal?: PastMeal | null;
   repeatMealTitle?: string;
   onRepeatMeal?: () => void;
   saving?: boolean;
-  /** PLAN-SWAPS-M (R4): the plan meal's Something else: the coach's swaps over the search field, the footnote under it. */
-  planMeal?: PlanMealSheet;
 }
 
 const shownNumber = (value: number) => Number.isFinite(value) ? String(Math.round(value)) : '—';
@@ -124,11 +124,11 @@ export default function FoodSearchView({
   browseUnavailable,
   onSelectFood,
   onEnterManualMode,
+  planMeal,
   repeatMeal,
   repeatMealTitle,
   onRepeatMeal,
   saving,
-  planMeal,
 }: Props) {
   const { semanticColors: sc } = useTheme();
   const styles = makeStyles(sc);

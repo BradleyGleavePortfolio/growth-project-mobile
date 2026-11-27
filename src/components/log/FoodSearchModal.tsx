@@ -18,13 +18,13 @@ import { TextLink, useScreenInsets } from '../../ui';
 import { SearchResult, MEAL_SECTIONS } from '../../utils/log/types';
 import { MealType } from '../../types';
 import type { PastMeal } from '../../hooks/useFoodBrowse';
+import type { PlanMealSheet } from '../../screens/client/mealplan/planMeal';
 import { clockOf } from '../../utils/log/foodTimeline';
 import FoodSearchView from './FoodSearchView';
 import MealChoiceRow from './MealChoiceRow';
 import ManualFoodEntryForm, { ManualFields } from './ManualFoodEntryForm';
 import SheetGrip from './SheetGrip';
 import { SheetGlyph } from './AddSheetGlyphs';
-import type { PlanMealSheet } from '../../screens/client/mealplan/planMeal';
 
 interface Props {
   visible: boolean;
@@ -137,9 +137,11 @@ export default function FoodSearchModal(props: Props) {
   const now = useSheetClock(visible && !!props.savesToday);
   const meal = MEAL_SECTIONS.find((s) => s.type === activeMealType)?.label;
   const at = props.savesToday?.() ? clockOf(now) : null;
-  const title = props.planMeal ? 'Something else' : at ? `Add at ${at}` : `Add to ${meal}`;
-  const mealLine = props.planMeal ? null : at;
+  const title = at ? `Add at ${at}` : `Add to ${meal}`;
 
+  // PLAN-SWAPS-M (R4, C_something): a plan meal's Something else has its own title and no meal line.
+  const head = props.planMeal ? 'Something else' : title;
+  const mealLine = props.planMeal ? null : at;
   return (
     <Modal testID="food-search-sheet" visible={visible} animationType="slide" transparent statusBarTranslucent onRequestClose={onClose}>
       <KeyboardAvoidingView
@@ -164,8 +166,8 @@ export default function FoodSearchModal(props: Props) {
                   <SheetGrip />
                   <View style={styles.modalHeader}>
                     <View style={styles.titleBlock} accessible accessibilityRole="header"
-                      accessibilityLabel={mealLine ? `${title}, ${meal}` : title}>
-                      <Text testID="food-search-title" style={styles.modalTitle}>{title}</Text>
+                      accessibilityLabel={mealLine ? `${head}, ${meal}` : head}>
+                      <Text testID="food-search-title" style={styles.modalTitle}>{head}</Text>
                       {mealLine ? <Text testID="food-search-meal" style={styles.mealLine}>{meal}</Text> : null}
                     </View>
                     {props.addedFoodName ? (
@@ -208,12 +210,12 @@ export default function FoodSearchModal(props: Props) {
                       frequentFoods={props.frequentFoods}
                       browseUnavailable={props.browseUnavailable}
                       onSelectFood={props.onSelectFood}
+                      planMeal={props.planMeal}
                       repeatMeal={props.repeatMeal}
                       repeatMealTitle={props.repeatMealTitle}
                       onRepeatMeal={props.onRepeatMeal}
                       saving={props.saving}
                       onEnterManualMode={onEnterManualMode}
-                      planMeal={props.planMeal}
                     />
                   ) : (
                     <ManualFoodEntryForm
