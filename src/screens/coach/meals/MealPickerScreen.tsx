@@ -4,6 +4,7 @@
  * #MEAL-2 (3/3): the coach's own meals first, then the food bank (GET foods/search;
  * a coach passes its student route by role hierarchy). A food becomes one of the
  * coach's meals at the portion picked, then fills the slot.
+ * PLAN-SWAPS-COACH-M R9: Swap, Add a meal and Remove send every other slot exactly as stored (slotWrite).
  */
 import React, { useState } from 'react';
 import { Image, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -28,8 +29,8 @@ import { formatPortion } from '../../../utils/log/quickLog';
 import type { SearchResult } from '../../../utils/log/types';
 import type { ProgramsScreenProps } from '../programs/types';
 import { Chips, FirstCard, LoadFailed, Loading, Masthead, SLOT_NAMES, macroLine, mealStyles as ms, planSaveFailed, saveFailed, sortedSlots } from './mealUi';
+import { slotWrite, type SlotChange } from './mealLinks';
 
-type SlotPick = { meal_template_id: string; slot_label: SlotLabel };
 const known = (f: SearchResult) => [f.calories, f.protein, f.carbs, f.fat].every(Number.isFinite);
 /** "Per 100g · 165 kcal · P 31 · C 0 · F 4", the food log's basis words (FoodSearchView). */
 const foodLine = (f: SearchResult) => `${f.nutrient_basis === 'PER_SERVING' ? 'Per portion' : 'Per 100g'} · ${macroLine(
@@ -60,10 +61,9 @@ export default function MealPickerScreen({ route, navigation }: ProgramsScreenPr
   // The meal DTO's limits, as the meal editor (CoachMealTemplatesScreen).
   const over = !!meal && (meal.calories_kcal > 2000 || meal.protein_g > 300 || meal.carbs_g > 400 || meal.fats_g > 200);
 
-  const write = async (next: SlotPick[]) => {
+  const write = async (change: SlotChange) => {
     try {
-      const input = { slots: next.map((x, order) => ({ meal_template_id: x.meal_template_id, slot_label: x.slot_label, order })) };
-      await update.mutateAsync({ id: planId, input });
+      await update.mutateAsync({ id: planId, input: { slots: slotWrite(slots, change) } });
       void HapticService.success();
       navigation.goBack();
     } catch {
@@ -71,8 +71,8 @@ export default function MealPickerScreen({ route, navigation }: ProgramsScreenPr
     }
   };
   const pick = (id: string) => void write(current
-    ? slots.map((x) => (x === current ? { meal_template_id: id, slot_label: kind } : x))
-    : [...slots, { meal_template_id: id, slot_label: kind }]);
+    ? { kind: 'swap', id: current.id, meal: id, label: kind }
+    : { kind: 'add', meal: id, label: kind });
   const addFood = async () => {
     if (!food || !meal || !amount || over) return;
     try {
@@ -92,7 +92,7 @@ export default function MealPickerScreen({ route, navigation }: ProgramsScreenPr
   const busy = update.isPending || create.isPending;
   return (
     <Screen edges={['bottom']} contentStyle={styles.content}
-      footer={slot ? <TextLink label={`Remove ${slot}`} onPress={() => void write(slots.filter((x) => x !== current))} /> : undefined}>
+      footer={slot && current ? <TextLink label={`Remove ${slot}`} onPress={() => void write({ kind: 'remove', id: current.id })} /> : undefined}>
       <Masthead title={slot ? `Swap ${slot}` : 'Add a meal'} sub={plan.data?.name} onBack={() => navigation.goBack()}>
         <Chips items={SLOT_LABELS.map((k): [SlotLabel, string] => [k, SLOT_NAMES[k]])} value={kind} onChange={setKind} label="Meal" />
       </Masthead>
