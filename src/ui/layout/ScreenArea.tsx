@@ -16,6 +16,7 @@ import React, { createContext, useContext } from 'react';
 import { Dimensions, Platform } from 'react-native';
 import * as SafeArea from 'react-native-safe-area-context';
 import type { EdgeInsets, Rect } from 'react-native-safe-area-context';
+import { isEffectivelyOnline, useNetworkStatus } from '../../hooks/useNetworkStatus';
 
 const NO_INSETS: EdgeInsets = { top: 0, bottom: 0, left: 0, right: 0 };
 const WindowInsetsContext = createContext<EdgeInsets | null>(null);
@@ -30,6 +31,8 @@ export function ScreenArea({ children }: { children: React.ReactNode }): React.R
   const windowInsets = useNearestInsets() ?? NO_INSETS;
   const windowFrame = useNearestFrame();
   const { width, height } = Dimensions.get('window');
+  const online = isEffectivelyOnline(useNetworkStatus());
+  if (online) return <WindowInsetsContext.Provider value={windowInsets}>{children}</WindowInsetsContext.Provider>;
   // initialMetrics: the children render on the first frame, with or without a provider above; the area's own native
   // view then sends its insets and frame, and again whenever either changes (the band showing or going).
   return (
