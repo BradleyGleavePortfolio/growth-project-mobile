@@ -169,7 +169,9 @@ function reset(): void {
   gen += 1;
   account = null;
   bound = null;
+  const keptTold = [...told];
   set([]);
+  keptTold.forEach((id) => told.add(id));
   void Promise.resolve()
     .then(() => cacheStorage.getAllKeys())
     .then((keys) => Promise.all(keys.filter((k) => k.startsWith(SPACE_OUTBOX_PREFIX)).map((k) => cacheStorage.delete(k))))
