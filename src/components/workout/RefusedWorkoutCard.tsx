@@ -290,7 +290,7 @@ export function RefusedWorkoutSheet({ item, coach, again, busy, assignments, onC
   const muted = { color: sc.textMuted };
   return (
     <Modal transparent visible animationType="slide" statusBarTranslucent onRequestClose={onClose}>
-      <View style={[s.scrim, { backgroundColor: sc.overlay }]}>
+      <View style={[s.scrim, { backgroundColor: sc.overlay, paddingTop: insets.top + 8 }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel={c.close}
           testID="refused-sheet-scrim" />
         <View style={[s.sheet, { backgroundColor: sc.bgSurface, paddingBottom: insets.bottom + 16 }]} accessibilityViewIsModal
@@ -352,7 +352,8 @@ const s = StyleSheet.create({
   outlineText: { fontFamily: 'Inter_600SemiBold', fontSize: 16, lineHeight: 20, textAlign: 'center' },
   dim: { opacity: 0.6 },
   scrim: { flex: 1, justifyContent: 'flex-end' },
-  sheet: { maxHeight: '92%', borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet },
+  // s2_R4a: at its tallest the sheet reaches 8 pt under the status bar (540 pt of 568 at 320, 789 of 844 at 390).
+  sheet: { maxHeight: '100%', borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet },
   // Spacing measured from s2_R4a at 390 pt: rows 37 pt, the reason box 22 pt under the lede, buttons 8 pt apart.
   pad: { paddingHorizontal: layout.gutter },
   // B2: the body takes only the height it needs and shrinks (scrolling) when the sheet reaches its full height.
