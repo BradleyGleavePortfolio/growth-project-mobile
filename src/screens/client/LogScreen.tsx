@@ -12,10 +12,14 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import * as ReactQuery from '@tanstack/react-query';
+import * as Navigation from '@react-navigation/native';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useClientStore } from '../../store/clientStore';
 import { MealType, FoodLog } from '../../types';
 import { foodApi, logApi } from '../../services/api';
+import type { ClientTodayResponse } from '../../api/mealTemplatesApi';
+import { findPlanSlot, firstName, planMealParams, somethingElseSheet } from './mealplan/planMeal';
 import { notifyPendingFoodLogs, syncFoodLogQueue } from '../../services/foodLogSync';
 import { usePendingFoodLogCount } from '../../hooks/useFoodLogQueueSync';
 import { useNetworkStatus, isEffectivelyOnline } from '../../hooks/useNetworkStatus';
@@ -58,6 +62,11 @@ import { Screen, Headline, Overline, PrimaryButton, TextLink, QuietTextButton, u
 import HapticPressable from '../../components/HapticPressable';
 import { errorMessage } from '../../types/common';
 import { Skeleton } from '../../ui/skeletons/Skeleton';
+
+// PLAN-SWAPS-M: the tab's navigation (R7) and the app's query cache (R4) where there are any (FoodDayView's pattern);
+// none outside a navigator or a query provider (a test, a render harness).
+const NONE = React.createContext<unknown>(undefined);
+const contextOf = (c: unknown) => (c as React.Context<unknown> | undefined) ?? NONE;
 
 export default function LogScreen({ onSaved, suspended = false }: { onSaved?: () => void; suspended?: boolean }) {
   const { semanticColors: colors } = useTheme();
@@ -215,6 +224,14 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
   const [sheetLink, setSheetLink] = useState<PlanLink | undefined>(undefined);
   // UI-3d: only the Food tab's Extras "Add" (no link) lets the client switch the meal in the sheet.
   const [mealChoice, setMealChoice] = useState(false);
+  // PLAN-SWAPS-M (R4): the plan meal a "Something else" was opened for, read from the Food day's own plan and coach
+  // answers in the cache (FoodDayView.tsx:159-170, the same keys) without asking the server: the sheet adds no request.
+  const cache = React.useContext(contextOf(ReactQuery.QueryClientContext)) as ReactQuery.QueryClient | undefined;
+  const sheetPlanSlot = sheetLink?.planSlotId
+    ? findPlanSlot(cache?.getQueryData<ClientTodayResponse>(['meal-plan', 'today', selectedDate]), sheetLink.planSlotId)?.slot : undefined;
+  const planSheet = sheetPlanSlot
+    ? somethingElseSheet(sheetPlanSlot, firstName(cache?.getQueryData<{ name?: string }>(['clients', 'me', 'coach'])?.name)) : undefined;
+  const navigation = React.useContext(contextOf(Navigation.NavigationContext)) as { navigate: (name: string, params?: object) => void } | undefined;
   // FIX-930R2 (LS-930R2 B2): `manual` opens the same sheet on its manual entry form (the first day's Enter manually);
   // its Back still returns to search, and every other open starts on search.
   const openAddFood = useCallback(async (mealType: MealType, link?: PlanLink, choose = false, manual = false) => {
@@ -779,6 +796,8 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
           onRepeat={(slot) => void repeatMealTo(slot.usual?.meal ?? null, slot.mealType, { fillsUsualMeal: true })}
           onSomethingElse={(meal, link, manual) => void openAddFood(meal, link, !link, manual)}
           onEditFood={handleEditFood}
+          // R7: the Food tab has no stack; the plan meal page opens in the You stack over its home (HomeTiles.tsx:128).
+          onOpenPlanMeal={navigation ? (slotId) => navigation.navigate('MoreTab', { screen: 'PlanMeal', params: planMealParams(selectedDate, slotId), initial: false }) : undefined}
         >
         <Overline>Food log</Overline>
         <DaySelector selectedDate={selectedDate} onDateChange={handleDateChange} />
@@ -846,6 +865,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
         onMealChange={mealChoice ? setActiveMealType : undefined}
         // REFINE-968 (ruling 3): "Add at {time}" only when a save now files under today, by the save's own day rule.
         savesToday={() => dayForNewLog({ selectedDate, selectedOn }) === getTodayString()}
+        planMeal={planSheet}
         addedFoodName={addedFoodName}
         onClose={() => {
           if (!foodSaving) {
@@ -884,7 +904,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
         saving={foodSaving}
         portionPicker={quantityModalVisible ? (
           <QuantityPickerContent
-            mealLabel={MEAL_SECTIONS.find((s) => s.type === activeMealType)?.label}
+            mealLabel={planSheet?.label ?? MEAL_SECTIONS.find((s) => s.type === activeMealType)?.label}
             selectedFood={selectedFood}
             quantityInput={quantityInput}
             selectedUnit={selectedUnit}
