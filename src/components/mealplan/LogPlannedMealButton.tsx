@@ -79,7 +79,7 @@ function sheetProblem(values: Values, type: MealType | null): string | null {
 
 // Log, Home and Macros read today's food from the shared day store and the
 // ['food', 'log', date] query; refresh both after a write.
-function refreshFoodLog() {
+export function refreshFoodLog() {
   void queryClient.invalidateQueries({ queryKey: ['food', 'log'] });
   const userId = readUserCacheSync()?.id;
   const store = useClientStore.getState();
