@@ -37,11 +37,13 @@ jest.mock('../../../../services/api', () => ({
   default: { post: (...a: unknown[]) => mockPost(...a), get: jest.fn(async () => ({ data: {} })), delete: jest.fn(async () => ({ data: {} })) },
 }));
 const mockDisk = new Map<string, string>();
+// Every write to the phone's stores over a case, not only what is left at its end (T8: "never hold").
+const mockWrites: unknown[] = [];
 jest.mock('../../../../storage/mmkv', () => ({
   cacheStorage: {
     getString: () => undefined,
     getStringAsync: async (k: string) => mockDisk.get(k),
-    set: async (k: string, v: string) => { mockDisk.set(k, v); },
+    set: async (k: string, v: string) => { mockWrites.push([k, v]); mockDisk.set(k, v); },
     delete: async (k: string) => { mockDisk.delete(k); },
     getAllKeys: async () => [...mockDisk.keys()],
   },
@@ -274,7 +276,7 @@ type Row17 = {
   name: string; at: 'link' | 'upload' | 'send'; answer: () => void;
   sees: 'gone' | 'not sent' | 'sent'; alert: string | null; links: number; uploads: number; sends: number; deleted: boolean; reread: boolean;
 };
-const W5 = "This photo can't be posted. It didn't pass our automatic check.";
+const W5 = "This photo can't be posted. It didn't pass the automatic check.";
 const W6 = "This photo can't be used. Choose another one.";
 const ROWS17: Row17[] = [
   { name: 'call 1: 404 community.cohort.not_found (not let in)', at: 'link', answer: () => { linkAnswers.push(reject(fail(404, { error: 'not_found', code: 'community.cohort.not_found' }))); }, sees: 'gone', alert: null, links: 1, uploads: 0, sends: 0, deleted: true, reread: true },
@@ -526,6 +528,13 @@ describe('SCM4 T7: the account fence', () => {
 
 describe('SCM4 T8: nothing saved', () => {
   it('SCM4 T8: over a whole send, a failure and a sign-out, no store, cache, log, report or event holds the file, the link or the key', async () => {
+    mockWrites.length = 0;
+    const asyncWrites = [
+      jest.spyOn(AsyncStorage, 'setItem'), jest.spyOn(AsyncStorage, 'mergeItem'),
+      jest.spyOn(AsyncStorage, 'multiSet'), jest.spyOn(AsyncStorage, 'multiMerge'),
+    ];
+    const cached: unknown[] = [];
+    const unwatch = qc.getQueryCache().subscribe((e) => { cached.push([e.query.queryKey, e.query.state.data]); });
     startSpaceOutbox('me-1');
     await pick();
     sendAnswers.push(reject(fail(500)), reject(fail(422, { code: 'PHOTO_NOT_ALLOWED' })));
@@ -543,7 +552,10 @@ describe('SCM4 T8: nothing saved', () => {
       JSON.stringify(qc.getQueryCache().getAll().map((q) => [q.queryKey, q.state.data])),
       JSON.stringify(qc.getMutationCache().getAll().map((m) => m.state)),
       JSON.stringify([mockCapture.mock.calls, mockTrack.mock.calls, mockLog.mock.calls]),
+      JSON.stringify([mockWrites, asyncWrites.map((w) => w.mock.calls), cached]),
     ].join('\n');
+    unwatch();
+    asyncWrites.forEach((w) => w.mockRestore());
     for (const s of secrets) expect(kept).not.toContain(s);
     expect(mockCapture).not.toHaveBeenCalled();
   });

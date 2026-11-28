@@ -212,7 +212,7 @@ const BY_CODE: Record<string, string> = {
   'community.image.has_location': "This photo can't be used. Choose another one.",
   'community.image.not_jpeg': "This photo can't be used. Choose another one.",
   'community.image.too_large': "This photo can't be used. Choose another one.",
-  PHOTO_NOT_ALLOWED: "This photo can't be posted. It didn't pass our automatic check.",
+  PHOTO_NOT_ALLOWED: "This photo can't be posted. It didn't pass the automatic check.",
 };
 
 /**
