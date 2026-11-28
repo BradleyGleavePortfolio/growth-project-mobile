@@ -24,6 +24,11 @@ import { calcMacros } from '../../utils/log/macros';
 import { SheetGlyph } from './AddSheetGlyphs';
 import { MealArt } from '../../screens/client/mealplan/planStyleC';
 import type { PlanMealSheet } from '../../screens/client/mealplan/planMeal';
+import SavedMealsTab, { DOOR_WORDS, type SavedPart } from './SavedMealsTab';
+
+/** The sheet's browse tabs; 'saved' (KITCHEN-DOOR-M) only in a sheet passed its saved part. */
+export type BrowseTab = 'recent' | 'frequent' | 'saved';
+const TAB_WORDS: Record<BrowseTab, string> = { recent: 'Recent', frequent: 'Frequent', saved: DOOR_WORDS.tab };
 
 interface Props {
   searchQuery: string;
@@ -36,8 +41,8 @@ interface Props {
   searchResults: SearchResult[];
   didYouMean: SearchResult[];
 
-  recentTab: 'recent' | 'frequent';
-  onRecentTabChange: (tab: 'recent' | 'frequent') => void;
+  recentTab: BrowseTab;
+  onRecentTabChange: (tab: BrowseTab) => void;
   recentFoods: SearchResult[];
   frequentFoods: SearchResult[];
   // No day of the week could be read: an empty list is not "nothing logged".
@@ -55,6 +60,8 @@ interface Props {
   saving?: boolean;
   /** MEAL-PHOTO-M: opens the photo chooser; absent (Android, R3), column 2 stays empty as before. */
   onMealPhoto?: () => void;
+  /** KITCHEN-DOOR-M (R3): the Saved meals tab, only in a sheet with no plan or usual-meal link. */
+  saved?: SavedPart;
 }
 
 const shownNumber = (value: number) => Number.isFinite(value) ? String(Math.round(value)) : '—';
@@ -138,6 +145,7 @@ export default function FoodSearchView({
   onRepeatMeal,
   saving,
   onMealPhoto,
+  saved,
 }: Props) {
   const { semanticColors: sc } = useTheme();
   const styles = makeStyles(sc);
@@ -153,6 +161,8 @@ export default function FoodSearchView({
   // PLAN-SWAPS-M (C_something): the swaps show until she types a search; with them on screen the field waits for a tap,
   // as drawn (no keyboard over the swaps).
   const swaps = planMeal && !searchingNow ? planMeal.swaps : [];
+  // KITCHEN-DOOR-M: with Saved meals chosen and no search typed, the tab replaces the whole list (rows, header, empty line).
+  const savedOn = !!saved && recentTab === 'saved' && !searchingNow;
 
   const top = (
     <>
@@ -254,7 +264,7 @@ export default function FoodSearchView({
             accessibilityRole="button"
             accessibilityLabel={`${repeatMealTitle}: add all ${repeatMeal.entries.length} ${repeatMeal.entries.length === 1 ? 'food' : 'foods'}`}
           >
-            {saving ? (
+            {saving && !saved?.savingId ? (
               <ActivityIndicator size="small" color={sc.accentText} />
             ) : (
               <Text style={styles.repeatButtonText}>Add all</Text>
@@ -265,7 +275,7 @@ export default function FoodSearchView({
 
       {searchQuery.length < 2 && (
         <View style={styles.tabRow} testID="food-search-tabs">
-          {(['recent', 'frequent'] as const).map((tab) => (
+          {(saved ? (['recent', 'frequent', 'saved'] as const) : (['recent', 'frequent'] as const)).map((tab) => (
             <HapticPressable
               key={tab}
               intent="light"
@@ -275,7 +285,7 @@ export default function FoodSearchView({
               accessibilityRole="tab"
               accessibilityState={{ selected: recentTab === tab }}
             >
-              <Text style={[styles.tabChipText, recentTab === tab && styles.tabChipTextActive]}>{tab === 'recent' ? 'Recent' : 'Frequent'}</Text>
+              <Text style={[styles.tabChipText, recentTab === tab && styles.tabChipTextActive]}>{TAB_WORDS[tab]}</Text>
             </HapticPressable>
           ))}
         </View>
@@ -300,7 +310,7 @@ export default function FoodSearchView({
   return (
     <View style={styles.modalBody}>
       {planMeal ? null : top}
-      <FlatList
+      {savedOn && saved ? <SavedMealsTab part={saved} saving={saving} listStyle={styles.searchList} /> : <FlatList
         data={showList}
         keyExtractor={(item, index) => `${item.id || item.name}-${index}`}
         ListHeaderComponent={withTop(
@@ -336,7 +346,7 @@ export default function FoodSearchView({
         ) : null}
         contentContainerStyle={styles.searchList}
         keyboardShouldPersistTaps="handled"
-      />
+      />}
 
     </View>
   );
@@ -417,6 +427,9 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   // only named for Roman).
   tabRow: {
     flexDirection: 'row',
+    // KITCHEN-DOOR-M (R2): three tabs wrap where they do not fit (P_food_ios320_130); two never wrap.
+    flexWrap: 'wrap',
+    rowGap: 1,
     marginHorizontal: layout.gutter,
     marginTop: 10,
     marginBottom: 2,
