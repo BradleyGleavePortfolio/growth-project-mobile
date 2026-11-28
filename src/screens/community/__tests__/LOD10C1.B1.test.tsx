@@ -173,10 +173,10 @@ beforeEach(() => {
 afterEach(() => jest.restoreAllMocks());
 
 /** The native screen (react-native-screens) that hosts New space: the host node with onDismissed above the page. */
-function nativeScreenOf(view: View) {
-  const page = view.getByTestId('coach-new-space');
-  let node: { parent: unknown; props: Record<string, unknown>; type: unknown } | null = page as never;
-  while (node && !(typeof node.type === 'string' && typeof node.props.onDismissed === 'function')) node = node.parent as never;
+type HostNode = { parent: HostNode | null; props: Record<string, unknown>; type: unknown };
+function nativeScreenOf(view: View): HostNode {
+  let node: HostNode | null = view.getByTestId('coach-new-space') as unknown as HostNode;
+  while (node && !(typeof node.type === 'string' && typeof node.props.onDismissed === 'function')) node = node.parent;
   if (!node) throw new Error('no native screen above New space');
   return node;
 }
