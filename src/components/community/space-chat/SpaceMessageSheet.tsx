@@ -2,8 +2,8 @@
  * SC-M3 (agent 184): the sheet a press and hold on a space chat row opens (GOAL C6CHAT-S-V2 c04, without its reactions:
  * one white sheet, 24 top corners, a grab, icon rows). Reply and Copy carry MessageActionSheet's labels and icons; Copy is
  * on text rows only. The sheet's Cancel and its scrim's "Close" are the space info sheet's and SafetyMenu's.
- * Report, Block and Delete stay on the row's own ••• (SafetyMenu, unchanged): SafetyMenu keeps its sheet's open state
- * inside it, so this sheet cannot run its flows without a change to SafetyMenu (m#877's file; SC-M3 READY, BLOCKED part).
+ * Delete and the coach's Remove stay on the row's own ••• (SafetyMenu); Report and Block {name} are below (REPORT-ANY-M),
+ * each run by the row's own SafetyMenu flow through its way in once this sheet has gone, so this sheet runs no flow.
  * As in SafetyMenu, on iOS what a row does runs once the sheet has gone (the Modal's onDismiss), so the keyboard Reply
  * brings up never meets a closing sheet.
  * REPORT-ANY-M (#200-S4, c04): Report and Block {name} after Copy, in c04's order. Each runs the row's own SafetyMenu

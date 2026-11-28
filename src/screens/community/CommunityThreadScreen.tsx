@@ -290,7 +290,7 @@ export default function CommunityThreadScreen(): React.ReactElement {
                 style={[styles.comment, { borderBottomColor: semanticColors.border }]}
                 testID={`comment-${item.id}`}
               >
-                <SafetyHold hold={replyRemoved ? undefined : holds.hold(item.id)} style={styles.flex}>
+                <SafetyHold hold={replyRemoved || (client?.id && item.author_user_id === client.id) ? undefined : holds.hold(item.id)} style={styles.flex}>
                   {meta ? (
                     <Text testID={`comment-meta-${item.id}`}
                       style={[styles.meta, { color: semanticColors.textMuted }]}>

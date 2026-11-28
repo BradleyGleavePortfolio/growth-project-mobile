@@ -13,10 +13,10 @@
  *     count, FR-871R6 Opus B3), so a banned member never gets a box to type in (owner 10-22 ban ruling).
  *   - Announcements (a coach-posting space): members get no composer, only "Only your coach posts here."; the coach
  *     posts as usual. A member who chooses Reply on the coach's post gets the field until the reply is sent or cancelled.
- *   - SC-M3 (agent 184, owner #167-5 TEXT-REPLIES): press and hold a row for the sheet (Reply, Copy; SpaceMessageSheet).
+ *   - SC-M3 (agent 184, owner #167-5 TEXT-REPLIES): press and hold a row for SpaceMessageSheet (Reply, Copy, Report, Block).
  *     Reply puts ReplyComposer above the field (no mic while it is set) and the text goes with parent_message_id; a
- *     reply draws its quote (SpaceReplyQuote), which scrolls to the message when it is loaded here. Report, Block and
- *     Delete stay on the row's own ••• (SafetyMenu, unchanged).
+ *     reply draws its quote (SpaceReplyQuote), which scrolls to the message when it is loaded here. REPORT-ANY-M: Report
+ *     and Block run the row's own SafetyMenu flow once the sheet has gone; Delete and the coach's Remove stay on the •••.
  *     FR-909: reply mode and the sheet follow the message (useSpaceChat): a removal, a delete, a block or a closed space
  *     ends reply mode and closes the sheet, Copy reads the message as it is when it runs, and a member's reply refused
  *     for its words in Announcements keeps the field until it is back in it (LO-909 B2).
