@@ -250,6 +250,7 @@ export default function VoiceNotesSection({
                   tone={coach ? 'coach' : 'light'}
                   offline={!outbox.online}
                   onPlaybackError={() => void feed.refetch()}
+                  hold={holds.hold(note.id)}
                   testID={`${testID}-player-${note.id}`}
                 />
               )}

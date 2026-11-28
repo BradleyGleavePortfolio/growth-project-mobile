@@ -350,6 +350,7 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
               tone={coach ? 'coach' : 'light'}
               offline={!online}
               onPlaybackError={() => void note.refetch()}
+              hold={holds.hold('note')}
               testID="community-voice-detail-player"
             />
           )}
