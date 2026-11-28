@@ -89,7 +89,8 @@ export function syncFoodLogQueue(): Promise<number> {
     let flushed = 0;
     try {
       const inDay = featureFlags.offlineFoodInDay;
-      flushed = (await flushFoodLogQueue()).flushed;
+      const result = await flushFoodLogQueue();
+      flushed = result.flushed;
       const userId = readUserCacheSync()?.id;
       if (flushed > 0 && userId) {
         const store = useClientStore.getState();
@@ -101,6 +102,9 @@ export function syncFoodLogQueue(): Promise<number> {
           const sent = await readSentSafe();
           if (sent) store.holdSentFoods?.(sent);
         }
+        // MEALPLAN-PAGE-FRESH-M (SWEEP-INT-CLIENT N1): each other day its foods went to is refreshed too, which marks
+        // that day's log for every reader of it (the meal plan page on today while the Food tab shows another day).
+        for (const day of new Set(result.days)) if (day !== store.selectedDate) void store.refreshShownDay(userId, day);
         await store.refreshShownDay(userId, store.selectedDate);
       }
     } catch (err) {

@@ -7,6 +7,7 @@ import { foodLogFromDailyEntry, type DailyLogEntry } from '../utils/log/dailyEnt
 import { forgetSaveKeys, waterDayShown, withSaveKey } from '../utils/log/saveKey';
 import { dayForNewLog } from '../utils/logDay';
 import { featureFlags } from '../config/featureFlags';
+import { appQueryClient } from '../lib/blockSync';
 import {
   dropQueued, enqueueWaterWeight, flush, readQueue, readSent, readWaterWeight, settleSent, settleSentWater,
   type PendingFoodLog, type PendingWaterWeightLog, type SentFoodLog, type SentWaterWeightLog,
@@ -336,6 +337,10 @@ export const useClientStore = create<ClientStore>((set, get) => ({
   },
 
   refreshShownDay: async (userId: string, date: string) => {
+    // MEALPLAN-PAGE-FRESH-M (SWEEP-INT-CLIENT B1): work on this day's log finished, so every other reader of the day's
+    // log (['food','log',date]: the meal plan page, the plan meal page, Food this week, the Kitchen, Macro targets)
+    // reads it again, an open one now and the next one on open. Shown day or not: the write happened either way.
+    void appQueryClient()?.invalidateQueries({ queryKey: ['food', 'log', date] });
     if (get().selectedDate !== date) return;
     await get().loadDayData(userId, date);
   },
