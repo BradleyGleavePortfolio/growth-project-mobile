@@ -1,0 +1,8 @@
+src/hooks/__tests__/SweepFoodLog.B2.targetsForeground.btest.test.ts
+src/hooks/__tests__/useMacroTargets.refresh.test.tsx
+src/hooks/__tests__/useMacroTargets.test.ts
+src/screens/client/__tests__/HomeScreen.macroMode.test.tsx
+src/screens/client/progress/__tests__/ProgressV2.test.tsx
+src/screens/client/progress/__tests__/progressStrengthUnit.test.tsx
+src/__tests__/memberContentAccess.test.tsx
+src/components/roman/__tests__/romanP3HostWiring.test.tsx
