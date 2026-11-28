@@ -1,0 +1,16 @@
+src/screens/client/kitchen/__tests__/EditMeal.test.tsx
+src/screens/client/kitchen/__tests__/FIXKM1.sheetSend.test.tsx
+src/screens/client/kitchen/__tests__/FIXKM2.reopenKey.test.tsx
+src/screens/client/kitchen/__tests__/Kitchen.test.tsx
+src/screens/client/kitchen/__tests__/LOKitchenM1.B1.todayLoads.btest.test.tsx
+src/screens/client/kitchen/__tests__/LOKitchenM1.B2.addedBarRow.btest.test.tsx
+src/screens/client/kitchen/__tests__/LO_SMS1.b1.nameWraps.test.tsx
+src/screens/client/kitchen/__tests__/SaveMeal.test.tsx
+src/screens/client/kitchen/__tests__/kitchen.model.test.ts
+src/screens/client/kitchen/__tests__/kitchenAdd.test.ts
+src/screens/client/kitchen/__tests__/saveMeal.model.test.ts
+src/__tests__/screenAreaCensus.test.ts
+src/__tests__/keyboardSafeSheets.test.tsx
+scripts/__tests__/routeContract.test.js
+src/screenshots/__tests__/storeFrameRoutes.test.tsx
+scripts/__tests__/allSwitchesOnRequired.test.js
