@@ -110,7 +110,6 @@ export function KitchenSheet({ visible, title, onClose, busy = false, children, 
   // With a pinned foot, the fade shows while the body has more below than it shows (S2_save); never without a foot.
   const [list, setList] = useState({ view: 0, content: 0, y: 0 });
   const scroll = useRef<ScrollView>(null);
-  useEffect(() => { if (toTop) scroll.current?.scrollTo({ y: 0, animated: false }); }, [toTop]);
   const more = !!footer && list.content > list.view + 1 && list.y + list.view < list.content - 1;
   const fit = keyboard > 0
     ? { maxHeight: height - keyboard - Math.max(16, top + 8), paddingBottom: 12 }
