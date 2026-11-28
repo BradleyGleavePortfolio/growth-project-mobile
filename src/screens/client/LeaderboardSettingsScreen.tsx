@@ -35,6 +35,7 @@ import {
 } from '../../services/leaderboardApi';
 import { contentRejectedMessage } from '../../api/communitySafetyApi';
 import { Screen } from '../../ui';
+import { useScreenAreaKeyboardOffset } from '../../ui/layout/ScreenArea';
 
 // ─── Explainer component ──────────────────────────────────────────────────────
 
@@ -87,6 +88,7 @@ function MeasuredExplainer({ styles }: { styles: ReturnType<typeof makeStyles> }
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function LeaderboardSettingsScreen() {
+  const keyboardOffset = useScreenAreaKeyboardOffset();
   const { semanticColors: sc } = useTheme();
   const styles = useMemo(() => makeStyles(sc), [sc]);
   const [loading, setLoading]           = useState(true);
@@ -186,7 +188,7 @@ export default function LeaderboardSettingsScreen() {
 
   return (
     <Screen edges={['top']} scroll={false} header={backBar} contentStyle={styles.bare} testID="leaderboard-settings-screen">
-      <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView keyboardVerticalOffset={keyboardOffset} style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
 
           {/* Header */}

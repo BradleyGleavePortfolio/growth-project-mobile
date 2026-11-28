@@ -40,6 +40,7 @@ import {
 import { generateIdempotencyKey } from "../../../utils/idempotency";
 import { FailureBox, LoadingRow, SmallButton } from "./ProgramUi";
 import type { ProgramsScreenProps } from "./types";
+import { useScreenAreaKeyboardOffset } from "../../../ui/layout/ScreenArea";
 
 const GOAL_SUGGESTIONS = [
   "Intro",
@@ -114,6 +115,7 @@ function ProgramForm({
   navigation: ProgramsScreenProps<"ProgramForm">["navigation"];
   existing?: Existing;
 }) {
+  const keyboardOffset = useScreenAreaKeyboardOffset();
   const { colors } = useTheme();
   const qc = useQueryClient();
   const invalidate = useInvalidatePrograms();
@@ -247,6 +249,7 @@ function ProgramForm({
 
   return (
     <KeyboardAvoidingView
+      keyboardVerticalOffset={keyboardOffset}
       style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
