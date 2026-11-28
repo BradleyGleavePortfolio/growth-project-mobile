@@ -10,16 +10,23 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Modal, Platform, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { SheetHairline } from './SpaceStreamLines';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, forestPop as fp, neutral, radius, spacing, withAlpha } from '../../../theme/tokens';
 
 export interface SpaceMessageSheetProps {
+  /** LEAVE-MUTE-M (D2b, Style 1 s1_L8): the held message's thread as the server keeps it for her (null: neither). */
+  thread?: 'muted' | 'left' | null;
+  /** Mute thread (LM-01), or Unmute thread (LM-02) on a muted one; given only on a thread's first message. */
+  onMuteThread?: () => void;
+  /** Leave thread (LM-03), or Follow thread (LM-04) on a left one. */
+  onLeaveThread?: () => void;
   onReply?: () => void;
   onCopy?: () => void;
   onClose: () => void;
 }
 
-export default function SpaceMessageSheet({ onReply, onCopy, onClose }: SpaceMessageSheetProps): React.ReactElement {
+export default function SpaceMessageSheet({ onReply, onCopy, onClose, thread, onMuteThread, onLeaveThread }: SpaceMessageSheetProps): React.ReactElement {
   const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(true);
   const after = useRef<(() => void) | null>(null);
@@ -50,6 +57,11 @@ export default function SpaceMessageSheet({ onReply, onCopy, onClose }: SpaceMes
           <View style={s.grab} />
           {onReply ? row('return-up-back-outline', 'Reply', onReply, 'reply') : null}
           {onCopy ? row('copy-outline', 'Copy', onCopy, 'copy') : null}
+          {onMuteThread || onLeaveThread ? <SheetHairline /> : null}
+          {onMuteThread ? (thread === 'muted' ? row('notifications-outline', 'Unmute thread', onMuteThread, 'unmute-thread')
+            : row('notifications-off-outline', 'Mute thread', onMuteThread, 'mute-thread')) : null}
+          {onLeaveThread ? (thread === 'left' ? row('return-down-forward-outline', 'Follow thread', onLeaveThread, 'follow-thread')
+            : row('exit-outline', 'Leave thread', onLeaveThread, 'leave-thread')) : null}
           <TouchableOpacity onPress={() => close()} accessibilityRole="button" accessibilityLabel="Cancel" style={s.cancel} testID="space-chat-sheet-cancel">
             <Text style={s.cancelText}>Cancel</Text>
           </TouchableOpacity>
