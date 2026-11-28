@@ -25,6 +25,8 @@ jest.mock("../../../../theme/ThemeProvider", () => ({
   useTheme: () => ({ colors: new Proxy({}, { get: () => "#123456" }) }),
 }));
 jest.mock("@tanstack/react-query", () => ({
+  // services/queryClient.ts builds a real client when it loads (reached via m#1000's RefusedWorkoutCard and sync-engine).
+  QueryClient: jest.requireActual("@tanstack/react-query").QueryClient,
   useQueryClient: () => ({
     setQueryData: jest.fn(),
     invalidateQueries: jest.fn(),

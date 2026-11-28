@@ -2,7 +2,8 @@
  * "Log this meal" on a planned meal (ClientDailyMealPlanScreen).
  *
  * One tap adds the meal to today's food log when the plan gives calories,
- * protein, carbs and fat and its slot names a log meal. Otherwise a sheet asks
+ * protein, carbs and fat and its slot names a log meal (every plan slot does:
+ * pre and post-workout log to Snacks, as the Food day counts them). Otherwise a sheet asks
  * only for what the plan does not say (the meal, a missing value); a missing
  * value is never logged as zero. The write is the Food log's manual-entry path
  * (utils/log/logSubmit): online it creates the food and the entry and offers
@@ -17,6 +18,7 @@ import { layout, radius, spacing, typography, type SemanticTokens } from '../../
 import type { MealType } from '../../types';
 import type { DailyMealPlanSlot } from '../../api/mealTemplatesApi';
 import { MEAL_SECTIONS } from '../../utils/log/types';
+import { logMealOfSlot } from '../../utils/log/foodDay';
 import { FoodLogValidationError, submitManualLogOffline, submitManualLogOnlineWithId } from '../../utils/log/logSubmit';
 import { logApi } from '../../services/api';
 import { notifyPendingFoodLogs } from '../../services/foodLogSync';
@@ -51,9 +53,14 @@ function parseAmount(raw: string): number | null {
   return isAmount(n) ? n : null;
 }
 
-/** The food-log meal a plan slot names, or null when it names none (pre-workout, "09:30"). */
+/**
+ * The food-log meal a plan slot names, or null when it names none ("09:30"). PREWORKOUT-EATEN-M: a plan slot logs to
+ * the meal the Food day's eaten rule counts it under (foodDay.ts logMealOfSlot; pre and post-workout: Snacks).
+ */
 export function mealTypeForSlot(slot?: string | null): MealType | null {
   const s = (slot ?? '').toLowerCase().replace(/^day\s+\d+\s*[–-]\s*/, '').trim();
+  const planned = logMealOfSlot(s);
+  if (planned) return planned;
   if (s.startsWith('breakfast')) return 'breakfast';
   if (s.startsWith('lunch')) return 'lunch';
   if (s.startsWith('dinner')) return 'dinner';
@@ -79,7 +86,7 @@ function sheetProblem(values: Values, type: MealType | null): string | null {
 
 // Log, Home and Macros read today's food from the shared day store and the
 // ['food', 'log', date] query; refresh both after a write.
-function refreshFoodLog() {
+export function refreshFoodLog() {
   void queryClient.invalidateQueries({ queryKey: ['food', 'log'] });
   const userId = readUserCacheSync()?.id;
   const store = useClientStore.getState();

@@ -148,7 +148,7 @@ it('UI-3d: Something else keeps the plan meal and shows no meal choice, and the 
     meal_template: { name: 'Greek yogurt bowl', calories_kcal: 210, protein_g: 30, carbs_g: 20, fats_g: 5, items: [] } }] } }] };
   await show();
   await fireEvent.press(await screen.findByText('Something else'));
-  expect(await screen.findByTestId('food-search-meal')).toHaveTextContent('Snacks');
+  expect(await screen.findByTestId('food-search-title')).toHaveTextContent('Something else');
   expect(screen.queryByTestId('food-search-meals')).toBeNull();
   await fireEvent.press(screen.getByLabelText('Close food search'));
   await fireEvent.press(await screen.findByTestId('food-day-add'));

@@ -19,20 +19,27 @@ import type {
 import api from '../services/api';
 import { isScreenshotMode } from './mode';
 import type { LtvMetrics } from '../components/command-center/CoachLtvDashboard';
+import type { CoachAIBudgetResponse } from '../api/types/coachAIBudget';
 import {
   DEMO_AUTH_ME,
   DEMO_COMMUNITY_FEED,
   DEMO_DAILY_TOTAL_ML,
+  DEMO_EXERCISES,
   DEMO_FASTING_HISTORY,
   DEMO_FOOD_LOGS,
   DEMO_HABITS,
   DEMO_MEAL_PLAN_TODAY,
   DEMO_MESSAGES,
+  DEMO_MESSAGES_INBOX,
+  DEMO_MESSAGES_PINS,
   DEMO_RECIPES,
   DEMO_USER,
+  DEMO_WEARABLE_CONNECTIONS,
   DEMO_WEIGHT_HISTORY,
+  DEMO_WORKOUT_HISTORY,
   DEMO_ROMAN_SESSION,
   DEMO_ROMAN_MESSAGES,
+  demoWearableSamples,
 } from './fixtures';
 
 type Handler = (
@@ -117,9 +124,18 @@ const ROUTES: Route[] = [
   { method: 'GET',  pattern: /^\/habits\/logs/,             handler: () => [] },
 
   // Workouts ─────────────────────────────────────────────────────────────────
+  // The saved-workout list (Home and the live workout's "previous" sets); other /workouts reads stay empty.
+  { method: 'GET',  pattern: /^\/workouts$/,                handler: () => DEMO_WORKOUT_HISTORY },
   { method: 'GET',  pattern: /^\/workouts/,                 handler: () => [] },
   { method: 'GET',  pattern: /^\/routines$/,                handler: () => [] },
+  // The live workout's catalog read by id (exerciseByIdQuery, for body weight).
+  // Only the demo workout's ids match; any other id stays a loud miss.
+  { method: 'GET', pattern: new RegExp(`^/exercises/(${Object.keys(DEMO_EXERCISES).join('|')})$`),
+    handler: (_c, m) => DEMO_EXERCISES[m[1] as keyof typeof DEMO_EXERCISES] },
   { method: 'GET', pattern: /^\/assignments\/me$/, handler: () => [] },
+  // Home's rings layout (clientHomeRings): the Steps tile and the Sleep dial.
+  { method: 'GET', pattern: /^\/v1\/wearables\/connections$/, handler: () => DEMO_WEARABLE_CONNECTIONS },
+  { method: 'GET', pattern: /^\/v1\/wearables\/samples$/, handler: (config) => demoWearableSamples(config.params ?? {}) },
   { method: 'GET', pattern: /^\/me\/macros\/current$/, handler: () => ({ calories_kcal: 2200, protein_g: 165, carbs_g: 230, fats_g: 70 }) },
   { method: 'GET', pattern: /^\/v1\/clients\/me\/coach$/, handler: () => ({ id: DEMO_USER.coach_id, name: 'Sam Carter' }) },
   { method: 'GET', pattern: /^\/coach\/team\/members$/, handler: () => [{ id: DEMO_USER.coach_id, role: 'head_coach' }] },
@@ -151,6 +167,19 @@ const ROUTES: Route[] = [
     at_risk_count: 0, win_streak_count: 6, unread_messages: 2, pending_actions: 0,
   }) },
   { method: 'GET', pattern: /^\/coach\/command-center\/at-risk$/, handler: () => ({ items: [], total_at_risk: 0 }) },
+  // Coach Home v11 (coachHomeV11 with coachTabsV2): as calm as the overview above (no alerts, nothing
+  // waiting for approval, no plan ended this week, no new notification), and a fifth of the AI budget used.
+  { method: 'GET', pattern: /^\/coach\/command-center\/action-queue$/, handler: () => ({ items: [], total_pending: 0 }) },
+  { method: 'GET', pattern: /^\/ai\/gateway\/drafts$/, handler: () => ({ items: [], next_cursor: null }) },
+  { method: 'GET', pattern: /^\/v1\/coach\/churned-clients$/, handler: () => ({ items: [], total: 0, time_zone: null, next_cursor: null }) },
+  { method: 'GET', pattern: /^\/notifications$/, handler: () => ({ items: [], nextCursor: null }) },
+  { method: 'GET', pattern: /^\/coach\/ai\/budget$/, handler: () => ({
+    period_start: '2026-05-01T00:00:00Z', period_end: '2026-06-01T00:00:00Z',
+    base_displayed_cents: 12500, pack_displayed_cents: 0, total_displayed_cents: 12500,
+    used_displayed_cents: 2500, remaining_displayed_cents: 10000, pct_used: 20,
+    base_actual_cents: 4000, value_multiplier: '3.125', actual_used_cents: 800,
+    pack_options_cents: [1000, 2500, 9900], custom_pack_bounds_cents: { min: 500, max: 50000 },
+  } satisfies CoachAIBudgetResponse) },
   { method: 'GET', pattern: /^\/coach\/connect\/payouts/, handler: () => ({ payouts: [] }) },
   { method: 'GET', pattern: /^\/coach\/command-center\/ltv-metrics$/, handler: () => ({
     active_client_count: 14, churn_rate_pct: 0, mrr_30d_ago_cents: 260000,
@@ -184,6 +213,10 @@ const ROUTES: Route[] = [
   // Messages / nudges / community ────────────────────────────────────────────
   { method: 'GET',  pattern: /^\/messages(\?|$)/,           handler: () => DEMO_MESSAGES },
   { method: 'GET',  pattern: /^\/messages\/unread-count$/,  handler: () => ({ count: 0 }) },
+  // Messaging v2 (server messaging_core_v2): the client's coach thread in the inbox, its pins, its review marker.
+  { method: 'GET',  pattern: /^\/messages\/inbox$/,         handler: () => DEMO_MESSAGES_INBOX },
+  { method: 'GET',  pattern: /^\/messages\/pins$/,          handler: () => DEMO_MESSAGES_PINS },
+  { method: 'GET',  pattern: /^\/messages\/coach-review$/,  handler: () => ({ coachReviewedAt: null }) },
   { method: 'GET',  pattern: /^\/nudges(\?|$)/,             handler: () => [] },
   { method: 'GET',  pattern: /^\/nudges\/unread-count$/,    handler: () => ({ count: 0 }) },
   { method: 'GET',  pattern: /^\/community\/feed$/,         handler: () => DEMO_COMMUNITY_FEED },

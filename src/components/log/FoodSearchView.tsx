@@ -22,6 +22,13 @@ import type { PastMeal } from '../../hooks/useFoodBrowse';
 import { formatPortion } from '../../utils/log/quickLog';
 import { calcMacros } from '../../utils/log/macros';
 import { SheetGlyph } from './AddSheetGlyphs';
+import { MealArt } from '../../screens/client/mealplan/planStyleC';
+import type { PlanMealSheet } from '../../screens/client/mealplan/planMeal';
+import SavedMealsTab, { DOOR_WORDS, type SavedPart } from './SavedMealsTab';
+
+/** The sheet's browse tabs; 'saved' (KITCHEN-DOOR-M) only in a sheet passed its saved part. */
+export type BrowseTab = 'recent' | 'frequent' | 'saved';
+const TAB_WORDS: Record<BrowseTab, string> = { recent: 'Recent', frequent: 'Frequent', saved: DOOR_WORDS.tab };
 
 interface Props {
   searchQuery: string;
@@ -34,8 +41,8 @@ interface Props {
   searchResults: SearchResult[];
   didYouMean: SearchResult[];
 
-  recentTab: 'recent' | 'frequent';
-  onRecentTabChange: (tab: 'recent' | 'frequent') => void;
+  recentTab: BrowseTab;
+  onRecentTabChange: (tab: BrowseTab) => void;
   recentFoods: SearchResult[];
   frequentFoods: SearchResult[];
   // No day of the week could be read: an empty list is not "nothing logged".
@@ -43,6 +50,8 @@ interface Props {
 
   onSelectFood: (food: SearchResult) => void;
   onEnterManualMode: () => void;
+  /** PLAN-SWAPS-M (R4): the plan meal's Something else: the coach's swaps over the search field, the footnote under it. */
+  planMeal?: PlanMealSheet;
 
   // Most recent earlier meal in this slot, offered as a one-tap repeat.
   repeatMeal?: PastMeal | null;
@@ -51,6 +60,8 @@ interface Props {
   saving?: boolean;
   /** MEAL-PHOTO-M: opens the photo chooser; absent (Android, R3), column 2 stays empty as before. */
   onMealPhoto?: () => void;
+  /** KITCHEN-DOOR-M (R3): the Saved meals tab, only in a sheet with no plan or usual-meal link. */
+  saved?: SavedPart;
 }
 
 const shownNumber = (value: number) => Number.isFinite(value) ? String(Math.round(value)) : '—';
@@ -128,11 +139,13 @@ export default function FoodSearchView({
   browseUnavailable,
   onSelectFood,
   onEnterManualMode,
+  planMeal,
   repeatMeal,
   repeatMealTitle,
   onRepeatMeal,
   saving,
   onMealPhoto,
+  saved,
 }: Props) {
   const { semanticColors: sc } = useTheme();
   const styles = makeStyles(sc);
@@ -145,9 +158,31 @@ export default function FoodSearchView({
   const showEmpty =
     searchQuery.length >= 2 && !searching && searchResults.length === 0 && didYouMean.length === 0;
   const searchingNow = searchQuery.length >= 2;
+  // PLAN-SWAPS-M (C_something): the swaps show until she types a search; with them on screen the field waits for a tap,
+  // as drawn (no keyboard over the swaps).
+  const swaps = planMeal && !searchingNow ? planMeal.swaps : [];
+  // KITCHEN-DOOR-M: with Saved meals chosen and no search typed, the tab replaces the whole list (rows, header, empty line).
+  const savedOn = !!saved && recentTab === 'saved' && !searchingNow;
 
-  return (
-    <View style={styles.modalBody}>
+  const top = (
+    <>
+      {swaps.length > 0 && planMeal?.heading ? (
+        <View style={styles.swaps} testID="food-search-swaps">
+          <Text style={styles.swapsHeading} accessibilityRole="header" accessibilityLabel={planMeal.heading}
+            testID="food-search-swaps-heading">{planMeal.heading.toUpperCase()}</Text>
+          {swaps.map((w) => (
+            <HapticPressable key={w.id} intent="light" style={styles.swapRow} onPress={() => onSelectFood(w.food)} disabled={saving}
+              accessibilityRole="button" accessibilityLabel={w.label} accessibilityHint={w.hint} testID={`food-search-swap-${w.id}`}>
+              <View style={styles.swapArt}><MealArt slot={planMeal.slot} /></View>
+              <View style={styles.searchResultLeft}>
+                <Text style={styles.searchResultName}>{w.name}</Text>
+                <Text style={styles.searchResultMacros}>{w.line}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={sc.accentText} />
+            </HapticPressable>
+          ))}
+        </View>
+      ) : null}
       {!searchingNow ? (
         // REFINE-968 (C_add.html :121 .c-big2): the drawn three columns, main's manual entry in the first with the drawn
         // "Quick add" words and bolt (QUICKADD-968; the drawing has it third, working tiles fill from the left); column 2
@@ -189,7 +224,7 @@ export default function FoodSearchView({
           placeholderTextColor={sc.textMuted}
           value={searchQuery}
           onChangeText={onSearchChange}
-          autoFocus
+          autoFocus={swaps.length === 0}
         />
         {searching && <ActivityIndicator size="small" color={sc.accentText} />}
         {searchQuery.length > 0 && (
@@ -198,6 +233,7 @@ export default function FoodSearchView({
           </HapticPressable>
         )}
       </View>
+      {planMeal ? <Text style={styles.footnote} testID="food-search-footnote">{planMeal.footnote}</Text> : null}
 
       {searchError && (
         <View style={styles.searchErrorBanner} accessibilityRole="alert" testID="food-search-error">
@@ -228,7 +264,7 @@ export default function FoodSearchView({
             accessibilityRole="button"
             accessibilityLabel={`${repeatMealTitle}: add all ${repeatMeal.entries.length} ${repeatMeal.entries.length === 1 ? 'food' : 'foods'}`}
           >
-            {saving ? (
+            {saving && !saved?.savingId ? (
               <ActivityIndicator size="small" color={sc.accentText} />
             ) : (
               <Text style={styles.repeatButtonText}>Add all</Text>
@@ -239,7 +275,7 @@ export default function FoodSearchView({
 
       {searchQuery.length < 2 && (
         <View style={styles.tabRow} testID="food-search-tabs">
-          {(['recent', 'frequent'] as const).map((tab) => (
+          {(saved ? (['recent', 'frequent', 'saved'] as const) : (['recent', 'frequent'] as const)).map((tab) => (
             <HapticPressable
               key={tab}
               intent="light"
@@ -249,7 +285,7 @@ export default function FoodSearchView({
               accessibilityRole="tab"
               accessibilityState={{ selected: recentTab === tab }}
             >
-              <Text style={[styles.tabChipText, recentTab === tab && styles.tabChipTextActive]}>{tab === 'recent' ? 'Recent' : 'Frequent'}</Text>
+              <Text style={[styles.tabChipText, recentTab === tab && styles.tabChipTextActive]}>{TAB_WORDS[tab]}</Text>
             </HapticPressable>
           ))}
         </View>
@@ -265,11 +301,19 @@ export default function FoodSearchView({
           ))}
         </View>
       )}
+    </>
+  );
+  // With a plan meal the whole block scrolls with the list, so the swaps and the footnote are never cut at 320 pt or 130%.
+  // The list pads its rows by the gutter; the block keeps its own margins, so it sits out of that padding.
+  const withTop = (head: React.ReactElement | null) => (planMeal ? <><View style={styles.bleed}>{top}</View>{head}</> : head);
 
-      <FlatList
+  return (
+    <View style={styles.modalBody}>
+      {planMeal ? null : top}
+      {savedOn && saved ? <SavedMealsTab part={saved} saving={saving} listStyle={styles.searchList} /> : <FlatList
         data={showList}
         keyExtractor={(item, index) => `${item.id || item.name}-${index}`}
-        ListHeaderComponent={
+        ListHeaderComponent={withTop(
           searchQuery.length < 2 && browseList.length === 0 ? (
             <View style={styles.emptyStateContainer}>
               {browseUnavailable ? (
@@ -294,15 +338,15 @@ export default function FoodSearchView({
                 <Text style={styles.retryText}>Try again</Text>
               </HapticPressable>
             </View>
-          ) : null
-        }
+          ) : null,
+        )}
         renderItem={({ item }) => <FoodRow item={item} onPress={() => onSelectFood(item)} />}
         ListFooterComponent={searchingNow ? (
           <TextLink label="Enter manually" tone="accent" onPress={onEnterManualMode} style={styles.manualLink} />
         ) : null}
         contentContainerStyle={styles.searchList}
         keyboardShouldPersistTaps="handled"
-      />
+      />}
 
     </View>
   );
@@ -383,6 +427,9 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   // only named for Roman).
   tabRow: {
     flexDirection: 'row',
+    // KITCHEN-DOOR-M (R2): three tabs wrap where they do not fit (P_food_ios320_130); two never wrap.
+    flexWrap: 'wrap',
+    rowGap: 1,
     marginHorizontal: layout.gutter,
     marginTop: 10,
     marginBottom: 2,
@@ -509,4 +556,17 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   searchResultLeft: {
     flex: 1,
   },
+  // PLAN-SWAPS-M, C_something (style_c.py :214-226): the eyebrow 10 under the "Instead of" line, Inter 600 11 tracked;
+  // each swap a .c-li row (gap 12, at least 56, hairline under) with MealArt's tile, the serif name, the muted line, a chevron.
+  swaps: { marginHorizontal: layout.gutter, marginTop: 10, marginBottom: 4 },
+  swapsHeading: { ...typography.eyebrow, fontFamily: 'Inter_600SemiBold', fontWeight: '600', lineHeight: 14, color: sc.textMuted, marginBottom: 6 },
+  swapRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6, minHeight: layout.rowMinHeight,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: sc.border,
+  },
+  bleed: { marginHorizontal: -layout.gutter },
+  // MealArt draws its 52 pt tile 10 from the words it follows; here it leads the row.
+  swapArt: { marginLeft: -10, marginTop: -2 },
+  // C_something .cap (C2-S-101): 13 muted, 10 under the field.
+  footnote: { ...typography.bodySmall, fontSize: 13, lineHeight: 18, color: sc.textMuted, marginHorizontal: layout.gutter, marginTop: 10 },
 });

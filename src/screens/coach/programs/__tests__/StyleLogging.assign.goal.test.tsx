@@ -31,6 +31,8 @@ jest.mock("../../../../theme/ThemeProvider", () => ({
   }),
 }));
 jest.mock("@tanstack/react-query", () => ({
+  // services/queryClient.ts builds a real client when it loads (reached via m#1000's RefusedWorkoutCard and sync-engine).
+  QueryClient: jest.requireActual("@tanstack/react-query").QueryClient,
   useQueryClient: () => ({ setQueryData: jest.fn(), invalidateQueries: jest.fn() }),
 }));
 jest.mock("../../../../services/sentry", () => ({ captureError: jest.fn() }));

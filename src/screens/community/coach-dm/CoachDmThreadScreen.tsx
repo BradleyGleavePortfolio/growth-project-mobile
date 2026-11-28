@@ -25,10 +25,12 @@ import {
   DmState, NO_NAME, OFF_LINE, OFF_SEND_LINE, OFF_TITLE, dayKey, dayLabel, dmOn, firstNameOf, initialsOf, isDmOff, rosterOf,
   useDmRoster, useStudioInk,
 } from './coachDm';
+import { useScreenAreaKeyboardOffset } from '../../../ui/layout/ScreenArea';
 
 const DM_MAX = 4000; // backend SendDmDto (body 1..4000), as the client's thread
 
 export default function CoachDmThreadScreen(): React.ReactElement {
+  const keyboardOffset = useScreenAreaKeyboardOffset();
   const navigation = useNavigation<CoachCommunityNav>();
   const route = useRoute<CoachCommunityRoute<'CommunityDmThread'>>();
   const { semanticColors: c } = useTheme();
@@ -119,7 +121,7 @@ export default function CoachDmThreadScreen(): React.ReactElement {
   return (
     <SafeAreaView style={[styles.flex, { backgroundColor: fp.deep }]} edges={['top']} testID="coach-dm-thread">
       <ForestStatusBar />
-      <KeyboardAvoidingView style={[styles.flex, { backgroundColor: c.bgPrimary }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView keyboardVerticalOffset={keyboardOffset} style={[styles.flex, { backgroundColor: c.bgPrimary }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ThreadHeader tone="deep" studio title={name ?? NO_NAME} subtitle={name ? NO_NAME : undefined} initials={initialsOf(name)}
           onBack={() => navigation.goBack()} testID="coach-dm-thread-header" />
         {body}

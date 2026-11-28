@@ -59,7 +59,18 @@ export interface MovedLine {
   weight?: number;
 }
 
-const nameKey = (name: string) => name.trim().toLowerCase();
+export const nameKey = (name: string) => name.trim().toLowerCase();
+
+/** LS-928 B4: a set counted in seconds, or a body-weight set, carries no lb to compare. */
+export const carriesLb = (exercise: SessionExercise, bodyWeight: Record<string, boolean | undefined>) =>
+  !isTimedRow(exercise) && !bodyWeight[exercise.exerciseId];
+
+/** FIX-974R2 (LS-974R2 C1): the heaviest of a name's records (main's rule gives one per block), or null. */
+export function nameRecord(records: ReadonlyArray<{ name: string; weight: number }>, key: string) {
+  return records
+    .filter((r) => nameKey(r.name) === key)
+    .reduce<{ name: string; weight: number } | null>((best, r) => (best == null || r.weight > best.weight ? r : best), null);
+}
 
 export function whatMoved(
   exercises: ReadonlyArray<SessionExercise>,
@@ -71,7 +82,7 @@ export function whatMoved(
   // FIX-974R1 (LO-974R1 C4, LS-974R1 C1): the same exercise twice draws its record once, from a block that lifted it.
   const recordDrawn = new Set<string>();
   // LS-928 B4: a set counted in seconds, or a body-weight set, carries no lb to compare.
-  const weighed = exercises.filter((exercise) => !isTimedRow(exercise) && !bodyWeight[exercise.exerciseId]);
+  const weighed = exercises.filter((exercise) => carriesLb(exercise, bodyWeight));
   const tickedSets = (exercise: SessionExercise) => exercise.sets.filter((set) => set.completed);
   for (const exercise of weighed) {
     const ticked = exercise.sets.map((set, number) => ({ set, number })).filter(({ set }) => set.completed);
@@ -79,9 +90,7 @@ export function whatMoved(
     const key = nameKey(exercise.exerciseName);
     // FIX-974R2 (LS-974R2 C1): two blocks of one exercise can each beat the old best (185, then 225): the line is the
     // heaviest of that name's records, with the most reps any ticked set of that name lifted at it, in any block.
-    const record = records
-      .filter((r) => nameKey(r.name) === key)
-      .reduce<{ name: string; weight: number } | null>((best, r) => (best == null || r.weight > best.weight ? r : best), null);
+    const record = nameRecord(records, key);
     if (record) {
       const atRecord = weighed
         .filter((other) => nameKey(other.exerciseName) === key)

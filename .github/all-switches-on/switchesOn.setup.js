@@ -1,6 +1,6 @@
 /**
- * ALL-ON-CI-M: test-only setup, loaded only by the "All switches on (not
- * required)" job (its proof and test steps pass it with --setupFilesAfterEnv
+ * ALL-ON-CI-M: test-only setup, loaded only by the "All switches on"
+ * job (its proof and test steps pass it with --setupFilesAfterEnv
  * after jest.setup.js). The normal suite and the app never load it.
  *
  * Two switch layers do not reach jest through process.env, so the job turns

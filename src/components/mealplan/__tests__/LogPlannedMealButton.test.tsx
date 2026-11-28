@@ -55,7 +55,9 @@ describe('plan helpers', () => {
     expect(mealTypeForSlot('Day 2 – Lunch')).toBe('lunch');
     expect(mealTypeForSlot('dinner')).toBe('dinner');
     expect(mealTypeForSlot('afternoon snack')).toBe('snack');
-    expect(mealTypeForSlot('preworkout')).toBeNull();
+    // PREWORKOUT-EATEN-M: a pre or post-workout plan meal logs under Snacks, the meal the Food day counts it under.
+    expect(mealTypeForSlot('preworkout')).toBe('snack');
+    expect(mealTypeForSlot('postworkout')).toBe('snack');
     expect(mealTypeForSlot('09:30')).toBeNull();
     expect(mealTypeForSlot(undefined)).toBeNull();
   });
@@ -114,7 +116,7 @@ describe('LogPlannedMealButton', () => {
   });
 
   it('asks which meal when the slot names none, and Cancel logs nothing', async () => {
-    await render(<LogPlannedMealButton meal={bowl} slot="preworkout" />);
+    await render(<LogPlannedMealButton meal={bowl} slot="09:30" />);
     await fireEvent.press(screen.getByText('Log this meal'));
     expect(screen.getByText('Choose the meal to add it to.')).toBeTruthy();
     expect(screen.getByText('Log meal')).toBeDisabled();
