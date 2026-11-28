@@ -99,7 +99,7 @@ function Footer({ archive, held, saving, disabled, onSave, onArchive, line }: { 
         </View>
       ) : null}
       <View testID="meal-footer-row" style={st.footerRow}>
-        {archive ? <View style={st.archive}><TextLink label="Archive this meal" align="start" onPress={onArchive} disabled={held || saving} /></View> : null}
+        {archive ? <View style={st.archive}><TextLink label="Archive this meal" align="start" onPress={onArchive} disabled={disabled || saving} /></View> : null}
         <PrimaryButton label="Save meal" wrap testID="meal-save" disabled={disabled} loading={saving} haptic={false} onPress={onSave}
           style={archive ? st.save : ms.fill} />
       </View>
