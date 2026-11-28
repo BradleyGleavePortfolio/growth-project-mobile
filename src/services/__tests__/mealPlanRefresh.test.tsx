@@ -507,6 +507,28 @@ describe('i. the screen rule alone (no notice)', () => {
     expect(refreshing()).toBe(false);
   });
 
+  it('i7 FIX-MLD-1: the no-date read fails: the error block (never "not available"), and Try again reads both', async () => {
+    seed(SCREEN_KEY, PLAN_ONE);
+    await openPlan({ assignmentId: A2 });
+    await waitFor(() => expect(screenReads()).toHaveLength(1));
+    await act(async () => screenReads()[0].release(PLAN_ONE));
+    // The read and the client's two retries (queryClient.ts retry), each failing offline.
+    for (let i = 0; i < 3; i += 1) {
+      await waitFor(() => expect(serverDayReads()).toHaveLength(i + 1), { timeout: 10_000 });
+      expectLoadingNotUnavailable();
+      await act(async () => serverDayReads()[i].fail());
+    }
+    expect(await screen.findByText('Could not load this meal plan. Pull to retry.')).toBeTruthy();
+    expect(screen.queryByTestId('meal-plan-ended')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Try again'));
+    await waitFor(() => expect(screenReads()).toHaveLength(2));
+    await waitFor(() => expect(serverDayReads()).toHaveLength(4));
+    const tomorrow = new Date(Date.parse(`${getTodayString()}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+    await act(async () => { screenReads()[1].release(PLAN_ONE); serverDayReads()[3].release({ date: tomorrow, assignments: [assignment(A2, 'Plan two')] }); });
+    expect(await screen.findByText('Plan two')).toBeTruthy();
+    expect(screen.queryByTestId('meal-plan-ended')).toBeNull();
+  }, 30_000);
+
   it('i6 FIX-MLD-1: no assignmentId and no plan on her day: "No plan for today" after her day\'s read only', async () => {
     await openPlan(undefined);
     await waitFor(() => expect(screenReads()).toHaveLength(1));
