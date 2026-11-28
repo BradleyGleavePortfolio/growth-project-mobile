@@ -1,0 +1,3 @@
+src/screens/client/__tests__/LO-KD-1.lostAnswerOneIntent.btest.test.tsx
+src/screens/client/__tests__/LogScreen.kitchenDoor.test.tsx
+src/components/log/__tests__/SavedMealsTab.kitchenDoor.test.tsx
