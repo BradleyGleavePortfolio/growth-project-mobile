@@ -155,8 +155,8 @@ function writeDayLog(d: string, data: unknown, startedAt: number, markedAtStart:
   if (!kept && !same) qc.setQueryData(key, data, { updatedAt: startedAt });
   heldDay?.();
   const cache = qc.getQueryCache();
-  const query = cache.find({ queryKey: key, exact: true });
   const stop = new QueryObserver(qc, { queryKey: key, enabled: false, staleTime: Infinity }).subscribe(() => undefined);
+  const query = cache.find({ queryKey: key, exact: true });
   // A query the cache already dropped (cleared) is not let go again: that would start its gc timer for nothing.
   heldDay = () => { if (cache.find({ queryKey: key, exact: true }) === query) stop(); };
 }
