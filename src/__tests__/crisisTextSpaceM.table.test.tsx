@@ -392,7 +392,7 @@ describe('CRISIS-TEXT-SPACE-M: the poster of a space chat text the crisis check 
     const r = await open();
     await write(r, WORDS);
     if (offline) {
-      expect(await r.findByText('Waiting to send')).toBeTruthy();
+      expect(await r.findByLabelText(`Dana Reyes, Waiting to send. ${WORDS}`)).toBeTruthy();
       expect(sends()).toHaveLength(0);
     } else await waitFor(() => expect(sends()).toHaveLength(1));
     await r.unmount();
@@ -462,7 +462,7 @@ describe('CRISIS-TEXT-SPACE-M: nobody else ever sees the line or the fact of a m
     mockNet.isOnline = false;
     const r = await open();
     await write(r, WORDS);
-    expect(await r.findByText('Waiting to send')).toBeTruthy();
+    expect(await r.findByLabelText(`Dana Reyes, Waiting to send. ${WORDS}`)).toBeTruthy();
     await r.unmount();
     onSend = async (_u, b) => ({ data: answer(b.body, FLAGGED) });
     await act(async () => { for (const q of signOutQueues()) await q.send('me-1'); }); // services/authActions sendUnsyncedLogs
