@@ -9,6 +9,7 @@
  * FIX-WRM-1 (OPERATOR RULING 7208809287): WORKOUT_INVALID reads a plain line, never the validation line; the sheet's
  * head and actions never scroll (s2_R4a, s2_R4b); Tell <coach> opens the chat on the Home stack; a timed exercise reads
  * "3 × 60 sec" (its plan row's unit, from the Train tab's assignments).
+ * LS-WRD-1 B1 (FR-880R2/R3): Tell <coach>, on the card and on the sheet, only while useCoachChatClosed knows the chat is open.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Animated, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -17,6 +18,7 @@ import { NavigationProp, ParamListBase, useFocusEffect, useNavigation } from '@r
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/colors';
 import { useMyCoaches } from '../../hooks/useCalendar';
+import { useCoachChatClosed } from '../../hooks/useCoachChatClosed';
 import { useCoachlessClient } from '../../hooks/useCoachlessClient';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -169,6 +171,8 @@ function RefusedCards({ userId, coachId, items, reload, assignments }: {
   const coaches = useMyCoaches(!coachless).data;
   const coachName = (coaches?.find((x) => x.coach_id === coachId) ?? coaches?.[0])?.name?.trim().split(/\s+/)[0];
   const coach = coachless ? null : coachName || c.yourCoach;
+  const chat = useCoachChatClosed(coachless ? null : coachId);
+  const chatOpen = chat.known && !chat.closed;
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const [openId, setOpenId] = useState<string | null>(null);
   const [again, setAgain] = useState<ReadonlySet<string>>(new Set());
@@ -232,7 +236,7 @@ function RefusedCards({ userId, coachId, items, reload, assignments }: {
     const resend = canSendAgain(item.refusal);
     const first = resend ? { label: c.sendAgain, run: () => void send(item.id), id: 'send' }
       : { label: c.see, run: () => setOpenId(item.id), id: 'see' };
-    const second = coach ? { label: c.tell(coach), run: tell, id: 'tell' }
+    const second = coach ? (chatOpen ? { label: c.tell(coach), run: tell, id: 'tell' } : null)
       : resend ? { label: c.see, run: () => setOpenId(item.id), id: 'see' } : null;
     return (
       <View key={item.id} style={[s.card, { borderColor: Colors.offlineBanner }]} accessibilityLiveRegion="polite"
@@ -270,7 +274,7 @@ function RefusedCards({ userId, coachId, items, reload, assignments }: {
       ) : items.map(one)}
       {open ? (
         <RefusedWorkoutSheet item={open} coach={coach} again={again.has(open.id)} busy={busy === open.id} assignments={assignments}
-          onClose={() => setOpenId(null)} onSend={() => void send(open.id)} onTell={tell} onRemove={() => remove(open)} />
+          onClose={() => setOpenId(null)} onSend={() => void send(open.id)} onTell={chatOpen ? tell : undefined} onRemove={() => remove(open)} />
       ) : null}
     </Animated.View>
   );
@@ -283,7 +287,7 @@ function RefusedCards({ userId, coachId, items, reload, assignments }: {
  */
 export function RefusedWorkoutSheet({ item, coach, again, busy, assignments, onClose, onSend, onTell, onRemove }: {
   item: RefusedWorkout; coach: string | null; again: boolean; busy: boolean; assignments?: RefusedPlans;
-  onClose: () => void; onSend: () => void; onTell: () => void; onRemove: () => void;
+  onClose: () => void; onSend: () => void; onTell?: () => void; onRemove: () => void;
 }) {
   const sc = useTheme().semanticColors;
   const insets = useSafeAreaInsets();
@@ -326,7 +330,7 @@ export function RefusedWorkoutSheet({ item, coach, again, busy, assignments, onC
             {canSendAgain(item.refusal) ? (
               <PrimaryButton label={c.sendAgain} onPress={onSend} loading={busy} testID="refused-sheet-send" />
             ) : null}
-            {coach ? <Outline label={c.tell(coach)} onPress={onTell} testID="refused-sheet-tell" /> : null}
+            {coach && onTell ? <Outline label={c.tell(coach)} onPress={onTell} testID="refused-sheet-tell" /> : null}
             <TextLink label={c.remove} tone="accent" onPress={onRemove} disabled={busy} testID="refused-sheet-remove" />
             <Text maxFontSizeMultiplier={CAP} style={[typography.bodySmall, muted, s.center]}>{c.stays}</Text>
           </View>
