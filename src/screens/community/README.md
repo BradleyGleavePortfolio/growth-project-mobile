@@ -121,7 +121,9 @@ rows, the coach's spaces with who each is for (Clients, Package, Public; none fo
 a members-only space) and "+ New space", which opens `CoachNewSpaceScreen.tsx`
 (v1 to v3: name and kind, then All my clients or Included with a package, then the
 packages). The create goes through `useCreateCohort` with exactly the keys the
-coach chose. With both switches off the K2 page (`CoachCommunityHomeScreen.tsx`)
+coach chose. On v2 and v3 the top bar's Back, Android's Back and the iPhone edge
+swipe step back one step with the entries kept (`usePreventRemove`, which
+native-stack can hold against the swipe); Close on v1 and a Create leave once. With both switches off the K2 page (`CoachCommunityHomeScreen.tsx`)
 is unchanged. Search, Activity, layers, public spaces and the welcome card wait
 for the server (v1.1). Tests: `D10CCoachHome.test.tsx`, `D10CNewSpace.test.tsx`,
 `navigation/__tests__/D10CCoachHomeSwitch.test.tsx`, `api/__tests__/D10CCreateBody.test.ts`.

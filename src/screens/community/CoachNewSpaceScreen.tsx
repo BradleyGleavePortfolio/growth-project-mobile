@@ -7,14 +7,17 @@
  * "Included with a package" opens v3 (R6). v3: the coach's live packages (coachPackagesApi.list, isLivePackage); "Create
  * space" makes { name, kind, visibility: 'package', package_ids } with at least one pick. The create goes through
  * useCreateCohort (one send per tap); a failure says why (alertCoachFailure) and keeps every entry. Close on v1 leaves;
- * Back on v2 or v3, or the system Back (beforeRemove), steps back with the entries kept. Nothing is saved to the phone.
+ * Back on v2 or v3 steps back with the entries kept, and so do Android's Back and the iPhone edge swipe: usePreventRemove
+ * holds them (native-stack passes preventNativeDismiss to the native screen only for it; a raw beforeRemove listener
+ * cannot hold the swipe, ClientNavigator.tsx's m#521 note). A Create leaves once, with nothing held. Nothing is saved
+ * to the phone.
  * Left out until the server has them (R4, v1.1): Section, Inside, the depth line, Public on TGP, "You can change this
  * later." and v3's total line.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, usePreventRemove } from '@react-navigation/native';
 import HapticPressable from '../../components/HapticPressable';
 import { Screen } from '../../ui/layout/Screen';
 import { PrimaryButton } from '../../ui/buttons/PrimaryButton';
@@ -67,16 +70,15 @@ export default function CoachNewSpaceScreen(): React.ReactElement {
   const [picks, setPicks] = useState<string[]>([]);
   const [packages, setPackages] = useState<Packages>({ state: 'idle' });
   const sending = useRef(false);
-  const leaving = useRef(false);
+  const [leaving, setLeaving] = useState(false);
   const trimmed = name.trim();
   const named = Array.from(trimmed).length >= NAME_MIN;
+  const stepBack = () => setStep(step === 'packages' ? 'who' : 'name');
 
-  // The system Back (Android, the iOS swipe) steps back like the top bar while a later step is open.
-  useEffect(() => navigation.addListener('beforeRemove', (e) => {
-    if (leaving.current || step === 'name') return;
-    e.preventDefault();
-    setStep(step === 'packages' ? 'who' : 'name');
-  }), [navigation, step]);
+  // Android's Back and the iPhone edge swipe step back like the top bar while v2 or v3 is open. After a Create the
+  // hold is off first (leaving), then the page goes back once, so nothing holds the Create's goBack.
+  usePreventRemove(step !== 'name' && !leaving, stepBack);
+  useEffect(() => { if (leaving) navigation.goBack(); }, [leaving, navigation]);
 
   const loadPackages = async () => {
     setPackages({ state: 'loading' });
@@ -96,13 +98,12 @@ export default function CoachNewSpaceScreen(): React.ReactElement {
   const picked = live.filter((p) => picks.includes(p.id)).map((p) => p.id);
 
   const send = (input: CreateCohortInput) => {
-    if (sending.current || create.isPending) return;
+    if (sending.current || create.isPending || leaving) return;
     sending.current = true;
     create.mutate(input, {
       onSuccess: () => {
         void HapticService.success();
-        leaving.current = true;
-        navigation.goBack();
+        setLeaving(true);
       },
       onError: alertCoachFailure,
       onSettled: () => { sending.current = false; },
@@ -113,7 +114,7 @@ export default function CoachNewSpaceScreen(): React.ReactElement {
   const title = step === 'name' ? 'New space' : step === 'who' ? 'Visibility' : 'Included with a package';
   const header = (
     <View style={s.bar}>
-      <HapticPressable intent="light" onPress={() => (step === 'name' ? navigation.goBack() : setStep(step === 'packages' ? 'who' : 'name'))}
+      <HapticPressable intent="light" onPress={() => (step === 'name' ? navigation.goBack() : stepBack())}
         accessibilityRole="button" accessibilityLabel={step === 'name' ? 'Close' : 'Back'} style={s.barButton} testID="new-space-back">
         <Ionicons name={step === 'name' ? 'close' : 'chevron-back'} size={26} color={fp.ink} />
       </HapticPressable>
