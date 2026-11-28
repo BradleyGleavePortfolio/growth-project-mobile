@@ -214,7 +214,7 @@ const st = StyleSheet.create({
   recipe: { paddingTop: spacing.md, paddingBottom: spacing.md, gap: spacing.xs },
   linked: { paddingTop: spacing.xs },
   grow: { flexGrow: 1 }, // C1: the title keeps its own width, so the count and Add wrap under it at 320 pt with 130% text
-  row: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: layout.rowMinHeight, paddingVertical: spacing.xs,
+  row: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingTop: 12,
     borderTopWidth: StyleSheet.hairlineWidth },
   addRow: { borderTopWidth: StyleSheet.hairlineWidth },
   act: { width: layout.touchMin, height: layout.touchMin, alignItems: 'center', justifyContent: 'center' },
