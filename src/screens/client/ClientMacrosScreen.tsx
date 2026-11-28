@@ -57,7 +57,9 @@ export default function ClientMacrosScreen() {
     queryFn: async () => (await api.get<{ id: string; name: string }>('/v1/clients/me/coach')).data,
     enabled: !!currentUser?.id && !!data?.coach_id,
   });
-  const totals = !daily.isError && daily.data && typeof daily.data === 'object'
+  // FIX-MPF-1 (B1 b, the ruled class "a re-read that fails keeps the last good answer"): a later read of today's log
+  // that fails keeps the totals already read; only a read with no answer yet says they did not load.
+  const totals = daily.data && typeof daily.data === 'object'
     ? daily.data as Record<string, unknown> : null;
   const consumed = (key: string) => { const value = totals?.[key]; return typeof value === 'number' ? value : null; };
   useEffect(() => {
@@ -129,7 +131,7 @@ export default function ClientMacrosScreen() {
         ) : data ? (
           <>
             <TargetCard target={data} mode={mode} styles={styles} sc={sc} coachName={coachName} eaten={eaten} italic={italic} />
-            {daily.isError ? <Text style={[typography.bodySmall, styles.after, { color: sc.textMuted }]} accessibilityLiveRegion="polite">Today's food totals did not load. Pull to retry.</Text>
+            {daily.isError && !totals ? <Text style={[typography.bodySmall, styles.after, { color: sc.textMuted }]} accessibilityLiveRegion="polite">Today's food totals did not load. Pull to retry.</Text>
               : daily.isLoading ? <Text style={[typography.bodySmall, styles.after, { color: sc.textMuted }]}>Loading today's food totals...</Text> : null}
           </>
         ) : (

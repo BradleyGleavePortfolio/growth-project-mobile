@@ -102,10 +102,12 @@ export function syncFoodLogQueue(): Promise<number> {
           const sent = await readSentSafe();
           if (sent) store.holdSentFoods?.(sent);
         }
-        // MEALPLAN-PAGE-FRESH-M (SWEEP-INT-CLIENT N1): each other day its foods went to is refreshed too, which marks
-        // that day's log for every reader of it (the meal plan page on today while the Food tab shows another day).
-        for (const day of new Set(result.days)) if (day !== store.selectedDate) void store.refreshShownDay(userId, day);
-        await store.refreshShownDay(userId, store.selectedDate);
+        // MEALPLAN-PAGE-FRESH-M (SWEEP-INT-CLIENT N1): each day its foods went to is marked for every reader of that
+        // day's log (the meal plan page on today while the Food tab shows another day). FIX-MPF-1 (B1 a): only those
+        // days; a send of glasses or weigh-ins alone marks no food log.
+        const days = new Set(result.days);
+        for (const day of days) if (day !== store.selectedDate) void store.refreshShownDay(userId, day, true);
+        await store.refreshShownDay(userId, store.selectedDate, days.has(store.selectedDate));
       }
     } catch (err) {
       logger.warn('FoodLogSync', 'offline food sync failed', err);

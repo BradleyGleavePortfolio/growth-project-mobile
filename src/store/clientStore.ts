@@ -52,8 +52,9 @@ interface ClientStore {
   loadDayData: (userId: string, date?: string) => Promise<void>;
   // LS-914R3 B1: the one day refresh for work that finishes after a wait
   // (save, edit, delete, repeat, sync). Reads `date` again only while that day
-  // is the one on screen; it never selects a day.
-  refreshShownDay: (userId: string, date: string) => Promise<void>;
+  // is the one on screen; it never selects a day. `changed` (FIX-MPF-1): the server took a change to that day's food
+  // log (a write it answered, a queue flush that sent its foods), so every reader of the day's log reads it again too.
+  refreshShownDay: (userId: string, date: string, changed?: boolean) => Promise<void>;
   loadProfile: (userId: string) => Promise<void>;
   logFood: (data: {
     userId: string;
@@ -336,11 +337,13 @@ export const useClientStore = create<ClientStore>((set, get) => ({
     }
   },
 
-  refreshShownDay: async (userId: string, date: string) => {
-    // MEALPLAN-PAGE-FRESH-M (SWEEP-INT-CLIENT B1): work on this day's log finished, so every other reader of the day's
-    // log (['food','log',date]: the meal plan page, the plan meal page, Food this week, the Kitchen, Macro targets)
-    // reads it again, an open one now and the next one on open. Shown day or not: the write happened either way.
-    void appQueryClient()?.invalidateQueries({ queryKey: ['food', 'log', date] });
+  refreshShownDay: async (userId: string, date: string, changed = false) => {
+    // MEALPLAN-PAGE-FRESH-M (SWEEP-INT-CLIENT B1): a change the server took to this day's log, so every other reader of
+    // the day's log (['food','log',date]: the meal plan page, the plan meal page, Food this week, the Kitchen, Macro
+    // targets) reads it again, an open one now and the next one on open. Shown day or not: the write happened either
+    // way. FIX-MPF-1 (B1 a): only then; a pull, a Try again, a failed Remove, a save the queue holds or a glass marks
+    // nothing, so no reader re-reads a day nothing changed (with no signal that read fails).
+    if (changed) void appQueryClient()?.invalidateQueries({ queryKey: ['food', 'log', date] });
     if (get().selectedDate !== date) return;
     await get().loadDayData(userId, date);
   },
@@ -363,7 +366,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       await withSaveKey(['food', save], (key) => logApi.logFood({ ...save, client_uuid: key }));
       // LS-914R3 B1: a day opened while this was saving stays open; the
       // logged day is read again only while it is the day on screen.
-      if (mine === session) await get().refreshShownDay(data.userId, data.date);
+      if (mine === session) await get().refreshShownDay(data.userId, data.date, true);
     } catch (err) {
       throw err;
     }

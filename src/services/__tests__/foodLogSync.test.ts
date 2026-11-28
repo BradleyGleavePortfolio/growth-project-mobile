@@ -27,9 +27,10 @@ beforeEach(() => {
 
 describe('syncFoodLogQueue', () => {
   it('reloads the selected day after a food saved offline is sent', async () => {
-    mockFlush.mockResolvedValue({ flushed: 1, remaining: 0, parked: 0 });
+    // FIX-MPF-1: the flush names the day its food went to, so that day's log is marked for its other readers.
+    mockFlush.mockResolvedValue({ flushed: 1, remaining: 0, parked: 0, days: ['2026-10-06'] });
     await expect(syncFoodLogQueue()).resolves.toBe(1);
-    expect(mockRefreshShownDay).toHaveBeenCalledWith('client-1', '2026-10-06');
+    expect(mockRefreshShownDay).toHaveBeenCalledWith('client-1', '2026-10-06', true);
   });
 
   it('does not reload when nothing was waiting', async () => {

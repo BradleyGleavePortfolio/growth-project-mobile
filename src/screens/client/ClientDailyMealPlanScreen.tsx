@@ -72,6 +72,8 @@ import { featureFlags } from '../../config/featureFlags';
 import { buildPlanDay, type DaySlot } from '../../utils/log/foodDay';
 import { clockOf, dayLeft, minutesOf } from '../../utils/log/foodTimeline';
 import { foodLogFromDailyEntry, type DailyLogEntry } from '../../utils/log/dailyEntry';
+import { countsInDay, withQueuedFoods } from '../../utils/log/queuedDay';
+import { useClientStore } from '../../store/clientStore';
 import { Skeleton } from '../../ui/skeletons/Skeleton';
 import HapticPressable from '../../components/HapticPressable';
 import LogPlannedMealButton, { plannedMealFromSlot } from '../../components/mealplan/LogPlannedMealButton';
@@ -177,8 +179,14 @@ export default function ClientDailyMealPlanScreen() {
   // RULING 3: the target and the shown day's log, read as Macro targets reads them.
   const target = useCurrentMacrosForSelf();
   const daily = useTodayLog(shownDay);
-  const log = !daily.isError && daily.data && typeof daily.data === 'object'
+  // FIX-MPF-1 (B1 b, the ruled class "a re-read that fails keeps the last good answer"): a later read that fails keeps
+  // the day's log already read; a read that failed with no answer yet is still unknown (no log).
+  const log = daily.data && typeof daily.data === 'object'
     ? daily.data as { entries?: DailyLogEntry[]; total_calories?: unknown; total_protein_g?: unknown } : null;
+  // FIX-MPF-1 (C1, FIX-PSM-2 (b)'s join): the foods she saved on this phone for the shown day count as eaten, joined as
+  // the Food day joins them (waiting and sent foods, by their key); a refused food counts nowhere.
+  const queuedFoods = useClientStore((st) => st.queuedFoods);
+  const sentFoods = useClientStore((st) => st.sentFoods);
   const goal = target.data ? { calories: num(target.data.calories_kcal), protein: num(target.data.protein_g) } : null;
   const left = log ? dayLeft(goal, { calories: num(log.total_calories), protein: num(log.total_protein_g) }) : null;
   // FoodDayView.tsx:233-235, word for word.
@@ -190,10 +198,11 @@ export default function ClientDailyMealPlanScreen() {
   const checklist = featureFlags.foodPlanChecklist;
   const stops = useMemo(() => orderStops(shown), [shown]);
   const eaten = useMemo(() => {
-    const logs = checklist && log ? (log.entries ?? []).map((e) => foodLogFromDailyEntry(e, shownDay)) : [];
+    const logs = checklist && log ? withQueuedFoods((log.entries ?? []).map((e) => foodLogFromDailyEntry(e, shownDay)),
+      { calories: 0, protein: 0, carbs: 0, fat: 0 }, [...queuedFoods, ...sentFoods], shownDay, '').foodLogs.filter(countsInDay) : [];
     const day = buildPlanDay(shown.map((a) => a.daily_meal_plan), logs);
     return new Map<string, DaySlot>(day.slots.map((x) => [x.key, x]));
-  }, [checklist, log, shown, shownDay]);
+  }, [checklist, log, shown, shownDay, queuedFoods, sentFoods]);
   const isDone = (id: string) => checklist && (eaten.get(id)?.logs.length ?? 0) > 0;
   // The Food day's nextSlot over the shown plans in shown order; today only (the button logs to today).
   // An unknown day log cannot establish which meal is next; keep the ordinary log actions available.
