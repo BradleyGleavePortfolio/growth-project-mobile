@@ -19,6 +19,9 @@ import { featureFlags } from '../../../config/featureFlags';
 import { getTodayString } from '../../../utils/date';
 import { buildPlanDay } from '../../../utils/log/foodDay';
 import { foodLogFromDailyEntry, type DailyLogEntry } from '../../../utils/log/dailyEntry';
+import { countsInDay, withQueuedFoods } from '../../../utils/log/queuedDay';
+import { useClientStore } from '../../../store/clientStore';
+import type { FoodLog } from '../../../types';
 import { errorStatus } from '../../../types/common';
 import { isHiddenForAllergens, recipeAllergenDetail, type RecipeAllergenFields } from '../../../lib/recipeAllergens';
 import LogPlannedMealButton, { plannedMealFromSlot } from '../../../components/mealplan/LogPlannedMealButton';
@@ -44,6 +47,11 @@ const FIVE_MIN = 5 * 60 * 1000;
 const QUOTED = /^["'“‘]|["'”’]$/;
 const quoted = (t: string) => (QUOTED.test(t) ? t : `“${t}”`);
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
+const NO_TOTALS = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+// Main's waiting words for a meal's foods saved on the phone (FoodDayView.tsx offlineLine, OFFLINE-FOOD-M).
+const waitingLine = (w: FoodLog[]) => (w.length === 1
+  ? `Saved offline. ${w[0].foodName} will sync when you reconnect.`
+  : `Saved offline. ${w.length} foods will sync when you reconnect.`);
 
 export default function PlanMealScreen() {
   const { date, slotId } = useRoute<RouteProp<Params, 'PlanMeal'>>().params;
@@ -91,28 +99,54 @@ function PlanMealPage({ date, slotId }: Params['PlanMeal']) {
   const dayOn = isToday && !!slot;
   const day = useTodayLog(dayOn ? date : '');
   const entries = day.data && typeof day.data === 'object' ? (day.data as { entries?: DailyLogEntry[] }).entries ?? [] : null;
-  const eaten = found && entries && featureFlags.foodPlanChecklist
-    ? buildPlanDay([found.plan], entries.map((e) => foodLogFromDailyEntry(e, date))).slots.find((x) => x.key === slotId) ?? null : null;
-  // LS B1: whether the meal was eaten is decided once per visit from the day's log read for that visit, never from a
-  // log the app already held (the Food day's own logs refresh its store, not this query). A visit starts when the page
-  // opens and again when it comes back into focus; offline (the read waits for a connection) the log in hand decides.
-  // A meal logged here keeps its button (and its Undo) for the rest of the visit.
+  // (b) FIX-PSM-2: this meal's foods saved on the phone count as eaten, joined as the Food day joins them (clientStore
+  // shownDay: withQueuedFoods over the waiting and sent foods, OFFLINE-FOOD-M #191-E3); a refused food counts nowhere.
+  const queue = useClientStore((st) => st.queuedFoods);
+  const sent = useClientStore((st) => st.sentFoods);
+  const logs = withQueuedFoods((entries ?? []).map((e) => foodLogFromDailyEntry(e, date)), NO_TOTALS, [...queue, ...sent], date, '')
+    .foodLogs.filter(countsInDay);
+  const eaten = found && (entries || day.isError) && featureFlags.foodPlanChecklist
+    ? buildPlanDay([found.plan], logs).slots.find((x) => x.key === slotId) ?? null : null;
+  const onPhone = (eaten?.logs ?? []).filter((l) => l.offline === 'waiting');
+  // LS B1: whether the meal was eaten is decided from the day's log read for this visit, never from a log the app
+  // already held (the Food day's own logs refresh its store, not this query). A visit starts when the page opens and
+  // again when it comes back into focus. Offline the read fails after the app's retries (no onlineManager is wired, so
+  // it never pauses on a phone); then the first visit decides from the log in hand and the phone's foods.
+  // (a) FIX-PSM-2: a return keeps the last decision, and LogPlannedMealButton with it (its Saving, Saved offline and
+  // Undo), closed to taps while the visit's read is out. Only a read that answers replaces the decision, or a food
+  // for this meal saved on the phone while the page was away (b).
   const [visitAt, setVisitAt] = useState(() => Date.now());
   const opened = useRef(false);
+  const phoneNow = useRef<string[]>([]);
+  phoneNow.current = onPhone.map((l) => l.id);
+  const phoneAtBlur = useRef<string[] | null>(null);
   useFocusEffect(useCallback(() => {
     if (opened.current) setVisitAt(Date.now());
     opened.current = true;
+    return () => { phoneAtBlur.current = phoneNow.current; };
   }, []));
   const { refetch } = day;
   useEffect(() => {
     if (dayOn) void refetch();
   }, [dayOn, visitAt, refetch]);
-  const readForVisit = day.dataUpdatedAt >= visitAt || day.errorUpdatedAt >= visitAt || day.fetchStatus === 'paused';
-  const eatenAtOpen = useRef<{ at: number; eaten: boolean } | null>(null);
-  if (eatenAtOpen.current?.at !== visitAt && readForVisit && (entries || day.isError)) {
-    eatenAtOpen.current = { at: visitAt, eaten: (eaten?.logs.length ?? 0) > 0 };
+  // A food of this meal leaving the phone (sent and read back, refused or removed) reads the day again, so the status
+  // line follows it to the server's words.
+  const phoneKey = phoneNow.current.join(' ');
+  const phoneSeen = useRef(phoneKey);
+  useEffect(() => {
+    if (dayOn && phoneSeen.current && phoneKey !== phoneSeen.current) void refetch();
+    phoneSeen.current = phoneKey;
+  }, [dayOn, phoneKey, refetch]);
+  const answered = day.dataUpdatedAt >= visitAt;
+  const readForVisit = answered || day.errorUpdatedAt >= visitAt || day.fetchStatus === 'paused';
+  const decision = useRef<{ at: number; eaten: boolean } | null>(null);
+  if (decision.current?.at !== visitAt && readForVisit && (entries || day.isError)) {
+    const last = decision.current;
+    const savedAway = phoneNow.current.some((id) => !(phoneAtBlur.current ?? phoneNow.current).includes(id));
+    decision.current = { at: visitAt, eaten: !last || answered ? (eaten?.logs.length ?? 0) > 0 : last.eaten || savedAway };
   }
-  const eatenThisVisit = eatenAtOpen.current?.at === visitAt ? eatenAtOpen.current.eaten : null;
+  const eatenNow = decision.current ? decision.current.eaten : null;
+  const reading = !!decision.current && decision.current.at !== visitAt;
 
   const [added, setAdded] = useState<number | null>(null);
   const addToGrocery = useMutation({
@@ -167,8 +201,9 @@ function PlanMealPage({ date, slotId }: Params['PlanMeal']) {
   const shownRecipe = recipeId ? recipe.data ?? null : null;
   const rows = recipeId ? (shownRecipe ? ingredientRows(shownRecipe, null) : []) : ingredientRows(null, t.items);
   const groceries = recipeId ? (shownRecipe ? groceryItems(shownRecipe, null) : []) : groceryItems(null, t.items);
-  const status = eatenThisVisit && eaten?.status ? eaten.status : null;
-  const showButton = isToday && eatenThisVisit === false;
+  // A meal still on the phone reads as the Food day reads it: main's waiting line, never "Logged as planned".
+  const status = !eatenNow ? null : onPhone.length > 0 ? waitingLine(onPhone) : eaten?.status ?? null;
+  const showButton = isToday && eatenNow === false;
 
   return (
     <View style={styles.screen}>
@@ -213,7 +248,12 @@ function PlanMealPage({ date, slotId }: Params['PlanMeal']) {
       </ScrollView>
       {/* C_recipe .foot: the actions stay at the bottom over the page. */}
       <View style={[styles.foot, { paddingBottom: bottom + 12 }]}>
-        {showButton ? <LogPlannedMealButton meal={plannedMealFromSlot(slot)} slot={slot.slot_label} planSlotId={slot.id} planned /> : null}
+        {showButton ? (
+          <View pointerEvents={reading ? 'none' : 'auto'} accessibilityElementsHidden={reading}
+            importantForAccessibility={reading ? 'no-hide-descendants' : 'auto'} testID="plan-meal-log">
+            <LogPlannedMealButton meal={plannedMealFromSlot(slot)} slot={slot.slot_label} planSlotId={slot.id} planned />
+          </View>
+        ) : null}
         {status ? <Text style={styles.status} testID="plan-meal-status">{status}</Text> : null}
         {groceries.length > 0 ? (
           <HapticPressable intent="light" disableAnimation onPress={() => { if (!addToGrocery.isPending) addToGrocery.mutate(groceries); }}
