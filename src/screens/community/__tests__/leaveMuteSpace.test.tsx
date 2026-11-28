@@ -4,7 +4,7 @@
  * account. Cases L1-L8, L10, L11, L15 of the job text; the server answers are made up (b#1168 CONTRACT 6423745363 shapes).
  */
 import React from 'react';
-import { Alert, TextInput } from 'react-native';
+import { Alert } from 'react-native';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { authEvents } from '../../../utils/authEvents';
@@ -285,7 +285,7 @@ describe('LEAVE-MUTE-M leave, Undo and Join again', () => {
     expect(calls('post', '/community/cohorts/c-chat/leave')).toHaveLength(1);
     // Nothing moves before the server answers (R3).
     expect(mockNavigate).not.toHaveBeenCalled();
-    expect(r.UNSAFE_queryAllByType(TextInput).length).toBe(1);
+    expect(r.queryByTestId('space-chat-composer-field')).not.toBeNull();
     mockLeft.set('c-chat', '2026-11-27T16:00:00.000Z');
     await act(async () => { answer.resolve({ data: { cohort_id: 'c-chat', left_at: '2026-11-27T16:00:00.000Z' } }); });
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('CommunityTab'));
@@ -318,7 +318,7 @@ describe('LEAVE-MUTE-M leave, Undo and Join again', () => {
     expect(within(toast).getByText(line)).toBeTruthy();
     expect(mockNavigate).not.toHaveBeenCalled();
     expect(r.queryByTestId('space-chat-left')).toBeNull();
-    expect(r.UNSAFE_queryAllByType(TextInput).length).toBe(1);
+    expect(r.queryByTestId('space-chat-composer-field')).not.toBeNull();
     expect(r.getByTestId('space-chat-bell')).toBeTruthy();
   });
 
@@ -330,7 +330,7 @@ describe('LEAVE-MUTE-M leave, Undo and Join again', () => {
     expect(r.getByText('body m1')).toBeTruthy();
     expect(r.getByText('Morning crew')).toBeTruthy();
     expect(r.getByText('13 members')).toBeTruthy();
-    expect(r.UNSAFE_queryAllByType(TextInput)).toHaveLength(0);
+    expect(r.queryByTestId('space-chat-composer-field')).toBeNull();
     expect(r.queryByTestId('space-chat-bell')).toBeNull();
     expect(calls('get', '/c-chat/notifications')).toHaveLength(0);
     const answer = deferred<{ data: unknown }>();
@@ -340,10 +340,10 @@ describe('LEAVE-MUTE-M leave, Undo and Join again', () => {
     await fireEvent.press(within(r.getByTestId('space-chat-left')).getByTestId('space-chat-join'));
     expect(calls('post', '/join')).toHaveLength(1);
     expect(r.getByTestId('space-chat-join').props.accessibilityState).toEqual(expect.objectContaining({ busy: true }));
-    expect(r.UNSAFE_queryAllByType(TextInput)).toHaveLength(0);
+    expect(r.queryByTestId('space-chat-composer-field')).toBeNull();
     mockLeft.delete('c-chat');
     await act(async () => { answer.resolve({ data: { cohort_id: 'c-chat', left_at: null } }); });
-    await waitFor(() => expect(r.UNSAFE_queryAllByType(TextInput)).toHaveLength(1));
+    await waitFor(() => expect(r.queryByTestId('space-chat-composer-field')).not.toBeNull());
     expect(r.queryByTestId('space-chat-left')).toBeNull();
     expect(calls('post', '/join')).toHaveLength(1);
   });
@@ -356,7 +356,7 @@ describe('LEAVE-MUTE-M leave, Undo and Join again', () => {
     expect(r.queryByTestId('space-chat-left')).toBeNull();
     expect(r.queryByText('Join again')).toBeNull();
     expect(r.queryByTestId('space-chat-bell')).toBeNull();
-    expect(r.UNSAFE_queryAllByType(TextInput)).toHaveLength(0);
+    expect(r.queryByTestId('space-chat-composer-field')).toBeNull();
   });
 });
 
@@ -459,7 +459,7 @@ describe('LEAVE-MUTE-M a second account (KT-13)', () => {
     expect(keys.every((k) => k[2] === 'me-1')).toBe(true);
     expect(client.getQueryCache().getAll().filter((q) => ['space-left', 'space-notify', 'space-threads'].includes(String((q.queryKey as unknown[])[1])))
       .every((q) => q.meta?.persist === false)).toBe(true);
-    r.unmount();
+    await r.unmount();
     // The next person: the sign-out clears the client (queryClient.ts); her own keys never hold the first one's rows.
     authEvents.emit('logout');
     client.clear();

@@ -5,7 +5,7 @@
  * or by a reply of her own. Cases L12-L14 of the job text; the server answers are made up (b#1168 shapes).
  */
 import React from 'react';
-import { Alert, TextInput } from 'react-native';
+import { Alert } from 'react-native';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { authEvents } from '../../../utils/authEvents';
@@ -244,7 +244,7 @@ describe('LEAVE-MUTE-M thread rows in the hold sheet (D2b, Style 1)', () => {
     await r.findByText('body m1');
     await hold(r, 'm1');
     await waitFor(() => expect(sheetRows(r)).toEqual(['Reply', 'Copy', 'Unmute thread', 'Leave thread', 'Cancel']));
-    r.unmount();
+    await r.unmount();
     client.clear();
     threadStates = [{ thread_message_id: 'm1', state: 'left', since: '2026-11-27T14:50:00.000Z' }];
     r = await open();
