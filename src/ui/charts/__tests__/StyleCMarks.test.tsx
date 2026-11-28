@@ -4,7 +4,7 @@
 // mock's element name (Path, Circle).
 import React from 'react';
 import { Animated, StyleSheet, Text } from 'react-native';
-import { render } from '@testing-library/react-native';
+import { act, render } from '@testing-library/react-native';
 import { SegmentedRing, DayMark, PeakStar, type DayState, type SegmentState } from '../StyleCMarks';
 import { lightTokens as t } from '../../../theme/tokens';
 import { HapticService } from '../../haptics/haptics.service';
@@ -34,6 +34,7 @@ beforeEach(() => {
 afterEach(() => {
   timing.mockRestore();
   jest.clearAllMocks();
+  jest.useRealTimers();
 });
 
 describe('SegmentedRing', () => {
@@ -74,9 +75,17 @@ describe('SegmentedRing', () => {
   });
 
   it('draws the new segment in 300 ms from undrawn', async () => {
+    // CI-FLAKES-M (SWEEP-CI-FLAKES F1): the draw-in is a JS-driven 300 ms Animated.timing. On real
+    // timers a busy runner can let its frames run inside render's act drain until it has finished,
+    // so the offset read 0. The fake clock holds every frame until the test moves it.
+    jest.useFakeTimers();
     const s = await render(<SegmentedRing segments={['done', 'done']} size={48} label="2 of 2 done" drawIndex={1} event="t1" />);
     expect(durations(timing)).toEqual([300]);
     expect(s.getAllByTestId('Path')[1].props.strokeDashoffset).toBeGreaterThan(0);
+    // Finish the draw-in (16 ms frames: the last is due at 304 ms) before afterEach restores real timers.
+    await act(async () => {
+      jest.advanceTimersByTime(400);
+    });
   });
 
   it('Reduce Motion: the full segment fades in over 150 ms instead', async () => {

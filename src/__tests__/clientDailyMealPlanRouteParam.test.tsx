@@ -17,6 +17,7 @@
 
 import React from 'react';
 import { render } from '@testing-library/react-native';
+import { getTodayString } from '../utils/date';
 
 let mockRouteParams: { date?: string } | undefined = undefined;
 const mockUseMealPlanToday = jest.fn();
@@ -68,10 +69,11 @@ describe('ClientDailyMealPlanScreen — route.params.date honor (audit P2-2)', (
     expect(mockUseMealPlanToday).toHaveBeenCalledWith('2026-05-01');
   });
 
-  it('falls back to undefined (today) when no date param is provided', async () => {
+  // MEALPLAN-LOCAL-DAY-M: the phone's today is sent, never left to the server's own (UTC) day.
+  it("falls back to the phone's today when no date param is provided", async () => {
     mockRouteParams = undefined;
     await render(<ClientDailyMealPlanScreen />);
-    expect(mockUseMealPlanToday).toHaveBeenCalledWith(undefined);
+    expect(mockUseMealPlanToday).toHaveBeenCalledWith(getTodayString());
   });
 
   it('normalises a full ISO timestamp to YYYY-MM-DD', async () => {
@@ -80,10 +82,10 @@ describe('ClientDailyMealPlanScreen — route.params.date honor (audit P2-2)', (
     expect(mockUseMealPlanToday).toHaveBeenCalledWith('2026-05-01');
   });
 
-  it('drops a malformed date param defensively (not propagated to the hook)', async () => {
+  it("drops a malformed date param defensively (not propagated to the hook; the phone's today is read)", async () => {
     mockRouteParams = { date: 'not-a-date' };
     await render(<ClientDailyMealPlanScreen />);
-    expect(mockUseMealPlanToday).toHaveBeenCalledWith(undefined);
+    expect(mockUseMealPlanToday).toHaveBeenCalledWith(getTodayString());
   });
 
   it('renders the meal-plan header when a date is provided', async () => {

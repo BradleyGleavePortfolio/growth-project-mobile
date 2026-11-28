@@ -20,7 +20,11 @@ jest.mock('../../../api/mealTemplatesApi', () => ({
 // GOAL-927-M (RULING 3): the meal plan's two new reads with no target and no log, so main's screen draws.
 jest.mock('../../../hooks/useApi', () => ({ ...jest.requireActual('../../../hooks/useApi'), useTodayLog: () => ({ data: undefined, isLoading: false, isError: false, refetch: jest.fn() }) }));
 jest.mock('../../../hooks/useMacros', () => ({ ...jest.requireActual('../../../hooks/useMacros'), useCurrentMacrosForSelf: () => ({ data: undefined, isLoading: false, isError: false, refetch: jest.fn() }) }));
-jest.mock('../../../hooks/useMealTemplates', () => ({ useMealPlanToday: (date?: string) => mockDaily(date) }));
+// FIX-MLD-1: the page's second call is the explicit no-date form (the server's own day, only while a plan-id door's plan is
+// missing from her day); here the server and the phone share the fixture's day, so it answers as her day does, read now.
+jest.mock('../../../hooks/useMealTemplates', () => ({
+  useMealPlanToday: (date?: string | null) => (date === null ? { ...mockDaily(date), dataUpdatedAt: Date.now() } : mockDaily(date)),
+}));
 
 import ClientDailyMealPlanScreen from '../ClientDailyMealPlanScreen';
 import type { DailyMealPlanAssignmentWithPlan } from '../../../api/mealTemplatesApi';
@@ -29,7 +33,7 @@ import { useMealPlanToday } from '../../../hooks/useMealTemplates';
 let mockParams: { date?: string; assignmentId?: string } | undefined;
 type DailyView = Partial<Pick<ReturnType<typeof useMealPlanToday>,
   'data' | 'isLoading' | 'isError' | 'isRefetching' | 'refetch'>>;
-const mockDaily = jest.fn<DailyView, [string | undefined]>();
+const mockDaily = jest.fn<DailyView, [string | null | undefined]>();
 const daily = mockDaily;
 const refetch = jest.fn();
 const assignment: DailyMealPlanAssignmentWithPlan = {

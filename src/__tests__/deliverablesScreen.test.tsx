@@ -549,7 +549,7 @@ describe('DeliverablesScreen — RTL mount', () => {
     // must actually USE the `date` param — asserting only the
     // navigate() call would be self-fulfilling. We assert both: (a)
     // navigate is called with `date`, and (b) source-grep proves the
-    // destination wires the param into `useMealPlanToday(dateParam)`.
+    // destination wires the param into `useMealPlanToday(dateParam ?? today)`.
     mockGetPurchaseDrops.mockResolvedValue({
       ok: true,
       data: [
@@ -579,7 +579,7 @@ describe('DeliverablesScreen — RTL mount', () => {
     const mealPlanScreenSrc = readSrc('screens/client/ClientDailyMealPlanScreen.tsx');
     expect(mealPlanScreenSrc).toMatch(/useRoute/);
     expect(mealPlanScreenSrc).toMatch(/route\.params\?\.date/);
-    expect(mealPlanScreenSrc).toMatch(/useMealPlanToday\(\s*dateParam\s*\)/);
+    expect(mealPlanScreenSrc).toMatch(/useMealPlanToday\(\s*dateParam\s*\?\?\s*today\s*\)/);
   });
 
   it('tapping a delivered auto_message drop opens Messages via parent navigator', async () => {
