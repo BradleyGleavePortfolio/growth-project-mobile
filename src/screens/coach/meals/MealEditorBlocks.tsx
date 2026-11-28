@@ -12,7 +12,9 @@ import { LoadFailed, macroLine, mealStyles as ms } from './mealUi';
 import { MAX_OPTIONS, declaresAllergen, moveOption, recipeLine, recipeShare, removeOption, type CoachRecipe, type OptionRow } from './mealLinks';
 
 /** The meal page's cream cards (schemeCard); 16 pt inside and 20 pt Cormorant titles, as measured on S1_F01 (390 / 100%). */
-export const card = [ms.card, schemeCard, schemeCardOutline, { padding: 16 }];
+// A sheet style, not an inline one, so a block's own top and bottom padding wins on the web build too (FIX-PSCM-1).
+const pad = StyleSheet.create({ card: { padding: 16 } });
+export const card = [ms.card, schemeCard, schemeCardOutline, pad.card];
 export const blockTitle = { ...typography.h2, fontSize: 20, lineHeight: 26 };
 type Glyph = keyof typeof Ionicons.glyphMap;
 
