@@ -1,0 +1,13 @@
+src/__tests__/clientDailyMealPlanRouteParam.test.tsx
+src/__tests__/deliverablesScreen.test.tsx
+src/__tests__/deliveredContentOpens.test.tsx
+src/screens/client/__tests__/Goal927.goal.test.tsx
+src/screens/client/__tests__/MealPlan.quiet.test.tsx
+src/screens/client/__tests__/loMealPlanLocalDay.B1.serverDayDoors.test.tsx
+src/screens/client/__tests__/lsMealPlanLocalDay.B1.assignmentDoor.test.tsx
+src/screens/client/__tests__/mealPlanLocalDay.test.tsx
+src/services/__tests__/mealPlanRefresh.test.tsx
+src/services/__tests__/sweepMealPlans.B3.planPageDay.test.tsx
+src/screens/client/kitchen/__tests__/Kitchen.test.tsx
+src/screens/client/__tests__/GroceryOfflineKeep.test.tsx
+scripts/__tests__/routeContract.test.js
