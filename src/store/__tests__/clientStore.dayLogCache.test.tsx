@@ -373,15 +373,16 @@ describe('MEALPLAN-STORE-DAY-M: the store writes its good day answer into the da
   });
 
   it('a change marked after the store read began (m#1043) keeps every reader due to read again', async () => {
+    // A page holds the day with nothing logged; then breakfast reaches the server unmarked here (another phone).
     await act(async () => { await readerRead(mockDay); });
     await act(async () => { await new Promise((r) => setTimeout(r, 5)); });
+    breakfastOnServer();
     holdNextRead = true;
     let store: Promise<void> = Promise.resolve();
     await act(async () => { store = useClientStore.getState().loadDayData('client', mockDay); });
-    // A write the server took, marked as refreshShownDay(changed) marks it; the read in flight began before it.
-    breakfastOnServer();
+    // A write the server took after the store read began, marked as refreshShownDay(changed) marks it.
     await act(async () => { await queryClient.invalidateQueries({ queryKey: DAY_KEY }); });
-    mockServer.entries.length = 0;
+    // The read answers as it began: breakfast, without the marked write. It is not every reader's answer.
     heldReads[0].go();
     await act(async () => { await store; });
     expect(queryClient.getQueryState(DAY_KEY)?.isInvalidated).toBe(true);
