@@ -22,7 +22,7 @@ export function Line({ icon, children }: { icon: Glyph; children: string }) {
   return (
     <View style={st.line}>
       <Ionicons name={icon} size={18} color={sc.textMuted} style={st.glyph} />
-      <Text style={[typography.bodySmall, ms.fill, { color: sc.textMuted }]}>{children}</Text>
+      <Text style={[typography.body, ms.fill, { color: sc.textMuted }]}>{children}</Text>
     </View>
   );
 }
@@ -89,7 +89,7 @@ export function OptionsBlock({ rows, editing, onEditing, onAdd, onChange }: {
         if (r.state === 'unknown') return <View key={`${r.id}-${i}`} style={[rule, st.ghost, { backgroundColor: sc.border }]} />;
         const words = r.meal ? (
           <View style={ms.fill}>
-            <Text style={[typography.bodyMd, ink]}>{r.meal.name}</Text>
+            <Text style={[typography.body, ink]}>{r.meal.name}</Text>
             <Text style={muted}>{macroLine(r.meal)}</Text>
           </View>
         ) : (
