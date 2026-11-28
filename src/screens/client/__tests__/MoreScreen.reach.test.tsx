@@ -76,10 +76,11 @@ describe("More: your plan rows (S-REACH)", () => {
     mockFlags.romanChat = false;
   });
 
-  it("lists the six plan surfaces", () => {
+  it("lists the seven plan surfaces", () => {
     expect(PLAN_MORE_ITEMS.map((i) => i.label)).toEqual([
       "Meal plan",
       "Macro targets",
+      "Food this week",
       "Progress",
       "Habits and check-in",
       "Timeline",
@@ -212,7 +213,7 @@ describe("More: Health and sleep / Connected devices (AUDIT-11-125)", () => {
 describe("More: calm groups and complete route parity (DES-AJ-127)", () => {
   const originalOS = Platform.OS;
   const stackRows = [
-    ["Meal plan", "ClientDailyMealPlan"], ["Macro targets", "ClientMacros"], ["Progress", "Progress"],
+    ["Meal plan", "ClientDailyMealPlan"], ["Macro targets", "ClientMacros"], ["Food this week", "FoodWeek"], ["Progress", "Progress"],
     ["Timeline", "Timeline"], ["Membership", "Membership"],
     ["Recipes", "Recipes"], ["Fasting", "Fast"], ["Community", "Community"],
     ["Profile", "ProfileMain"], ["Settings", "Settings"], ["Report", "Report"],
@@ -266,7 +267,7 @@ describe("More: calm groups and complete route parity (DES-AJ-127)", () => {
     const guidanceLabels = [...(roman ? ["Roman"] : []), "Community"];
     expect(screen.getAllByRole("button").map((b) => b.props.accessibilityLabel)).toEqual([
       ...(tutorial ? healthLabels : []), ...(roman ? guidanceLabels : []),
-      "Meal plan", "Macro targets", "Progress", "Habits and check-in", "Timeline",
+      "Meal plan", "Macro targets", "Food this week", "Progress", "Habits and check-in", "Timeline",
       "Exercise library", "Membership", "Report", ...(!tutorial ? healthLabels : []),
       ...(!roman ? guidanceLabels : []), "Recipes", "Fasting", "Grocery list",
       "Prep guide", "Profile", "Settings", "Shortcuts", "Learn",
