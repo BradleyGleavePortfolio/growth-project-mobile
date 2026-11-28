@@ -158,7 +158,11 @@ export default function ClientDailyMealPlanScreen() {
   const serverShown = useMemo(() => (serverDay ? plansOf(serverData, assignmentId) : []), [serverDay, serverData, assignmentId]);
   const serverFailed = askServer && !serverAnswered && serverError && serverErrorAt >= askedAt;
   const shown = serverShown.length > 0 ? serverShown : herShown;
-  const failed = isError || serverFailed;
+  // FOODDAY-PLAN-KEEP-M (SWEEP-INT-CLIENT C1's class): the card is for a failed read with nothing to show for this ask: no
+  // answer yet, or a plan-id door whose saved answer lacks that plan (R-b: offline it never says "not available"). This is
+  // the Food day's key, so a re-read that fails anywhere (the Kitchen, Food this week, a pull here) keeps the plan she was
+  // shown and its "Ate it as planned".
+  const failed = (isError && (data === undefined || (!!assignmentId && herShown.length === 0))) || serverFailed;
   const waiting = isLoading || (holding && !isError) || (askServer && !serverAnswered && !serverFailed);
 
   const onRefresh = useCallback(() => {
