@@ -21,7 +21,8 @@ import { MealType } from '../../types';
 import type { PastMeal } from '../../hooks/useFoodBrowse';
 import type { PlanMealSheet } from '../../screens/client/mealplan/planMeal';
 import { clockOf } from '../../utils/log/foodTimeline';
-import FoodSearchView from './FoodSearchView';
+import FoodSearchView, { type BrowseTab } from './FoodSearchView';
+import type { SavedPart } from './SavedMealsTab';
 import MealChoiceRow from './MealChoiceRow';
 import ManualFoodEntryForm, { ManualFields } from './ManualFoodEntryForm';
 import SheetGrip from './SheetGrip';
@@ -53,8 +54,8 @@ interface Props {
   searchResults: SearchResult[];
   didYouMean: SearchResult[];
 
-  recentTab: 'recent' | 'frequent';
-  onRecentTabChange: (tab: 'recent' | 'frequent') => void;
+  recentTab: BrowseTab;
+  onRecentTabChange: (tab: BrowseTab) => void;
   recentFoods: SearchResult[];
   frequentFoods: SearchResult[];
   browseUnavailable?: boolean;
@@ -85,6 +86,8 @@ interface Props {
    * under it. Absent (every other open), the sheet is main's.
    */
   planMeal?: PlanMealSheet;
+  /** KITCHEN-DOOR-M (R3): the Saved meals tab with Open Kitchen; LogScreen passes it only to a sheet with no link. */
+  saved?: SavedPart;
 }
 
 const nowMinutes = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
@@ -234,6 +237,7 @@ export default function FoodSearchModal(props: Props) {
                       saving={props.saving}
                       onEnterManualMode={onEnterManualMode}
                       onMealPhoto={onMealPhoto}
+                      saved={props.saved}
                     />
                   ) : (
                     <ManualFoodEntryForm
