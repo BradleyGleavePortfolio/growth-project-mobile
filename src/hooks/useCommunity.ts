@@ -452,6 +452,13 @@ function onCommunityPing(qc: QueryClient, ping?: CommunityPing): void {
   if (event === COMMUNITY_BROADCAST_EVENTS.messageCreated || !known.includes(event)) {
     refreshDmReadsIn(qc);
   }
+  // LEAVE-MUTE-M (b#1168 CONTRACT update 6477611562): a leave that leaves, or a join that ends one, pings each reader of
+  // the space as community.membership.changed (ids only). Re-read the one space list (left_at, counts) and the left lists
+  // ("{name} left"; only an open space's is active, so only it reads). Only the event name is read.
+  if (event === COMMUNITY_BROADCAST_EVENTS.membershipChanged) {
+    void qc.invalidateQueries({ queryKey: communityKeys.cohorts() });
+    void qc.invalidateQueries({ queryKey: ['community', 'space-left'] });
+  }
 }
 
 /**
