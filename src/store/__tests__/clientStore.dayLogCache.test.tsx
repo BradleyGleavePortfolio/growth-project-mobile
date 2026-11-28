@@ -359,6 +359,7 @@ describe('MEALPLAN-STORE-DAY-M: the store writes its good day answer into the da
     let store: Promise<void> = Promise.resolve();
     await act(async () => { store = useClientStore.getState().loadDayData('client', mockDay); });
     // The store's read began before breakfast reached the server; a page's read after it holds breakfast.
+    await act(async () => { await new Promise((r) => setTimeout(r, 5)); });
     breakfastOnServer();
     await act(async () => { await readerRead(mockDay); });
     const newer = queryClient.getQueryState(DAY_KEY);
