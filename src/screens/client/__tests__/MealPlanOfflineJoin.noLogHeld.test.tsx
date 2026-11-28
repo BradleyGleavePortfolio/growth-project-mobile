@@ -208,11 +208,19 @@ afterEach(() => {
   queryClient.clear();
 });
 
+/**
+ * MEALPLAN-STORE-DAY-M: the Food tab's good day read is every reader's day log now, so these cases (the phone's foods
+ * with no day log held) drop it, as a cache that no longer holds the day would.
+ */
+const noDayLogHeld = () => {
+  queryClient.removeQueries({ queryKey: DAY_KEY, exact: true });
+  expect(queryClient.getQueryState(DAY_KEY)).toBeUndefined();
+};
 /** Online, she opens the app on the Food tab (the day and the plan load); the page has not read today's day log. */
 async function foodTabOnlineThenSignalGone() {
   await render(<App pageOpen={false} />);
   await settle();
-  expect(queryClient.getQueryState(DAY_KEY)).toBeUndefined();
+  noDayLogHeld();
   await signalGone();
 }
 /** She opens More > Meal plan with no signal: its day log read fails after the app's retries. */
@@ -235,7 +243,7 @@ describe('MEALPLAN-OFFLINE-JOIN-M: offline, with no day log held, the meal plan 
     await render(<App pageOpen={false} />);
     await settle();
     // The Food tab read the day and the plan online; the page has not read today's day log.
-    expect(queryClient.getQueryState(DAY_KEY)).toBeUndefined();
+    noDayLogHeld();
     await signalGone();
     await fireEvent.press(await screen.findByTestId('food-day-primary'));
     await settle();
