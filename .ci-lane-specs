@@ -1,0 +1,8 @@
+src/screens/client/__tests__/LsMealPlanPageFresh.offlineRefresh.btest.test.tsx
+src/screens/client/__tests__/MealPlanPageFresh.foodTabWrites.test.tsx
+src/screens/client/__tests__/MealPlan
+src/screens/client/mealplan
+src/services/__tests__/foodLogQueue
+src/services/__tests__/offlineWaterWeight
+src/screens/client/__tests__/LogScreen
+src/store
