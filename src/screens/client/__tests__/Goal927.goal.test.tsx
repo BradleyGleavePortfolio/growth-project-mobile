@@ -32,7 +32,11 @@ jest.mock('@react-navigation/native', () => ({ useRoute: () => ({ params: mockPa
 jest.mock('../../../api/mealTemplatesApi', () => ({
   SLOT_LABELS: ['breakfast', 'lunch', 'dinner', 'snack', 'preworkout', 'postworkout'],
 }));
-jest.mock('../../../hooks/useMealTemplates', () => ({ useMealPlanToday: () => mockDaily() }));
+// FIX-MLD-1: the page's second call is the explicit no-date form (the server's own day, only while a plan-id door's plan is
+// missing from her day); here the server and the phone share the fixture's day, so it answers as her day does, read now.
+jest.mock('../../../hooks/useMealTemplates', () => ({
+  useMealPlanToday: (day?: string | null) => (day === null ? { ...mockDaily(), dataUpdatedAt: Date.now() } : mockDaily()),
+}));
 const mockButtons: Array<{ planSlotId?: string; planned?: boolean }> = [];
 jest.mock('../../../components/mealplan/LogPlannedMealButton', () => {
   const React = require('react');
