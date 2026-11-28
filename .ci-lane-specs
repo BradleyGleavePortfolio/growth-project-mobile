@@ -1,0 +1,17 @@
+src/screens/client/mealplan/__tests__/PlanMealScreen.returnToPage.test.tsx
+src/screens/client/mealplan/__tests__/PlanMealScreen.LO1009R2B1.test.tsx
+src/screens/client/mealplan/__tests__/lsPlanSwapsM2.offlineRefocus.btest.test.tsx
+src/screens/client/mealplan/__tests__/PlanMealScreen.test.tsx
+src/screens/client/mealplan/__tests__/PlanMealScreen.LO1009B1.test.tsx
+src/screens/client/mealplan/__tests__/lsPlanSwapsM1.eatenFresh.btest.test.tsx
+src/screens/client/mealplan/__tests__/lsPlanSwapsM1.newMealSamePage.btest.test.tsx
+src/screens/client/mealplan/__tests__/planMeal.test.ts
+src/store/__tests__
+src/utils/log/__tests__/queuedDay
+src/services/__tests__/offlineFoodAccountRead.ls931.test.ts
+src/components/mealplan
+src/entitlements/dunning
+src/navigation/__tests__
+src/screens/client/foodweek
+src/screens/client/__tests__/MoreScreen.reach.test.tsx
+src/screens/client/__tests__/YouScreen.c9s1.test.tsx
