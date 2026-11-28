@@ -14,15 +14,15 @@ import React from 'react';
 import { Alert, Dimensions, StyleSheet } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
-import { fireEvent, render, waitFor, within } from '@testing-library/react-native';
+import { fireEvent, render, within } from '@testing-library/react-native';
 
 type Row = Record<string, any>;
-const mockDb = { meals: [] as Row[], recipes: [] as Row[] };
+const mockDb = { meals: [] as Row[], recipes: [] as Row[], hang: false };
 const mockNav = { navigate: jest.fn(), goBack: jest.fn(), setParams: jest.fn(), popTo: jest.fn(), dispatch: jest.fn(), push: jest.fn() };
 
 jest.mock('../../../../services/api', () => ({ __esModule: true, coachApi: { getClients: () => Promise.resolve({ data: [] }) },
   recipesApi: { list: () => Promise.resolve({ data: mockDb.recipes }) }, foodApi: { search: () => Promise.resolve({ data: { results: [] } }) },
-  default: { get: (u: string) => Promise.resolve({ data: u === '/coach/meal-templates' ? mockDb.meals.filter((m) => !m.archived_at) : [] }),
+  default: { get: (u: string) => (mockDb.hang ? new Promise(() => {}) : Promise.resolve({ data: u === '/coach/meal-templates' ? mockDb.meals.filter((m) => !m.archived_at) : [] })),
     post: () => Promise.resolve({ data: {} }), patch: () => Promise.resolve({ data: {} }), delete: () => Promise.resolve({ data: {} }) } }));
 jest.mock('../../../../theme/ThemeProvider', () => ({ useTheme: () => ({ colors: require('../../../../constants/colors').default,
   tokens: require('../../../../theme/tokens').default, semanticColors: require('../../../../theme/tokens').lightTokens }) }));
@@ -64,37 +64,43 @@ beforeEach(() => {
     meal('m2', 'Rice cakes, honey and whey', 240, 26, 30, 2), meal('m3', 'Greek yoghurt and granola', 260, 22, 34, 5),
     meal('m4', 'Cottage cheese and pineapple', 230, 24, 26, 3), meal('m5', 'Apple and peanut butter', 270, 7, 30, 16),
   ];
+  mockDb.hang = false;
   mockDb.recipes = [recipe('r1', 'Banana protein shake', true, ['dairy'], 250, 25, 32, 3), recipe('r3', 'Overnight protein oats', false, ['soy'], 320, 24, 38, 5)];
 });
 afterEach(() => jest.restoreAllMocks());
 
 const STRIP = 'Banana and whey shake · 250 kcal · P 25 · C 32 · F 3';
-/** The page lays out its masthead (300 pt tall) and is scrolled to `y`. */
+const HIDDEN = { includeHiddenElements: true };
+const strip = (s: Awaited<ReturnType<typeof editor>>) => s.getByTestId('meal-strip', HIDDEN);
+const shown = (s: Awaited<ReturnType<typeof editor>>) => flat(strip(s)).opacity === 1 && strip(s).props.pointerEvents === 'auto';
+/** The page lays out its masthead (300 pt tall) and the strip (115 pt), and is scrolled to `y`. */
 async function scrollTo(s: Awaited<ReturnType<typeof editor>>, y: number) {
   await fireEvent(s.getByTestId('meal-masthead'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 390, height: 300 } } });
+  await fireEvent(strip(s), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 390, height: 115 } } });
   await fireEvent.scroll(s.getByTestId('meal-scroll'), { nativeEvent: { contentOffset: { x: 0, y }, contentSize: { width: 390, height: 1600 }, layoutMeasurement: { width: 390, height: 700 } } });
 }
 
 describe.each(SIZES)('#ALM-E40 the pinned strip at $width pt, $fontScale text', (z) => {
-  it('strip 1: none while the masthead shows; once it has left the screen, the strip pins over the page under the top inset, as drawn', async () => {
+  it('strip 1: none while the masthead shows; once no more of it shows than the strip covers, the strip pins over the page under the top inset, as drawn', async () => {
     size(z);
     const s = await editor({ mealId: 'm1' });
     await s.findByText('Banana protein shake');
-    expect(s.queryByTestId('meal-strip', { includeHiddenElements: true })).toBeNull();
-    await scrollTo(s, 200); // the masthead's lower part still shows under the status bar
-    expect(s.queryByTestId('meal-strip', { includeHiddenElements: true })).toBeNull();
-    await scrollTo(s, 300 - INSETS.top); // its last line has gone under the top inset
-    const strip = s.getByTestId('meal-strip', { includeHiddenElements: true });
-    const words = within(strip).getByText(STRIP, { includeHiddenElements: true });
+    expect(shown(s)).toBe(false);
+    expect(flat(strip(s)).opacity).toBe(0);
+    await scrollTo(s, 300 - 115 - 1); // 116 pt of the masthead still show: more than the strip
+    expect(shown(s)).toBe(false);
+    await scrollTo(s, 300 - 115); // what is left of it fits under the strip
+    expect(shown(s)).toBe(true);
+    const words = within(strip(s)).getByText(STRIP, HIDDEN);
     // Pinned: drawn outside the scroll area, across the top of the page.
-    expect(within(s.getByTestId('meal-scroll')).queryByTestId('meal-strip', { includeHiddenElements: true })).toBeNull();
-    expect(flat(strip)).toMatchObject({ position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: lightTokens.surface.masthead,
+    expect(within(s.getByTestId('meal-scroll')).queryByTestId('meal-strip', HIDDEN)).toBeNull();
+    expect(flat(strip(s))).toMatchObject({ position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: lightTokens.surface.masthead,
       paddingTop: INSETS.top + spacing.xs, paddingBottom: spacing.md, paddingHorizontal: layout.gutter,
       borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet });
     expect({ ...face(words), color: flat(words).color }).toEqual({ ...token(typography.body), color: lightTokens.textOnMastheadMuted });
     expect(words.props.numberOfLines).toBeUndefined(); // it wraps (two lines at 320 pt with 130% text, as F03 and F10 draw)
     await scrollTo(s, 0);
-    expect(s.queryByTestId('meal-strip', { includeHiddenElements: true })).toBeNull();
+    expect(shown(s)).toBe(false);
   });
 });
 
@@ -102,9 +108,9 @@ it('strip 2: decoration for sighted users: hidden from VoiceOver, and the masthe
   const s = await editor({ mealId: 'm1' });
   await s.findByText('Banana protein shake');
   await scrollTo(s, 400);
-  const strip = s.getByTestId('meal-strip', { includeHiddenElements: true });
-  expect(strip.props.accessibilityElementsHidden).toBe(true);
-  expect(strip.props.importantForAccessibility).toBe('no-hide-descendants');
+  expect(shown(s)).toBe(true);
+  expect(strip(s).props.accessibilityElementsHidden).toBe(true);
+  expect(strip(s).props.importantForAccessibility).toBe('no-hide-descendants');
   expect(s.queryByText(STRIP)).toBeNull(); // not in the accessibility tree
   expect(s.getAllByRole('header').filter((h) => h.props.children === 'Banana and whey shake')).toHaveLength(1);
 });
@@ -113,10 +119,11 @@ it('strip 3: a New meal before Name is typed: the macros alone, no name, no "For
   const s = await editor();
   await s.findByText('Options for clients');
   await scrollTo(s, 400);
-  expect(within(s.getByTestId('meal-strip', { includeHiddenElements: true })).getByText('0 kcal · P 0 · C 0 · F 0', { includeHiddenElements: true })).toBeTruthy();
+  expect(shown(s)).toBe(true);
+  expect(within(strip(s)).getByText('0 kcal · P 0 · C 0 · F 0', HIDDEN)).toBeTruthy();
   await fireEvent.changeText(s.getByLabelText('Name'), 'Oats');
   await fireEvent.changeText(s.getByLabelText('Calories (kcal)'), '380');
-  expect(within(s.getByTestId('meal-strip', { includeHiddenElements: true })).getByText('Oats · 380 kcal · P 0 · C 0 · F 0', { includeHiddenElements: true })).toBeTruthy();
+  expect(within(strip(s)).getByText('Oats · 380 kcal · P 0 · C 0 · F 0', HIDDEN)).toBeTruthy();
 });
 
 /** B1's class (LS and LO B1, the seat's list): each line, the state that draws it, and the frame's measured type. */
@@ -187,11 +194,13 @@ it.each(SIZES)('C1: at $width pt, $fontScale text, the block titles keep their o
   }
 });
 
-it('C2: with no meal name yet the recipe picker shows no "For " sub; with one it reads "For {meal}"', async () => {
+it('C2: with no meal name yet the recipe picker shows no "For " sub', async () => {
   const none = await open('MealRecipePickerScreen', { mealId: undefined, mealName: '', recipeId: null });
   await none.findByText('Overnight protein oats');
   expect(none.queryByText(/^For\b/)).toBeNull();
-  none.unmount();
+});
+
+it('C2: with a name the recipe picker reads "For {meal}"', async () => {
   const named = await open('MealRecipePickerScreen', { mealId: 'm1', mealName: 'Banana and whey shake', recipeId: 'r1' });
   expect(await named.findByText('For Banana and whey shake')).toBeTruthy();
 });
@@ -208,9 +217,9 @@ it('N1: "Archive this meal" stays on while Save meal is off for a cleared name; 
 });
 
 it('N1: while the meal loads (F09) both footer actions are present and off', async () => {
-  qc.setQueryDefaults(['meal-templates'], { queryFn: () => new Promise(() => {}) });
+  mockDb.hang = true; // the meal list never answers
   const s = await editor({ mealId: 'm1' });
-  await waitFor(() => expect(s.getByLabelText('Loading the meal')).toBeTruthy());
+  expect(await s.findByLabelText('Loading the meal')).toBeTruthy();
   expect(s.getByLabelText('Archive this meal').props.accessibilityState?.disabled).toBe(true);
   expect(s.getByTestId('meal-save').props.accessibilityState?.disabled).toBe(true);
 });
