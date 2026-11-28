@@ -202,6 +202,9 @@ export const CommunityCohortSummarySchema = z
     // characters), or null. Absent until that backend lands, and then no purpose line; a bad value is dropped the same
     // way (no purpose line) rather than failing the list. Same cast as unread_count.
     description: z.string().nullable().optional().catch(undefined) as unknown as z.ZodOptional<z.ZodNullable<z.ZodString>>,
+    // LEAVE-MUTE-M (b#1168, ?include_left=1): when she left this space, or null while she is in it. A bad value is dropped
+    // (read as in) rather than failing the list. Same cast as unread_count.
+    left_at: z.string().nullable().optional().catch(undefined) as unknown as z.ZodOptional<z.ZodNullable<z.ZodString>>,
   })
   .passthrough();
 export type CommunityCohortSummary = z.infer<
@@ -373,10 +376,14 @@ export const communityApi = {
     );
   },
 
-  /** GET /community/cohorts — caller's cohort summaries (server-scoped). */
-  getCohorts(): Promise<CommunityCohortListResponse> {
+  /**
+   * GET /community/cohorts — caller's cohort summaries (server-scoped). LEAVE-MUTE-M (b#1168): the one list read
+   * (useCommunityCohorts) asks includeLeft, ?include_left=1, so the spaces she left come too, each with left_at set (null,
+   * or absent from an older server, = in the space); every reader splits them through leaveMute.ts (isLeft, splitCohorts).
+   */
+  getCohorts(opts: { includeLeft?: boolean } = {}): Promise<CommunityCohortListResponse> {
     return call(CommunityCohortListResponseSchema, () =>
-      api.get<unknown>('/community/cohorts'),
+      (opts.includeLeft ? api.get<unknown>('/community/cohorts', { params: { include_left: 1 } }) : api.get<unknown>('/community/cohorts')),
     );
   },
 

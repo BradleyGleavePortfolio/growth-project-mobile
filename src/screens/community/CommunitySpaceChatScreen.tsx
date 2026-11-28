@@ -44,7 +44,7 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AccessibilityInfo, ActivityIndicator, FlatList, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View,
+  AccessibilityInfo, ActivityIndicator, Alert, FlatList, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View,
   type ViewToken,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -73,6 +73,11 @@ import { useCommunityCohorts } from '../../hooks/useCommunity';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { isEffectivelyOnline, useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { featureFlags } from '../../config/featureFlags';
+import { SpaceBell } from '../../components/community/space-chat/SpaceBellMenu';
+import { SpaceToast, showLeftToast } from '../../components/community/space-chat/SpaceToast';
+import { FoldLine, FollowLink, LeftLine, MutedMark } from '../../components/community/space-chat/SpaceStreamLines';
+import { canLeave, isLeft, isReply, weaveStream, type StreamExtra } from '../../components/community/space-chat/leaveMute';
+import { useSpaceLeaveMute } from '../../components/community/space-chat/useSpaceLeaveMute';
 import { colors, forestPop as fp, radius, schemeCard, schemeCardOutline, spacing, typography, voiceShades } from '../../theme/tokens';
 
 type Params = { CommunitySpaceChat: { cohortId: string; messageId?: string } };
@@ -82,12 +87,17 @@ type Item =
   | { type: 'voice'; key: string; v: VoiceOutboxItem; at: string }
   | { type: 'day'; key: string; label: string }
   | { type: 'new'; key: string };
+/** LEAVE-MUTE-M: the stream as drawn, with the leave and thread lines (leaveMute.ts weaveStream). */
+type Row = Item | StreamExtra;
 
 // The kinds this page draws (LS-938R2 B2: a photo too); a coach's removal draws in place whatever the kind.
 const kindDrawn = (m: SpaceMessage) => (m.kind === 'voice' ? featureFlags.communityVoiceNotes : m.kind === 'text' || m.kind === 'image');
 const live = (m: SpaceMessage) =>
   kindDrawn(m) && !m.deleted && (m.kind === 'voice' ? !!m.voice_note : m.kind === 'image' || !!m.body);
 const drawable = (m: SpaceMessage) => live(m) || (kindDrawn(m) && isCoachRemoved(m));
+/** An item's time, for placing "{name} left" lines (a day line's is in its key; New messages has none). */
+const itemTime = (i: Item): string | null =>
+  (i.type === 'msg' ? i.m.created_at : i.type === 'local' ? i.r.createdAt : i.type === 'voice' ? i.at : i.type === 'day' ? i.key.slice(4) : null);
 
 export default function CommunitySpaceChatScreen(): React.ReactElement {
   const { cohortId, messageId } = useRoute<RouteProp<Params, 'CommunitySpaceChat'>>().params;
@@ -114,11 +124,14 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
   const chat = useSpaceChat(cohortId, client?.id ?? null, isOnline, focused);
   const isCoachViewer = cohort?.my_role === 'coach' || cohort?.my_role === 'owner';
   const coachOnly = cohort?.kind === 'announcement' || (cohort as { posting_policy?: string } | undefined)?.posting_policy === 'coach';
+  // LEAVE-MUTE-M (b#1168): a space she left stays readable (the server still lets her read it) with no box and no bell.
+  const left = isLeft(cohort);
   // Only once the server has let this person in on this visit (no 404 / 403): never while loading, never on a page
   // restored from the saved cache at a cold start (online until the read answers, or offline), FR-871R6 Opus B3.
   const answered = useServerAnswered(chat.list);
   const admitted = !!cohort && answered && !chat.noAccess;
-  const canPost = admitted && (isCoachViewer || !coachOnly);
+  const canPost = admitted && !left && (isCoachViewer || !coachOnly);
+  const lm = useSpaceLeaveMute(cohortId, client?.id ?? null, { admitted, left, memberCount: cohort?.member_count });
   // SC-M2: voice notes into this space (m#848's outbox, sent with this space's id) while communityVoiceNotes is on.
   const voiceOn = featureFlags.communityVoiceNotes && !!cohort?.workspace_id && !!client?.id;
   const voice = useSpaceVoiceOutbox(voiceOn ? cohort?.workspace_id ?? null : null, client?.id ?? null, cohortId);
@@ -150,9 +163,18 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
     return out.reverse();
   }, [chat.messages, chat.pending, chat.readCursor, client?.id, voice.rows]);
 
+  // LEAVE-MUTE-M: the stream as drawn: "{name} left" between messages (in the loaded range, R9), the Muted mark, a left
+  // thread's later replies folded (R8) unless opened here. Every place and scroll below reads this list.
+  const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set());
+  const oldestAt = chat.messages.length ? chat.messages[chat.messages.length - 1].created_at : null;
+  const whole = chat.list.isSuccess && !chat.list.hasNextPage;
+  const stream: Row[] = useMemo(() => weaveStream<Item>({
+    items, timeOf: itemTime, messageOf: (i) => (i.type === 'msg' ? i.m : null), lefts: lm.lefts, threads: left ? [] : lm.threads,
+    opened, oldestAt, whole,
+  }), [items, lm.lefts, lm.threads, left, opened, oldestAt, whole]);
   // Open at the message asked for, else at the New messages line, once per visit after the read cursor has answered.
   // Older pages load first until that row is loaded (the asked-for row, or the oldest unread one) or there are none.
-  const listRef = useRef<FlatList<Item>>(null);
+  const listRef = useRef<FlatList<Row>>(null);
   const [target, setTarget] = useState<string | null | undefined>(undefined);
   const [placed, setPlaced] = useState(false);
   const [seenRows, setSeenRows] = useState<ReadonlySet<string>>(() => new Set());
@@ -183,18 +205,18 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
     setTimeout(() => { if (visit.current === v && !placedRef.current) toRow(info.index); }, 50);
   }, [toRow]);
   useEffect(() => {
-    if (target !== undefined || !chat.readSettled || items.length === 0) return;
+    if (target !== undefined || !chat.readSettled || stream.length === 0) return;
     const lastRead = chat.readCursor?.last_read_at;
     const oldest = chat.messages[chat.messages.length - 1];
-    const short = messageId ? !items.some((i) => i.key === messageId) : !!lastRead && !!oldest && oldest.created_at > lastRead;
+    const short = messageId ? !stream.some((i) => i.key === messageId) : !!lastRead && !!oldest && oldest.created_at > lastRead;
     // At most 10 pages (300 rows): past that the line sits above the oldest row loaded (C, edge, deferred to 10k clients).
     if (short && chat.list.hasNextPage && (chat.list.data?.pages.length ?? 0) < 10) {
       if (!chat.list.isFetchingNextPage) void chat.list.fetchNextPage();
       return;
     }
-    const index = items.findIndex((i) => (messageId ? i.key === messageId : i.type === 'new'));
+    const index = stream.findIndex((i) => (messageId ? i.key === messageId : i.type === 'new'));
     const v = visit.current;
-    setTarget(index > 0 ? items[index].key : null);
+    setTarget(index > 0 ? stream[index].key : null);
     // FIX-945R5 (LS-945R5 B1): else at the newest rows, where a fresh open starts (the newest message asked for, one not
     // held here, nothing unread), so a visit started over in the list on screen ends there too.
     requestAnimationFrame(() => {
@@ -202,7 +224,7 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
       if (index > 0) toRow(index);
       else listRef.current?.scrollToOffset({ offset: 0, animated: false });
     });
-  }, [items, messageId, target, chat.readSettled, chat.readCursor, chat.messages, chat.list, toRow]);
+  }, [stream, messageId, target, chat.readSettled, chat.readCursor, chat.messages, chat.list, toRow]);
   // In place once the row it opened at is on screen (or the person scrolls); only then do read marks count.
   useEffect(() => { if (!placed && (target === null || (!!target && seen.has(target)))) setPlaced(true); }, [placed, target, seen]);
 
@@ -255,7 +277,7 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
   // space only the coach posts in, a member's own top-level row (members answer the coach's posts there).
   // FR-909: with who wrote it and when, so a block or a removal ends reply mode.
   const replyTo = useCallback((m: SpaceMessage): SpaceReplyTarget | null => {
-    if (!admitted || m.deleted) return null;
+    if (!admitted || left || m.deleted) return null;
     if (m.parent || m.parent_message_id) {
       const q = quoteOf(m.parent ?? null);
       const root = m.parent ? chat.messages.find((x) => x.id === m.parent?.id) : undefined;
@@ -266,24 +288,36 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
     const body = m.kind === 'voice' ? voiceLine(m.voice_note?.duration_ms ?? 0)
       : m.kind === 'image' ? photoLine(m.body) : firstLine(m.body);
     return { id: m.id, authorLabel: m.sender?.name ?? '', body, authorId: m.sender_user_id, at: m.created_at };
-  }, [admitted, coachOnly, isCoachViewer, chat.messages]);
+  }, [admitted, left, coachOnly, isCoachViewer, chat.messages]);
   const { readable } = chat;
   const copyOf = useCallback((m: SpaceMessage) => (m.kind === 'text' && m.body && !m.deleted ? () => {
     const body = readable(m.id)?.body;
     if (body) void Clipboard.setStringAsync(body).then(() => HapticService.success(), () => undefined);
   } : undefined), [readable]);
-  const loaded = useMemo(() => new Set(items.map((i) => i.key)), [items]);
+  const loaded = useMemo(() => new Set(stream.map((i) => i.key)), [stream]);
   const jump = useCallback((id: string) => {
-    const index = items.findIndex((i) => i.key === id);
+    const index = stream.findIndex((i) => i.key === id);
     if (index < 0) return;
     visit.current.jumping = index;
     listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true });
     setLit(id);
-  }, [items]);
+  }, [stream]);
 
-  const renderItem = useCallback(({ item }: { item: Item }) => {
+  const renderItem = useCallback(({ item }: { item: Row }) => {
     if (item.type === 'day') return <DayLine label={item.label} />;
     if (item.type === 'new') return <NewMessagesLine />;
+    if (item.type === 'left') return <LeftLine name={item.name} testID={`space-${item.key}`} />;
+    if (item.type === 'mark') return <MutedMark testID={`space-muted-${item.threadId}`} />;
+    if (item.type === 'fold') {
+      const id = item.threadId;
+      return <FoldLine count={item.count} open={item.open} testID={`space-fold-${id}`}
+        onPress={() => setOpened((o) => { const n = new Set(o); if (n.has(id)) n.delete(id); else n.add(id); return n; })} />;
+    }
+    if (item.type === 'follow') {
+      const id = item.threadId;
+      return <FollowLink busy={lm.busy === `thread-${id}`} testID={`space-follow-${id}`}
+        onPress={() => lm.thread(id, 'left', false, () => setOpened((o) => { const n = new Set(o); n.delete(id); return n; }))} />;
+    }
     if (item.type === 'local') {
       const r = item.r;
       return (
@@ -324,7 +358,7 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
         onReply={answer ? () => setReply(answer) : undefined} onCopy={copy} held={held?.id === m.id || lit === m.id}
       />
     );
-  }, [chat, client, isCoachViewer, isOnline, myName, voice, navigation, safetyRoute, replyTo, copyOf, loaded, jump, held, lit, setHeld, setReply]);
+  }, [chat, client, isCoachViewer, isOnline, myName, voice, navigation, safetyRoute, replyTo, copyOf, loaded, jump, held, lit, setHeld, setReply, lm]);
 
   const loading = chat.list.isLoading || cohorts.isLoading;
   // Offline with nothing kept: say so at once rather than spin through the retries.
@@ -369,10 +403,41 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
       <Text style={s.backLabel}>{BACK_TO_SPACES}</Text>
     </TouchableOpacity>
   ) : <SpaceListButton label={BACK_TO_SPACES} testID="space-chat-back" />;
+  // LEAVE-MUTE-M (D2a, D2c; Style 1): Leave space asks first with the system's own confirm (LM-10, LM-11, c_L4); nothing
+  // moves before the server answers (R3); then she lands on Home with "You left {space}." and Undo (the owner's default).
+  const confirmLeave = () => {
+    if (!cohort) return;
+    const name = cohort.name;
+    Alert.alert(leaveTitle(name), LEAVE_BODY, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: LEAVE_SPACE, style: 'destructive', onPress: () => lm.leave(() => {
+        showLeftToast(cohortId, name);
+        navigation.navigate(coachStack ? 'CoachCommunityCohorts' : 'CommunityTab');
+      }) },
+    ]);
+  };
+  // A thread action's toast ("Thread muted." with Undo, s1_L9); a failure's comes from the hook (s1_L11).
+  const [notice, setNotice] = useState<{ text: string; undo: () => void } | null>(null);
+  const hideNotice = useCallback(() => setNotice(null), []);
+  const barRef = useRef<View>(null);
+  // D2b (the owner's default: rows on a thread's first message): Mute or Unmute thread, Leave or Follow thread, with the
+  // first message's id; none on a reply, a removed row, or in a left or closed space.
+  const threadRows = (m: SpaceMessage | undefined) => {
+    if (!m || !admitted || left || isReply(m) || m.deleted) return {};
+    const state = lm.stateOf(m.id) ?? null;
+    return {
+      thread: state,
+      onMuteThread: () => (state === 'muted' ? lm.thread(m.id, 'muted', false)
+        : lm.thread(m.id, 'muted', true, () => setNotice({ text: THREAD_MUTED, undo: () => lm.thread(m.id, 'muted', false) }))),
+      onLeaveThread: () => lm.thread(m.id, 'left', state !== 'left'),
+    };
+  };
+  // Said once, as the closed bar is.
+  useEffect(() => { if (left && admitted) AccessibilityInfo.announceForAccessibility?.(LEFT_LINE); }, [left, admitted]);
 
   return (
     <SafeAreaView style={s.safe} edges={['top']} testID="space-chat-screen">
-      <View style={s.header}>
+      <View style={s.header} ref={barRef}>
         <View style={s.icon}>
           {coachStack ? (
             <TouchableOpacity onPress={() => navigation.navigate('CoachCommunityCohorts')} accessibilityRole="button" accessibilityLabel="Open space list" style={s.icon} testID="space-chat-spaces">
@@ -383,10 +448,13 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
         <View style={s.titles} accessible accessibilityRole="header">
           <View style={s.titleRow}>
             {cohort ? <HashGlyph color={fp.onDeepMuted} /> : null}
-            <Text style={s.title} numberOfLines={1}>{cohort ? cohort.name : ' '}</Text>
+            <Text style={s.title} numberOfLines={2}>{cohort ? cohort.name : ' '}</Text>
           </View>
           {cohort ? <Text style={s.sub}>{members}</Text> : null}
         </View>
+        {cohort && admitted && !left ? (
+          <SpaceBell bar={barRef} notify={lm.notify} busy={lm.busy === 'bell' || lm.busy === 'leave'} canLeave={canLeave(cohort)} onAction={lm.bell} onLeave={confirmLeave} />
+        ) : null}
         <View style={s.icon}>
           {cohort ? (
             <TouchableOpacity
@@ -438,7 +506,7 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
           <FlatList
             ref={listRef}
             inverted
-            data={items}
+            data={stream}
             keyExtractor={(i) => i.key}
             renderItem={renderItem}
             viewabilityConfigCallbackPairs={viewPairs}
@@ -460,10 +528,27 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
             <Text style={s.pillText}>New messages</Text>
           </TouchableOpacity>
         ) : null}
+        {lm.failure ? <SpaceToast stack text={lm.failure.message} action="Try again" onAction={lm.failure.retry} onTimeout={lm.clearFailure} />
+          : notice ? <SpaceToast text={notice.text} action="Undo" onAction={() => { setNotice(null); notice.undo(); }} onTimeout={hideNotice} />
+            : null}
         {chat.noAccess ? (
           <View style={[s.closedDock, dockInset ? { paddingBottom: spacing.sm + dockInset } : null]}>
             <ConversationClosedLine studio testID="space-chat-no-access" style={s.closedLine} />
             {backToSpaces}
+          </View>
+        ) : left && admitted ? (
+          // LEAVE-MUTE-M (s1_L6): where the box was, the closed bar's sibling: the leave glyph and LM-14, Join again (LM-15).
+          <View style={[s.closedDock, dockInset ? { paddingBottom: spacing.sm + dockInset } : null]} testID="space-chat-left">
+            <View style={s.leftLine} accessible accessibilityRole="text" accessibilityLabel={LEFT_LINE}>
+              <Ionicons name="exit-outline" size={22} color={colors.charcoal} />
+              <Text style={s.leftText}>{LEFT_LINE}</Text>
+            </View>
+            <TouchableOpacity
+              onPress={lm.busy ? undefined : lm.join} disabled={!!lm.busy} accessibilityRole="button" accessibilityLabel={JOIN_AGAIN}
+              accessibilityState={{ busy: lm.busy === 'join', disabled: !!lm.busy }} style={s.backLink} testID="space-chat-join"
+            >
+              {lm.busy === 'join' ? <ActivityIndicator color={fp.forest} /> : <Text style={s.backLabel}>{JOIN_AGAIN}</Text>}
+            </TouchableOpacity>
           </View>
         ) : canPost || (admitted && (reply || refusedReply)) ? (
           // SC-M3: a member answering the coach in a space only the coach posts in gets the field while the reply is set.
@@ -491,7 +576,7 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
       ) : null}
       {heldNow ? (
         <SpaceMessageSheet onClose={() => setHeld(null)} onCopy={copyOf(heldNow)}
-          onReply={heldReply ? () => setReply(heldReply) : undefined} />
+          onReply={heldReply ? () => setReply(heldReply) : undefined} {...threadRows(heldNow)} />
       ) : null}
     </SafeAreaView>
   );
@@ -503,6 +588,13 @@ const HIDDEN_LINE = 'Messages in this space are hidden.';
 const COACH_ONLY_LINE = 'Only your coach posts here.';
 const startLine = (space: string) => `This is the start of ${space}.`;
 const welcomeLine = (space: string) => `Welcome to ${space}.`;
+// LEAVE-MUTE-M words: LM-09, LM-10, LM-11, LM-14, LM-15, LM-07 (owner 10-25 21:21, "approve all wording").
+const LEAVE_SPACE = 'Leave space';
+const leaveTitle = (space: string) => `Leave ${space}?`;
+const LEAVE_BODY = "You'll stop getting its messages and notifications. You can join again from Spaces you left.";
+const LEFT_LINE = 'You left this space.';
+const JOIN_AGAIN = 'Join again';
+const THREAD_MUTED = 'Thread muted.';
 
 /** Seen: most of the row is on screen, or the row fills most of the screen (one taller than the screen). */
 const VIEWABLE = [{ itemVisiblePercentThreshold: 60 }, { viewAreaCoveragePercentThreshold: 60 }];
@@ -547,4 +639,7 @@ const s = StyleSheet.create({
     borderTopWidth: 1, ...schemeCardOutline, ...schemeCard,
   },
   bandText: { ...typography.bodySmall, color: colors.charcoal, textAlign: 'center', flexShrink: 1 },
+  // LEAVE-MUTE-M (s1_L6): the left line, as the closed bar's (.cline: 15 / 22 charcoal, a 22 pt glyph, 8 pt gap, 36 pt).
+  leftLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, minHeight: 36, alignSelf: 'stretch' },
+  leftText: { fontFamily: 'Inter_400Regular', fontSize: 15, lineHeight: 22, color: colors.charcoal, textAlign: 'center', flexShrink: 1 },
 });

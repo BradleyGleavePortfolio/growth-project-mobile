@@ -110,7 +110,8 @@ export function useCommunityToday(): UseQueryResult<CommunityTodayResponse> {
 export function useCommunityCohorts(enabled = true): UseQueryResult<CommunityCohortListResponse> {
   return useQuery({
     queryKey: communityKeys.cohorts(),
-    queryFn: () => communityApi.getCohorts(),
+    // LEAVE-MUTE-M: the one list read keeps the spaces she left (left_at set); readers split them (leaveMute.ts).
+    queryFn: () => communityApi.getCohorts({ includeLeft: true }),
     staleTime: 60_000,
     enabled,
   });
@@ -451,6 +452,13 @@ function onCommunityPing(qc: QueryClient, ping?: CommunityPing): void {
   // pings with the same name: one DM read per ping while a DM screen is mounted, none otherwise.
   if (event === COMMUNITY_BROADCAST_EVENTS.messageCreated || !known.includes(event)) {
     refreshDmReadsIn(qc);
+  }
+  // LEAVE-MUTE-M (b#1168 CONTRACT update 6477611562): a leave that leaves, or a join that ends one, pings each reader of
+  // the space as community.membership.changed (ids only). Re-read the one space list (left_at, counts) and the left lists
+  // ("{name} left"; only an open space's is active, so only it reads). Only the event name is read.
+  if (event === COMMUNITY_BROADCAST_EVENTS.membershipChanged) {
+    void qc.invalidateQueries({ queryKey: communityKeys.cohorts() });
+    void qc.invalidateQueries({ queryKey: ['community', 'space-left'] });
   }
 }
 

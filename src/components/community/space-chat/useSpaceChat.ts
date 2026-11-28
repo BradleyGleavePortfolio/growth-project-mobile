@@ -199,7 +199,11 @@ export function useSpaceChat(cohortId: string, userId: string | null, isOnline: 
       if (a.name) names.add(a.name);
     }
     retire(ids, (m) => (m.sender_user_id === authorId ? null : m), authorId, names);
-  }, [retire]);
+    // LEAVE-MUTE-M (R9): their "{name} left" lines go with their rows, in every space's kept list (the server leaves a
+    // block out of the next read).
+    qc.setQueriesData<Array<{ user_id: string }>>({ queryKey: ['community', 'space-left', uid] }, (rows) =>
+      rows?.some((r) => r.user_id === authorId) ? rows.filter((r) => r.user_id !== authorId) : rows);
+  }, [retire, qc, uid]);
 
   /** Resolves false when the mark did not land, so the page tries again with the next row seen (FR-871 Sol B1 C). */
   const markRead = useCallback(async (messageId: string): Promise<boolean> => {

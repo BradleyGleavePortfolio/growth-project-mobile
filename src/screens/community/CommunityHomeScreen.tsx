@@ -29,6 +29,7 @@ import { featureFlags } from '../../config/featureFlags';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { forestPop as fp, layout, motion, typography } from '../../theme/tokens';
 import type { CommunityNav } from './communityNavTypes';
+import { SpaceLeftToastHost } from '../../components/community/space-chat/SpaceToast';
 
 type Tab = 'home' | 'challenges';
 const LABEL: Record<Tab, string> = { home: 'Home', challenges: 'Challenges' };
@@ -154,6 +155,7 @@ export default function CommunityHomeScreen(): React.ReactElement {
         {tabs.length > 1 && ready ? <Segment tabs={tabs} value={tab} onChange={setTab} /> : null}
       </View>
       <View style={s.body}>{body}</View>
+      <SpaceLeftToastHost />
     </View>
   );
 }

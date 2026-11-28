@@ -25,6 +25,8 @@ import { HapticService } from '../../ui/haptics/haptics.service';
 import { startSpaceOutbox } from './space-chat/spaceChatOutbox';
 import { forestPop as fp, layout, typography } from '../../theme/tokens';
 import type { CommunityNav } from '../../screens/community/communityNavTypes';
+import { LeftSpaceRow } from './SpaceLeftRows';
+import { splitCohorts } from './space-chat/leaveMute';
 
 export type SpaceTarget =
   | { kind: 'space'; id: string }
@@ -32,7 +34,7 @@ export type SpaceTarget =
   | { kind: 'route'; name: 'Leaderboard' | 'CommunityClassroom' };
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
-export interface SpaceRow { key: string; label: string; icon: IconName | '#'; meta?: string; chip?: string; badge?: number; target: SpaceTarget }
+export interface SpaceRow { key: string; label: string; icon: IconName | '#'; meta?: string; chip?: string; badge?: number; target: SpaceTarget; left?: boolean }
 export interface SpaceSection { key: string; title: string; rows: SpaceRow[] }
 
 /** SC-BE2 caps a space's count at 99, meaning 99 or more: drawn "99+" like any count over 99. */
@@ -73,8 +75,9 @@ export function useSpaceTree() {
     queryFn: async () => Number((await api.get<{ total?: unknown }>('/messages/unread-count')).data?.total) || 0,
   });
 
-  const spaces: SpaceRow[] = (cohorts.data?.cohorts ?? [])
-    .filter((c) => c.kind !== 'section')
+  // LEAVE-MUTE-M: one list read with include_left; the spaces she left go under "Spaces you left" (after Direct messages).
+  const rows = splitCohorts((cohorts.data?.cohorts ?? []).filter((c) => c.kind !== 'section'));
+  const spaces: SpaceRow[] = rows.in
     .map((c): SpaceRow => ({ key: c.id, label: c.name, icon: c.kind === 'announcement' ? 'megaphone-outline' : '#', badge: spaceBadge(c.unread_count), target: { kind: 'space', id: c.id } }));
   if (coachId) spaces.push({ key: 'leaderboard', label: 'Leaderboard', icon: 'podium-outline', chip: 'Private', target: { kind: 'route', name: 'Leaderboard' } });
   if (featureFlags.communityClassroom) spaces.push({ key: 'classroom', label: 'Classroom', icon: 'book-outline', target: { kind: 'route', name: 'CommunityClassroom' } });
@@ -89,6 +92,7 @@ export function useSpaceTree() {
     { key: 'spaces', title: 'Spaces', rows: spaces },
     { key: 'dms', title: 'Direct messages', rows: dms },
   ].filter((sec) => sec.rows.length > 0);
+  if (rows.left.length) sections.push({ key: 'left', title: 'Spaces you left', rows: rows.left.map((c): SpaceRow => ({ key: c.id, label: c.name, icon: '#', left: true, target: { kind: 'space', id: c.id } })) });
 
   const retry = async () => {
     const results = await Promise.all([me.isError ? me.refetch() : null, cohorts.isError ? cohorts.refetch() : null]);
@@ -161,6 +165,7 @@ export function SpaceTree({ sections, deep = false, activeId, onOpen }: {
               ? sec.rows.map((r) => {
                   const active = r.target.kind === 'space' && r.target.id === activeId;
                   const badge = r.badge ?? 0;
+                  if (r.left && r.target.kind === 'space') return <LeftSpaceRow key={r.key} id={r.target.id} label={r.label} deep={deep} onOpen={() => onOpen(r.target)} />;
                   return (
                     <HapticPressable
                       key={r.key}
