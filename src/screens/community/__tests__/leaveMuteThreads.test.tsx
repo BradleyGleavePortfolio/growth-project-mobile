@@ -58,7 +58,7 @@ let mockRole = 'client';
 const mockLeft = new Map<string, string>();
 let mockKindOf: Record<string, string | undefined> = {};
 const mockRows = () => [
-  { id: 'c-chat', workspace_id: 'ws', name: 'Morning crew', is_default: false, kind: mockKindOf['c-chat'] ?? 'chat', member_count: mockLeft.has('c-chat') ? 13 : 14, my_role: mockRole, left_at: mockLeft.get('c-chat') ?? null },
+  { id: 'c-chat', workspace_id: 'ws', name: 'Morning crew', is_default: false, kind: 'c-chat' in mockKindOf ? mockKindOf['c-chat'] : 'chat', member_count: mockLeft.has('c-chat') ? 13 : 14, my_role: mockRole, left_at: mockLeft.get('c-chat') ?? null },
   { id: 'c-ann', workspace_id: 'ws', name: 'Announcements', is_default: false, kind: 'announcement', posting_policy: 'coach', member_count: 24, my_role: mockRole, left_at: null },
 ].map((c) => (c.kind === undefined ? (({ kind: _k, ...rest }) => rest)(c) : c));
 jest.mock('../../../hooks/useCommunity', () => {
@@ -92,6 +92,7 @@ const MAYA = { id: 'u-maya', name: 'Maya Ortiz' };
 const RILEY = { id: 'u-riley', name: 'Riley Park' };
 const fail = (status: number, code?: string) => Object.assign(new Error(`HTTP ${status}`), { isAxiosError: true, response: { status, data: code ? { code } : {} } });
 const offline = () => Object.assign(new Error('Network Error'), { isAxiosError: true });
+const HIDDEN = { includeHiddenElements: true };
 const OFFLINE_LINE = 'You appear to be offline. Check your connection, then try again.';
 const CHANGED_LINE = 'This changed while you were looking at it. Refresh, then try again.';
 const GONE_LINE = 'This is no longer available. It may have been removed or hidden. Go back and refresh.';
@@ -212,7 +213,7 @@ const keysOf = (r: R) => (r.getByTestId('space-chat-list').props.data as Array<{
 describe('LEAVE-MUTE-M thread rows in the hold sheet (D2b, Style 1)', () => {
   it('L12: on a thread\'s first message: Reply, Copy, Mute thread, Leave thread, Cancel; on a reply: no thread rows (the owner\'s default)', async () => {
     const r = await open();
-    await r.findByText('body m1');
+    await r.findByTestId('space-chat-row-m1');
     await hold(r, 'm1');
     expect(sheetRows(r)).toEqual(['Reply', 'Copy', 'Mute thread', 'Leave thread', 'Cancel']);
     await pick(r, 'cancel');
@@ -229,7 +230,7 @@ describe('LEAVE-MUTE-M thread rows in the hold sheet (D2b, Style 1)', () => {
   ] as const)('L12: %s calls its route once with the first message\'s id', async (label, id, states, verb, url) => {
     threadStates = [...states] as typeof threadStates;
     const r = await open();
-    await r.findByText('body m1');
+    await r.findByTestId('space-chat-row-m1');
     await waitFor(() => expect(calls('get', '/threads').length).toBeGreaterThan(0));
     await hold(r, 'm1');
     await waitFor(() => expect(sheetRows(r)).toContain(label));
@@ -241,14 +242,14 @@ describe('LEAVE-MUTE-M thread rows in the hold sheet (D2b, Style 1)', () => {
   it('L12: a muted thread offers Unmute thread and Leave thread; a left one Mute thread and Follow thread', async () => {
     threadStates = [{ thread_message_id: 'm1', state: 'muted', since: '2026-11-27T14:50:00.000Z' }];
     let r = await open();
-    await r.findByText('body m1');
+    await r.findByTestId('space-chat-row-m1');
     await hold(r, 'm1');
     await waitFor(() => expect(sheetRows(r)).toEqual(['Reply', 'Copy', 'Unmute thread', 'Leave thread', 'Cancel']));
     await r.unmount();
     client.clear();
     threadStates = [{ thread_message_id: 'm1', state: 'left', since: '2026-11-27T14:50:00.000Z' }];
     r = await open();
-    await r.findByText('body m1');
+    await r.findByTestId('space-chat-row-m1');
     await hold(r, 'm1');
     await waitFor(() => expect(sheetRows(r)).toEqual(['Reply', 'Copy', 'Mute thread', 'Follow thread', 'Cancel']));
   });
@@ -266,7 +267,7 @@ describe('LEAVE-MUTE-M thread rows in the hold sheet (D2b, Style 1)', () => {
 describe('LEAVE-MUTE-M the Muted mark (LM-05, LM-06, LM-07)', () => {
   it('L13: after the server answers Mute thread: the mark under the first message, spoken "Thread muted", and the toast "Thread muted." with Undo (which unmutes)', async () => {
     const r = await open();
-    await r.findByText('body m1');
+    await r.findByTestId('space-chat-row-m1');
     const answer = deferred<{ data: unknown }>();
     mockApi.put.mockImplementationOnce(() => answer.promise);
     await hold(r, 'm1');
@@ -280,7 +281,7 @@ describe('LEAVE-MUTE-M the Muted mark (LM-05, LM-06, LM-07)', () => {
     const toast = await r.findByTestId('space-toast');
     expect(within(toast).getByText('Thread muted.')).toBeTruthy();
     // The replies stay in the stream.
-    expect(r.getByText('body m3')).toBeTruthy();
+    expect(r.getByText('body m3', HIDDEN)).toBeTruthy();
     await fireEvent.press(within(toast).getByText('Undo'));
     await waitFor(() => expect(mockApi.delete).toHaveBeenCalledWith('/community/cohorts/c-chat/threads/m1/mute'));
     await waitFor(() => expect(r.queryByTestId('space-muted-m1')).toBeNull());
@@ -288,7 +289,7 @@ describe('LEAVE-MUTE-M the Muted mark (LM-05, LM-06, LM-07)', () => {
 
   it('L13: a mute refused offline: no mark, the failure line', async () => {
     const r = await open();
-    await r.findByText('body m1');
+    await r.findByTestId('space-chat-row-m1');
     mockApi.put.mockImplementationOnce(async () => { throw offline(); });
     await hold(r, 'm1');
     await pick(r, 'mute-thread');
@@ -306,10 +307,10 @@ describe('LEAVE-MUTE-M the fold of a left thread (LM-08)', () => {
     const r = await open();
     const fold = await r.findByTestId('space-fold-m1');
     expect(within(fold).getByText('2 replies since you left')).toBeTruthy();
-    expect(r.getByText('body m2')).toBeTruthy(); // before she left the thread
-    expect(r.queryByText('body m3')).toBeNull();
-    expect(r.queryByText('body m4')).toBeNull();
-    expect(r.getByText('body m5')).toBeTruthy(); // not in the thread
+    expect(r.getByText('body m2', HIDDEN)).toBeTruthy(); // before she left the thread
+    expect(r.queryByText('body m3', HIDDEN)).toBeNull();
+    expect(r.queryByText('body m4', HIDDEN)).toBeNull();
+    expect(r.getByText('body m5', HIDDEN)).toBeTruthy(); // not in the thread
     const keys = keysOf(r);
     expect(keys.indexOf('fold-m1')).toBe(keys.indexOf('m2') + 1);
   });
@@ -318,8 +319,8 @@ describe('LEAVE-MUTE-M the fold of a left thread (LM-08)', () => {
     threadStates = LEFT;
     const r = await open();
     await fireEvent.press(await r.findByTestId('space-fold-m1'));
-    expect(r.getByText('body m3')).toBeTruthy();
-    expect(r.getByText('body m4')).toBeTruthy();
+    expect(r.getByText('body m3', HIDDEN)).toBeTruthy();
+    expect(r.getByText('body m4', HIDDEN)).toBeTruthy();
     const keys = keysOf(r);
     expect(keys.indexOf('follow-m1')).toBe(keys.indexOf('m4') + 1);
     const answer = deferred<{ data: unknown }>();
@@ -332,7 +333,7 @@ describe('LEAVE-MUTE-M the fold of a left thread (LM-08)', () => {
     await act(async () => { answer.resolve({ data: '' }); });
     await waitFor(() => expect(r.queryByTestId('space-follow-m1')).toBeNull());
     expect(r.queryByTestId('space-fold-m1')).toBeNull();
-    expect(r.getByText('body m4')).toBeTruthy();
+    expect(r.getByText('body m4', HIDDEN)).toBeTruthy();
   });
 
   it('L14: a reply of her own follows the thread again on the server: no fold after the next read', async () => {
@@ -344,8 +345,8 @@ describe('LEAVE-MUTE-M the fold of a left thread (LM-08)', () => {
     page = [msg('m6', '2026-11-27T15:40:00.000Z', ME, { parent_message_id: 'm1', parent: quoteOf('m1') }), ...thread()];
     await act(async () => { await client.invalidateQueries(); });
     await waitFor(() => expect(r.queryByTestId('space-fold-m1')).toBeNull());
-    expect(r.getByText('body m4')).toBeTruthy();
-    expect(r.getByText('body m6')).toBeTruthy();
+    expect(r.getByText('body m4', HIDDEN)).toBeTruthy();
+    expect(r.getByText('body m6', HIDDEN)).toBeTruthy();
   });
 
   it('L14: the states survive a refetch of the stream', async () => {

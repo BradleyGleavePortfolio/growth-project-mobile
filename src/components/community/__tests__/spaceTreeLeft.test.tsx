@@ -37,8 +37,9 @@ jest.mock('../../../hooks/useCommunity', () => {
   };
 });
 
-import CommunityHomeScreen from '../../../screens/community/CommunityHomeScreen';
-import { SpaceTree, useSpaceTree } from '../SpaceTree';
+// Required here, after the stand-ins above exist (an import would load them before mockApi is set).
+const CommunityHomeScreen = require('../../../screens/community/CommunityHomeScreen').default as React.ComponentType;
+const { SpaceTree, useSpaceTree } = require('../SpaceTree') as typeof import('../SpaceTree');
 
 const row = (id: string, name: string, extra: Record<string, unknown> = {}) => ({ id, workspace_id: 'ws-1', name, is_default: false, kind: 'chat', member_count: 14, my_role: 'client', left_at: null, ...extra });
 const offline = () => Object.assign(new Error('Network Error'), { isAxiosError: true });

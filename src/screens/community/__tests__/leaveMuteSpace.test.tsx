@@ -57,7 +57,7 @@ let mockRole = 'client';
 const mockLeft = new Map<string, string>();
 let mockKindOf: Record<string, string | undefined> = {};
 const mockRows = () => [
-  { id: 'c-chat', workspace_id: 'ws', name: 'Morning crew', is_default: false, kind: mockKindOf['c-chat'] ?? 'chat', member_count: mockLeft.has('c-chat') ? 13 : 14, my_role: mockRole, left_at: mockLeft.get('c-chat') ?? null },
+  { id: 'c-chat', workspace_id: 'ws', name: 'Morning crew', is_default: false, kind: 'c-chat' in mockKindOf ? mockKindOf['c-chat'] : 'chat', member_count: mockLeft.has('c-chat') ? 13 : 14, my_role: mockRole, left_at: mockLeft.get('c-chat') ?? null },
   { id: 'c-ann', workspace_id: 'ws', name: 'Announcements', is_default: false, kind: 'announcement', posting_policy: 'coach', member_count: 24, my_role: mockRole, left_at: null },
 ].map((c) => (c.kind === undefined ? (({ kind: _k, ...rest }) => rest)(c) : c));
 jest.mock('../../../hooks/useCommunity', () => {
@@ -74,6 +74,15 @@ jest.mock('../../../components/community/SafetyMenu', () => {
     <Text testID={p.testID} accessibilityLabel="Report or block" onPress={() => p.onBlocked?.(p.authorUserId)}>menu</Text>
   );
 });
+// The realtime channel stands in: the ping handler useCommunityBadge subscribes is kept for L11 to call.
+const mockPing: { current: ((p?: { event: string }) => void) | null } = { current: null };
+jest.mock('../../../api/communityRealtime', () => ({
+  COMMUNITY_BROADCAST_EVENTS: {
+    messageCreated: 'community.message.created', messageUpdated: 'community.message.updated', postCreated: 'community.post.created',
+    postUpdated: 'community.post.updated', reactionChanged: 'community.reaction.changed', membershipChanged: 'community.membership.changed',
+  },
+  subscribeToCommunityUser: (_u: string, cb: (p?: { event: string }) => void) => { mockPing.current = cb; return () => { mockPing.current = null; }; },
+}));
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(async () => true) }));
 const mockApi = { get: jest.fn(), post: jest.fn(), put: jest.fn(), delete: jest.fn() };
 jest.mock('../../../services/api', () => ({ __esModule: true, default: mockApi }));
@@ -91,9 +100,11 @@ const MAYA = { id: 'u-maya', name: 'Maya Ortiz' };
 const RILEY = { id: 'u-riley', name: 'Riley Park' };
 const fail = (status: number, code?: string) => Object.assign(new Error(`HTTP ${status}`), { isAxiosError: true, response: { status, data: code ? { code } : {} } });
 const offline = () => Object.assign(new Error('Network Error'), { isAxiosError: true });
+const HIDDEN = { includeHiddenElements: true };
 const OFFLINE_LINE = 'You appear to be offline. Check your connection, then try again.';
 const CHANGED_LINE = 'This changed while you were looking at it. Refresh, then try again.';
-const GONE_LINE = 'This is no longer available. It may have been removed or hidden. Go back and refresh.';
+// The app's words for that code (communityErrors.ts BY_CODE), through describeCommunityFailure (R3).
+const GONE_LINE = 'This cohort is no longer available. Go back and refresh, or contact your coach.';
 const notify = (mode: string, extra: Record<string, unknown> = {}) => ({ mode, default_mode: 'mute_low', effective_mode: mode, silenced_until: null, ...extra });
 const deferred = <T,>() => { let resolve!: (v: T) => void; let reject!: (e: unknown) => void; const promise = new Promise<T>((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
 
@@ -279,6 +290,7 @@ describe('LEAVE-MUTE-M leave, Undo and Join again', () => {
 
     menu = within(await openMenu(r));
     await fireEvent.press(menu.getByLabelText('Leave space'));
+    await waitFor(() => expect(alert).toHaveBeenCalledTimes(2));
     const answer = deferred<{ data: unknown }>();
     mockApi.post.mockImplementationOnce(() => answer.promise);
     await act(async () => { confirmButtons()[1].onPress?.(); });
@@ -312,6 +324,7 @@ describe('LEAVE-MUTE-M leave, Undo and Join again', () => {
     const menu = within(await openMenu(r));
     await waitFor(() => expect(menu.getByLabelText('Leave space')).toBeTruthy());
     await fireEvent.press(menu.getByLabelText('Leave space'));
+    await waitFor(() => expect(alert).toHaveBeenCalledTimes(1));
     mockApi.post.mockImplementationOnce(async () => { throw error(); });
     await act(async () => { confirmButtons()[1].onPress?.(); });
     const toast = await r.findByTestId('space-toast');
@@ -327,7 +340,7 @@ describe('LEAVE-MUTE-M leave, Undo and Join again', () => {
     const r = await open();
     const band = await r.findByTestId('space-chat-left');
     expect(within(band).getByText('You left this space.')).toBeTruthy();
-    expect(r.getByText('body m1')).toBeTruthy();
+    expect(r.getByText('body m1', HIDDEN)).toBeTruthy();
     expect(r.getByText('Morning crew')).toBeTruthy();
     expect(r.getByText('13 members')).toBeTruthy();
     expect(r.queryByTestId('space-chat-composer-field')).toBeNull();
@@ -387,13 +400,13 @@ describe('LEAVE-MUTE-M "{name} left" (D2d op 2)', () => {
     // A rejoin keeps the line (the server keeps the row): Riley's new message follows it.
     page = [msg('m4', '2026-11-27T15:40:00.000Z', RILEY), ...page];
     await act(async () => { await client.invalidateQueries(); });
-    await r.findByText('body m4');
+    await r.findByText('body m4', HIDDEN);
     expect(r.getByText('Riley Park left')).toBeTruthy();
     // A block of Riley (the row's menu): her rows and her line go at once, before any read.
     mockApi.get.mockImplementation(() => new Promise(() => undefined));
     await fireEvent.press(r.getByTestId('space-chat-menu-m2'));
     await waitFor(() => expect(r.queryByText('Riley Park left')).toBeNull());
-    expect(r.queryByText('body m2')).toBeNull();
+    expect(r.queryByText('body m2', HIDDEN)).toBeNull();
     expect(r.getByText('Jo Lane left')).toBeTruthy();
   });
 
@@ -407,24 +420,13 @@ describe('LEAVE-MUTE-M "{name} left" (D2d op 2)', () => {
 });
 
 describe('LEAVE-MUTE-M the membership ping (onCommunityPing)', () => {
-  const ping: { current: ((p?: { event: string }) => void) | null } = { current: null };
-  beforeAll(() => {
-    jest.doMock('../../../api/communityRealtime', () => ({
-      COMMUNITY_BROADCAST_EVENTS: {
-        messageCreated: 'community.message.created', messageUpdated: 'community.message.updated', postCreated: 'community.post.created',
-        postUpdated: 'community.post.updated', reactionChanged: 'community.reaction.changed', membershipChanged: 'community.membership.changed',
-      },
-      subscribeToCommunityUser: (_u: string, cb: (p?: { event: string }) => void) => { ping.current = cb; return () => { ping.current = null; }; },
-    }));
-  });
   const mount = async () => {
-    let real: { useCommunityBadge: (u: string) => unknown } | null = null;
-    jest.isolateModules(() => { real = jest.requireActual('../../../hooks/useCommunity'); });
-    const Badge = () => { (real as unknown as { useCommunityBadge: (u: string) => unknown }).useCommunityBadge('me-1'); return null; };
+    const real = jest.requireActual('../../../hooks/useCommunity') as { useCommunityBadge: (u: string) => unknown };
+    const Badge = () => { real.useCommunityBadge('me-1'); return null; };
     client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const spy = jest.spyOn(client, 'invalidateQueries');
     await render(<QueryClientProvider client={client}><Badge /></QueryClientProvider>);
-    await waitFor(() => expect(ping.current).toBeTruthy());
+    await waitFor(() => expect(mockPing.current).toBeTruthy());
     spy.mockClear();
     return spy;
   };
@@ -432,7 +434,7 @@ describe('LEAVE-MUTE-M the membership ping (onCommunityPing)', () => {
 
   it('L11: community.membership.changed re-reads the space list and the open space\'s left list, once each', async () => {
     const spy = await mount();
-    await act(async () => { ping.current?.({ event: 'community.membership.changed' }); });
+    await act(async () => { mockPing.current?.({ event: 'community.membership.changed' }); });
     const keys = keysOf(spy);
     expect(keys.filter((k) => k === JSON.stringify(['community', 'cohorts']))).toHaveLength(1);
     expect(keys.filter((k) => k === JSON.stringify(['community', 'space-left']))).toHaveLength(1);
@@ -441,7 +443,7 @@ describe('LEAVE-MUTE-M the membership ping (onCommunityPing)', () => {
 
   it.each(['community.message.created', 'community.post.updated', 'community.reaction.changed'])('L11 (green at both): %s re-reads neither the space list nor a left list', async (event) => {
     const spy = await mount();
-    await act(async () => { ping.current?.({ event }); });
+    await act(async () => { mockPing.current?.({ event }); });
     const keys = keysOf(spy);
     expect(keys).toContain(JSON.stringify(['community', 'me']));
     expect(keys.filter((k) => k === JSON.stringify(['community', 'cohorts']) || k.startsWith('["community","space-left"'))).toHaveLength(0);
@@ -467,7 +469,7 @@ describe('LEAVE-MUTE-M a second account (KT-13)', () => {
     mockLeft.clear();
     leftAnswer = {};
     const second = await render(<QueryClientProvider client={client}><Screen /></QueryClientProvider>);
-    await second.findByText('body m1');
+    await second.findByText('body m1', HIDDEN);
     expect(second.queryByText('Dana Reyes left')).toBeNull();
     expect(second.queryByTestId('space-chat-left')).toBeNull();
     expect(client.getQueryCache().getAll().map((q) => q.queryKey as unknown[]).filter((k) => k[2] === 'me-1')).toHaveLength(0);
