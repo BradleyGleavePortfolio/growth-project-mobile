@@ -1,0 +1,10 @@
+src/services
+src/hooks
+src/ui
+src/utils
+src/screens/client
+src/screens/settings
+src/components/home
+src/components/log
+src/navigation
+src/store
