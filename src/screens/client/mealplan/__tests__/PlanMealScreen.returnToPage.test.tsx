@@ -4,7 +4,7 @@
 // (a) a return keeps the last decision and LogPlannedMealButton with it, closed to taps while the return's read is out;
 //     only a read that answers replaces the decision (LS-PLAN-SWAPS-M-2 C1 is the running save).
 // (b) this meal's foods saved on the phone count as eaten, with main's waiting line (OFFLINE-FOOD-M), on an open and
-//     on a return (the round-1 C: a meal saved offline on the Food day).
+//     on a return (the round-1 C: a meal saved offline on the Food day); the line follows the food once it syncs.
 // Fictional data (client Jordan, coach Sam).
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
@@ -216,6 +216,25 @@ describe('FIX-PSM-2: a return to the plan meal page', () => {
     expect(await screen.findByText(WAITING, {}, { timeout: 5000 })).toBeTruthy();
     expect(screen.queryByText('Ate it as planned', { includeHiddenElements: true })).toBeNull();
     expect(screen.queryByText('Logged as planned')).toBeNull();
+  });
+
+  it('(b) the waiting line follows the food: once Dinner syncs and leaves the phone the page reads the day again', async () => {
+    offline();
+    await savedOfflineOnFoodDay();
+    await open();
+    expect(await screen.findByText(WAITING, {}, { timeout: 5000 })).toBeTruthy();
+
+    // The connection returns and the sync sends Dinner: the server holds it and the phone's queue lets it go.
+    netinfo.__reset();
+    mockDaily.mockResolvedValue({ data: dinnerLogged });
+    await act(async () => {
+      await clearQueue();
+      await notifyPendingFoodLogs();
+    });
+
+    expect(await screen.findByText('Logged as planned', {}, { timeout: 5000 })).toBeTruthy();
+    expect(screen.queryByText(WAITING)).toBeNull();
+    expect(screen.queryByText('Ate it as planned', { includeHiddenElements: true })).toBeNull();
   });
 
   it('(b) offline: Dinner saved offline on the Food day while the page was away; back on the page: the waiting line', async () => {
