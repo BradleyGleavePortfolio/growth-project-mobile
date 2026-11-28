@@ -1,0 +1,7 @@
+src/services/__tests__/authActions
+src/hooks/__tests__/useSettings.test.ts
+src/ui/haptics
+src/utils/__tests__/notifications.test.ts
+src/screens/client/__tests__
+src/components/home
+src/navigation/__tests__
