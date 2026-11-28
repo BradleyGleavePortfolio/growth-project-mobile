@@ -9,7 +9,7 @@
 import fs from 'fs';
 import path from 'path';
 import React from 'react';
-import { AccessibilityInfo, Keyboard, Platform, StyleSheet } from 'react-native';
+import { AccessibilityInfo, Keyboard, Platform, ScrollView, StyleSheet } from 'react-native';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -27,6 +27,9 @@ jest.mock('react-native/Libraries/Components/RefreshControl/RefreshControl', () 
   return { __esModule: true, default: (props: object) => React.createElement(require('react-native').View, { ...props }) };
 });
 jest.mock('../../../../components/StatusBarBand', () => ({ useStatusBarBand: () => undefined }));
+// FIX-SMS-1 C1: the window's insets as a Modal reads them (ScreenArea.tsx); 0 unless a test sets the status bar's.
+let mockInsets = { top: 0, bottom: 0, left: 0, right: 0 };
+jest.mock('../../../../ui/layout/ScreenArea', () => ({ ...jest.requireActual('../../../../ui/layout/ScreenArea'), useWindowInsets: () => mockInsets }));
 jest.mock('../../../../components/FadeInView', () => ({ __esModule: true, default: ({ children }: { children: React.ReactNode }) => children }));
 const mockListeners: Record<string, Array<() => void>> = {};
 const mockParent = { navigate: jest.fn() };
@@ -71,6 +74,7 @@ const mockEnqueue = jest.fn();
 jest.mock('../../../../services/foodLogQueue', () => ({ ...jest.requireActual('../../../../services/foodLogQueue'), enqueue: (...a: unknown[]) => mockEnqueue(...a) }));
 
 import KitchenScreen from '../KitchenScreen';
+import { SAVE_WORDS } from '../kitchen';
 
 const SRC = path.resolve(__dirname, '..', '..', '..', '..');
 
@@ -162,6 +166,7 @@ beforeEach(() => {
   jest.useRealTimers();
   setClock(13, 5);
   mockDims = { width: 390, height: 844, scale: 2, fontScale: 1 };
+  mockInsets = { top: 0, bottom: 0, left: 0, right: 0 };
   Object.assign(mockFlags, { youTabV2: true, foodPlanChecklist: true, clientTimelineV2: true, clientPathCopilot: true, romanChat: true });
   mockUser = { id: 'jordan', coach_id: null };
   (NetInfo as unknown as { __reset: () => void }).__reset();
@@ -556,6 +561,115 @@ describe('SAVED-MEAL-SAVE-M: Save a meal from today (Style 2 Menu)', () => {
     } finally {
       Object.defineProperty(Platform, 'OS', { configurable: true, get: () => os });
     }
+  });
+
+  /** FIX-SMS-1: iOS with the keyboard's listeners captured, as case 13 does; show(h) raises it, hide() puts it down. */
+  function iosKeyboard() {
+    const os = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'ios' });
+    const kb: Record<string, Array<(e: unknown) => void>> = {};
+    jest.spyOn(Keyboard, 'addListener').mockImplementation(((event: string, fn: (e: unknown) => void) => {
+      (kb[event] ??= []).push(fn);
+      return { remove: jest.fn() };
+    }) as never);
+    return {
+      show: (height: number) => act(async () => { (kb.keyboardWillShow ?? []).forEach((fn) => fn({ endCoordinates: { height } })); }),
+      hide: () => act(async () => { (kb.keyboardWillHide ?? []).forEach((fn) => fn({})); }),
+      restore: () => Object.defineProperty(Platform, 'OS', { configurable: true, get: () => os }),
+    };
+  }
+  const flat = (id: string) => StyleSheet.flatten(screen.getByTestId(id, { includeHiddenElements: true }).props.style) as Record<string, number>;
+
+  it('13b. B1 (LO-SAVED-MEAL-SAVE-M-1): the Name field wraps the whole name and takes no line break; while she types at 320 x 568 and 130% it keeps to one line, so Save stays above the keyboard', async () => {
+    const ios = iosKeyboard();
+    try {
+      mockDims = { width: 320, height: 568, scale: 2, fontScale: 1.3 };
+      mockInsets = { top: 20, bottom: 0, left: 0, right: 0 };
+      await mount();
+      await openSave();
+      await loaded();
+      const field = () => screen.getByTestId('save-name');
+      expect(field().props.multiline).toBe(true);
+      expect(field().props.submitBehavior).toBe('blurAndSubmit');
+      expect(field().props.maxLength).toBe(80);
+      // Keyboard down: no cap, so the whole name shows on as many lines as it takes.
+      expect(flat('save-name').maxHeight).toBeUndefined();
+      // A pasted line break becomes a space: one value, never a second line of its own.
+      await fireEvent.changeText(field(), 'Usual\nbreakfast \r\n bowl');
+      expect(field().props.value).toBe('Usual breakfast bowl');
+      // Typing, keyboard up: one line here, and the field and Save stay inside the sheet, which keeps below the status bar.
+      await fireEvent(field(), 'focus');
+      expect(flat('save-name').maxHeight).toBeCloseTo(flat('save-name').lineHeight * 1.3 + flat('save-name').paddingVertical * 2, 5);
+      await ios.show(260);
+      const sheet = flat('kitchen-save-sheet');
+      const text = (id: string, lines = 1) => { const t = flat(id); return lines * t.lineHeight * 1.3 + (t.paddingTop ?? 0) + (t.marginTop ?? 0) + (t.marginBottom ?? 0); };
+      const grab = flat('kitchen-sheet-grab');
+      const header = sheet.paddingTop + grab.height + grab.marginBottom + text('kitchen-sheet-title', 2);
+      const button = Math.max(flat('save-submit').minHeight ?? 0, 54) + (flat('save-submit-wrap').marginTop ?? 0);
+      const toSave = (flat('kitchen-sheet-foot').paddingTop ?? 0) + text('save-name-label') + Math.max(flat('save-name').minHeight, flat('save-name').maxHeight) + button;
+      expect(header + toSave).toBeLessThanOrEqual(sheet.maxHeight);
+      // Return puts the keyboard down and sends nothing; off the field, the whole name shows again.
+      await fireEvent(field(), 'submitEditing');
+      await fireEvent(field(), 'blur');
+      expect(mockPost).not.toHaveBeenCalled();
+      expect(flat('save-name').maxHeight).toBeUndefined();
+    } finally {
+      ios.restore();
+    }
+  });
+
+  it('13c. C1 (LO-SAVED-MEAL-SAVE-M-1): with the keyboard up the sheet keeps 8 pt below the status bar (390 x 844, top inset 47, a 336 pt keyboard); typing there, the field keeps two lines', async () => {
+    const ios = iosKeyboard();
+    try {
+      mockInsets = { top: 47, bottom: 34, left: 0, right: 0 };
+      await mount();
+      await openSave();
+      await loaded();
+      await ios.show(336);
+      // The keyboard view lifts the sheet by the keyboard, so a day that fills it puts its top at 844 - 336 - maxHeight.
+      expect(flat('kitchen-save-sheet').maxHeight).toBeLessThanOrEqual(844 - 336 - 47 - 8);
+      // B1 at this size: typing, the field keeps two lines (room for them above this keyboard).
+      await fireEvent(screen.getByTestId('save-name'), 'focus');
+      expect(flat('save-name').maxHeight).toBeCloseTo(2 * flat('save-name').lineHeight + flat('save-name').paddingVertical * 2, 5);
+      await ios.hide();
+      expect(flat('kitchen-save-sheet').maxHeight).toBeCloseTo(844 * 0.92, 5);
+    } finally {
+      ios.restore();
+    }
+  });
+
+  it('6c. C2 (LO-SAVED-MEAL-SAVE-M-1): at 320 x 568 and 130%, a line that asks her to change her picks (KS-4, KS-6) scrolls with the list from its top; a line about the send (KS-3) stays pinned by its button', async () => {
+    mockDims = { width: 320, height: 568, scale: 2, fontScale: 1.3 };
+    const scrollTo = jest.spyOn(ScrollView.prototype as unknown as { scrollTo: (o: object) => void }, 'scrollTo');
+    await mount();
+    await openSave();
+    await loaded();
+    const body = () => screen.getByTestId('kitchen-sheet-body');
+    const foot = () => screen.getByTestId('kitchen-sheet-foot');
+    mockPost.mockImplementationOnce(() => Promise.reject(refusal(404, 'Food not found')));
+    await pressSave();
+    await screen.findByText(SAVE_WORDS.foodGone);
+    expect(within(body()).getByText(SAVE_WORDS.foodGone)).toBeTruthy();
+    expect(within(foot()).queryByText(SAVE_WORDS.foodGone)).toBeNull();
+    expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ y: 0 }));
+    mockPost.mockImplementationOnce(lost);
+    await pressSave();
+    await screen.findByText(SAVE_WORDS.notSaved);
+    expect(within(foot()).getByText(SAVE_WORDS.notSaved)).toBeTruthy();
+    expect(within(body()).queryByText(SAVE_WORDS.foodGone)).toBeNull();
+  });
+
+  it('9b. C2: at 320 x 568 and 130%, 31 picked foods put KS-6 at the top of the list, which scrolls, not in the pinned foot', async () => {
+    mockDims = { width: 320, height: 568, scale: 2, fontScale: 1.3 };
+    k = 100;
+    server['/log/daily'] = { entries: Array.from({ length: 31 }, (_, i) => entry('lunch', 12, 30, `Food ${i}`, 10, 1, 1)) };
+    await mount();
+    await openSave();
+    await screen.findByTestId('save-food-e131');
+    const words = 'A saved meal holds up to 30 foods. Untick 1 to save it.';
+    expect(within(screen.getByTestId('kitchen-sheet-body')).getByText(words)).toBeTruthy();
+    expect(within(screen.getByTestId('kitchen-sheet-foot')).queryByText(words)).toBeNull();
+    expect(submit().props.accessibilityState.disabled).toBe(true);
   });
 
   it('14. 320 x 568 at 130%: no text of this PR capped by numberOfLines; every control at least 44 pt', async () => {
