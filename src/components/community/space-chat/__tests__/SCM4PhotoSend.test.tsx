@@ -529,10 +529,8 @@ describe('SCM4 T7: the account fence', () => {
 describe('SCM4 T8: nothing saved', () => {
   it('SCM4 T8: over a whole send, a failure and a sign-out, no store, cache, log, report or event holds the file, the link or the key', async () => {
     mockWrites.length = 0;
-    const asyncWrites = [
-      jest.spyOn(AsyncStorage, 'setItem'), jest.spyOn(AsyncStorage, 'mergeItem'),
-      jest.spyOn(AsyncStorage, 'multiSet'), jest.spyOn(AsyncStorage, 'multiMerge'),
-    ];
+    // async-storage 3.1.1 writes through setItem and setMany only (AsyncStorage.d.ts:20, :42).
+    const asyncWrites = [jest.spyOn(AsyncStorage, 'setItem'), jest.spyOn(AsyncStorage, 'setMany')];
     const cached: unknown[] = [];
     const unwatch = qc.getQueryCache().subscribe((e) => { cached.push([e.query.queryKey, e.query.state.data]); });
     startSpaceOutbox('me-1');
