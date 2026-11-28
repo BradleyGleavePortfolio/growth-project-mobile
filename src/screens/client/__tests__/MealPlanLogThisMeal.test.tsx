@@ -88,10 +88,12 @@ it('daily plan: every slot logs its meal template to that meal in one tap', asyn
   }));
   expect(logApi.logFood).toHaveBeenCalledWith(expect.objectContaining({ date: '2026-10-07', meal_type: 'dinner' }));
 
-  // A pre-workout slot names no food-log meal: the sheet asks which meal.
+  // PREWORKOUT-EATEN-M: a pre-workout slot logs to Snacks in one tap, the meal the Food day counts it under.
   await fireEvent.press(screen.getByLabelText('Log this meal: Banana'));
-  expect(screen.getByText('Choose the meal to add it to.')).toBeTruthy();
-  expect(foodApi.create).toHaveBeenCalledTimes(1);
+  expect(screen.queryByText('Choose the meal to add it to.')).toBeNull();
+  expect(await screen.findByText("Added to today's snacks.")).toBeTruthy();
+  expect(foodApi.create).toHaveBeenCalledTimes(2);
+  expect(logApi.logFood).toHaveBeenLastCalledWith(expect.objectContaining({ date: '2026-10-07', meal_type: 'snack' }));
 });
 
 it('parity, daily plan: one Log this meal per slot is the only new action; pull to refresh unchanged', async () => {

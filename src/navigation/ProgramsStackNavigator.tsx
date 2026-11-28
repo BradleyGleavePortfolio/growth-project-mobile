@@ -18,6 +18,8 @@ import SupportInboxScreen from "../screens/support/SupportInboxScreen";
 import CoachMealTemplatesScreen from "../screens/coach/CoachMealTemplatesScreen";
 import DayPlanBuilderScreen from "../screens/coach/meals/DayPlanBuilderScreen";
 import MealPickerScreen from "../screens/coach/meals/MealPickerScreen";
+import MealOptionsPickerScreen from "../screens/coach/meals/MealOptionsPickerScreen";
+import MealRecipePickerScreen from "../screens/coach/meals/MealRecipePickerScreen";
 import MealPlanAssignScreen from "../screens/coach/meals/MealPlanAssignScreen";
 import { featureFlags } from "../config/featureFlags";
 import type { ProgramsStackParamList } from "../screens/coach/programs/types";
@@ -85,6 +87,8 @@ export default function ProgramsStackNavigator() {
           <Stack.Screen name="MealEditor" component={CoachMealTemplatesScreen} />
           <Stack.Screen name="DayPlanBuilder" component={DayPlanBuilderScreen} />
           <Stack.Screen name="MealPicker" component={MealPickerScreen} />
+          <Stack.Screen name="MealOptionsPicker" component={MealOptionsPickerScreen} />
+          <Stack.Screen name="MealRecipePicker" component={MealRecipePickerScreen} />
           <Stack.Screen name="MealPlanAssign" component={MealPlanAssignScreen} />
         </Stack.Group>
       )}
