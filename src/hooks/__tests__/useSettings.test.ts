@@ -39,7 +39,9 @@ describe('useSettings', () => {
     const first = await renderHook(() => useSettings());
     const second = await renderHook(() => useSettings());
     await waitFor(() => expect(first.result.current.settings.waterGoalOz).toBe(80));
-    expect(second.result.current.settings.waterGoalOz).toBe(80);
+    // CI-FLAKES-M (F2 class): the second hook is its own root, updated by its own load or the seed's
+    // notice, which can land after the first hook's; its read waits too.
+    await waitFor(() => expect(second.result.current.settings.waterGoalOz).toBe(80));
     expect(mockGetProfile).toHaveBeenCalledTimes(1);
     expect(JSON.parse((await AsyncStorage.getItem('gp_client_settings'))!)).toMatchObject({ waterGoalOz: 80, fastingAlerts: true });
   });
