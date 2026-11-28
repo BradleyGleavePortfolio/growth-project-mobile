@@ -50,6 +50,8 @@ export const TRAIN_COPY = {
   nothing: 'Nothing planned yet.', // C1-C-43
   whenPlan: (coach: string) => `When ${coach} sends a plan, each day shows here with what to lift and why.`, // C1-C-44
   yourCoach: 'your coach', // C1-C-44 before the coach's name has loaded
+  // WORKOUT-STATES-M (C2_first): the coach's card on a coached client's first day (WS-W1; before the name loads, WS-W1b).
+  firstPlan: (coach: string | null) => `${coach ?? 'Your coach'} is building your first plan. You can log a session of your own at any time.`,
   loading: "Loading today's workout", // C1-S-46
   yourPlan: 'Your plan', // today's (You tab section)
   start: 'Start workout', // EX-01, today's
@@ -77,6 +79,9 @@ const DAY = 86_400_000;
 // The day it was assigned for: a calendar date, never moved west (utils/workout/workoutDay).
 const dayOf = (a: Row) => assignmentDay(a);
 const firstName = (name?: string) => name?.trim().split(/\s+/)[0] || null;
+/** The coach the tab's own lines name: hers by coach_id, else the first of her coaches (TrainDay and the first day's link). */
+export const trainCoachName = (coaches: ReadonlyArray<{ coach_id: string; name?: string }> | undefined, coachId?: string | null) =>
+  firstName((coaches?.find((x) => x.coach_id === coachId) ?? coaches?.[0])?.name);
 
 /** The ring and strip, Monday to Sunday around `today`; a skipped day reads missed (the coach's This week rule). */
 export function trainWeek(rows: ReadonlyArray<Row>, today: string): WorkoutWeek {
@@ -180,7 +185,7 @@ export function TrainDay({ workout, hasAny, state, coachless, coachId, userId, o
   const coaches = useMyCoaches(!coachless && !!userId).data;
   // The empty line names the client's coach; a note is signed only by the coach who set that workout (a note
   // kept from a former coach shows unsigned, never under the current coach's name).
-  const coachName = coachless ? null : firstName((coaches?.find((x) => x.coach_id === coachId) ?? coaches?.[0])?.name);
+  const coachName = coachless ? null : trainCoachName(coaches, coachId);
   const author = coachless || !workout ? null : firstName(coaches?.find((x) => x.coach_id === workout.assigned_by_coach_id)?.name);
   const plan = useMemo(() => (workout ? assignmentPrescription(workout) : null), [workout]);
   const ids = useMemo(() => (plan?.exercises ?? []).map((e) => e.exercise_external_id), [plan]);
@@ -224,8 +229,19 @@ export function TrainDay({ workout, hasAny, state, coachless, coachId, userId, o
   }
   if (!workout || !plan) {
     if (hasAny) return null;
+    const first = c.firstPlan(coachName);
     return (
       <View style={s.body} testID="train-day-empty">
+        {coachless || !coachId ? null : (
+          <View style={[s.card, schemeCard]} testID="train-first-card" accessible accessibilityLabel={first}>
+            {coachName ? (
+              <View style={[s.avatar, { backgroundColor: sc.surface.masthead }]} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+                <Text maxFontSizeMultiplier={1.15} style={[typography.h3, { color: sc.textOnAccent }]}>{coachName.charAt(0).toUpperCase()}</Text>
+              </View>
+            ) : null}
+            <View style={s.flex}><Text style={[s.note, italic && s.italic, ink]}>{first}</Text></View>
+          </View>
+        )}
         {coachless ? <Text maxFontSizeMultiplier={CAP} style={[typography.eyebrow, muted, s.over]}>{c.yourPlan}</Text> : null}
         <Text accessibilityRole="header" style={[typography.h1, ink]}>{c.nothing}</Text>
         {coachless ? null : <Text style={[typography.body, ink, s.lede]}>{c.whenPlan(coachName ?? c.yourCoach)}</Text>}
