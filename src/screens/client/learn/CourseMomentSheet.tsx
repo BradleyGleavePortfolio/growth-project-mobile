@@ -9,6 +9,7 @@ import { Animated, Modal, Pressable, ScrollView, StyleSheet, Text, View } from '
 import { Ionicons } from '@expo/vector-icons';
 import { useIsFocused, useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useWindowInsets } from '../../../ui/layout/ScreenArea';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { layout, radius, typography, type SemanticTokens } from '../../../theme/tokens';
 import { PrimaryButton, QuietTextButton } from '../../../ui';
@@ -78,7 +79,8 @@ export function useWeekMoment(course: Course | null, weekId?: string) {
 export function WeekCompleteSheet({ course, week, onClose }: { course: Course; week: CourseWeek; onClose: () => void }) {
   const { semanticColors: sc } = useTheme();
   const s = useMemo(() => makeStyles(sc), [sc]);
-  const insets = useSafeAreaInsets();
+  // OFFLINE-BAND-ROOT-M: a Modal draws from the window's top, over the band: the window's insets, not the area's.
+  const insets = useWindowInsets();
   const after = course.weeks[week.n];
   const weeksDone = course.weeks.filter(weekDone).length;
   const reduced = useMotionAnswer(); // the page opens once the OS answers: with Reduce Motion on, without the fade

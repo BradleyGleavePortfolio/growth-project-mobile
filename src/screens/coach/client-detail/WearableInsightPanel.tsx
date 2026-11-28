@@ -26,7 +26,7 @@
  * silent failure and never a fabricated success that would hide a real outage.
  */
 
-import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -41,7 +41,7 @@ import {
   View,
 } from 'react-native';
 import axios from 'axios';
-import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
+import { useWindowInsets } from '../../../ui/layout/ScreenArea';
 import { Ionicons } from '@expo/vector-icons';
 import AiRefusalNotice from '../../../components/ai/AiRefusalNotice';
 import { aiRefusalOf } from '../../../lib/ai/aiRefusal';
@@ -463,7 +463,8 @@ function MessageDraftReviewSheet({
 
   const approve = useApproveDraft();
   // As the shared Screen: the safe-area context, or no inset outside a provider.
-  const topInset = useContext(SafeAreaInsetsContext)?.top ?? 0;
+  // OFFLINE-BAND-ROOT-M: a Modal draws from the window's top, over the band: the window's insets, not the area's.
+  const topInset = useWindowInsets().top;
   // Exact comparison, never trimmed: the server refuses an `approve` whose
   // text is not Roman's stored suggestion.
   const edited = body !== original;

@@ -67,6 +67,14 @@ export const PLAN_MORE_ITEMS: MoreItem[] = [
     a11yHint: 'Opens your daily targets',
   },
   {
+    icon: 'analytics-outline',
+    label: 'Food this week',
+    description: 'Calories and protein, day by day',
+    section: 'Your plan',
+    target: { type: 'stack', screen: 'FoodWeek' },
+    a11yHint: 'Opens your food week',
+  },
+  {
     icon: 'trending-up-outline',
     label: 'Progress',
     description: 'View weight trends and daily totals',

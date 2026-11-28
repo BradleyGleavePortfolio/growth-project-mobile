@@ -45,6 +45,7 @@ import {
 } from '../../services/leaderboardApi';
 import { contentRejectedMessage } from '../../api/communitySafetyApi';
 import { Screen } from '../../ui';
+import { useScreenAreaKeyboardOffset } from '../../ui/layout/ScreenArea';
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -215,6 +216,7 @@ function OptInCard({
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function LeaderboardScreen() {
+  const keyboardOffset = useScreenAreaKeyboardOffset();
   const { semanticColors: sc } = useTheme();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -350,7 +352,7 @@ export default function LeaderboardScreen() {
 
   return (
     <Screen edges={['top']} scroll={false} header={topBar} contentStyle={styles.bare} testID="leaderboard-screen">
-      <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView keyboardVerticalOffset={keyboardOffset} style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Leaderboard</Text>

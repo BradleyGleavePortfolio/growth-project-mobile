@@ -48,7 +48,7 @@ import {
   TextInput,
   Platform,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useWindowInsets } from '../../ui/layout/ScreenArea';
 import DateTimePicker, {
   type DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
@@ -401,7 +401,8 @@ function CreateEventModal({
   onSubmit,
 }: CreateEventModalProps): React.ReactElement {
   const { semanticColors } = useTheme();
-  const insets = useSafeAreaInsets();
+  // OFFLINE-BAND-ROOT-M: a Modal draws from the window's top, over the band: the window's insets, not the area's.
+  const insets = useWindowInsets();
   // F12: native date + time pickers replace the raw ISO text field. We keep a
   // single Date in the parent; the two pickers edit the date and the time of
   // that same instant. Android shows pickers as transient dialogs (open on
@@ -647,7 +648,8 @@ function ManageEventModal({
   onConfirm,
 }: ManageEventModalProps): React.ReactElement | null {
   const { semanticColors } = useTheme();
-  const insets = useSafeAreaInsets();
+  // OFFLINE-BAND-ROOT-M: a Modal draws from the window's top, over the band: the window's insets, not the area's.
+  const insets = useWindowInsets();
   const eventId = event?.id ?? '';
   const transition = useTransitionEvent(eventId, workspaceId);
   const attachReplay = useAttachReplay(eventId, workspaceId);
