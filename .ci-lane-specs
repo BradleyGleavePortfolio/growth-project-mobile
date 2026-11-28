@@ -1,0 +1,5 @@
+src/screens/client/__tests__/SWEEP_KITCHEN.B1.groceryKeepsList.btest.test.tsx
+src/screens/client/__tests__/GroceryOfflineKeep.test.tsx
+src/screens/client/kitchen/__tests__/Kitchen.test.tsx
+src/screens/client/__tests__/KitchenRefine201.test.tsx
+src/screens/client/__tests__/ShopSwitch.test.tsx
