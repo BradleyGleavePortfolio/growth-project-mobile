@@ -7,6 +7,11 @@ export interface ScreenshotTarget {
   tab?: keyof ClientTabParamList;
   /** Existing screen content which must be visible before capture. */
   readyText: string;
+  /**
+   * The same content as the frame's screen draws it with its v1 switch on, when that screen differs
+   * (06: coach Home v11, EXPO_PUBLIC_FF_COACH_HOME_V11 with COACH_TABS_V2). Either text means ready.
+   */
+  readyTextSwitchOn?: string;
 }
 
 // One manifest for the app and both capture drivers. No caption is rendered.
@@ -16,7 +21,7 @@ export const SCREENSHOT_TARGETS: ScreenshotTarget[] = [
   { slug: '03-workout', audience: 'client', route: 'ActiveWorkout', tab: 'WorkoutTab', readyText: 'Bench press' },
   { slug: '04-food', audience: 'client', route: 'Log', tab: 'Log', readyText: 'Oats with berries' },
   { slug: '05-messages', audience: 'client', route: 'Messages', tab: 'Home', readyText: 'Travelling Thursday' },
-  { slug: '06-coach-overview', audience: 'coach', route: 'CommandCenter', readyText: 'All fourteen' },
+  { slug: '06-coach-overview', audience: 'coach', route: 'CommandCenter', readyText: 'All fourteen', readyTextSwitchOn: 'All 14 clients' },
 ];
 
 // Apple's two iPhone slots: large display (6.9") and the required medium display (6.3").
