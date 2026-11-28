@@ -487,15 +487,21 @@ describe('SHOP-SWITCH-M: the switch itself', () => {
 // with Shopping chosen, carried here when that screen is deleted: p (KitchenRefine201's 'shopping' row: a failed reload
 // keeps no Clear checked) and q (FIX-997R1, LS-997R1 B1: KitchenListsHoldStill954 C1's Shopping lane, pull to refresh).
 describe('SHOPPING-CUT-M: carried from the retired Shopping list screen', () => {
-  it('p. on Shopping, a failed reload shows the shopping error words, and cached checked rows do not expose Clear checked', async () => {
+  // GROCERY-OFFLINE-KEEP-M (SWEEP-KITCHEN B1, flipped): a failed reload keeps the rows, so Clear checked stays beside the
+  // checked rows it clears; the shopping error words are only for a list with no answer yet (i. above).
+  it('p. on Shopping, a failed reload keeps the shopping rows and the switch, and Clear checked stays with its checked rows', async () => {
     const ui = await mount(SIZES[1]);
     await ui.findByText('Salmon fillet');
     await press(ui, 'Shopping, 2 to get');
     await waitFor(() => expect(ui.getByRole('button', { name: 'Clear checked' })).toBeTruthy());
     serve({ grocery: new Error('Network Error'), shopping: new Error('Network Error') });
     await act(async () => { await clients[clients.length - 1].refetchQueries(); });
-    await waitFor(() => expect(ui.getByText("Couldn't load shopping list.")).toBeTruthy());
-    expect(ui.queryByRole('button', { name: 'Clear checked' })).toBeNull();
+    await waitFor(() => expect(clients[clients.length - 1].getQueryState(['lists', 'grocery'])?.status).toBe('error'));
+    await act(async () => { await new Promise((done) => setTimeout(done, 20)); }); // react-query tells the page on a setTimeout(0)
+    expect(ui.queryByText("Couldn't load shopping list.")).toBeNull();
+    expect(ui.getByText('Dish sponges')).toBeTruthy();
+    expect(selected(ui, 'Shopping, 2 to get')).toBe(true);
+    expect(ui.getByRole('button', { name: 'Clear checked' })).toBeTruthy();
   });
 
   it('q. on Shopping, pull to refresh is on only while the shopping list has rows (carried from KitchenListsHoldStill954 C1)', async () => {
