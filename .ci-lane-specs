@@ -1,0 +1,9 @@
+src/store
+src/services
+src/screens/client
+src/components/mealplan
+src/components/log
+src/hooks
+src/utils/log
+src/__tests__
+src/navigation
