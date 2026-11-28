@@ -68,7 +68,9 @@ function profileEnv(name) {
         try {
           await page.goto(`${url}/screenshot/${target.slug}`, { waitUntil: 'domcontentloaded', timeout: 180000 });
           await page.getByTestId(`screenshot-${target.slug}`).waitFor({ timeout: 180000 });
-          await page.getByText(target.readyText, { exact: false }).first().waitFor({ timeout: 30000 });
+          let ready = page.getByText(target.readyText, { exact: false });
+          if (target.readyTextSwitchOn) ready = ready.or(page.getByText(target.readyTextSwitchOn, { exact: false }));
+          await ready.first().waitFor({ timeout: 30000 });
           await page.evaluate(() => document.fonts.ready);
           await page.waitForTimeout(Number(process.env.SCREENSHOT_SETTLE_MS || 1500));
           if (errors.length) throw new Error(errors.join('\n'));
