@@ -23,7 +23,7 @@ import { track } from '../../../lib/analytics';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { colors as palette, layout, radius, typography, withAlpha, type SemanticTokens } from '../../../theme/tokens';
 import type { MealType } from '../../../types';
-import { PrimaryButton, useWindowInsets } from '../../../ui';
+import { PrimaryButton } from '../../../ui';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { useBottomInset } from '../../../ui/layout/StyleCPage';
 import { dayForNewLog } from '../../../utils/logDay';
@@ -106,14 +106,13 @@ export function KitchenSheet({ visible, title, onClose, busy = false, children, 
   const close = () => { if (!busy) onClose(); };
   const pull = usePullDown(close, busy);
   const keyboard = useKeyboardHeight();
-  const top = useWindowInsets().top; // LO-SAVED-MEAL-SAVE-M-1 C1: with the keyboard up the sheet stops 8 pt under the status bar
   // With a pinned foot, the fade shows while the body has more below than it shows (S2_save); never without a foot.
   const [list, setList] = useState({ view: 0, content: 0, y: 0 });
   const scroll = useRef<ScrollView>(null);
   useEffect(() => { if (toTop) scroll.current?.scrollTo({ y: 0, animated: false }); }, [toTop]);
   const more = !!footer && list.content > list.view + 1 && list.y + list.view < list.content - 1;
   const fit = keyboard > 0
-    ? { maxHeight: height - keyboard - Math.max(16, top + 8), paddingBottom: 12 }
+    ? { maxHeight: height - keyboard - 16, paddingBottom: 12 }
     : { maxHeight: height * 0.92, paddingBottom: bottom + 16 };
   return (
     <Modal visible={visible} transparent animationType={reduced ? 'none' : 'slide'} onRequestClose={close} statusBarTranslucent>
