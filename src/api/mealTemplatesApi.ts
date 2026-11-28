@@ -89,6 +89,32 @@ export interface DailyMealPlanSlot {
   /** C2-C0 (backend 96f20061): the coach's planned time, local "HH:MM" on the 24-hour clock; null when none. */
   time_of_day?: string | null;
   meal_template: MealTemplate;
+  /** PLAN-SWAPS-BE (b#1221): the coach's swaps for this meal, only her current coach's live meals; carbs_g and fats_g come with PLAN-SWAPS-MACROS-BE. */
+  swaps?: PlanSwap[];
+  /** PLAN-SWAPS-BE: the meal's recipe, null unless she can open it. */
+  recipe_id?: string | null;
+}
+
+/** One swap the coach offers for a plan meal (CONTRACT 6641656549 on b#1221). */
+export interface PlanSwap {
+  id: string;
+  name: string;
+  calories_kcal: number;
+  protein_g: number;
+  carbs_g?: number;
+  fats_g?: number;
+}
+
+/** PLAN-SWAPS-BE: one meal change the coach made to one of her current plans today (oldest first, at most 100). */
+export interface PlanChange {
+  plan_id: string;
+  slot_id: string;
+  slot_label: SlotLabel;
+  from_template_id: string | null;
+  from_name: string | null;
+  to_template_id: string | null;
+  to_name: string | null;
+  changed_at: string;
 }
 
 export interface DailyMealPlan {
@@ -98,6 +124,8 @@ export interface DailyMealPlan {
   notes: string | null;
   created_at: string;
   archived_at: string | null;
+  /** PLAN-SWAPS-BE: when the coach last changed the plan. */
+  updated_at?: string;
   slots: DailyMealPlanSlot[];
 }
 
@@ -130,6 +158,8 @@ export interface ClientTodayResponse {
   /** YYYY-MM-DD echoed by the server. */
   date: string;
   assignments: DailyMealPlanAssignmentWithPlan[];
+  /** PLAN-SWAPS-BE: today's meal changes; empty when ?date is not her today. */
+  changes_today?: PlanChange[];
 }
 
 // ─── API ─────────────────────────────────────────────────────────────────────

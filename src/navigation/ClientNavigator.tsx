@@ -36,6 +36,7 @@ import HabitsScreen from '../screens/client/HabitsScreen';
 import LogScreen from '../screens/client/LogScreen';
 import RecipesScreen from '../screens/client/RecipesScreen';
 import RecipeDetailScreen from '../screens/client/RecipeDetailScreen';
+import PlanMealScreen from '../screens/client/mealplan/PlanMealScreen';
 import GroceryListScreen from '../screens/client/GroceryListScreen';
 import PrepGuideScreen from '../screens/client/PrepGuideScreen';
 import ProgressScreen from '../screens/client/ProgressScreen';
@@ -219,6 +220,8 @@ const ProtectedClientUpcomingSessionsScreen = withProtectedScreen(ClientUpcoming
 const ProtectedCalendarHomeScreen = withProtectedScreen(CalendarHomeScreen);
 const ProtectedCalendarBookScreen = withProtectedScreen(CalendarBookScreen);
 const ProtectedCalendarSessionScreen = withProtectedScreen(CalendarSessionScreen);
+// PLAN-SWAPS-M: the plan meal page, OWN as the meal plan page
+const ProtectedPlanMealScreen = withProtectedScreen(PlanMealScreen, OWN);
 /** Side padding @react-navigation/bottom-tabs puts on each tab button (BottomTabItem tabVerticalUiKit). */
 const TAB_BUTTON_PADDING = 5;
 // ─── Param lists ──────────────────────────────────────────────────────────────
@@ -302,6 +305,7 @@ export type MoreStackParamList = {
   MoreIndex:   undefined;
   Recipes:     undefined;
   RecipeDetail: { recipeId: string };
+  PlanMeal: { date: string; slotId: string };
   Fast:        undefined;
   Community:   undefined;
   // B-314-4: Community safety opens from member wins even when the
@@ -596,6 +600,7 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
       <MoreStackNav.Screen name="EditProfile"  component={EditProfileScreen} />
       <MoreStackNav.Screen name="Recipes"      component={RecipesScreen} />
       <MoreStackNav.Screen name="RecipeDetail" component={RecipeDetailScreen} />
+      <MoreStackNav.Screen name="PlanMeal" component={ProtectedPlanMealScreen} options={backOnlyHeader('', PLAN_BAND)} />
       <MoreStackNav.Screen name="GroceryList"  component={GroceryListScreen} />
       <MoreStackNav.Screen name="PrepGuide"    component={PrepGuideScreen} />
       <MoreStackNav.Screen name="Fast"         component={ProtectedFastingScreen} options={backOnlyHeader('', PLAN_BAND)} />
