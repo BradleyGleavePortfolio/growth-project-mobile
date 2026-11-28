@@ -26,10 +26,13 @@ import { PrimaryButton, Screen } from '../../../ui';
 import { StyleCMasthead, StyleCMastText, StyleCNotice, StyleCPaper, usePullToRefresh, useStyleCScreen } from '../../../ui/layout/StyleCPage';
 import { getTodayString } from '../../../utils/date';
 import { fetchOneList, toGet } from '../GroceryListScreen';
+import SaveMealSheet from './SaveMealSheet';
 import SavedMealSheet from './SavedMealSheet';
 import {
-  WORDS, addedWords, coachFirst, fromCoach, kcalWords, mealView, planCard, recipesDetail, rowSpoken, savedMealsOf, toGetWords,
+  SAVE_WORDS, WORDS, addedWords, coachFirst, fromCoach, kcalWords, mealView, planCard, recipesDetail, rowSpoken, savedMealsOf, toGetWords,
 } from './kitchen';
+import { atLimit } from './saveMeal';
+import { useSavedMealWrites } from './useSavedMealWrites';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -85,6 +88,10 @@ function KitchenPage({ userId, coachId }: { userId: string; coachId: string | nu
 
   const [sheetMeal, setSheetMeal] = useState<SavedMeal | null>(null);
   const [added, setAdded] = useState<MealType | null>(null);
+  // SAVED-MEAL-SAVE-M: the save sheet, and the three writes (R7: after a save the page shows her meals from the first).
+  const [saving, setSaving] = useState(false);
+  const scroll = useRef<ScrollView>(null);
+  const writes = useSavedMealWrites(() => scroll.current?.scrollTo({ y: 0, animated: false }));
 
   // Back on the page (from the Food tab, the Grocery page or a recipe) every read is fresh again; the page stays
   // mounted and the app's queries do not refetch on focus (queryClient.ts), so the focus after the first re-reads.
@@ -117,10 +124,11 @@ function KitchenPage({ userId, coachId }: { userId: string; coachId: string | nu
     (navigation.getParent() ?? navigation).navigate('Log');
   };
   const openMeal = (meal: SavedMeal) => { setAdded(null); setSheetMeal(meal); };
+  const openSave = () => { setAdded(null); setSaving(true); };
 
   return (
     <Screen edges={['top']} scroll={false} {...page} testID="kitchen-screen">
-      <ScrollView style={s.flex} contentContainerStyle={s.grow} showsVerticalScrollIndicator={false}
+      <ScrollView ref={scroll} style={s.flex} contentContainerStyle={s.grow} showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl testID="kitchen-refresh" refreshing={pulling} onRefresh={onRefresh} tintColor={sc.textOnAccent} />}>
         <StyleCMasthead title={WORDS.title} onBack={() => navigation.goBack()} backLabel="Go back">
           {saved.isPending
@@ -134,6 +142,13 @@ function KitchenPage({ userId, coachId }: { userId: string; coachId: string | nu
               {meals.length === 0 ? <Text style={s.empty} testID="kitchen-empty">{WORDS.empty}</Text> : meals.map((meal, i) => (
                 <MealRow key={meal.id} meal={meal} first={i === 0} onPress={() => openMeal(meal)} s={s} />
               ))}
+              {/* SAVED-MEAL-SAVE-M SS0: the group's last row, only when the meals read worked (S2_page, S2_empty). */}
+              <Pressable onPress={openSave} accessibilityRole="button" accessibilityLabel={SAVE_WORDS.way}
+                accessibilityHint={atLimit(meals) ? undefined : SAVE_WORDS.wayHint}
+                style={({ pressed }) => [s.row, s.rule, pressed && s.pressed]} testID="kitchen-save-way">
+                <Ionicons name="add" size={24} color={sc.accent} />
+                <Text style={s.saveWay}>{SAVE_WORDS.way}</Text>
+              </Pressable>
             </View>
           ) : saved.isPending ? (
             <View style={s.card} accessible accessibilityLabel={WORDS.loading} testID="kitchen-loading">
@@ -194,7 +209,8 @@ function KitchenPage({ userId, coachId }: { userId: string; coachId: string | nu
         </View>
       ) : null}
 
-      <SavedMealSheet meal={sheetMeal} onClose={() => setSheetMeal(null)}
+      {saving && meals ? <SaveMealSheet meals={meals} writes={writes} onClose={() => setSaving(false)} /> : null}
+      <SavedMealSheet meal={sheetMeal} onClose={() => setSheetMeal(null)} writes={writes}
         onAdded={(meal) => { setSheetMeal(null); setAdded(meal); }} onStale={() => void saved.refetch()} />
     </Screen>
   );
@@ -264,6 +280,8 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   error: { gap: 14, marginBottom: 20 },
   logButton: { marginTop: -4, marginBottom: 26 },
   planCard: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 64, paddingHorizontal: 16, paddingVertical: 14 },
+  saveWay: { ...typography.body, flexShrink: 1, fontSize: 17, lineHeight: 24, letterSpacing: 0, color: sc.accent,
+    textDecorationLine: 'underline' },
   menuLabel: { ...typography.h4, fontSize: 17, lineHeight: 24, letterSpacing: 0, color: sc.textPrimary },
   detail: { ...typography.bodySmall, fontSize: 15, lineHeight: 21, color: sc.textMuted, fontVariant: ['tabular-nums'], flexShrink: 1, textAlign: 'right' },
   // R11: the forest "Added" bar over the page, above the tab bar, inside the page (W2). One row at every text size, as
