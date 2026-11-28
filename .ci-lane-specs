@@ -1,0 +1,7 @@
+src/screens/client/mealplan
+src/components/mealplan
+src/components/log/__tests__/FoodDayView
+src/components/log/__tests__/LogScreen.planSwaps
+src/screens/client/__tests__/MealPlan.recipeLink.planSwaps
+src/store
+src/services/__tests__/offlineFoodAccountRead
