@@ -29,7 +29,18 @@ import type { SearchResult } from '../../../utils/log/types';
 import type { ProgramsScreenProps } from '../programs/types';
 import { Chips, FirstCard, LoadFailed, Loading, Masthead, SLOT_NAMES, macroLine, mealStyles as ms, planSaveFailed, saveFailed, sortedSlots } from './mealUi';
 
-type SlotPick = { meal_template_id: string; slot_label: SlotLabel };
+type SlotPick = { meal_template_id: string; slot_label: SlotLabel; order: number };
+/**
+ * MEALPLAN-SLOT-KEEP-M: the server keeps a meal's row, and so the foods a client logged for it, only while its kind
+ * and order are sent again (updatePlan, FOODLINK), so every save keeps each meal's own order. A new meal goes after
+ * every meal; past the DTO's cap (20) it takes the lowest order no meal uses, then the lowest no meal of its kind uses.
+ */
+const freeOrder = (kind: SlotLabel, taken: SlotPick[]) => {
+  const free = (n: number, same?: boolean) => !taken.some((x) => x.order === n && (!same || x.slot_label === kind));
+  const top = Math.max(-1, ...taken.map((x) => x.order)) + 1;
+  const tries = [top, ...Array.from({ length: 21 }, (_, n) => n)].filter((n) => n <= 20);
+  return tries.find((n) => free(n)) ?? tries.find((n) => free(n, true)) ?? top;
+};
 const known = (f: SearchResult) => [f.calories, f.protein, f.carbs, f.fat].every(Number.isFinite);
 /** "Per 100g · 165 kcal · P 31 · C 0 · F 4", the food log's basis words (FoodSearchView). */
 const foodLine = (f: SearchResult) => `${f.nutrient_basis === 'PER_SERVING' ? 'Per portion' : 'Per 100g'} · ${macroLine(
@@ -62,7 +73,7 @@ export default function MealPickerScreen({ route, navigation }: ProgramsScreenPr
 
   const write = async (next: SlotPick[]) => {
     try {
-      const input = { slots: next.map((x, order) => ({ meal_template_id: x.meal_template_id, slot_label: x.slot_label, order })) };
+      const input = { slots: next.map(({ meal_template_id, slot_label, order }) => ({ meal_template_id, slot_label, order })) };
       await update.mutateAsync({ id: planId, input });
       void HapticService.success();
       navigation.goBack();
@@ -70,9 +81,13 @@ export default function MealPickerScreen({ route, navigation }: ProgramsScreenPr
       void HapticService.error();
     }
   };
-  const pick = (id: string) => void write(current
-    ? slots.map((x) => (x === current ? { meal_template_id: id, slot_label: kind } : x))
-    : [...slots, { meal_template_id: id, slot_label: kind }]);
+  const pick = (id: string) => {
+    const others = slots.filter((x) => x !== current);
+    // A Swap keeps the meal's order; moved to a kind that already holds that order, it takes a free one.
+    const order = current && !others.some((x) => x.slot_label === kind && x.order === current.order) ? current.order : freeOrder(kind, others);
+    const mine = { meal_template_id: id, slot_label: kind, order };
+    void write(current ? slots.map((x) => (x === current ? mine : x)) : [...slots, mine]);
+  };
   const addFood = async () => {
     if (!food || !meal || !amount || over) return;
     try {
