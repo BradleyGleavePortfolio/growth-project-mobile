@@ -9,17 +9,21 @@
  *     in `materialised_ref`; mobile routed it as a date, the screen dropped
  *     it and showed the newest plan. It now routes { assignmentId } and the
  *     screen shows exactly that assignment.
+ *     FIX-MLD-1 (LS N1): the plan read is backend main's, by day: a delivered
+ *     plan starts on the server's day (meal-plan.resolver.ts, todayUtcDate())
+ *     and is answered only from that day on, never for any day asked.
  */
 
 import React from 'react';
 import { Alert } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { getTodayString } from '../utils/date';
 
 const mockNavigate = jest.fn();
 const mockOpenBrowser = jest.fn();
 const mockGetPurchaseDrops = jest.fn();
-const mockUseMealPlanToday = jest.fn();
+const mockTodayForClient = jest.fn();
 let mockRouteParams: Record<string, string> | undefined = { purchaseId: 'purchase_1' };
 
 jest.mock('@react-navigation/native', () => ({
@@ -37,9 +41,11 @@ jest.mock('expo-web-browser', () => ({
 // GOAL-927-M (RULING 3): the meal plan's two new reads with no target and no log, so main's screen draws.
 jest.mock('../hooks/useApi', () => ({ ...jest.requireActual('../hooks/useApi'), useTodayLog: () => ({ data: undefined, isLoading: false, isError: false, refetch: jest.fn() }) }));
 jest.mock('../hooks/useMacros', () => ({ ...jest.requireActual('../hooks/useMacros'), useCurrentMacrosForSelf: () => ({ data: undefined, isLoading: false, isError: false, refetch: jest.fn() }) }));
-jest.mock('../hooks/useMealTemplates', () => ({
-  useMealPlanToday: (dateIso?: string) => mockUseMealPlanToday(dateIso),
-}));
+// FIX-MLD-1: the real useMealPlanToday over a fake backend main (the HTTP edge only), so the page's two reads run.
+jest.mock('../api/mealTemplatesApi', () => {
+  const actual = jest.requireActual('../api/mealTemplatesApi');
+  return { ...actual, mealTemplatesApi: { ...actual.mealTemplatesApi, todayForClient: (date?: string) => mockTodayForClient(date) } };
+});
 
 jest.mock('../theme/ThemeProvider', () => {
   const realTokens = jest.requireActual('../theme/tokens').default;
@@ -179,7 +185,7 @@ describe('B4 — a delivered meal plan opens that plan', () => {
     client_id: 'client_1',
     assigned_by_coach_id: 'coach_1',
     starts_on: startsOn,
-    ends_on: null,
+    ends_on: null as string | null,
     created_at: startsOn,
     daily_meal_plan: { id: `plan_${id}`, name, slots: [] },
   });
@@ -187,7 +193,7 @@ describe('B4 — a delivered meal plan opens that plan', () => {
   beforeEach(() => {
     mockNavigate.mockReset();
     mockGetPurchaseDrops.mockReset();
-    mockUseMealPlanToday.mockReset();
+    mockTodayForClient.mockReset();
     mockRouteParams = { purchaseId: 'purchase_1' };
   });
 
@@ -201,35 +207,56 @@ describe('B4 — a delivered meal plan opens that plan', () => {
     expect(mockNavigate).toHaveBeenCalledWith('ClientDailyMealPlan', { date: '2026-10-01' });
   });
 
-  function mealPlanData(assignments: ReturnType<typeof plan>[]) {
-    mockUseMealPlanToday.mockReturnValue({
-      data: { date: '2026-10-06', assignments },
-      isLoading: false,
-      isError: false,
-      isRefetching: false,
-      refetch: jest.fn(),
+  /** Backend main's GET /me/meal-plan/today: plans in force on ?date's day, or with no ?date on the server's day. */
+  function mealPlanServer(runs: ReturnType<typeof plan>[], serverDay = new Date().toISOString().slice(0, 10)) {
+    mockTodayForClient.mockImplementation((date?: string) => {
+      const day = date ?? serverDay;
+      const assignments = runs.filter((a) => a.starts_on <= day && (!a.ends_on || a.ends_on >= day));
+      return Promise.resolve({ data: { date: day, assignments, changes_today: [] } });
     });
   }
+  let mealClient: QueryClient | undefined;
+  afterEach(() => {
+    mealClient?.clear();
+    mealClient = undefined;
+  });
+  const openMealPlan = (params: Record<string, string>) => {
+    mockRouteParams = params;
+    mealClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+    return render(<QueryClientProvider client={mealClient}><ClientDailyMealPlanScreen /></QueryClientProvider>);
+  };
+  const reads = () => mockTodayForClient.mock.calls.map((c) => c[0] as string | undefined);
 
   it('the meal plan screen shows the delivered assignment, not the newest plan', async () => {
-    mealPlanData([
-      plan('newer', 'Coach cut plan', '2026-10-05'),
-      plan(ASSIGNMENT_ID, 'Package bulk plan', '2026-10-01'),
-    ]);
-    mockRouteParams = { assignmentId: ASSIGNMENT_ID };
-    const screen = await render(<ClientDailyMealPlanScreen />);
-    // MEALPLAN-LOCAL-DAY-M: with no date the screen reads the phone's today, never the server's own day.
-    expect(mockUseMealPlanToday).toHaveBeenCalledWith(getTodayString());
-    expect(screen.getByText('Package bulk plan')).toBeTruthy();
+    const today = getTodayString();
+    // Delivered now: the resolver starts it on the server's day, here her day too.
+    mealPlanServer([plan('newer', 'Coach cut plan', '2026-10-05'), plan(ASSIGNMENT_ID, 'Package bulk plan', today)], today);
+    const screen = await openMealPlan({ assignmentId: ASSIGNMENT_ID });
+    expect(await screen.findByText('Package bulk plan')).toBeTruthy();
     expect(screen.queryByText('Coach cut plan')).toBeNull();
     expect(screen.getByText('Meal plan')).toBeTruthy();
+    // MEALPLAN-LOCAL-DAY-M: with no date the screen reads the phone's today; her day holds it, so no second read.
+    expect(reads()).toEqual([today]);
+  });
+
+  it('delivered on an evening when the server is already on her tomorrow, it still opens (FIX-MLD-1 B1)', async () => {
+    const today = getTodayString();
+    const tomorrow = new Date(Date.parse(`${today}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+    // The resolver stamps the server's day; the fake server answers it only from that day on.
+    mealPlanServer([plan('newer', 'Coach cut plan', '2026-10-05'), plan(ASSIGNMENT_ID, 'Package bulk plan', tomorrow)], tomorrow);
+    const screen = await openMealPlan({ assignmentId: ASSIGNMENT_ID });
+    expect(await screen.findByText('Package bulk plan')).toBeTruthy();
+    expect(screen.queryByTestId('meal-plan-ended')).toBeNull();
+    expect(screen.queryByText('Coach cut plan')).toBeNull();
+    expect(reads()).toEqual([today, undefined]);
   });
 
   it('an assignment that is no longer active says it ended instead of showing another plan', async () => {
-    mealPlanData([plan('newer', 'Coach cut plan', '2026-10-05')]);
-    mockRouteParams = { assignmentId: ASSIGNMENT_ID };
-    const screen = await render(<ClientDailyMealPlanScreen />);
-    expect(screen.getByTestId('meal-plan-ended')).toBeTruthy();
+    mealPlanServer([plan('newer', 'Coach cut plan', '2026-10-05'), { ...plan(ASSIGNMENT_ID, 'Package bulk plan', '2026-10-01'), ends_on: '2026-10-20' }]);
+    const screen = await openMealPlan({ assignmentId: ASSIGNMENT_ID });
+    expect(await screen.findByTestId('meal-plan-ended')).toBeTruthy();
     expect(screen.queryByText('Coach cut plan')).toBeNull();
+    // Her day lacks it, so the server's day is read too; neither holds it.
+    expect(reads()).toEqual([getTodayString(), undefined]);
   });
 });

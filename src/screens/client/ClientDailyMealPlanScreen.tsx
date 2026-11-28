@@ -22,10 +22,13 @@
  *
  * Route param `assignmentId` (B-DELIV-125, B4): the backend materialises a
  * delivered meal_plan drop as a DailyMealPlanAssignment and stores its id in
- * `materialised_ref`, not a date. Delivered assignments start on delivery
- * day with no end, so the plan is among today's active assignments; the
- * screen shows exactly that assignment instead of every active one. If it is
- * absent, an honest unavailable state replaces another plan.
+ * `materialised_ref`, not a date. The screen shows exactly that assignment
+ * instead of every active one. The server starts a delivered plan, and links
+ * a notice to a plan, on its own (UTC) day, which is her tomorrow on an evening
+ * in the Americas; so when her day's answer lacks the assignment the screen
+ * reads once more with no date (the server's day) and shows it under the day
+ * that answer names (FIX-MLD-1). If neither answer holds it, an honest
+ * unavailable state replaces another plan.
  *
  * When no assignment is active for the chosen day we render an honest
  * empty state — no fabricated suggestions, no "ask your coach" CTA
@@ -56,6 +59,7 @@ import {
 import { NavigationContext, useRoute, type RouteProp } from '@react-navigation/native';
 import {
   SLOT_LABELS,
+  type ClientTodayResponse,
   type DailyMealPlanAssignmentWithPlan,
   type DailyMealPlanSlot,
   type SlotLabel,
@@ -96,6 +100,10 @@ interface Stop { slot: DailyMealPlanSlot; plan: string; first: boolean; last: bo
 // the phone's today when omitted, matching the legacy call site behaviour.
 type MealPlanRouteParams = { date?: string; assignmentId?: string } | undefined;
 
+/** The answer's plans this page shows: the door's assignment alone, or every one. */
+const plansOf = (answer: ClientTodayResponse | undefined, assignmentId: string | undefined): DailyMealPlanAssignmentWithPlan[] =>
+  (answer?.assignments ?? []).filter((a) => !assignmentId || a.id === assignmentId);
+
 // Accept either YYYY-MM-DD or a full ISO timestamp; the hook + backend
 // query parameter expect YYYY-MM-DD so we trim accordingly.
 function normaliseDateParam(raw: string | undefined): string | undefined {
@@ -121,14 +129,7 @@ export default function ClientDailyMealPlanScreen() {
   const { data, isLoading, isError, refetch, isRefetching, isFetching, dataUpdatedAt } =
     useMealPlanToday(dateParam ?? today);
 
-  const onRefresh = useCallback(() => {
-    void refetch();
-  }, [refetch]);
-
-  const shown: DailyMealPlanAssignmentWithPlan[] = useMemo(() => {
-    const all = data?.assignments ?? [];
-    return assignmentId ? all.filter((a) => a.id === assignmentId) : all;
-  }, [data, assignmentId]);
+  const herShown = useMemo(() => plansOf(data, assignmentId), [data, assignmentId]);
 
   // MEAL-PLAN-REFRESH-M (R-a): "not available" only from an answer read since this screen was asked for the
   // assignment (a mount, or new params). Until then it is still loading, and one read is started if none runs.
@@ -136,21 +137,42 @@ export default function ClientDailyMealPlanScreen() {
   const [ask, setAsk] = useState(() => ({ key: askKey, at: Date.now() }));
   if (ask.key !== askKey) setAsk({ key: askKey, at: Date.now() }); // new params on a screen already open
   const askedAt = ask.at;
-  const holding = !!assignmentId && shown.length === 0 && typeof dataUpdatedAt === 'number' && dataUpdatedAt < askedAt;
+  const holding = !!assignmentId && herShown.length === 0 && typeof dataUpdatedAt === 'number' && dataUpdatedAt < askedAt;
   const readFor = useRef(0);
   useEffect(() => {
     if (!holding || readFor.current === askedAt) return;
     readFor.current = askedAt; // once per ask: the read already running, or the one started here
     if (!isFetching) void refetch();
   }, [holding, askedAt, isFetching, refetch]);
-  const waiting = isLoading || (holding && !isError);
+
+  // FIX-MLD-1 (m#1038 B1): a plan-id door with no date (a delivered plan, a notice's tgp://meal-plan/<id>) names a
+  // plan the server chose on its own day. When her day's settled answer lacks it, the page reads once more with no
+  // date (main's read) and, if that answer holds it, shows it under the day that answer names: the dated view, so
+  // no "Ate it as planned" and no now line. Until that read answers the page holds; neither holds it: main's card.
+  const askServer = !!assignmentId && !dateParam && !isLoading && !isError && !holding && herShown.length === 0;
+  const {
+    data: serverData, dataUpdatedAt: serverAt, isError: serverError, errorUpdatedAt: serverErrorAt, refetch: refetchServer,
+  } = useMealPlanToday(null, askServer);
+  const serverAnswered = askServer && serverAt >= askedAt;
+  const serverDay = serverAnswered ? normaliseDateParam(serverData?.date) : undefined;
+  const serverShown = useMemo(() => (serverDay ? plansOf(serverData, assignmentId) : []), [serverDay, serverData, assignmentId]);
+  const serverFailed = askServer && !serverAnswered && serverError && serverErrorAt >= askedAt;
+  const shown = serverShown.length > 0 ? serverShown : herShown;
+  const failed = isError || serverFailed;
+  const waiting = isLoading || (holding && !isError) || (askServer && !serverAnswered && !serverFailed);
+
+  const onRefresh = useCallback(() => {
+    void refetch();
+    if (askServer) void refetchServer();
+  }, [refetch, askServer, refetchServer]);
 
   const italic = useCoachItalic();
-  const loaded = !isLoading && !isError;
+  const loaded = !isLoading && !failed;
   const timeW = useTimeColumn();
 
-  // The shown day: the route's date, else today (the day the plan read above asked for).
-  const shownDay = dateParam ?? today;
+  // The shown day: the server answer's day when it holds the door's plan (FIX-MLD-1), else the route's date, else
+  // today (the day the plan read above asked for).
+  const shownDay = (serverShown.length > 0 ? serverDay : undefined) ?? dateParam ?? today;
   const isToday = shownDay === today;
   // RULING 3: the target and the shown day's log, read as Macro targets reads them.
   const target = useCurrentMacrosForSelf();
@@ -227,7 +249,7 @@ export default function ClientDailyMealPlanScreen() {
       <PaperPage bg={sc.bgSurface}>
         {waiting ? (
           <LoadingTimeline sc={sc} styles={styles} />
-        ) : isError ? (
+        ) : failed ? (
           <View style={[planStyleC.card, styles.cardFill, styles.state]} accessibilityLiveRegion="polite" accessibilityRole="alert">
             <Text style={[typography.body, { color: sc.textPrimary }]}>
               Could not load this meal plan. Pull to retry.

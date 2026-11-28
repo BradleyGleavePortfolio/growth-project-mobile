@@ -112,6 +112,8 @@ mockToday.mockImplementation((date?: string) => {
   });
 });
 const screenReads = () => reads.filter((r) => r.date === getTodayString());
+/** FIX-MLD-1: the plan-id door's one read with no date (the server's own day), only once her day lacks the plan. */
+const serverDayReads = () => reads.filter((r) => r.date === undefined);
 const dayReads = () => reads.filter((r) => r.date !== undefined);
 
 /** The answer saved before the notice: read a minute ago unless a case says otherwise. */
@@ -447,25 +449,50 @@ describe('i. the screen rule alone (no notice)', () => {
     expect(mockToday).toHaveBeenCalledTimes(1);
   });
 
-  it('i2 the fresh answer still lacks A2: "not available" after exactly one read, no loop; i3 pull keeps main', async () => {
+  it('i2 the fresh answer still lacks A2: the no-date read, then "not available", no loop; i3 pull keeps main', async () => {
     seed(SCREEN_KEY, PLAN_ONE);
     await openPlan({ assignmentId: A2 });
     await waitFor(() => expect(screenReads()).toHaveLength(1));
     await act(async () => screenReads()[0].release(PLAN_ONE));
+    // FIX-MLD-1: her day lacks A2, so the page reads once with no date (the server's day) and holds until it answers.
+    await waitFor(() => expect(serverDayReads()).toHaveLength(1));
+    expectLoadingNotUnavailable();
+    await act(async () => serverDayReads()[0].release(PLAN_ONE));
     expect(await screen.findByTestId('meal-plan-ended')).toBeTruthy();
     await settle();
     await settle();
-    expect(mockToday).toHaveBeenCalledTimes(1);
+    expect(mockToday).toHaveBeenCalledTimes(2);
     expect(screen.getByTestId('meal-plan-ended')).toBeTruthy();
-    // i3: pull to refresh on the card: the card stays and main's spinner shows.
+    // i3: pull to refresh on the card: the card stays, main's spinner shows, and both reads run again once.
     await fireEvent(screen.getByTestId('daily-meal-plan-refresh'), 'refresh');
     await waitFor(() => expect(screenReads()).toHaveLength(2));
+    await waitFor(() => expect(serverDayReads()).toHaveLength(2));
     expect(screen.getByTestId('meal-plan-ended')).toBeTruthy();
     expect(screen.queryByTestId('daily-meal-plan-loading')).toBeNull();
     await waitFor(() => expect(refreshing()).toBe(true));
-    await act(async () => screenReads()[1].release(PLAN_ONE));
+    await act(async () => { screenReads()[1].release(PLAN_ONE); serverDayReads()[1].release(PLAN_ONE); });
     await waitFor(() => expect(refreshing()).toBe(false));
     expect(screen.getByTestId('meal-plan-ended')).toBeTruthy();
+    await settle();
+    expect(mockToday).toHaveBeenCalledTimes(4);
+  });
+
+  it('i5 FIX-MLD-1: her day lacks A2 and the server\'s day holds it: loading until the no-date read answers, then A2', async () => {
+    seed(SCREEN_KEY, PLAN_ONE);
+    // An old no-date answer holding A2 (the key main used, as a persisted cache restores it) never stands in for the read.
+    seed(['meal-plan', 'today', null], { date: '2026-11-01', assignments: [assignment(A2, 'Plan two, old')] }, 10 * MINUTE);
+    await openPlan({ assignmentId: A2 });
+    await waitFor(() => expect(screenReads()).toHaveLength(1));
+    expectLoadingNotUnavailable();
+    await act(async () => screenReads()[0].release(PLAN_ONE));
+    await waitFor(() => expect(serverDayReads()).toHaveLength(1));
+    expectLoadingNotUnavailable();
+    expect(screen.queryByText('Plan two, old')).toBeNull();
+    const tomorrow = new Date(Date.parse(`${getTodayString()}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+    await act(async () => serverDayReads()[0].release({ date: tomorrow, assignments: [assignment(A2, 'Plan two')] }));
+    expect(await screen.findByText('Plan two')).toBeTruthy();
+    expect(screen.queryByTestId('meal-plan-ended')).toBeNull();
+    expect(screen.queryByText('Ate it as planned')).toBeNull(); // shown under that day: the dated view
     await settle();
     expect(mockToday).toHaveBeenCalledTimes(2);
   });
@@ -478,6 +505,17 @@ describe('i. the screen rule alone (no notice)', () => {
     await settle();
     expect(mockToday).not.toHaveBeenCalled();
     expect(refreshing()).toBe(false);
+  });
+
+  it('i6 FIX-MLD-1: no assignmentId and no plan on her day: "No plan for today" after her day\'s read only', async () => {
+    await openPlan(undefined);
+    await waitFor(() => expect(screenReads()).toHaveLength(1));
+    await act(async () => screenReads()[0].release(answer()));
+    expect(await screen.findByText('No plan for today')).toBeTruthy();
+    await settle();
+    await settle();
+    expect(serverDayReads()).toHaveLength(0);
+    expect(mockToday).toHaveBeenCalledTimes(1);
   });
 });
 

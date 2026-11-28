@@ -9,14 +9,21 @@
  * Two phones: 16:30 on Friday 27 November in America/Los_Angeles (UTC is already Saturday 28 November) and 08:30 on
  * Saturday 28 November in Australia/Brisbane (UTC+10, no daylight saving; UTC is still Friday 27 November). Her coach's
  * this-week plan ends on Friday 27 November and next week's starts on Saturday 28 November.
+ * FIX-MLD-1 (m#1038 B1, LO 7234024743 and LS 7234028928, OPERATOR RULING 7234060232): a door that opens the page by
+ * plan id with no date (a delivered plan, a notice's tgp://meal-plan/<id>) opens that plan at every hour, as main does.
+ * The server picks the plan such a door names on its own day: a delivery starts on todayUtcDate()
+ * (packages/asset-resolvers/meal-plan.resolver.ts) and a notice links tgp://meal-plan/<id> only while the plan is in
+ * force on planDay() (real-meal-plans/meal-plan-notice.ts:122-126), else tgp://plan. When her day's answer lacks the
+ * plan, the page reads once more with no date and shows it under the day that answer names; the plain doors (More,
+ * the Kitchen card, tgp://plan) read her day only. The notice cases below take the link the server sends at the clock.
  * Real: ClientDailyMealPlanScreen, KitchenScreen, useMealPlanToday, useTodayLog, LogPlannedMealButton with logSubmit,
- * and the notice link rules (incomingLinkPath, resolveAppLink). Stubbed: the HTTP edge (services/api,
+ * routeForDrop and the notice link rules (incomingLinkPath, resolveAppLink). Stubbed: the HTTP edge (services/api,
  * mealTemplatesApi), navigation, the theme, icons and haptics. Every switch is on. Names and ids are fictional.
  */
 import fs from 'fs';
 import path from 'path';
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 jest.mock('../../../config/featureFlags', () => ({ featureFlags: new Proxy({}, { get: () => true }) }));
@@ -58,6 +65,7 @@ jest.mock('../../../api/mealTemplatesApi', () => ({
 }));
 const mockLogFood = jest.fn();
 const mockCreateFood = jest.fn();
+const mockGetDaily = jest.fn();
 jest.mock('../../../services/api', () => ({
   __esModule: true,
   default: {
@@ -65,7 +73,7 @@ jest.mock('../../../services/api', () => ({
     post: jest.fn(),
   },
   logApi: {
-    getDaily: () => Promise.resolve({ data: { entries: [] } }),
+    getDaily: (date: string) => mockGetDaily(date),
     logFood: (...a: unknown[]) => mockLogFood(...a),
     deleteEntry: jest.fn(),
   },
@@ -87,7 +95,9 @@ jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
 import ClientDailyMealPlanScreen from '../ClientDailyMealPlanScreen';
 import KitchenScreen from '../kitchen/KitchenScreen';
 import { incomingLinkPath, resolveAppLink } from '../../../navigation/incomingLinks';
+import { routeForDrop } from '../deliverables/dropRow';
 import type { ClientTodayResponse, DailyMealPlanAssignmentWithPlan } from '../../../api/mealTemplatesApi';
+import type { ScheduledDropView } from '../../../api/clientPaymentsApi';
 
 jest.setTimeout(30_000);
 
@@ -108,12 +118,22 @@ function run(id: string, name: string, meal: string, starts: string, ends: strin
 const THIS_WEEK = run(THIS_RUN, 'Cut, week 1', 'Chicken rice bowl', '2026-11-21', '2026-11-27');
 const NEXT_WEEK = run(NEXT_RUN, 'Cut, week 2', 'Salmon and greens', '2026-11-28', null);
 
+/** The server's own day (planDay() / todayUtcDate() on a TZ=UTC server) at the test's clock. */
+const serverDay = () => new Date().toISOString().slice(0, 10);
+const inForce = (a: DailyMealPlanAssignmentWithPlan, day: string) => a.starts_on <= day && (!a.ends_on || a.ends_on >= day);
+let runs: DailyMealPlanAssignmentWithPlan[] = [];
 /** Backend main's GET /me/meal-plan/today: ?date's day, or with no ?date the server's UTC day at the test's clock. */
 function server(date?: string): ClientTodayResponse {
-  const day = date ?? new Date().toISOString().slice(0, 10);
-  const runs = [NEXT_WEEK, THIS_WEEK].filter((a) => a.starts_on <= day && (!a.ends_on || a.ends_on >= day));
-  return { date: day, assignments: runs, changes_today: [] };
+  const day = date ?? serverDay();
+  return { date: day, assignments: runs.filter((a) => inForce(a, day)), changes_today: [] };
 }
+/** meal-plan-notice.ts:122-126, the link a notice carries: in force on the server's day -> tgp://meal-plan/<id>, else tgp://plan. */
+const noticeLink = (id: string) => (server().assignments.some((a) => a.id === id) ? `tgp://meal-plan/${id}` : 'tgp://plan');
+const mealOf = (a: DailyMealPlanAssignmentWithPlan) => a.daily_meal_plan.slots[0].meal_template.name;
+/** The page's eyebrow for a day (ClientDailyMealPlanScreen longDay, the same formula in the same process). */
+const longDay = (date: string) =>
+  new Date(`${date}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }).replace(',', '');
+const eyebrow = (day: string, herDay: string) => (day === herDay ? `Today, ${longDay(day)}` : longDay(day)).toUpperCase();
 
 const PHONES = [
   { phone: '16:30 Friday in Los Angeles', zone: 'America/Los_Angeles', at: '2026-11-28T00:30:00Z', herDay: '2026-11-27',
@@ -122,6 +142,9 @@ const PHONES = [
     her: NEXT_WEEK, herMeal: 'Salmon and greens', otherMeal: 'Chicken rice bowl' },
 ];
 type Phone = (typeof PHONES)[number];
+/** The control: 10:00 on Friday in Los Angeles, the server on the same day (18:00 UTC). */
+const DAYTIME: Phone = { phone: '10:00 Friday in Los Angeles (the server on the same day)', zone: 'America/Los_Angeles',
+  at: '2026-11-27T18:00:00Z', herDay: '2026-11-27', her: THIS_WEEK, herMeal: 'Chicken rice bowl', otherMeal: 'Salmon and greens' };
 
 const RealDateTimeFormat = Intl.DateTimeFormat;
 let zoneSpy: jest.SpyInstance | undefined;
@@ -145,11 +168,15 @@ const expectEveryReadHerDay = (p: Phone) => {
   expect(mockToday).toHaveBeenCalled();
   expect(mockToday.mock.calls.map((c) => c[0])).toEqual(mockToday.mock.calls.map(() => p.herDay));
 };
+const reads = () => mockToday.mock.calls.map((c) => c[0] as string | undefined);
+const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 30)); });
 
 beforeEach(() => {
   client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
   mockParams = undefined;
+  runs = [NEXT_WEEK, THIS_WEEK];
   mockToday.mockReset().mockImplementation((date?: string) => Promise.resolve({ data: server(date) }));
+  mockGetDaily.mockReset().mockResolvedValue({ data: { entries: [] } });
   mockLogFood.mockReset().mockResolvedValue({ data: { id: 'entry-1' } });
   mockCreateFood.mockReset().mockResolvedValue({ data: { id: 'food-1' } });
   mockNav.navigate.mockClear();
@@ -180,6 +207,7 @@ describe.each(PHONES)('$phone', (p) => {
     expect(mockNav.navigate).toHaveBeenCalledTimes(1);
     const [route, params] = mockNav.navigate.mock.calls[0] as [string, typeof mockParams];
     expect(route).toBe('ClientDailyMealPlan');
+    expect(params).toBeUndefined(); // the Kitchen card's door is More's: no date and no plan id
     mockParams = params;
     await view.rerender(wrap(<ClientDailyMealPlanScreen />));
     expect(await screen.findByText(p.herMeal)).toBeTruthy();
@@ -187,16 +215,17 @@ describe.each(PHONES)('$phone', (p) => {
     expectEveryReadHerDay(p);
   });
 
-  it.each([
-    ['her plan\'s notice (tgp://meal-plan/:id)', (q: Phone) => `tgp://meal-plan/${q.her.id}`],
-    ['tgp://plan', () => 'tgp://plan'],
-  ])('a notice link, %s, opens her day\'s plan', async (_name, link) => {
-    const target = resolveAppLink(incomingLinkPath(link(p)) as string, 'student');
+  it('a notice about her day\'s plan carries the link the server sends at this clock and opens her day\'s plan', async () => {
+    const link = noticeLink(p.her.id); // LO N1 and LS N1: the server's own link rule, not a link it never sends
+    const target = resolveAppLink(incomingLinkPath(link) as string, 'student');
     expect(target?.screen).toBe('ClientDailyMealPlan');
     await openPage(target?.params);
     expect(await screen.findByText(p.herMeal)).toBeTruthy();
     expect(screen.queryByTestId('meal-plan-ended')).toBeNull();
     expect(screen.queryByText(p.otherMeal)).toBeNull();
+    expect(screen.getByText(eyebrow(p.herDay, p.herDay))).toBeTruthy();
+    // Her day's plan is not in force on the server's day at either clock, so the server links tgp://plan.
+    expect(link).toBe('tgp://plan');
     expectEveryReadHerDay(p);
   });
 
@@ -212,14 +241,101 @@ describe.each(PHONES)('$phone', (p) => {
 });
 
 /**
+ * FIX-MLD-1 (B1), class-first (R24): every door that opens the page by plan id with no date (routeForDrop for the
+ * Deliverables and purchase rows; incomingLinks.ts for tgp://meal-plan/<id>), at three clocks. The plan opens; it shows
+ * under her day when her day holds it, else under the day the no-date answer names (the dated view: no "Today", no
+ * "Ate it as planned", that day's log); and the no-date read happens only then.
+ */
+const BOUGHT = '3a1f0c52-7b4e-4d21-9c6a-0e5d8f2b1a03';
+const ONE_DAY = '3a1f0c52-7b4e-4d21-9c6a-0e5d8f2b1a04';
+type Door = [name: string, plan: () => DailyMealPlanAssignmentWithPlan, door: (a: DailyMealPlanAssignmentWithPlan) => typeof mockParams];
+const viaDeliverables = (a: DailyMealPlanAssignmentWithPlan) => {
+  const drop = { id: 'drop-1', asset_type: 'meal_plan', asset_id: a.daily_meal_plan_id, status: 'fired', materialised_ref: a.id } as ScheduledDropView;
+  const navigate = jest.fn();
+  routeForDrop(drop, { navigate } as never);
+  expect(navigate).toHaveBeenCalledWith('ClientDailyMealPlan', { assignmentId: a.id });
+  return navigate.mock.calls[0][1] as typeof mockParams;
+};
+const viaNotice = (a: DailyMealPlanAssignmentWithPlan) => {
+  const target = resolveAppLink(incomingLinkPath(noticeLink(a.id)) as string, 'student');
+  expect(target?.screen).toBe('ClientDailyMealPlan');
+  return target?.params as typeof mockParams;
+};
+const bought = () => run(BOUGHT, 'Lean start', 'Turkey chilli', serverDay(), null); // meal-plan.resolver.ts: starts_on = todayUtcDate()
+const DOORS: Door[] = [
+  ['the plan she bought now, from its Deliverables or purchase row (routeForDrop)', bought, viaDeliverables],
+  ['a notice about this week\'s plan', () => THIS_WEEK, viaNotice],
+  ['a notice about next week\'s plan', () => NEXT_WEEK, viaNotice],
+];
+
+describe.each([...PHONES, DAYTIME])('FIX-MLD-1 B1, $phone', (p) => {
+  beforeEach(() => onPhone(p));
+
+  it.each(DOORS)('%s opens that plan (by its id), or her day\'s plan when the server sent tgp://plan', async (_name, planOf, door) => {
+    const plan = planOf();
+    runs = [NEXT_WEEK, THIS_WEEK, plan].filter((a, i, all) => all.findIndex((b) => b.id === a.id) === i);
+    const params = door(plan);
+    const byId = !!params?.assignmentId;
+    expect(byId).toBe(params === undefined ? false : inForce(plan, serverDay())); // the id only for a plan in force on the server's day
+    const fallback = byId && !inForce(plan, p.herDay);
+    const day = fallback ? serverDay() : p.herDay;
+    await openPage(params);
+    expect(await screen.findByText(mealOf(byId ? plan : p.her))).toBeTruthy();
+    expect(screen.queryByTestId('meal-plan-ended')).toBeNull();
+    expect(screen.getByText(eyebrow(day, p.herDay))).toBeTruthy();
+    await settle();
+    // Her day first; the no-date read (the server's own day) only for a plan-id door whose plan her day lacks.
+    expect(reads()).toEqual(fallback ? [p.herDay, undefined] : [p.herDay]);
+    if (fallback) {
+      expect(day).not.toBe(p.herDay);
+      expect(screen.queryByText('Ate it as planned')).toBeNull(); // the dated view logs nothing as planned
+      expect(screen.queryByTestId('daily-meal-plan-now')).toBeNull();
+      await waitFor(() => expect(mockGetDaily).toHaveBeenCalledWith(day)); // its checklist reads that day's log
+    }
+  });
+
+  it('a plan-id door whose plan neither answer holds keeps main\'s card, after both reads', async () => {
+    const ended = run(ONE_DAY, 'Old plan', 'Lentil soup', '2026-11-01', '2026-11-10');
+    runs = [NEXT_WEEK, THIS_WEEK, ended];
+    await openPage(viaDeliverables(ended));
+    expect(await screen.findByTestId('meal-plan-ended')).toBeTruthy();
+    expect(screen.getByText('This plan is not available for this day')).toBeTruthy();
+    await settle();
+    expect(reads()).toEqual([p.herDay, undefined]);
+  });
+});
+
+describe.each(PHONES)('FIX-MLD-1, the plain doors read her day only: $phone', (p) => {
+  beforeEach(() => onPhone(p));
+
+  // A plan in force on the server's day only (her tomorrow in Los Angeles, her yesterday in Brisbane): her day has none.
+  it.each([
+    ['More > Meal plan', () => undefined],
+    ['the Kitchen card (the same door, no params)', () => undefined],
+    ['tgp://plan', () => resolveAppLink(incomingLinkPath('tgp://plan') as string, 'student')?.params as typeof mockParams],
+  ])('%s, with no plan on her day: "No plan for today" after exactly one read, for her day', async (_name, paramsOf) => {
+    runs = [run(ONE_DAY, 'One-day plan', 'Lentil soup', serverDay(), serverDay())];
+    expect(inForce(runs[0], p.herDay)).toBe(false);
+    await openPage(paramsOf());
+    expect(await screen.findByText('No plan for today')).toBeTruthy();
+    await settle();
+    await settle();
+    expect(reads()).toEqual([p.herDay]);
+    expect(screen.queryByText('Lentil soup')).toBeNull();
+  });
+});
+
+/**
  * Class-first (R24): every phone read of a day's plan, and the day it sends. A new caller must be added here with the
- * day it sends; none may leave the day to the server (mealTemplatesApi.todayForClient's day is optional).
+ * day it sends. Only the meal plan page's plan-id door may leave the day to the server, and only while her day's
+ * answer lacks its plan (`useMealPlanToday(null, askServer)`, FIX-MLD-1); mealTemplatesApi.todayForClient's day is optional.
  */
 const SRC = path.resolve(__dirname, '..', '..', '..');
 const PLAN_READS: Array<[file: string, call: string]> = [
   ['components/log/FoodDayView.tsx', 'todayForClient(p.selectedDate)'],
-  ['hooks/useMealTemplates.ts', 'todayForClient(dateIso)'],
+  ['hooks/useMealTemplates.ts', 'todayForClient(dateIso ?? undefined)'],
   ['screens/client/ClientDailyMealPlanScreen.tsx', 'useMealPlanToday(dateParam ?? today)'],
+  ['screens/client/ClientDailyMealPlanScreen.tsx', 'useMealPlanToday(null, askServer)'],
   ['screens/client/foodweek/FoodWeekScreen.tsx', 'todayForClient(day)'],
   ['screens/client/kitchen/KitchenScreen.tsx', 'todayForClient(today)'],
   ['screens/client/mealplan/PlanMealScreen.tsx', 'todayForClient(date)'],
