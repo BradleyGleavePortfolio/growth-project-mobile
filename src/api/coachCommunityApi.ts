@@ -162,13 +162,13 @@ export const CoachCohortSchema = z
   .passthrough();
 export type CoachCohort = z.infer<typeof CoachCohortSchema>;
 
-/** D10-BUILD-COMMUNITY: what a coach may choose for a new space (CreateCohortDto); never 'public', 'members' or 'section'. */
-export type CreateCohortInput = {
-  name: string;
-  kind?: 'chat' | 'announcement';
-  visibility?: 'clients' | 'package';
-  package_ids?: string[];
-};
+/**
+ * D10-BUILD-COMMUNITY: what a coach may choose for a new space (CreateCohortDto); never 'public', 'members' or 'section'.
+ * package_ids go only with 'package' (FIX-D10C-1: the server refuses them beside any other visibility).
+ */
+export type CreateCohortInput =
+  | { name: string; kind?: 'chat' | 'announcement'; visibility?: 'clients'; package_ids?: never }
+  | { name: string; kind?: 'chat' | 'announcement'; visibility: 'package'; package_ids: string[] };
 
 /** The coach's cohorts (tenant-scoped). */
 export const CoachCohortListSchema = z

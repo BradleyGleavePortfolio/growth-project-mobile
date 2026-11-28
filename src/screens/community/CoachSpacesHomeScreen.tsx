@@ -21,7 +21,9 @@
  * States: the first spaces read with nothing cached is the still s01 skeleton; a failed read with nothing to show keeps
  * the rows (none of them needs the spaces) and puts the s03 words and Try again where the spaces go, with an error
  * tick when the retry fails too; a failed refresh keeps the rows on screen. A row the Home has not drawn before (a new
- * space) carries a leaf left edge for 2 s, with no fill and no fade.
+ * space) carries a leaf left edge for 2 s, with no fill and no fade (one timer per set of new rows, so another change
+ * to the list inside the 2 s never keeps it). The create's provisional row draws at once but opens nothing until the
+ * server's row replaces it.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -86,19 +88,21 @@ function SpaceTag({ tag }: { tag: Tag }): React.ReactElement {
   );
 }
 
-/** Ids the Home has not drawn before, once its first list is in: each is fresh for FRESH_MS. */
+/** Ids the Home has not drawn before, once its first list is in: each set is fresh for FRESH_MS (one timer per set). */
 function useFreshIds(list: CoachCohort[] | undefined): ReadonlySet<string> {
   const seen = useRef<Set<string> | null>(null);
   const [fresh, setFresh] = useState<ReadonlySet<string>>(new Set());
   useEffect(() => {
-    if (!list) return undefined;
+    if (!list) return;
     const added = seen.current ? list.map((c) => c.id).filter((id) => !seen.current?.has(id)) : [];
     seen.current = new Set([...(seen.current ?? []), ...list.map((c) => c.id)]);
-    if (added.length === 0) return undefined;
-    setFresh(new Set(added));
+    if (added.length > 0) setFresh(new Set(added));
+  }, [list]);
+  useEffect(() => {
+    if (fresh.size === 0) return undefined;
     const t = setTimeout(() => setFresh(new Set()), FRESH_MS);
     return () => clearTimeout(t);
-  }, [list]);
+  }, [fresh]);
   return fresh;
 }
 
@@ -124,10 +128,11 @@ export default function CoachSpacesHomeScreen(): React.ReactElement {
   const failed = !loading && cohorts.data === undefined;
   const name = (!failed && workspace.data?.name.trim()) || 'Community';
 
-  const openSpace = (c: CoachCohort) =>
-    featureFlags.communitySpaceChat
-      ? navigation.navigate('CommunitySpaceChat', { cohortId: c.id })
-      : navigation.navigate('CoachCommunityCohortDetail', { cohortId: c.id, cohortName: c.name });
+  const openSpace = (c: CoachCohort) => {
+    if (c.id.startsWith('optimistic:')) return; // useCreateCohort's provisional row: the server's row opens
+    if (featureFlags.communitySpaceChat) navigation.navigate('CommunitySpaceChat', { cohortId: c.id });
+    else navigation.navigate('CoachCommunityCohortDetail', { cohortId: c.id, cohortName: c.name });
+  };
   const refresh = () => {
     void cohorts.refetch();
     void flagged.refetch();
