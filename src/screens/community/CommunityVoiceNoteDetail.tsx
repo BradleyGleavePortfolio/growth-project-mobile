@@ -357,7 +357,7 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
         </SafetyHold>
 
         {excerpt.length > 0 && !folded && !removedLine ? (
-          <View style={styles.transcriptWrap}>
+          <SafetyHold hold={holds.hold('note')} style={styles.transcriptWrap}>
             <Text
               style={[styles.transcriptLabel, { color: semanticColors.textMuted }]}
             >
@@ -369,7 +369,7 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
             >
               {excerpt}
             </Text>
-          </View>
+          </SafetyHold>
         ) : null}
       </ScrollView>
     </StudioPage>
