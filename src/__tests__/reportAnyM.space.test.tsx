@@ -372,3 +372,33 @@ describe('H8 SC9-SC10: no hold where the row has nothing to report, and a messag
     expect(reportsSent()).toEqual([]);
   });
 });
+
+// ─── FIX-RAM-1 VN-LINE2 (fix 4): the owner's voice note line reads to a client viewer only ─────────────────────────
+describe('VN-LINE2 (FIX-RAM-1): in the space chat the voice note line reads to a client viewer only', () => {
+  /** The reasons step for jo b.'s voice note (m4), from the hold sheet's Report or from the row's own •••. */
+  const readsLine = async (r: R, door: 'hold' | 'dots') => {
+    if (door === 'hold') {
+      await hold(r, 'm4');
+      await pick(r, 'report');
+    } else {
+      await fireEvent.press(r.getByTestId('space-chat-menu-m4'));
+      await fireEvent.press(r.getByTestId('space-chat-menu-m4-report'));
+    }
+    const tid = door === 'hold' ? 'space-chat-report-m4' : 'space-chat-menu-m4';
+    return within(r.getByTestId(`${tid}-sheet`)).queryByText(VOICE_NOTE_HEARD_LINE) !== null;
+  };
+
+  it.each(['hold', 'dots'] as const)('VN-LINE2 space chat: a client reads the line word for word (by the %s)', async (door) => {
+    const r = await open();
+    expect(await readsLine(r, door)).toBe(true);
+  });
+
+  it.each([
+    ['coach', 'hold'], ['coach', 'dots'], ['owner', 'hold'], ['owner', 'dots'],
+  ] as const)('VN-LINE2 space chat: a viewer whose my_role is %s reads no line (by the %s)', async (role, door) => {
+    mockRole = role;
+    mockUser = { id: 'coach-1', name: 'Sam Okafor', coach_id: '' };
+    const r = await open();
+    expect(await readsLine(r, door)).toBe(false);
+  });
+});
