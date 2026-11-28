@@ -475,3 +475,28 @@ describe('LEAVE-MUTE-M a second account (KT-13)', () => {
     expect(client.getQueryCache().getAll().map((q) => q.queryKey as unknown[]).filter((k) => k[2] === 'me-1')).toHaveLength(0);
   });
 });
+
+// LEAVE-MUTE-M r2, from the renders (GOAL vs BUILT against the owner's pick, Style 1): the bar's hash stays on the first
+// line of a name that wraps (s1_L1 at 320 pt and 130% text), and a failed action's toast puts its words over Try again
+// (s1_L11), as the GOAL frames draw them.
+describe('LEAVE-MUTE-M renders r2: the bar and the failure toast as Style 1 draws them', () => {
+  it('s1_L1 (130%): the name\'s row aligns its top, so the hash sits on the first line of a name that wraps', async () => {
+    const r = await open();
+    await r.findByTestId('space-chat-bell');
+    const { StyleSheet } = jest.requireActual('react-native') as typeof import('react-native');
+    expect(StyleSheet.flatten(r.getByTestId('space-chat-title-row').props.style)).toEqual(expect.objectContaining({ flexDirection: 'row', alignItems: 'flex-start' }));
+    expect(within(r.getByTestId('space-chat-title-row')).getByTestId('space-chat-hash', HIDDEN)).toBeTruthy();
+  });
+
+  it('s1_L11: a failed action\'s toast stacks its words over Try again', async () => {
+    const r = await open();
+    mockApi.put.mockImplementationOnce(async () => { throw offline(); });
+    const menu = within(await openMenu(r));
+    await waitFor(() => expect(menu.getByLabelText('Mute low priority').props.accessibilityState).toEqual(expect.objectContaining({ checked: true })));
+    await fireEvent.press(menu.getByLabelText('Mute all'));
+    const toast = await r.findByTestId('space-toast');
+    const stack = within(toast).getByTestId('space-toast-stack');
+    expect(within(stack).getByText(OFFLINE_LINE)).toBeTruthy();
+    expect(within(stack).getByText('Try again')).toBeTruthy();
+  });
+});

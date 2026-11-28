@@ -361,3 +361,28 @@ describe('LEAVE-MUTE-M the fold of a left thread (LM-08)', () => {
     expect(r.getByTestId('space-fold-m1')).toBeTruthy();
   });
 });
+
+// LEAVE-MUTE-M r2, from the renders (GOAL vs BUILT, s1_L8b-l): Follow thread draws the GOAL's "enter" glyph (an arrow
+// into the box, the mirror of Leave thread's exit glyph); Leave thread keeps the exit glyph.
+type GlyphNode = { props?: Record<string, unknown>; children?: Array<GlyphNode | string> | null };
+const GLYPHS = (require('@expo/vector-icons').Ionicons as { glyphMap: Record<string, number> }).glyphMap;
+const hasGlyph = (n: GlyphNode, name: string): boolean => n.props?.name === name
+  || (n.children ?? []).some((c) => (typeof c === 'string' ? c === String.fromCodePoint(GLYPHS[name]) : hasGlyph(c, name)));
+describe('LEAVE-MUTE-M renders r2: the sheet\'s thread rows as Style 1 draws them', () => {
+  it('s1_L8b-l: Follow thread draws the enter glyph; s1_L8: Leave thread the exit glyph', async () => {
+    threadStates = [{ thread_message_id: 'm1', state: 'left', since: '2026-11-27T14:50:00.000Z' }];
+    let r = await open();
+    await r.findByTestId('space-chat-row-m1');
+    await hold(r, 'm1');
+    await waitFor(() => expect(sheetRows(r)).toContain('Follow thread'));
+    expect(hasGlyph(r.getByTestId('space-chat-sheet-follow-thread') as unknown as GlyphNode, 'enter-outline')).toBe(true);
+    await r.unmount();
+    client.clear();
+    threadStates = [];
+    r = await open();
+    await r.findByTestId('space-chat-row-m1');
+    await hold(r, 'm1');
+    await waitFor(() => expect(sheetRows(r)).toContain('Leave thread'));
+    expect(hasGlyph(r.getByTestId('space-chat-sheet-leave-thread') as unknown as GlyphNode, 'exit-outline')).toBe(true);
+  });
+});

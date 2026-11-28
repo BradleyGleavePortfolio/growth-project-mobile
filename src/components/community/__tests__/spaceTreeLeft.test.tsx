@@ -158,3 +158,28 @@ describe('LEAVE-MUTE-M Spaces you left in the tree (L9)', () => {
     expect(client.getQueryCache().findAll({ queryKey: ['community', 'cohorts'] })).toHaveLength(1);
   });
 });
+
+// LEAVE-MUTE-M r2, from the renders (GOAL vs BUILT, s1_L5 and s1_L5d): the name takes the row's free width, so Join sits
+// at the row's end (and a long name wraps before it instead of pushing Join off the row).
+type JsonNode = { type: string; props: Record<string, unknown>; children: Array<JsonNode | string> | null };
+const rowOf = (n: JsonNode | string | null | undefined, joinId: string): JsonNode | null => {
+  if (!n || typeof n === 'string') return null;
+  if ((n.children ?? []).some((c) => typeof c !== 'string' && c.props?.testID === joinId)) return n;
+  for (const c of n.children ?? []) { const f = rowOf(c, joinId); if (f) return f; }
+  return null;
+};
+describe('LEAVE-MUTE-M renders r2: a left row as Style 1 draws it', () => {
+  it.each([['Home', false], ['the drawer', true]])('s1_L5 / s1_L5d (%s): the name\'s area takes the free width and Join sits at the end', async (_where, deep) => {
+    mockRows = [...mockRows, row('c-morning', 'Morning crew', { left_at: '2026-11-27T16:00:00.000Z' })];
+    const Tree = () => { const t = useSpaceTree(); return <SpaceTree sections={t.sections} deep={deep} onOpen={() => undefined} />; };
+    await mount(deep ? <Tree /> : <CommunityHomeScreen />);
+    await screen.findByTestId('space-row-c-morning-join');
+    const { StyleSheet } = jest.requireActual('react-native') as typeof import('react-native');
+    const json = screen.toJSON() as JsonNode | JsonNode[];
+    const found = (Array.isArray(json) ? json : [json]).map((j) => rowOf(j, 'space-row-c-morning-join')).find(Boolean);
+    const kids = (found?.children ?? []).filter((c): c is JsonNode => typeof c !== 'string');
+    expect(kids).toHaveLength(2);
+    expect(kids[1].props.testID).toBe('space-row-c-morning-join');
+    expect(StyleSheet.flatten(kids[0].props.style as never)).toEqual(expect.objectContaining({ flex: 1 }));
+  });
+});
