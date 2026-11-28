@@ -216,7 +216,7 @@ const st = StyleSheet.create({
   // apart on 20 pt lines); with no recipe linked (F05, F07) the frames draw 2 to 6 pt between its parts, so it keeps 4.
   block: { paddingVertical: spacing.xs, gap: spacing.xs },
   recipe: { paddingTop: spacing.md, paddingBottom: spacing.md, gap: spacing.xs },
-  linked: { paddingTop: spacing.xs, gap: 0 },
+  linked: { paddingTop: spacing.xs },
   grow: { flexGrow: 1 }, // C1: the title keeps its own width, so the count and Add wrap under it at 320 pt with 130% text
   row: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: layout.rowMinHeight, paddingVertical: spacing.xs,
     borderTopWidth: StyleSheet.hairlineWidth },
