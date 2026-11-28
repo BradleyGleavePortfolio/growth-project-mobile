@@ -12,8 +12,9 @@
  * cannot hold the swipe, ClientNavigator.tsx's m#521 note). A Create leaves once, with nothing held. Nothing is saved
  * to the phone. Every word draws whole at 320 pt and 130% text: the top bar's title wraps at a space between two equal
  * side slots sized to their content, and a card's title column fits "Announcement" (LS-D10C-1 B2 and its class).
- * Left out until the server has them (R4, v1.1): Section, Inside, the depth line, Public on TGP, "You can change this
- * later." and v3's total line.
+ * The page is the app's page colour, Sunlit sand (the Screen wrapper's own bgPrimary, owner #203-E86), so the strip
+ * and the page are one colour. Left out (R4; each its own v1 row, 203-D62, #203-E124): Section, Inside, the depth line,
+ * Public on TGP, "You can change this later." and v3's total line.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, View, type LayoutChangeEvent } from 'react-native';
@@ -218,14 +219,13 @@ export default function CoachNewSpaceScreen(): React.ReactElement {
   }
 
   return (
-    <Screen header={header} footer={footer} style={s.page} contentStyle={s.content} testID="coach-new-space">
+    <Screen header={header} footer={footer} contentStyle={s.content} testID="coach-new-space">
       {body}
     </Screen>
   );
 }
 
 const s = StyleSheet.create({
-  page: { backgroundColor: fp.surface },
   content: { paddingHorizontal: 16, paddingTop: 8 },
   bar: { minHeight: 56, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 },
   side: { minHeight: layout.touchMin, justifyContent: 'center', alignItems: 'flex-start' },
