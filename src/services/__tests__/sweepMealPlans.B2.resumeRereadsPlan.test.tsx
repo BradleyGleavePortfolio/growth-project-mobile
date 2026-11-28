@@ -171,7 +171,7 @@ it('f. a plan read that is off (a coachless client) and a coach’s app read not
   const view = await render(app(<PlanRead day={getTodayString()} enabled={false} />));
   await comeBack();
   expect(mockToday).not.toHaveBeenCalled();
-  view.unmount();
+  await view.unmount();
   await render(app(<PlanRead day={getTodayString()} />, false));
   await screen.findByText('Chicken rice bowl');
   await comeBack();
