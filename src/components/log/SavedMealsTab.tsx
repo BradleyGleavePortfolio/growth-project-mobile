@@ -31,8 +31,11 @@ export const DOOR_WORDS = {
 /** KD-1 (spoken hint): "Adds it to breakfast", the sheet's meal in a sentence. */
 export const addsToWords = (meal: MealType): string => `Adds it to ${mealWord(meal)}`;
 
-/** Why the last tap added nothing; 'offline' is the tap with no connection (R7), which sends nothing. */
-export type SavedMealFailure = { meal: SavedMeal; outcome: Exclude<AddOutcome, 'added'> | 'offline' };
+/**
+ * Why the last tap added nothing; 'offline' is the tap with no connection (R7), which sends nothing. day and mealType are
+ * what that send used: after a lost answer, Try again resends exactly them (FIX-KD-1, B1 and LO C1).
+ */
+export type SavedMealFailure = { meal: SavedMeal; outcome: Exclude<AddOutcome, 'added'> | 'offline'; day?: string; mealType?: MealType };
 /** D7: each outcome's line (KK-5 to KK-9); Try again only for a lost answer, which resends the same key. */
 const LINES: Record<SavedMealFailure['outcome'], string> = {
   empty: WORDS.nothingToAdd, 'food-not-found': WORDS.foodGone, 'meal-gone': WORDS.mealGone, lost: WORDS.notAdded,
@@ -49,6 +52,11 @@ export interface SavedPart {
   /** The meal whose add is running: its row spins (D5). */
   savingId: string | null;
   failure: SavedMealFailure | null;
+  /**
+   * FIX-KD-1 (B1, OPERATOR RULING 7232387348 item 2): the meal of this saved meal's lost add whose key is still kept, else
+   * null. Its row is held: a tap is Try again, which resends that save (the same key, its meal and day), never a new one.
+   */
+  heldMeal?: (mealId: string) => MealType | null;
   /** Absent outside a navigator (and in a sheet the Kitchen mounts itself): no link. */
   onOpenKitchen?: () => void;
 }
@@ -126,21 +134,34 @@ type Sc = ReturnType<typeof useTheme>['semanticColors'];
 function MealRow({ meal, part, busy, off, s, sc }: { meal: SavedMeal; part: SavedPart; busy: boolean; off: boolean; s: Styles; sc: Sc }) {
   const view = mealView(meal);
   const names = view.foods.map((f) => f.name);
+  // FIX-KD-1 (B1): a lost add of this meal still keeps its key, so the row holds it in the Kitchen's held words (KK-6 and
+  // Try again, SavedMealSheet's), and its tap resends that save to the meal it was sent to (the hint says which). Where
+  // the line above the list already says so for this meal (the answer just now), the row adds nothing of its own.
+  const heldMeal = view.foods.length > 0 ? part.heldMeal?.(meal.id) ?? null : null;
+  const said = part.failure?.outcome === 'lost' && part.failure.meal.id === meal.id;
+  const held = heldMeal !== null && !said && !busy;
   const body = (
     <View style={s.rowText}>
       <Text style={s.name}>{meal.name}</Text>
       <Text style={s.sub}>{names.length > 0 ? foodsLine(names) : WORDS.noFoods}</Text>
       {view.held.length > 0 ? <Text style={s.sub} testID={`saved-meal-held-${meal.id}`}>{heldNote(view.held)}</Text> : null}
+      {held ? (
+        <View testID={`saved-meal-kept-${meal.id}`}>
+          <Text style={s.keptText}>{WORDS.notAdded}</Text>
+          <Text style={[s.again, { color: off ? sc.textOnDisabled : sc.accentText }]}>{WORDS.tryAgain}</Text>
+        </View>
+      ) : null}
     </View>
   );
   // D9: a meal with no foods left is not a button and sends nothing.
   if (view.foods.length === 0) {
     return <View style={s.row} accessible accessibilityLabel={rowSpoken(meal, view)} testID={`saved-meal-${meal.id}`}>{body}</View>;
   }
-  const spoken = [rowSpoken(meal, view), foodsLine(names), view.held.length > 0 ? heldNote(view.held) : null].filter(Boolean).join(', ');
+  const spoken = [rowSpoken(meal, view), foodsLine(names), view.held.length > 0 ? heldNote(view.held) : null,
+    held ? WORDS.notAdded : null, held ? WORDS.tryAgain : null].filter(Boolean).join(', ');
   return (
     <HapticPressable intent="light" style={s.row} onPress={() => part.onAdd(meal)} disabled={off}
-      accessibilityRole="button" accessibilityLabel={spoken} accessibilityHint={addsToWords(part.mealType)}
+      accessibilityRole="button" accessibilityLabel={spoken} accessibilityHint={addsToWords(heldMeal ?? part.mealType)}
       accessibilityState={{ busy, disabled: off }} testID={`saved-meal-${meal.id}`}>
       {body}
       <View style={s.nums}>
@@ -178,6 +199,9 @@ const makeStyles = (sc: Sc) => StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: sc.border,
   },
   failureText: { fontSize: 13, lineHeight: 18.2, color: sc.textPrimary, flex: 1, minWidth: 160 },
+  // FIX-KD-1: a held row's KK-6 in the failure line's words and type, and its Try again in the accent (QuietTextButton's).
+  keptText: { fontSize: 13, lineHeight: 18.2, color: sc.textPrimary, marginTop: 4 },
+  again: { ...typography.body, lineHeight: 22 },
   state: { paddingTop: 8 },
   // The sheet's empty and failed layouts (emptyStateContainer).
   empty: { alignItems: 'center', paddingVertical: 40, paddingHorizontal: 8, gap: 8 },

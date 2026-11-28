@@ -32,7 +32,7 @@ import FoodSearchModal from '../../components/log/FoodSearchModal';
 import type { BrowseTab } from '../../components/log/FoodSearchView';
 import type { SavedMealFailure, SavedPart } from '../../components/log/SavedMealsTab';
 import { SAVED_MEALS_KEY, type SavedMeal } from '../../api/savedFoodsApi';
-import { addSavedMeal } from './kitchen/kitchenAdd';
+import { addSavedMeal, keptAddMeal } from './kitchen/kitchenAdd';
 import MealChoiceRow from '../../components/log/MealChoiceRow';
 import { FoodDayGate } from '../../components/log/FoodDayView';
 import { featureFlags } from '../../config/featureFlags';
@@ -549,9 +549,14 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
   // closes on an answer with entries only; every other answer keeps it open with its line (D7).
   const addSavedMealTo = async (meal: SavedMeal) => {
     if (!currentUser || foodSaving || savedSending.current) return;
+    // FIX-KD-1 (B1, OPERATOR RULING 7232387348 item 2, KITCHEN-M's C1 class): one log per intent across a lost answer.
+    // While a lost add of this saved meal keeps its key, its next send is that same save: the lost send's own day and
+    // meal (held here, so Try again after midnight is the same save too, LO C1), else the meal keptAddMeal names for the
+    // sheet's day (a close and reopen, or the Kitchen's own lost add). Never a new key for it until its answer is known.
+    const lost = savedFailure?.outcome === 'lost' && savedFailure.meal.id === meal.id ? savedFailure : null;
     setSavedFailure(null);
-    const day = takeLogDay();
-    const mealType = activeMealType;
+    const day = lost?.day ?? takeLogDay();
+    const mealType = lost?.mealType ?? keptAddMeal(meal.id, day) ?? activeMealType;
     if (!online) {
       HapticService.error();
       setSavedFailure({ meal, outcome: 'offline' });
@@ -564,7 +569,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
       const outcome = await addSavedMeal(meal.id, day, mealType);
       if (outcome !== 'added') {
         HapticService.error();
-        setSavedFailure({ meal, outcome });
+        setSavedFailure({ meal, outcome, day, mealType });
         // KK-7 (the meal is gone) and KK-8b (its foods were removed): read her saved meals again.
         if (outcome === 'meal-gone' || outcome === 'empty') void cache?.invalidateQueries({ queryKey: SAVED_MEALS_KEY });
         return;
@@ -588,6 +593,9 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
   // R8: the sheet closes, then the Kitchen opens in the You stack, popping back to a Kitchen already there (never two).
   const savedPart: SavedPart = {
     mealType: activeMealType, onAdd: (meal) => void addSavedMealTo(meal), savingId: savingMealId, failure: savedFailure,
+    // B1: the meal the row's next send goes to while its lost add keeps a key (the same read as the tap's, no side effect).
+    heldMeal: (id) => (savedFailure?.outcome === 'lost' && savedFailure.meal.id === id ? savedFailure.mealType : undefined)
+      ?? keptAddMeal(id, dayForNewLog({ selectedDate, selectedOn })),
     onOpenKitchen: navigation ? () => {
       if (foodSaving) return;
       setModalVisible(false);
