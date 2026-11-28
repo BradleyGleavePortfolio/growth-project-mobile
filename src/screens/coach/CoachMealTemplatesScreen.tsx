@@ -94,8 +94,8 @@ function Footer({ archive, held, saving, disabled, onSave, onArchive, line }: { 
     <View testID="meal-footer" style={st.footer}>
       {line ? (
         <View accessible accessibilityRole="alert" style={st.alert}>
-          <Ionicons name="alert-circle-outline" size={18} color={semantic.danger.border} style={st.alertGlyph} />
-          <Text style={[typography.bodySmall, ms.fill, { color: sc.textPrimary }]}>{line}</Text>
+          <Ionicons name="alert-circle-outline" size={20} color={semantic.danger.border} style={st.alertGlyph} />
+          <Text style={[typography.body, ms.fill, { color: sc.textPrimary }]}>{line}</Text>
         </View>
       ) : null}
       <View testID="meal-footer-row" style={st.footerRow}>
@@ -335,7 +335,7 @@ const st = StyleSheet.create({
   save: { flexGrow: 1, flexShrink: 0 },
   alert: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   // S1_F10 (FIX-PSCM-2, LO B1): the refusal line at the page's 14 pt on 22 pt lines, its glyph at 18 as Line draws one.
-  alertGlyph: { marginTop: 2 },
+  alertGlyph: { marginTop: 3 },
 });
 
 function makeFormStyles(sc: SemanticTokens) {
