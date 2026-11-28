@@ -194,7 +194,7 @@ function MealForm({ meal, live, answered, picked, navigation, sc }: { meal?: Mea
     >
       <ScrollView ref={scroll} testID="meal-scroll" style={st.fill} contentContainerStyle={[st.content, styles.page]}
         keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" showsVerticalScrollIndicator={false} scrollEventThrottle={16}
-        onScroll={(e) => setPinned(mastEnd > 0 && e.nativeEvent.contentOffset.y >= mastEnd - stripH)}>
+        onScroll={(e) => setPinned(false)}>
       <View testID="meal-masthead" style={st.mast} onLayout={(e) => setMastEnd(e.nativeEvent.layout.y + e.nativeEvent.layout.height)}>
       <Masthead title={<Text accessibilityRole="header" style={[ms.title, styles.title, { color: sc.textOnAccent }]}>{meal?.name ?? 'New meal'}</Text>}
         sub={canSave || pending ? macroLine(input) : undefined} onBack={onDone}
