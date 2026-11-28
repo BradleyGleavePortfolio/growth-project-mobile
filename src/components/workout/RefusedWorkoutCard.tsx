@@ -9,6 +9,7 @@
  * FIX-WRM-1 (OPERATOR RULING 7208809287): WORKOUT_INVALID reads a plain line, never the validation line; the sheet's
  * head and actions never scroll (s2_R4a, s2_R4b); Tell <coach> opens the chat on the Home stack; a timed exercise reads
  * "3 × 60 sec" (its plan row's unit, from the Train tab's assignments).
+ * LS-WRD-1 B1 (FR-880R2/R3): Tell <coach>, on the card and on the sheet, only while useCoachChatClosed knows the chat is open.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Animated, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -18,18 +19,22 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useWindowInsets } from '../../ui/layout/ScreenArea';
 import { Colors } from '../../constants/colors';
 import { useMyCoaches } from '../../hooks/useCalendar';
+import { useCoachChatClosed } from '../../hooks/useCoachChatClosed';
 import { useCoachlessClient } from '../../hooks/useCoachlessClient';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import type { ClientWorkoutAssignmentWithPlan } from '../../api/workoutBuilderApi';
 import {
+  canSendAgain,
   deadLetterEvents,
   listRefusedWorkouts,
+  refusalLines,
   removeRefusedWorkout,
   sendRefusedWorkoutAgain,
   workoutSyncEvents,
   type RefusedWorkout,
-} from '../../offline/sync/sync-engine';
-import { canSendAgain, refusalLines } from '../../offline/sync/refusal';
+} from '../../offline';
+import { calendarDay, dayStart } from '../../utils/workout/workoutDay';
 import { useTheme } from '../../theme/ThemeProvider';
 import { colors, layout, radius, typography } from '../../theme/tokens';
 import { PrimaryButton, TextLink } from '../../ui';
@@ -77,9 +82,8 @@ type Exercise = {
   exercise_name?: unknown; sets_completed?: unknown; reps_per_set?: unknown; weight_per_set?: unknown;
   plan_assignment_id?: unknown; plan_order?: unknown;
 };
-/** The client's assignments as the Train tab reads them (GET /assignments/me), in assignmentPrescription's shape. */
-type Assignment = Parameters<typeof assignmentPrescription>[0];
-export type RefusedPlans = ReadonlyArray<Partial<Assignment>>;
+/** The client's assignments as the Train tab reads them (GET /assignments/me): each plan row names its unit. */
+export type RefusedPlans = ReadonlyArray<Partial<ClientWorkoutAssignmentWithPlan>>;
 
 /**
  * C3 (TIMED-SETS-M): the stored body counts seconds in reps_per_set with no unit; an exercise logged from an assignment
@@ -88,13 +92,12 @@ export type RefusedPlans = ReadonlyArray<Partial<Assignment>>;
 function timed(plans: RefusedPlans | undefined, e: Exercise): boolean {
   const a = typeof e.plan_assignment_id === 'string' ? plans?.find((p) => p.id === e.plan_assignment_id) : undefined;
   return !!a && typeof e.plan_order === 'number'
-    && isTimedRow(assignmentPrescription(a as Assignment).exercises.find((r) => r.order === e.plan_order));
+    && isTimedRow(assignmentPrescription(a as ClientWorkoutAssignmentWithPlan).exercises.find((r) => r.order === e.plan_order));
 }
 
 /** Name, "Sat 10 Oct", "Saturday 10 October", minutes and set rows from the stored POST /workouts body. */
 export function refusedView(body: Record<string, unknown>, plans?: RefusedPlans) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(body.date ?? ''));
-  const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+  const d = dayStart(calendarDay(typeof body.date === 'string' ? body.date : null));
   const exercises = (Array.isArray(body.exercises) ? body.exercises : []) as Exercise[];
   const rows = exercises.map((e) => {
     const reps = Array.isArray(e.reps_per_set) ? (e.reps_per_set as number[]) : [];
@@ -169,6 +172,8 @@ function RefusedCards({ userId, coachId, items, reload, assignments }: {
   const coaches = useMyCoaches(!coachless).data;
   const coachName = (coaches?.find((x) => x.coach_id === coachId) ?? coaches?.[0])?.name?.trim().split(/\s+/)[0];
   const coach = coachless ? null : coachName || c.yourCoach;
+  const chat = useCoachChatClosed(coachless ? null : coachId);
+  const chatOpen = chat.known && !chat.closed;
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const [openId, setOpenId] = useState<string | null>(null);
   const [again, setAgain] = useState<ReadonlySet<string>>(new Set());
@@ -232,7 +237,7 @@ function RefusedCards({ userId, coachId, items, reload, assignments }: {
     const resend = canSendAgain(item.refusal);
     const first = resend ? { label: c.sendAgain, run: () => void send(item.id), id: 'send' }
       : { label: c.see, run: () => setOpenId(item.id), id: 'see' };
-    const second = coach ? { label: c.tell(coach), run: tell, id: 'tell' }
+    const second = coach ? (chatOpen ? { label: c.tell(coach), run: tell, id: 'tell' } : null)
       : resend ? { label: c.see, run: () => setOpenId(item.id), id: 'see' } : null;
     return (
       <View key={item.id} style={[s.card, { borderColor: Colors.offlineBanner }]} accessibilityLiveRegion="polite"
@@ -270,7 +275,7 @@ function RefusedCards({ userId, coachId, items, reload, assignments }: {
       ) : items.map(one)}
       {open ? (
         <RefusedWorkoutSheet item={open} coach={coach} again={again.has(open.id)} busy={busy === open.id} assignments={assignments}
-          onClose={() => setOpenId(null)} onSend={() => void send(open.id)} onTell={tell} onRemove={() => remove(open)} />
+          onClose={() => setOpenId(null)} onSend={() => void send(open.id)} onTell={chatOpen ? tell : undefined} onRemove={() => remove(open)} />
       ) : null}
     </Animated.View>
   );
@@ -283,7 +288,7 @@ function RefusedCards({ userId, coachId, items, reload, assignments }: {
  */
 export function RefusedWorkoutSheet({ item, coach, again, busy, assignments, onClose, onSend, onTell, onRemove }: {
   item: RefusedWorkout; coach: string | null; again: boolean; busy: boolean; assignments?: RefusedPlans;
-  onClose: () => void; onSend: () => void; onTell: () => void; onRemove: () => void;
+  onClose: () => void; onSend: () => void; onTell?: () => void; onRemove: () => void;
 }) {
   const sc = useTheme().semanticColors;
   const insets = useSafeAreaInsets();
@@ -328,7 +333,7 @@ export function RefusedWorkoutSheet({ item, coach, again, busy, assignments, onC
             {canSendAgain(item.refusal) ? (
               <PrimaryButton label={c.sendAgain} onPress={onSend} loading={busy} testID="refused-sheet-send" />
             ) : null}
-            {coach ? <Outline label={c.tell(coach)} onPress={onTell} testID="refused-sheet-tell" /> : null}
+            {coach && onTell ? <Outline label={c.tell(coach)} onPress={onTell} testID="refused-sheet-tell" /> : null}
             <TextLink label={c.remove} tone="accent" onPress={onRemove} disabled={busy} testID="refused-sheet-remove" />
             <Text maxFontSizeMultiplier={CAP} style={[typography.bodySmall, muted, s.center]}>{c.stays}</Text>
           </View>

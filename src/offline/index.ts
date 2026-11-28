@@ -34,9 +34,18 @@ export {
   workoutSyncEvents,
   __isSyncInProgress,
 } from './sync/sync-engine';
+// WORKOUT-REFUSAL-DAY-M: what the refused-workout card (RefusedWorkoutCard) takes.
+export {
+  deadLetterEvents,
+  listRefusedWorkouts,
+  sendRefusedWorkoutAgain,
+  removeRefusedWorkout,
+} from './sync/sync-engine';
+export { canSendAgain, refusalLines } from './sync/refusal';
 export type {
   WriteWorkoutPayload,
   QueueWorkoutInput,
   QueueWorkoutResult,
   QueuedAssignmentCompletion,
+  RefusedWorkout,
 } from './sync/sync-engine';

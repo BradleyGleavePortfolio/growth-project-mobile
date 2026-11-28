@@ -89,6 +89,8 @@ const SAVES_AND_READS: Array<[file: string, what: string, uses: RegExp]> = [
   ['src/screens/client/ClientWorkoutViewerScreen.tsx', 'assigned plans: order and day label', /assignmentDay\(/],
   // REFINE-987R3: the week helpers of Your workouts and Your weeks (the window, the one-week page, the week rows).
   ['src/screens/client/workouts/workoutWeeks.tsx', 'Your workouts and Your weeks: which week a workout is in', /assignmentDay\(a\)/],
+  // WORKOUT-REFUSAL-DAY-M (LS-WRM-2 C2 on m#1000): a workout the server refused shows the day it was done.
+  ['src/components/workout/RefusedWorkoutCard.tsx', 'refused workout card: the day of the stored workout', /dayStart\(calendarDay\(/],
   ['src/components/tutorial/PlanExplanationCard.tsx', 'plan card: weekday of the assigned day', /assignmentDay\(/],
   // FOOD-DAY-STYLEC-M: the Style C food day shows today's workout from Train on its timeline.
   ['src/components/log/FoodDayView.tsx', "food day: today's workout from Train is the assignment for the shown day", /assignmentDay\(w\) === p\.selectedDate/],
@@ -292,6 +294,12 @@ const LISTED_LINES: Record<string, Array<[snippet: string, why: string]>> = {
   'src/screens/client/progress/progressV2.ts': [['dayX(l.date)', 'weigh-in days'], ['log.date === today', 'a weigh-in day'], ['dayX(log.date)', 'a weigh-in day'], ['monthDay(log.date)', 'a weigh-in day']],
   'src/screens/client/progress/weekReview.ts': [['inWeek(d.date, week)', 'a food day'], ['inWeek(c.date, week)', 'a check-in day'], ['r.date <= week.end', 'a weigh-in day'], ['c.date.slice(0, 10) === day', 'a check-in day'], ['foodDays.map((d) => d.date.slice(0, 10))', 'food days'], ['inWeek(w.date, week)', 'a weigh-in day']],
   'src/screens/client/ClientWorkoutViewerScreen.tsx': [['formatScheduled(a.scheduled_for)', 'formatScheduled reads assignmentDay (checked below)']],
+  'src/components/workout/RefusedWorkoutCard.tsx': [
+    ['c.confirmBody(v.name, v.date)', "the card's day label (\"Sat 10 Oct\") from refusedView, made by the rule above"],
+    ["[v.name, v.date].filter(Boolean).join(' · ')", 'the same label on the card'],
+    ["[v.name, v.date].filter(Boolean).join(', ')", 'the same label in the count card list'],
+    ['    date,\n    longDate:', "refusedView's label field, not a day read"],
+  ],
   'src/components/tutorial/PlanExplanationCard.tsx': [['weekdayOf(first.scheduled_for)', 'weekdayOf reads assignmentDay (checked below)']],
   'src/components/log/FoodDayView.tsx': [
     ['[{ date: dates[i], entries: r.value.data?.entries ?? [] }]', 'past food days (food log calendar dates) for the usual day, not a workout'],

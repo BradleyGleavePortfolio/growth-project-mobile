@@ -55,6 +55,8 @@ jest.mock('../../../offline', () => ({
   countQueuedWorkouts: async () => 0,
   pushQueuedWorkouts: async () => undefined,
   workoutSyncEvents: { on: () => undefined, off: () => undefined },
+  listRefusedWorkouts: async () => [],
+  deadLetterEvents: { on: () => undefined, off: () => undefined },
 }));
 jest.mock('../../../components/workout/WorkoutSyncCards', () => () => null);
 jest.mock('../../../components/tutorial/PlanExplanationCard', () => () => null);
