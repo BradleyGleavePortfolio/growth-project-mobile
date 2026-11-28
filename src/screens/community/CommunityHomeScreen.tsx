@@ -15,6 +15,7 @@
  * skeleton; a failed read says so with Try again, and an error tick when the
  * retry fails too.
  * DM-FORMER-HOME-M (item 5, R1-R4): with communityDm, her former coach's Style 3 card (FormerCoachEntry) ends Direct messages once her coach row's answer is in.
+ * FIX-DFH-1 (LO-DFH-1 B1 = LS-DFH-1 B1): the card also waits for the signed-in person's coach id, so no render draws it before she, her saved block list and her coach row's answer are known.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -77,7 +78,8 @@ export default function CommunityHomeScreen(): React.ReactElement {
   const tree = useSpaceTree();
   const openTarget = useOpenSpaceTarget();
   const me = useCommunityMe();
-  const former = useFormerCoach(featureFlags.communityDm ? me.data : undefined, useCurrentUser()?.coach_id ?? null);
+  const coachId = useCurrentUser()?.coach_id ?? null;
+  const former = useFormerCoach(featureFlags.communityDm ? me.data : undefined, coachId);
   const tabs: Tab[] = featureFlags.communityChallenges ? ['home', 'challenges'] : ['home'];
   const [tab, setTab] = useState<Tab>('home');
   const ready = !tree.loading && !tree.failed;
@@ -112,7 +114,7 @@ export default function CommunityHomeScreen(): React.ReactElement {
         <SpaceTree
           sections={tree.sections}
           onOpen={openTarget}
-          dmsEnd={former && tree.coachKnown ? (
+          dmsEnd={former && coachId && tree.coachKnown ? (
             <FormerCoachEntry former={former} onPress={() => navigation.navigate('CommunityDmThread', { recipientId: former.coachId })} testID="community-home-former-coach" />
           ) : undefined}
         />
