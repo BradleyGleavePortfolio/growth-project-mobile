@@ -33,7 +33,7 @@ React hooks shared across screens. Two flavours: thin `useQuery` / `useMutation`
 | File | What it does |
 | --- | --- |
 | `useFoodBrowse.ts` | "Recent" and "frequent" food rows for the Log search modal — derived from `logApi.getDaily`. Keeps state local to the hook. |
-| `useMacroTargets.ts` | Resolves the current user's macro targets (profile + override). |
+| `useMacroTargets.ts` | Resolves the current user's macro targets (profile + override) from `GET /me/macros/current`, with a per-user cache. Reads the target again when she returns to the app from the background (not on an inactive blip) and when her screen (the Food tab, Home) gains focus, so a target her coach changed shows without a restart (TARGETS-REFRESH-M); one read at a time per account, shared by every mounted reader; a failed read keeps the target on screen. Tests: [useMacroTargets.refresh.test.tsx](__tests__/useMacroTargets.refresh.test.tsx). |
 
 ### Platform
 

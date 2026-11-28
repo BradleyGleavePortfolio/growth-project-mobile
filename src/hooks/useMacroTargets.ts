@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type Context } from 'react';
+import { AppState } from 'react-native';
+import * as Navigation from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { macrosApi } from '../api/macrosApi';
+import { macrosApi, type MacroTarget } from '../api/macrosApi';
 import { useCurrentUser } from './useCurrentUser';
 import { reportMacroDisplay } from '../macros/macroDisplayStore';
 
@@ -23,6 +25,27 @@ function cacheKeyFor(userId: string): string {
   return `macro_targets:${userId}`;
 }
 
+// TARGETS-REFRESH-M: one read of GET /me/macros/current at a time per account. The Food tab, Home and Progress each
+// hold this hook, so a return to the app reads her target once for all of them; another account never joins it.
+let shared: { userId: string; read: Promise<MacroTarget | null> } | null = null;
+function readCurrent(userId: string): Promise<MacroTarget | null> {
+  if (shared?.userId !== userId) {
+    const read = macrosApi
+      .currentForSelf()
+      .then((res) => res.data)
+      .finally(() => {
+        if (shared?.read === read) shared = null;
+      });
+    shared = { userId, read };
+  }
+  return shared.read;
+}
+
+// The screen the hook is on (a test may mock navigation away; LogScreen.tsx:69 does the same).
+const NO_SCREEN = createContext<unknown>(undefined);
+const contextOf = (c: unknown) => (c as Context<unknown> | undefined) ?? NO_SCREEN;
+type FocusEvents = { addListener?: (event: 'focus', listener: () => void) => () => void };
+
 /**
  * useMacroTargets — server-authoritative macro targets with AsyncStorage cache.
  *
@@ -33,6 +56,10 @@ function cacheKeyFor(userId: string): string {
  *     values always win over any locally-stored defaults.
  *  3. Persist the server response back to the per-user cache key so the next
  *     cold mount is still fast.
+ *  4. Read the server again when she returns to the app from the background and
+ *     when her screen (the Food tab, Home) gains focus, so a target her coach
+ *     changed shows without a restart (TARGETS-REFRESH-M). One read per return,
+ *     shared by every mounted reader; a failed read keeps the target on screen.
  *
  * Cross-user safety: the cache key is `macro_targets:${userId}`. When the
  * signed-in user changes (logout → login, account switch, or first mount
@@ -44,6 +71,8 @@ export function useMacroTargets(): MacroTargets | null {
   const currentUser = useCurrentUser();
   const userId = currentUser?.id ?? null;
   const [macroTargets, setMacroTargets] = useState<MacroTargets | null>(null);
+  const screen = useContext(contextOf(Navigation.NavigationContext)) as FocusEvents | undefined;
+  const readAgain = useRef<() => void>(() => undefined);
 
   useEffect(() => {
     // Reset state immediately on user change so the previous user's value
@@ -56,7 +85,9 @@ export function useMacroTargets(): MacroTargets | null {
     }
 
     let cancelled = false;
-    const cacheKey = cacheKeyFor(userId);
+    const owner = userId;
+    const cacheKey = cacheKeyFor(owner);
+    let latest = 0; // the newest read; an older answer never paints over it
 
     async function load() {
       // One-time cleanup: nuke the legacy global key on the way through so
@@ -78,11 +109,15 @@ export function useMacroTargets(): MacroTargets | null {
         console.error('useMacroTargets: failed to read cache', err);
       }
 
+      await readServer();
+    }
+
+    async function readServer() {
       // Step 2 — fetch authoritative values from the server.
+      const mine = ++latest;
       try {
-        const res = await macrosApi.currentForSelf();
-        const serverTarget = res.data;
-        if (cancelled) return;
+        const serverTarget = await readCurrent(owner);
+        if (cancelled || mine !== latest) return;
         // Lighter start for never-trackers: the same body carries
         // macro_display_mode / simple_until. Absent means 'full'.
         reportMacroDisplay(serverTarget);
@@ -112,6 +147,7 @@ export function useMacroTargets(): MacroTargets | null {
             // ignore — profile fields are nice-to-have
           }
 
+          if (cancelled || mine !== latest) return;
           setMacroTargets(merged);
 
           // Step 3 — update the cache with the latest server value.
@@ -126,10 +162,25 @@ export function useMacroTargets(): MacroTargets | null {
     }
 
     void load();
+    readAgain.current = () => void readServer();
+    // Step 4 — a return to the app from the background reads again; a glance at Control Centre or the app switcher
+    // (inactive and back) is not a return (the useServerCoachRefresh.ts pattern).
+    let away = false;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'background') away = true;
+      if (state !== 'active' || !away) return;
+      away = false;
+      void readServer();
+    });
     return () => {
       cancelled = true;
+      readAgain.current = () => undefined;
+      sub.remove();
     };
   }, [userId]);
+
+  // Step 4 — her screen gaining focus (back to the Food tab or Home) reads again too.
+  useEffect(() => screen?.addListener?.('focus', () => readAgain.current()), [screen]);
 
   return macroTargets;
 }
