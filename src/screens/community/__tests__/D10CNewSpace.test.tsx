@@ -88,6 +88,7 @@ jest.mock('../../../components/community/CommunityTermsGate', () => ({
 /* eslint-disable @typescript-eslint/no-var-requires */
 const CoachCommunityNavigator = require('../../../navigation/CoachCommunityNavigator').default;
 const { forestPop: fp, schemeCard } = require('../../../theme/tokens');
+const { describeCommunityFailure } = require('../../../api/communityErrors');
 /* eslint-enable @typescript-eslint/no-var-requires */
 
 const uuid = (n: number) => `${String(n).padStart(8, '0')}-0000-4000-8000-000000000000`;
@@ -404,5 +405,130 @@ describe('B1 through the page: the exact body for every kind and every choice', 
     expect(postBody()).toStrictEqual(picks.length > 0
       ? { name: 'Food on the go', kind, visibility: 'package', package_ids: listed }
       : { name: 'Food on the go', kind, visibility: 'clients' });
+  });
+});
+
+// FIX-D10C-1: the duplicate-name words, two create-body and rollback pins, and Back through the real stack (fix 1).
+const refusal = (status: number, code?: string) =>
+  Object.assign(new Error(`HTTP ${status}`), { isAxiosError: true, response: { status, data: code ? { code } : {} } });
+/** The coach Community stack's routes, by name. */
+const stackRoutes = () => {
+  const root = ref.getRootState() as unknown as { routes: { name: string; state?: { routes: { name: string }[] } }[] };
+  return (root.routes.find((r) => r.name === 'CommunityStack')?.state?.routes ?? []).map((r) => r.name);
+};
+type HostNode = { parent: HostNode | null; props: Record<string, unknown>; type: unknown };
+/** The native screen (react-native-screens) that hosts New space: the host node with onDismissed above the page. */
+function nativeScreen(view: View): HostNode {
+  let node: HostNode | null = view.getByTestId('coach-new-space') as unknown as HostNode;
+  while (node && !(typeof node.type === 'string' && typeof node.props.onDismissed === 'function')) node = node.parent;
+  if (!node) throw new Error('no native screen above New space');
+  return node;
+}
+const holdsSwipe = (view: View) => nativeScreen(view).props.preventNativeDismiss === true || nativeScreen(view).props.gestureEnabled === false;
+
+describe('N5: a duplicate name says "space"', () => {
+  it('N5: a create refused as community.cohort.name_taken says the space sentence, keeps every entry and turns Create on again', async () => {
+    serve();
+    const err = refusal(409, 'community.cohort.name_taken');
+    mockPost.mockReset().mockRejectedValue(err);
+    const view = await openNewSpace();
+    await toVisibility(view, 'Food on the go', 'announcement');
+    await press(view, 'new-space-create');
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalledTimes(1));
+    expect(Alert.alert).toHaveBeenCalledWith(describeCommunityFailure(err, 'moderate').title, 'You already used this name for a space. Choose a different name.');
+    expect(ref.getCurrentRoute()?.name).toBe('CoachCommunityNewSpace');
+    await waitFor(() => expect(disabled(view, 'new-space-create')).toBe(false));
+    await press(view, 'new-space-back');
+    expect(view.getByTestId('new-space-name').props.value).toBe('Food on the go');
+    expect(view.getByTestId('new-space-kind-announcement').props.accessibilityState).toEqual({ checked: true });
+  });
+  it('N5: any other refusal says what alertCoachFailure says', async () => {
+    serve();
+    const err = refusal(409);
+    mockPost.mockReset().mockRejectedValue(err);
+    const view = await openNewSpace();
+    await toVisibility(view);
+    await press(view, 'new-space-create');
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalledTimes(1));
+    const words = describeCommunityFailure(err, 'moderate');
+    expect(Alert.alert).toHaveBeenCalledWith(words.title, words.message);
+    expect(words.message).not.toMatch(/name for a space/);
+  });
+});
+
+describe('N6 and N7: the create body after Back, and a failed create\'s rollback', () => {
+  it('N6: picks on v3, then Back, then Create on v2 sends exactly { name, kind, visibility: \'clients\' }', async () => {
+    serve();
+    const view = await openNewSpace();
+    await toVisibility(view, 'Food on the go', 'announcement');
+    await toPackages(view);
+    await waitFor(() => expect(view.getByTestId('new-space-pkg-pkg-spring')).toBeTruthy());
+    await press(view, 'new-space-pkg-pkg-spring');
+    await press(view, 'new-space-pkg-pkg-strength');
+    await press(view, 'new-space-back');
+    expect(title(view).props.children).toBe('Visibility');
+    await press(view, 'new-space-create');
+    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1));
+    expect(postBody()).toStrictEqual({ name: 'Food on the go', kind: 'announcement', visibility: 'clients' });
+  });
+  it('N7: a failed create, then Close: the Home lists no provisional row', async () => {
+    serve();
+    mockPost.mockReset().mockRejectedValue(refusal(503));
+    const view = await openNewSpace();
+    await toVisibility(view);
+    // The list's re-read after the failure is held, so only the rollback can take the provisional row away.
+    http['/community/cohorts'] = PENDING;
+    await press(view, 'new-space-create');
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalledTimes(1));
+    await press(view, 'new-space-back');
+    await press(view, 'new-space-back');
+    await waitFor(() => expect(ref.getCurrentRoute()?.name).toBe('CoachCommunityHome'));
+    const rows = view.getAllByTestId(/^coach-home-space-/);
+    expect(rows.map((r) => r.props.testID)).toEqual([`coach-home-space-${uuid(11)}`, `coach-home-space-${uuid(12)}`]);
+    expect(view.queryByText('Food on the go')).toBeNull();
+  });
+});
+
+describe('N8: leaving and stepping back through the real coach stack (fix 1)', () => {
+  it('N8: Back on v2 steps to v1 with the name and kind kept, and Close on v1 leaves to the Home once', async () => {
+    serve();
+    const view = await openNewSpace();
+    await toVisibility(view, 'Food on the go', 'announcement');
+    await press(view, 'new-space-back');
+    expect(title(view).props.children).toBe('New space');
+    expect(view.getByTestId('new-space-name').props.value).toBe('Food on the go');
+    expect(view.getByTestId('new-space-kind-announcement').props.accessibilityState).toEqual({ checked: true });
+    expect(stackRoutes()).toEqual(['CoachCommunityHome', 'CoachCommunityNewSpace']);
+    await press(view, 'new-space-back');
+    await waitFor(() => expect(ref.getCurrentRoute()?.name).toBe('CoachCommunityHome'));
+    expect(stackRoutes()).toEqual(['CoachCommunityHome']);
+  });
+  it('N8: a successful Create leaves to the Home once, with nothing held, and "+ New space" opens New space again', async () => {
+    serve();
+    const view = await openNewSpace();
+    await toVisibility(view);
+    await press(view, 'new-space-create');
+    await waitFor(() => expect(ref.getCurrentRoute()?.name).toBe('CoachCommunityHome'));
+    expect(stackRoutes()).toEqual(['CoachCommunityHome']);
+    await act(async () => { fireEvent.press(view.getByTestId('coach-home-new-space')); });
+    await waitFor(() => expect(ref.getCurrentRoute()?.name).toBe('CoachCommunityNewSpace'));
+    expect(stackRoutes()).toEqual(['CoachCommunityHome', 'CoachCommunityNewSpace']);
+    expect(title(view).props.children).toBe('New space');
+    expect(view.getByTestId('new-space-name').props.value).toBe('');
+  });
+  it('N8: the native screen holds the iPhone swipe on v2 and v3 only; a held swipe on v2 steps back to v1 and New space stays in front', async () => {
+    serve();
+    const view = await openNewSpace();
+    expect(holdsSwipe(view)).toBe(false);
+    await toVisibility(view, 'Food on the go', 'announcement');
+    expect(holdsSwipe(view)).toBe(true);
+    // What UIKit does with a swipe the native screen holds: it cancels the dismiss and tells JS, which pops once.
+    const cancelled = nativeScreen(view).props.onNativeDismissCancelled as (e: { nativeEvent: { dismissCount: number } }) => void;
+    await act(async () => { cancelled({ nativeEvent: { dismissCount: 1 } }); });
+    expect(title(view).props.children).toBe('New space');
+    expect(view.getByTestId('new-space-name').props.value).toBe('Food on the go');
+    expect(ref.getCurrentRoute()?.name).toBe('CoachCommunityNewSpace');
+    expect(stackRoutes()).toEqual(['CoachCommunityHome', 'CoachCommunityNewSpace']);
+    expect(holdsSwipe(view)).toBe(false);
   });
 });

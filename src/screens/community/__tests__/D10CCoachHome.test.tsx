@@ -11,7 +11,7 @@ import { StyleSheet, Text } from 'react-native';
 import { NavigationContainer, createNavigationContainerRef, type ParamListBase } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { InfiniteQueryObserver, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const mockGet = jest.fn();
 const mockPost = jest.fn();
@@ -94,7 +94,9 @@ jest.mock('../../../components/community/CommunityTermsGate', () => ({
 /* eslint-disable @typescript-eslint/no-var-requires */
 const CoachCommunityNavigator = require('../../../navigation/CoachCommunityNavigator').default;
 const { StatusBarBand } = require('../../../components/StatusBarBand');
-const { coachCommunityKeys } = require('../../../hooks/useCoachCommunity');
+const { coachCommunityKeys, dropAuthorFromCoachInbox } = require('../../../hooks/useCoachCommunity');
+const { coachCommunityApi } = require('../../../api/coachCommunityApi');
+const { useBlockedUsersStore } = require('../../../store/blockedUsersStore');
 const { forestPop: fp, lightTokens, schemeCard } = require('../../../theme/tokens');
 /* eslint-enable @typescript-eslint/no-var-requires */
 
@@ -260,30 +262,251 @@ describe('H2: a space opens its chat, or its page with the chat off', () => {
   });
 });
 
-describe('H3 and H4: Reports and Inbox stay one tap away (their counts wait for a KT-2 row, PLAN 1a)', () => {
-  it('Reports: the title alone, no count read, and it opens the report queue', async () => {
-    serve(base());
+// FIX-D10C-1 (D10C-OP1): the Reports count is the report queue's length (CommunityReportsEntry's read); the Inbox
+// count is the rows of the inbox's first server page the Inbox page would draw (my blocks left out at once).
+const FLAGGED_URL = '/community/moderation/flagged';
+const INBOX_URL = '/community/me/coach-inbox';
+const WS_URL = `/community/workspaces/${WS}`;
+const report = (n: number) => ({
+  id: uuid(200 + n), target_type: 'post', target_id: uuid(300 + n), content: 'A reported post', author_name: 'Member',
+  cohort_name: 'Everyone', reason: 'spam', author_user_id: uuid(400 + n), created_at: '2026-11-27T00:00:00.000Z',
+});
+const reports = (count: number) => ({ items: Array.from({ length: count }, (_, i) => report(i + 1)) });
+const CLIENT_A = uuid(31);
+const CLIENT_B = uuid(32);
+const inboxRow = (n: number, author: string) => ({
+  id: uuid(500 + n), type: 'post', cohort_id: uuid(12), cohort_name: 'Everyone', author_user_id: author,
+  author_display_name: 'Client', preview: 'Morning check-in', created_at: '2026-11-27T00:00:00.000Z',
+});
+const inboxPage = (rows: unknown[], next: string | null = null) => ({ items: rows, next_cursor: next });
+const THREE = inboxPage([inboxRow(1, CLIENT_A), inboxRow(2, CLIENT_A), inboxRow(3, CLIENT_B)]);
+const inboxReads = () => mockGet.mock.calls.filter(([url]) => url === INBOX_URL).length;
+const badge = (view: Awaited<ReturnType<typeof mount>>, row: string) => view.queryByTestId(`${row}-badge`);
+
+describe('H3: Reports shows how many reports are waiting (D10C-OP1)', () => {
+  it('H3: none waiting: the title alone, no badge, the queue\'s label, and it opens the report queue', async () => {
+    serve(base({ [FLAGGED_URL]: reports(0) }));
     const view = await mount();
     await ready(view);
-    const reports = view.getByTestId('coach-home-reports');
-    expect(reports.props.accessibilityLabel).toBe('Reports');
-    expect(within(reports).queryByText(/waiting/)).toBeNull();
-    expect(iconsIn(reports)).toEqual(['flag-outline']);
-    expect(mockGet.mock.calls.some(([url]) => String(url).includes('/moderation/flagged'))).toBe(false);
-    await act(async () => { fireEvent.press(reports); });
+    await waitFor(() => expect(view.getByTestId('coach-home-reports').props.accessibilityLabel).toBe('Open community reports, none waiting'));
+    const row = view.getByTestId('coach-home-reports');
+    expect(within(row).queryByText(/waiting/)).toBeNull();
+    expect(badge(view, 'coach-home-reports')).toBeNull();
+    await act(async () => { fireEvent.press(row); });
     expect(ref.getCurrentRoute()?.name).toBe('CoachCommunityModeration');
   });
-  it('Inbox: its words, no inbox read, and it opens the inbox', async () => {
+  it('H3: one waiting: "1 report waiting" and the leaf badge 1', async () => {
+    serve(base({ [FLAGGED_URL]: reports(1) }));
+    const view = await mount();
+    await ready(view);
+    const b = await waitFor(() => view.getByTestId('coach-home-reports-badge'));
+    expect(within(b).getByText('1')).toBeTruthy();
+    expect(flat(b)).toEqual(expect.objectContaining({ backgroundColor: fp.leaf }));
+    const row = view.getByTestId('coach-home-reports');
+    expect(within(row).getByText('1 report waiting')).toBeTruthy();
+    expect(row.props.accessibilityLabel).toBe('Open community reports, 1 waiting for review');
+  });
+  it('H3: 120 waiting: "120 reports waiting" and the badge "99+"', async () => {
+    serve(base({ [FLAGGED_URL]: reports(120) }));
+    const view = await mount();
+    await ready(view);
+    const b = await waitFor(() => view.getByTestId('coach-home-reports-badge'));
+    expect(within(b).getByText('99+')).toBeTruthy();
+    const row = view.getByTestId('coach-home-reports');
+    expect(within(row).getByText('120 reports waiting')).toBeTruthy();
+    expect(row.props.accessibilityLabel).toBe('Open community reports, 120 waiting for review');
+  });
+  it('H3: a failed report read: the title alone, and it still opens the report queue', async () => {
+    serve(base({ [FLAGGED_URL]: axiosErr(503) }));
+    const view = await mount();
+    await ready(view);
+    await waitFor(() => expect(mockGet.mock.calls.some(([url]) => url === FLAGGED_URL)).toBe(true));
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+    const row = view.getByTestId('coach-home-reports');
+    expect(row.props.accessibilityLabel).toBe('Reports');
+    expect(within(row).queryByText(/waiting/)).toBeNull();
+    expect(badge(view, 'coach-home-reports')).toBeNull();
+    await act(async () => { fireEvent.press(row); });
+    expect(ref.getCurrentRoute()?.name).toBe('CoachCommunityModeration');
+  });
+});
+
+describe('H4: Inbox shows how many are waiting on its first page (D10C-OP1, R9)', () => {
+  it('H4: none waiting: "Unread in your inbox", no badge, and it opens the inbox', async () => {
+    serve(base({ [INBOX_URL]: inboxPage([]) }));
+    const view = await mount();
+    await ready(view);
+    await waitFor(() => expect(inboxReads()).toBe(1));
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+    const row = view.getByTestId('coach-home-inbox');
+    expect(within(row).getByText('Unread in your inbox')).toBeTruthy();
+    expect(row.props.accessibilityLabel).toBe('Inbox, Unread in your inbox');
+    expect(badge(view, 'coach-home-inbox')).toBeNull();
+    await act(async () => { fireEvent.press(row); });
+    expect(ref.getCurrentRoute()?.name).toBe('CoachCommunityInbox');
+  });
+  it('H4: three waiting: the badge 3 and "Inbox, Unread in your inbox: 3"; the dashboard is never read', async () => {
+    serve(base({ [INBOX_URL]: THREE }));
+    const view = await mount();
+    await ready(view);
+    const b = await waitFor(() => view.getByTestId('coach-home-inbox-badge'));
+    expect(within(b).getByText('3')).toBeTruthy();
+    const row = view.getByTestId('coach-home-inbox');
+    expect(within(row).getByText('Unread in your inbox')).toBeTruthy();
+    expect(row.props.accessibilityLabel).toBe('Inbox, Unread in your inbox: 3');
+    expect(mockGet.mock.calls.some(([url]) => String(url).includes('dashboard'))).toBe(false);
+  });
+  it('H4: only the first page counts: a second page loaded through the inbox query leaves the number at 3', async () => {
+    serve(base({ [INBOX_URL]: inboxPage([inboxRow(1, CLIENT_A), inboxRow(2, CLIENT_A), inboxRow(3, CLIENT_B)], 'page-2') }));
+    const inner = mockGet.getMockImplementation() as (url: string, cfg?: { params?: Record<string, string> }) => unknown;
+    mockGet.mockImplementation(async (url: string, cfg?: { params?: Record<string, string> }) =>
+      (url === INBOX_URL && cfg?.params?.cursor === 'page-2' ? { data: inboxPage([inboxRow(4, CLIENT_B), inboxRow(5, CLIENT_B)]), headers: {} } : inner(url, cfg)));
+    const view = await mount();
+    await ready(view);
+    await waitFor(() => expect(within(view.getByTestId('coach-home-inbox-badge')).getByText('3')).toBeTruthy());
+    const more = new InfiniteQueryObserver(qc, {
+      queryKey: coachCommunityKeys.inbox(),
+      queryFn: ({ pageParam }: { pageParam: string | undefined }) => coachCommunityApi.getInbox({ cursor: pageParam }),
+      initialPageParam: undefined as string | undefined,
+      getNextPageParam: (last: { next_cursor: string | null }) => last.next_cursor ?? undefined,
+    });
+    await act(async () => { await more.fetchNextPage(); });
+    expect((qc.getQueryData(coachCommunityKeys.inbox()) as { pages: unknown[] }).pages).toHaveLength(2);
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+    expect(within(view.getByTestId('coach-home-inbox-badge')).getByText('3')).toBeTruthy();
+    expect(view.getByTestId('coach-home-inbox').props.accessibilityLabel).toBe('Inbox, Unread in your inbox: 3');
+  });
+});
+
+describe('KT-2: the Home\'s Inbox number never counts a blocked or banned person', () => {
+  it('KT-2: a client I block from another screen leaves the Inbox number on the Home at once, with no new inbox read', async () => {
+    serve(base({ [INBOX_URL]: THREE }));
+    const view = await mount();
+    await ready(view);
+    await waitFor(() => expect(within(view.getByTestId('coach-home-inbox-badge')).getByText('3')).toBeTruthy());
+    const reads = inboxReads();
+    try {
+      await act(async () => { useBlockedUsersStore.setState({ blocked: [{ id: CLIENT_A, displayName: 'Client', blockedAt: '2026-11-27T00:00:00Z' }] }); });
+      expect(within(view.getByTestId('coach-home-inbox-badge')).getByText('1')).toBeTruthy();
+      expect(view.getByTestId('coach-home-inbox').props.accessibilityLabel).toBe('Inbox, Unread in your inbox: 1');
+      expect(inboxReads()).toBe(reads);
+      expect(qc.getQueryState(coachCommunityKeys.inbox())?.fetchStatus).toBe('idle');
+    } finally {
+      await act(async () => { useBlockedUsersStore.setState({ blocked: [] }); });
+    }
+  });
+  it('KT-2: dropAuthorFromCoachInbox (a block or a ban) drops the rows of that author from the Inbox number on the Home before any re-read answers', async () => {
+    serve(base({ [INBOX_URL]: THREE }));
+    const view = await mount();
+    await ready(view);
+    await waitFor(() => expect(within(view.getByTestId('coach-home-inbox-badge')).getByText('3')).toBeTruthy());
+    http[INBOX_URL] = PENDING;
+    const reads = inboxReads();
+    await act(async () => { dropAuthorFromCoachInbox(qc, CLIENT_B); });
+    await waitFor(() => expect(within(view.getByTestId('coach-home-inbox-badge')).getByText('2')).toBeTruthy());
+    await act(async () => { dropAuthorFromCoachInbox(qc, CLIENT_A); });
+    await waitFor(() => expect(badge(view, 'coach-home-inbox')).toBeNull());
+    expect(view.getByTestId('coach-home-inbox').props.accessibilityLabel).toBe('Inbox, Unread in your inbox');
+    // The drop's own re-read went out and is still unanswered: the number dropped from the cache alone.
+    expect(inboxReads()).toBeGreaterThan(reads);
+    expect(qc.getQueryState(coachCommunityKeys.inbox())?.fetchStatus).toBe('fetching');
+  });
+});
+
+describe('H6 name: the community\'s name in the masthead', () => {
+  it('H6: the community\'s name once /community/me and the workspace answer, with its monogram; a pull reads the workspace again', async () => {
+    serve(base({ [WS_URL]: { name: 'Northside Strength Club' } }));
+    const view = await mount();
+    await ready(view);
+    const head = await waitFor(() => view.getByRole('header', { name: 'Northside Strength Club' }));
+    expect(head.props.numberOfLines).toBe(1);
+    expect(view.getByText('N', { includeHiddenElements: true })).toBeTruthy();
+    expect(view.queryByText('C', { includeHiddenElements: true })).toBeNull();
+    const wsReads = () => mockGet.mock.calls.filter(([url]) => url === WS_URL).length;
+    const before = wsReads();
+    http[WS_URL] = { name: 'Northside Strength' };
+    await act(async () => { await view.getByTestId('coach-home-list').props.refreshControl.props.onRefresh(); });
+    await waitFor(() => expect(wsReads()).toBe(before + 1));
+    await waitFor(() => expect(view.getByRole('header', { name: 'Northside Strength' })).toBeTruthy());
+  });
+  it('H6: "Community" and its monogram while the name loads, as the client Home draws them', async () => {
+    serve(base({ [WS_URL]: PENDING }));
+    const view = await mount();
+    await ready(view);
+    await waitFor(() => expect(mockGet.mock.calls.some(([url]) => url === WS_URL)).toBe(true));
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+    expect(view.getByRole('header', { name: 'Community' })).toBeTruthy();
+    expect(view.getByText('C', { includeHiddenElements: true })).toBeTruthy();
+    expect(qc.getQueryState(['community', 'workspace', WS])?.fetchStatus).toBe('fetching');
+  });
+  it('H6: "Community" with its monogram when the workspace read fails', async () => {
+    serve(base({ [WS_URL]: axiosErr(503) }));
+    const view = await mount();
+    await ready(view);
+    await waitFor(() => expect(mockGet.mock.calls.some(([url]) => url === WS_URL)).toBe(true));
+    await waitFor(() => expect(view.getByText('C', { includeHiddenElements: true })).toBeTruthy());
+    expect(view.getByRole('header', { name: 'Community' })).toBeTruthy();
+  });
+  it('H6: "Community" with its monogram and no workspace read when there is no workspace', async () => {
+    serve(base({ '/community/me': { ...ME, feature_flag_state: 'disabled', workspace_id: null } }));
+    const view = await mount();
+    await ready(view);
+    await waitFor(() => expect(mockGet.mock.calls.some(([url]) => url === '/community/me')).toBe(true));
+    await waitFor(() => expect(view.getByText('C', { includeHiddenElements: true })).toBeTruthy());
+    expect(view.getByRole('header', { name: 'Community' })).toBeTruthy();
+    expect(mockGet.mock.calls.some(([url]) => String(url).startsWith(WS_URL) && url !== LIST_URL)).toBe(false);
+  });
+});
+
+describe('H6 reads: a failed count or name read never blanks the page', () => {
+  it('H6: a failed report, inbox or name read keeps every row and the spaces', async () => {
+    serve(base({ [FLAGGED_URL]: axiosErr(503), [INBOX_URL]: axiosErr(503), [WS_URL]: axiosErr(503) }));
+    const view = await mount();
+    await ready(view);
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+    for (const id of ['coach-home-reports', 'coach-dm-entry', 'coach-home-inbox', 'coach-home-events', 'coach-home-spaces', 'coach-home-new-space']) {
+      expect(view.getByTestId(id)).toBeTruthy();
+    }
+    expect(view.getAllByTestId(/^coach-home-space-/)).toHaveLength(6);
+    expect(view.getByRole('header', { name: 'Community' })).toBeTruthy();
+    expect(badge(view, 'coach-home-reports')).toBeNull();
+    expect(badge(view, 'coach-home-inbox')).toBeNull();
+    expect(view.queryByTestId('coach-home-error')).toBeNull();
+  });
+});
+
+describe('E1 and P1: the new row', () => {
+  it('E1: a create, then a second list change inside the 2 s with no new id: the leaf edge is gone 2 s after the create', async () => {
     serve(base());
     const view = await mount();
     await ready(view);
-    const inbox = view.getByTestId('coach-home-inbox');
-    expect(within(inbox).getByText('Inbox')).toBeTruthy();
-    expect(within(inbox).getByText('Unread in your inbox')).toBeTruthy();
-    expect(iconsIn(inbox)).toEqual(['mail-outline']);
-    expect(mockGet.mock.calls.some(([url]) => String(url).includes('coach-inbox'))).toBe(false);
-    await act(async () => { fireEvent.press(inbox); });
-    expect(ref.getCurrentRoute()?.name).toBe('CoachCommunityInbox');
+    await act(async () => { qc.setQueryData(coachCommunityKeys.cohorts(), (old: unknown[]) => [...old, { ...space(18, 'Food on the go'), member_count: 0 }]); });
+    const row = () => view.getByTestId(`coach-home-space-${uuid(18)}`);
+    await waitFor(() => expect(flat(row()).borderLeftColor).toBe(fp.leaf));
+    await act(async () => { await new Promise((r) => setTimeout(r, 1000)); });
+    await act(async () => {
+      qc.setQueryData(coachCommunityKeys.cohorts(), (old: { id: string }[]) => old.map((c) => (c.id === uuid(12) ? { ...c, member_count: 13 } : c)));
+    });
+    expect(flat(row()).borderLeftColor).toBe(fp.leaf);
+    await act(async () => { await new Promise((r) => setTimeout(r, 1150)); });
+    expect(flat(row()).borderLeftColor).toBe('transparent');
+  });
+  it('P1: the provisional row opens nothing until the server\'s row replaces it, then opens its chat', async () => {
+    serve(base());
+    const view = await mount();
+    await ready(view);
+    const provisional = { id: 'optimistic:Food on the go', name: 'Food on the go', member_count: 0, unread_count: 0, kind: 'chat', visibility: 'clients' };
+    await act(async () => { qc.setQueryData(coachCommunityKeys.cohorts(), (old: unknown[]) => [provisional, ...old]); });
+    const row = await waitFor(() => view.getByTestId('coach-home-space-optimistic:Food on the go'));
+    expect(row.props.accessibilityLabel).toBe('Food on the go, Clients');
+    await act(async () => { fireEvent.press(row); });
+    expect(ref.getCurrentRoute()?.name).toBe('CoachCommunityHome');
+    await act(async () => {
+      qc.setQueryData(coachCommunityKeys.cohorts(), (old: { id: string }[]) => [space(40, 'Food on the go'), ...old.filter((c) => c.id !== provisional.id)]);
+    });
+    const landed = await waitFor(() => view.getByTestId(`coach-home-space-${uuid(40)}`));
+    await act(async () => { fireEvent.press(landed); });
+    expect(ref.getCurrentRoute()).toEqual(expect.objectContaining({ name: 'CommunitySpaceChat', params: { cohortId: uuid(40) } }));
   });
 });
 
