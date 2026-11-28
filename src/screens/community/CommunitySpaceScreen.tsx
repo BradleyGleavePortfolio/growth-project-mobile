@@ -336,7 +336,7 @@ export default function CommunitySpaceScreen({
             }
             return (
               <View style={[styles.postRow, { borderBottomColor: semanticColors.border }]}>
-                <HapticPressable onPress={() => openThread(item)} disabled={isOptimisticId(item.id)} {...holds.hold(item.id)}
+                <HapticPressable onPress={() => openThread(item)} disabled={isOptimisticId(item.id)} {...(client?.id && item.author_user_id === client.id ? null : holds.hold(item.id))}
                   accessibilityRole="button" accessibilityLabel={`Open post ${item.title ?? 'Untitled post'}`}
                   testID={`post-card-${item.id}`} style={styles.postContent}>
                   {item.pinned ? <Ionicons name="pin-outline" size={16} color={semanticColors.textMuted} /> : null}
