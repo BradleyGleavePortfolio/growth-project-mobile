@@ -1,0 +1,7 @@
+src/services/__tests__/authActions.clientSettings.signOut.test.ts
+src/hooks/__tests__/useSettings.test.ts
+src/services/__tests__/authActions.test.ts
+src/services/__tests__/authActions.signOut.test.ts
+src/services/__tests__/authActions.accountSwitch124.test.ts
+src/ui/haptics/__tests__/haptics.service.test.ts
+src/utils/__tests__/notifications.test.ts
