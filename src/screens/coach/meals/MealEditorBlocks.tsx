@@ -212,9 +212,11 @@ const st = StyleSheet.create({
   // FIX-PSCM-1 B1, measured on S1_F01 (390 / 100%): the Options card 6 pt inside top and bottom (the nearest token, 4),
   // its lines 4 pt apart; each option row 56 pt and a hairline (57 pt pitch), the rows in one container; the Recipe
   // card 4 pt above its 44 pt header row when linked (14 pt, the nearest token 12, otherwise) and 14 pt (12) below.
+  // FIX-PSCM-2 (LS C1, F01 and F08): a linked card sets its lines with no gap, each on its own 22 pt line (the frames: 2 pt
+  // apart on 20 pt lines); with no recipe linked (F05, F07) the frames draw 2 to 6 pt between its parts, so it keeps 4.
   block: { paddingVertical: spacing.xs, gap: spacing.xs },
   recipe: { paddingTop: spacing.md, paddingBottom: spacing.md, gap: spacing.xs },
-  linked: { paddingTop: spacing.xs },
+  linked: { paddingTop: spacing.xs, gap: 0 },
   grow: { flexGrow: 1 }, // C1: the title keeps its own width, so the count and Add wrap under it at 320 pt with 130% text
   row: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: layout.rowMinHeight, paddingVertical: spacing.xs,
     borderTopWidth: StyleSheet.hairlineWidth },
