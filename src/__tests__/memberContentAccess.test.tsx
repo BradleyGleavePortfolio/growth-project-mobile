@@ -423,6 +423,27 @@ const REGISTRY: Surface[] = [
             ] } },
         ];
       })(),
+      // SC-M4 (agent 203): the + and her photos. The wire (spaceChatPhotoApi) stops nothing, as spaceChatApi's row; the
+      // photo module applies the rules and stops here (the screen and the + reach only its exports).
+      ...((): Surface[] => {
+        const photos = 'components/community/space-chat/__tests__/SCM4PhotoSend.test.tsx';
+        return [
+          { file: 'components/community/space-chat/spaceChatPhotoApi.ts', kind: 'composer', what: 'the space chat photo wire (an upload link, one upload, the photo message)',
+            how: 'the server refuses a space she cannot open (404 community.cohort.not_found on the link; 403 / 404 on the message), which spaceChatPhotos turns into a gone row and a read of the list that closes the space; the row stops nothing (exports: []), so every caller is named',
+            proof: { by: 'suite', file: photos, titles: [
+              'call 1: 404 community.cohort.not_found (not let in)',
+              'call 3: 403 (not let in)',
+              'call 3: 404 community.message.not_found (not let in)',
+            ] }, exports: [] },
+          { file: 'components/community/space-chat/spaceChatPhotos.ts', kind: 'composer', what: 'her photos into one space (picked, held in memory, sent one at a time)',
+            how: 'the + is drawn only where the screen says she may post (canPost: let in on this visit, never closed, loading, restored from the cache, or a member where only the coach posts); a photo refused as not let in leaves and the list is read again, which closes the space; a closed space keeps none of her photos; the rows are per person and per space; a sign-out wipes them and another account never sends them',
+            proof: { by: 'suite', file: photos, titles: [
+              'SCM4 T10: another space and another person see none of them',
+              'SCM4 T4: the plain 404 never reads as a closed space',
+              'sends nothing more, wipes the rows, deletes the file and cancels the bound call',
+            ] }, exports: ['useSpacePhotos', 'pickSpacePhoto', 'retrySpacePhoto', 'discardSpacePhoto', 'spacePhotoBusy'] },
+        ];
+      })(),
     ];
   })(),
   // FR-911R2 (LO-911R2 B1): a KNOWN GAP row no longer stops the scan, so the files that draw a gap part are named; each

@@ -271,6 +271,7 @@ const CENSUS: ReadonlyArray<readonly [string, number, string]> = [
   ['components/community/ThreadHeader.tsx', 2, 'avatar tile, comment'],
   ['components/community/space-chat/SpaceInfoSheet.tsx', 1, 'sheet grab (m#944, Space info)'],
   ['components/community/space-chat/SpaceMessageSheet.tsx', 1, 'sheet grab'],
+  ['components/community/space-chat/SpaceChatPlus.tsx', 1, 'sheet grab (SC-M4, Add to your message)'],
   ['components/log/FoodDayView.tsx', 1, 'icon circle'],
   ['components/messaging/ConversationClosed.tsx', 2, 'hairline, comment'],
   ['components/messaging/MessageActionSheet.tsx', 2, 'sheet grab, comment'],

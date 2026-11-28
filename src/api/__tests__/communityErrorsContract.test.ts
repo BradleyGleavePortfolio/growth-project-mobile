@@ -60,6 +60,9 @@ const BACKEND_COMMUNITY_CODES = new Set([
   'community.event.replay_requires_link',
   'community.event.rsvp_closed',
   'community.event.rsvp_not_eligible',
+  'community.image.has_location',
+  'community.image.not_jpeg',
+  'community.image.too_large',
   'community.inbox.not_coach',
   'community.message.edit_window_closed',
   'community.message.not_author',
@@ -99,6 +102,7 @@ const BACKEND_COMMUNITY_CODES = new Set([
   'community.win.removed_member',
   'community.workspace.no_access',
   'community.workspace.not_found',
+  'PHOTO_NOT_ALLOWED',
 ]);
 
 function axiosError(status: number, data: Record<string, unknown>) {
