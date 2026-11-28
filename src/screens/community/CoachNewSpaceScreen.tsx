@@ -6,7 +6,8 @@
  * v2: who can join. "All my clients" is the radio, selected; "Create space" makes { name, kind, visibility: 'clients' }.
  * "Included with a package" opens v3 (R6). v3: the coach's live packages (coachPackagesApi.list, isLivePackage); "Create
  * space" makes { name, kind, visibility: 'package', package_ids } with at least one pick. The create goes through
- * useCreateCohort (one send per tap); a failure says why (alertCoachFailure) and keeps every entry. Close on v1 leaves;
+ * useCreateCohort (one send per tap); a failure says why (alertCoachFailure's words; a name already used says "space",
+ * D10C-W6) and keeps every entry. Close on v1 leaves;
  * Back on v2 or v3 steps back with the entries kept, and so do Android's Back and the iPhone edge swipe: usePreventRemove
  * holds them (native-stack passes preventNativeDismiss to the native screen only for it; a raw beforeRemove listener
  * cannot hold the swipe, ClientNavigator.tsx's m#521 note). A Create leaves once, with nothing held. Nothing is saved
@@ -17,7 +18,7 @@
  * Public on TGP, "You can change this later." and v3's total line.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, TextInput, View, type LayoutChangeEvent } from 'react-native';
+import { Alert, StyleSheet, Text, TextInput, View, type LayoutChangeEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, usePreventRemove } from '@react-navigation/native';
 import HapticPressable from '../../components/HapticPressable';
@@ -26,10 +27,10 @@ import { PrimaryButton } from '../../ui/buttons/PrimaryButton';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { useCreateCohort } from '../../hooks/useCoachCommunity';
 import type { CreateCohortInput } from '../../api/coachCommunityApi';
+import { describeCommunityFailure } from '../../api/communityErrors';
 import { coachPackagesApi, isLivePackage, type CoachPackage } from '../../api/packagesApi';
 import { forestPop as fp, layout, neutral, schemeCard, typography } from '../../theme/tokens';
 import type { CoachCommunityNav } from './coachCommunityNavTypes';
-import { alertCoachFailure } from './CoachCommunityInboxScreen';
 
 type Step = 'name' | 'who' | 'packages';
 type Kind = NonNullable<CreateCohortInput['kind']>;
@@ -38,6 +39,14 @@ type Packages = { state: 'idle' | 'loading' | 'failed' } | { state: 'ready'; row
 
 const NAME_MIN = 2;
 const NAME_MAX = 120;
+/** main's name_taken sentence (communityErrors.ts) with this page's word, "space" (D10C-W6). */
+const NAME_TAKEN = 'You already used this name for a space. Choose a different name.';
+
+/** alertCoachFailure's alert, word for word, except a name already used. */
+function alertCreateFailure(err: unknown): void {
+  const f = describeCommunityFailure(err, 'moderate');
+  Alert.alert(f.title, f.code === 'community.cohort.name_taken' ? NAME_TAKEN : f.message);
+}
 const KINDS: { kind: Kind; icon: IconName | '#'; title: string; line: string }[] = [
   { kind: 'chat', icon: '#', title: 'Chat space', line: 'Everyone in the space can post.' },
   { kind: 'announcement', icon: 'megaphone-outline', title: 'Announcement space', line: 'Only you post. Members react and reply in threads.' },
@@ -111,7 +120,7 @@ export default function CoachNewSpaceScreen(): React.ReactElement {
         void HapticService.success();
         setLeaving(true);
       },
-      onError: alertCoachFailure,
+      onError: alertCreateFailure,
       onSettled: () => { sending.current = false; },
     });
   };
