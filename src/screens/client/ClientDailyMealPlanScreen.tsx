@@ -199,10 +199,12 @@ export default function ClientDailyMealPlanScreen() {
     : `${n(left.kcal)} kcal and ${n(left.protein)} g protein left.`;
 
   // RULING 4: the Food day's eaten rule. Only while the checklist switch is on is a log linked to its plan meal.
+  // MEALPLAN-OFFLINE-JOIN-M (SWEEP-FINAL-OFFLINE B1): the phone's foods count with no day log held too, as the Food day
+  // and the plan meal page count them, so a meal saved offline is never offered again as not eaten.
   const checklist = featureFlags.foodPlanChecklist;
   const stops = useMemo(() => orderStops(shown), [shown]);
   const eaten = useMemo(() => {
-    const logs = checklist && log ? withQueuedFoods((log.entries ?? []).map((e) => foodLogFromDailyEntry(e, shownDay)),
+    const logs = checklist ? withQueuedFoods((log?.entries ?? []).map((e) => foodLogFromDailyEntry(e, shownDay)),
       { calories: 0, protein: 0, carbs: 0, fat: 0 }, [...queuedFoods, ...sentFoods], shownDay, '').foodLogs.filter(countsInDay) : [];
     const day = buildPlanDay(shown.map((a) => a.daily_meal_plan), logs);
     return new Map<string, DaySlot>(day.slots.map((x) => [x.key, x]));
