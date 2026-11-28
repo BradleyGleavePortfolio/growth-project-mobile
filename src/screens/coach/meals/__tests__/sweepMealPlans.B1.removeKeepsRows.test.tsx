@@ -28,7 +28,7 @@ const mockPlan = () => ({ id: 'p1', coach_id: 'coach', name: 'Training day', not
 /** Backend main's slot write (updatePlan, FOODLINK): the rows kept by (slot_label, order), the rest deleted and created anew. */
 function mockServerPatch(body: Row) {
   const key = (s: Row) => `${s.slot_label}#${s.order}`;
-  const next = (body.slots as Row[]).map((s, idx) => ({ ...s, order: s.order ?? idx }));
+  const next = (body.slots as Row[]).map((s, idx): Row => ({ ...s, order: s.order ?? idx }));
   const wanted = new Map(next.map((s) => [key(s), s]));
   const kept = mockSlots.filter((e) => wanted.has(key(e))).map((e) => ({ ...e, meal_template_id: wanted.get(key(e))!.meal_template_id }));
   const keptKeys = new Set(kept.map(key));

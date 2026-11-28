@@ -28,7 +28,7 @@ let mockNew = 0;
 /** The plan as the server answers it: slots ordered by slot_label, then order (getPlan and updatePlan's orderBy). */
 const mockPlan = () => ({ id: 'p1', coach_id: 'coach', name: 'Training day', notes: null, created_at: '2026-11-01T00:00:00.000Z', archived_at: null,
   slots: [...mockSlots].sort((a, b) => a.slot_label.localeCompare(b.slot_label) || a.order - b.order)
-    .map((s) => ({ ...s, daily_meal_plan_id: 'p1', meal_template: mockMeals.find((m) => m.id === s.meal_template_id) })) });
+    .map((s): Row => ({ ...s, daily_meal_plan_id: 'p1', meal_template: mockMeals.find((m) => m.id === s.meal_template_id) })) });
 
 /** Backend main's updatePlan slot write (FOODLINK), with the DTO's order range and the table's unique key. */
 function mockServerPatch(body: Row) {
