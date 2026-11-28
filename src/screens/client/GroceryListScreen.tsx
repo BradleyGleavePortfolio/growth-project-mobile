@@ -44,7 +44,7 @@ const QUERY_KEY = ['lists', LIST_TYPE];
 // One read (owner 10-07, CF-ONE-LIST-128): More no longer opens a Shopping list, so rows a client saved there are
 // read here too. The shopping read runs only after the grocery read succeeds, so a failed load costs one request.
 // SHOP-SWITCH-M (owner 203-D16 op 1, ctx#527 style 1): the switch under the title chooses which list the page shows.
-async function fetchOneList(): Promise<ListItem[]> {
+export async function fetchOneList(): Promise<ListItem[]> {
   const grocery = (await listsApi.getList(LIST_TYPE)).data as ListItem[];
   const shopping = (await listsApi.getList('shopping')).data as ListItem[];
   const groceryIds = new Set(grocery.map((item) => item.id));
@@ -72,7 +72,7 @@ type ListType = keyof typeof LISTS;
 const LIST_TYPES = Object.keys(LISTS) as ListType[];
 /** A row is on Shopping when it came from the shopping read (above), else on Grocery. */
 const onList = (type: ListType) => (item: ListItem) => fromShopping(item) === (type === 'shopping');
-const toGet = (rows: ListItem[], type: ListType) => rows.filter((item) => onList(type)(item) && !item.is_checked).length;
+export const toGet = (rows: ListItem[], type: ListType) => rows.filter((item) => onList(type)(item) && !item.is_checked).length;
 
 /** ctx#527 style 1, the Masthead switch (src/build.py:120-123): two equal segments inside a 1 pt forest-band line, 4 pt
  *  inset and gap; the chosen one bone with ink, a check and weight 600, so it is told by more than colour; each label
