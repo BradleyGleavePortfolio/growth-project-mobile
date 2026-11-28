@@ -43,16 +43,18 @@ const recipe = { id: 'r1', title: 'Lentil soup', calories: 320, protein: 24, car
 type Read = jest.Mock;
 interface Lane {
   name: string; Screen: React.ComponentType; scroll: string; key: unknown[]; data: unknown; shown: string; read: () => Read;
-  /** Recipes shows its error block only when no row is on screen, so its failed reload starts from an empty library. */
-  beforeError: { data: unknown; shown: string };
+  /** Recipes shows its error block only when no row is on screen, so its failed reload starts from an empty library.
+   *  Grocery and the Prep guide show theirs only for a page with no answer yet (GROCERY-OFFLINE-KEEP-M: a failed re-read
+   *  keeps what she has), so theirs start from a first read that failed. */
+  beforeError: { data: unknown; shown: string } | 'no answer';
 }
 const grocery: Lane = {
   name: 'Grocery', Screen: GroceryListScreen, scroll: 'list-scroll', key: ['lists', 'grocery'], data: rows, shown: 'Milk',
-  read: () => jest.mocked(listsApi.getList) as unknown as Read, beforeError: { data: rows, shown: 'Milk' },
+  read: () => jest.mocked(listsApi.getList) as unknown as Read, beforeError: 'no answer',
 };
 const prep: Lane = {
   name: 'Prep guide', Screen: PrepGuideScreen, scroll: 'list-scroll', key: ['prep-guide', getLocalWeekStart(0)], data: guide, shown: 'Soup',
-  read: () => jest.mocked(prepGuideApi.getWeeklyGuide) as unknown as Read, beforeError: { data: guide, shown: 'Soup' },
+  read: () => jest.mocked(prepGuideApi.getWeeklyGuide) as unknown as Read, beforeError: 'no answer',
 };
 const recipes: Lane = {
   name: 'Recipes', Screen: RecipesScreen, scroll: 'recipes-list', key: ['recipes'], data: [recipe], shown: 'Lentil soup',
@@ -104,6 +106,15 @@ async function loaded(lane: Lane, data: unknown = lane.data, shown: string = lan
   expect(page.refreshing()).toBe(false);
   return page;
 }
+/** The page as it is just before an error block: a failed first read (no answer yet), or a loaded page (Recipes). */
+async function beforeError(lane: Lane) {
+  if (lane.beforeError !== 'no answer') return loaded(lane, lane.beforeError.data, lane.beforeError.shown);
+  mode = 'fail';
+  const page = await mount(lane);
+  await page.ui.findByRole('button', { name: 'Try again' });
+  expect(page.refreshing()).toBe(false);
+  return page;
+}
 /** Starts the user's pull with the read held open, without waiting for it to finish. */
 async function pull(page: Awaited<ReturnType<typeof mount>>) {
   mode = 'hold';
@@ -152,7 +163,7 @@ describe('A: refreshing is true only during a pull the user made', () => {
     });
 
     it('case 3: Try again holds still while it reloads', async () => {
-      const page = await loaded(lane, lane.beforeError.data, lane.beforeError.shown);
+      const page = await beforeError(lane);
       mode = 'fail';
       await act(async () => { await page.control().props.onRefresh(); });
       const tryAgain = await page.ui.findByRole('button', { name: 'Try again' });
@@ -175,7 +186,7 @@ describe('A: refreshing is true only during a pull the user made', () => {
     });
 
     it('case 5: a failed pull ends the spinner and shows the error block', async () => {
-      const page = await loaded(lane, lane.beforeError.data, lane.beforeError.shown);
+      const page = await beforeError(lane);
       mode = 'fail';
       await act(async () => { await page.control().props.onRefresh(); });
       await page.ui.findByRole('button', { name: 'Try again' });

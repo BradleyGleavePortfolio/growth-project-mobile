@@ -3,7 +3,8 @@
  * One calm menu on the Style C kitchen page: her saved meals (a tap opens the sheet that adds one to today), the owner's
  * "Log food" button, From {coach} with today's next plan meal for a client with a coach, then rows to Recipes, the
  * approved Grocery list, the Prep guide and Food this week. A client with no coach gets the same page without the
- * coach's parts, and the page makes no coach, plan or day read for her. A read that failed never shows as zero or empty.
+ * coach's parts, and the page makes no coach, plan or day read for her. A read that failed never shows as zero or empty,
+ * and a re-read that fails (offline, or a cold start on saved reads that last failed) keeps the answer she was shown.
  * Opened from the Food tab's add sheet (KITCHEN-DOOR-M, the owner's "door from food"); 'Kitchen' in the More stack.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -107,15 +108,17 @@ function KitchenPage({ userId, coachId }: { userId: string; coachId: string | nu
   // R11: the bar's words, once, for VoiceOver (Android reads the live region).
   useEffect(() => { if (Platform.OS === 'ios' && added) AccessibilityInfo.announceForAccessibility(addedWords(added)); }, [added]);
 
+  // GROCERY-OFFLINE-KEEP-M (SWEEP-KITCHEN B1's class): each part reads its query's data, not isSuccess, so a re-read that
+  // fails keeps From {coach}, its card and the counts; a read with no answer still shows none (data is undefined).
   const meals = savedMealsOf(saved.data);
-  const first = coached && coach.isSuccess ? coachFirst(coach.data) : null;
-  const card = coached && plan.isSuccess && daily.isSuccess ? planCard(plan.data, daily.data, today) : null;
-  const recipeList = recipes.isSuccess && Array.isArray(recipes.data) ? recipes.data : null;
+  const first = coached ? coachFirst(coach.data) : null;
+  const card = coached ? planCard(plan.data, daily.data, today) : null;
+  const recipeList = Array.isArray(recipes.data) ? recipes.data : null;
   const recipeCount = recipeList
     ? recipesDetail(recipeList.length, coached ? recipeList.filter((r) => r?.created_by_id === coachId).length : 0,
       coached ? first ?? 'your coach' : null)
     : null;
-  const groceryCount = grocery.isSuccess && Array.isArray(grocery.data) ? toGetWords(toGet(grocery.data, 'grocery')) : null;
+  const groceryCount = Array.isArray(grocery.data) ? toGetWords(toGet(grocery.data, 'grocery')) : null;
 
   // LO-KITCHEN-M-1 B1: set AND read today, as Home does (loadDayData sets the day, then reads it); the setter alone left
   // the Food tab on an unread today whenever it was showing another day.

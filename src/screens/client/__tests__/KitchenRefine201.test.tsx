@@ -142,16 +142,22 @@ it.each([['Grocery list', GroceryListScreen]] as const)(
   },
 );
 
+// GROCERY-OFFLINE-KEEP-M (SWEEP-KITCHEN B1, flipped from "a failed reload shows the error and no Clear checked"): a
+// failed reload keeps her rows, so Clear checked stays beside the checked rows it clears; the error words are only for a
+// list with no answer yet (GroceryOfflineKeep.test.tsx).
 it.each([['grocery', GroceryListScreen]] as const)(
-  'preserves the %s error state: cached checked rows must not expose Clear checked',
+  'a failed %s reload keeps the cached rows, and Clear checked stays with the checked rows it clears',
   async (_kind, Screen) => {
     jest.mocked(listsApi.getList).mockResolvedValue({ data: [{ ...item, is_checked: true }] } as Awaited<ReturnType<typeof listsApi.getList>>);
     const ui = await mount(Screen);
     await waitFor(() => expect(ui.getByRole('button', { name: 'Clear checked' })).toBeTruthy());
     jest.mocked(listsApi.getList).mockRejectedValue(new Error('Network Error'));
     await act(async () => { await clients[clients.length - 1].refetchQueries(); });
-    await waitFor(() => expect(ui.getByText(/Couldn't load grocery list\./)).toBeTruthy());
-    expect(ui.queryByRole('button', { name: 'Clear checked' })).toBeNull();
+    await waitFor(() => expect(clients[clients.length - 1].getQueryState(['lists', 'grocery'])?.status).toBe('error'));
+    await act(async () => { await new Promise((done) => setTimeout(done, 20)); }); // react-query tells the page on a setTimeout(0)
+    expect(ui.queryByText(/Couldn't load grocery list\./)).toBeNull();
+    expect(ui.getByText('Milk')).toBeTruthy();
+    expect(ui.getByRole('button', { name: 'Clear checked' })).toBeTruthy();
   },
 );
 

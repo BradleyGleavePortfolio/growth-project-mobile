@@ -11,7 +11,7 @@ import path from 'path';
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, dehydrate, hydrate } from '@tanstack/react-query';
 import NetInfo from '@react-native-community/netinfo';
 
 let mockDims = { width: 390, height: 844, scale: 2, fontScale: 1 };
@@ -525,5 +525,72 @@ describe('KITCHEN-M: the Kitchen page (Style 2 Menu)', () => {
     expect(screen.getByTestId('kitchen-added')).toBeTruthy();
     await act(async () => { (mockListeners.blur ?? []).forEach((cb) => cb()); });
     expect(screen.queryByTestId('kitchen-added')).toBeNull();
+  });
+});
+
+// GROCERY-OFFLINE-KEEP-M (SWEEP-KITCHEN B1's class, m#1008 LS-KWM-2 C1 7229714411): a re-read that fails keeps the last
+// good answer. From {coach}, its card and the two row counts stay when a focus re-read fails offline and on a cold start
+// from saved reads that ended in an error (queryClient.ts saves a query in any state); with no answer they never show.
+describe('GROCERY-OFFLINE-KEEP-M: the Kitchen keeps From {coach} and its counts when a re-read fails', () => {
+  // The shopping read runs only after the grocery read answers (fetchOneList), so it is not counted here.
+  const ALL_READS = ['/me/foods/saved-meals', '/lists/grocery', '/recipes', ...COACH_READS];
+  const shown = () => {
+    expect(screen.getByTestId('kitchen-plan-card')).toBeTruthy();
+    expect(screen.getByText('From Sam')).toBeTruthy();
+    expect(screen.getByLabelText('Recipes, 12, 2 from Sam')).toBeTruthy();
+    expect(screen.getByLabelText('Grocery list, 4 to get')).toBeTruthy();
+  };
+
+  it('20. a focus re-read that fails offline keeps the card, From Sam and the counts; a cold start on those saved reads shows them', async () => {
+    const before = await mount();
+    await settle();
+    await screen.findByTestId('kitchen-plan-card');
+    await waitFor(shown);
+    await focus(); // the first focus is the mount's: skipped
+    const counts = () => ALL_READS.map(reads);
+    const was = counts();
+    for (const url of ALL_READS) server[url] = fail();
+    await focus();
+    await waitFor(() => expect(counts()).toEqual(was.map((c) => c + 1)));
+    await waitFor(() => expect(before.getQueryState(['clients', 'me', 'coach'])?.status).toBe('error'));
+    await act(async () => { await new Promise((done) => setTimeout(done, 20)); }); // react-query tells the page on a setTimeout(0)
+    for (const key of [['meal-plan', 'today', '2026-10-13'], ['food', 'log', '2026-10-13'], ['recipes'], ['lists', 'grocery']]) {
+      expect(before.getQueryState(key)?.status).toBe('error');
+    }
+    shown();
+    await screen.unmount();
+    // The app is closed and opened again with no signal: the persister's copy (any state, its errors cut down).
+    const { serializePersistedClient } = jest.requireActual('../../../../services/queryClient');
+    const saved = JSON.parse(serializePersistedClient({ timestamp: Date.now(), buster: 'test',
+      clientState: dehydrate(before, { shouldDehydrateQuery: () => true }) }));
+    // Ten minutes later, so every saved read is older than its staleTime and the page reads it again.
+    for (const query of saved.clientState.queries) {
+      query.state.dataUpdatedAt -= 10 * 60 * 1000;
+      query.state.errorUpdatedAt -= 10 * 60 * 1000;
+    }
+    const sent = mockGet.mock.calls.length;
+    const after = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+    hydrate(after, saved.clientState);
+    expect(after.getQueryState(['meal-plan', 'today', '2026-10-13'])?.status).toBe('error');
+    await render(<QueryClientProvider client={after}><KitchenScreen /></QueryClientProvider>);
+    await screen.findByTestId('kitchen-log-food');
+    shown();
+    await waitFor(() => expect(mockGet.mock.calls.length).toBeGreaterThanOrEqual(sent + ALL_READS.length)); // the open read each again
+    await waitFor(() => expect(after.getQueryState(['meal-plan', 'today', '2026-10-13'])?.fetchStatus).toBe('idle'));
+    await act(async () => { await new Promise((done) => setTimeout(done, 20)); });
+    shown();
+  });
+
+  it('21. with no answer yet, failed reads show no card, no From and no counts (unchanged)', async () => {
+    for (const url of ['/lists/grocery', '/recipes', ...COACH_READS]) server[url] = fail();
+    await mount();
+    await settle();
+    await waitFor(() => expect(reads('/v1/clients/me/coach')).toBeGreaterThan(0));
+    await act(async () => undefined);
+    expect(screen.queryByTestId('kitchen-plan-card')).toBeNull();
+    expect(screen.queryByTestId('kitchen-from')).toBeNull();
+    expect(screen.getByLabelText('Recipes')).toBeTruthy();
+    expect(screen.getByLabelText('Grocery list')).toBeTruthy();
+    expect(allWords()).not.toMatch(/to get|from Sam/);
   });
 });
