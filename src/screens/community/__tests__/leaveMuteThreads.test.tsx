@@ -315,10 +315,13 @@ describe('LEAVE-MUTE-M the fold of a left thread (LM-08)', () => {
     expect(keys.indexOf('fold-m1')).toBe(keys.indexOf('m2') + 1);
   });
 
-  it('L14: tapping the line opens the replies with Follow thread under them; Follow thread unfolds for good after the answer', async () => {
+  it('L14: tapping the line opens the replies under it with Follow thread under them; Follow thread unfolds for good after the answer', async () => {
     threadStates = LEFT;
     const r = await open();
     await fireEvent.press(await r.findByTestId('space-fold-m1'));
+    // The line stays above the opened replies (s1_L10b), said as open.
+    expect(r.getByTestId('space-fold-m1').props.accessibilityState).toEqual(expect.objectContaining({ expanded: true }));
+    expect(keysOf(r).indexOf('fold-m1')).toBe(keysOf(r).indexOf('m3') - 1);
     expect(r.getByText('body m3', HIDDEN)).toBeTruthy();
     expect(r.getByText('body m4', HIDDEN)).toBeTruthy();
     const keys = keysOf(r);
