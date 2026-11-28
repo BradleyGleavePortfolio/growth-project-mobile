@@ -65,6 +65,8 @@ import type { VoiceOutboxItem } from '../../hooks/useVoiceOutbox';
 import SpaceChatRow, { DayLine, HashGlyph, MenuGlyph, NewMessagesLine, SMALL_GREY, spaceDay } from '../../components/community/space-chat/SpaceChatRow';
 import { isCoachRemoved, spaceRemovedLine } from '../../components/community/space-chat/removed/SpaceRemovedPlaceholder';
 import { useSpaceChat, type PendingRow } from '../../components/community/space-chat/useSpaceChat';
+import SpaceChatPlus from '../../components/community/space-chat/SpaceChatPlus';
+import { discardSpacePhoto, retrySpacePhoto, useSpacePhotos, type SpacePhotoRow } from '../../components/community/space-chat/spaceChatPhotos';
 import { type SpaceMessage } from '../../components/community/space-chat/spaceChatApi';
 import { CLOSED_LINE, ConversationClosedLine, useServerAnswered } from '../../components/messaging/ConversationClosed';
 import { describeCommunityFailure } from '../../api/communityErrors';
@@ -80,6 +82,7 @@ type Item =
   | { type: 'msg'; key: string; m: SpaceMessage }
   | { type: 'local'; key: string; r: PendingRow }
   | { type: 'voice'; key: string; v: VoiceOutboxItem; at: string }
+  | { type: 'photo'; key: string; p: SpacePhotoRow }
   | { type: 'day'; key: string; label: string }
   | { type: 'new'; key: string };
 
@@ -122,6 +125,8 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
   // SC-M2: voice notes into this space (m#848's outbox, sent with this space's id) while communityVoiceNotes is on.
   const voiceOn = featureFlags.communityVoiceNotes && !!cohort?.workspace_id && !!client?.id;
   const voice = useSpaceVoiceOutbox(voiceOn ? cohort?.workspace_id ?? null : null, client?.id ?? null, cohortId);
+  // SC-M4: her photos into this space (iPhone), in memory only, until the server list carries them.
+  const photos = useSpacePhotos(cohortId, client?.id ?? null, isOnline, chat.messages, chat.noAccess);
 
   const myName = useMemo(() => chat.messages.find((m) => m.sender_user_id === client?.id)?.sender?.name
     ?? client?.name ?? [client?.firstName, client?.lastName].filter(Boolean).join(' '), [chat.messages, client]);
@@ -133,6 +138,8 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
       ...chat.pending.filter((r) => r.state !== 'sent' || !chat.messages.some((m) => m.id === r.serverId))
         .map((r) => ({ at: r.createdAt, item: { type: 'local', key: r.localId, r } as Item, mine: true })),
       ...voice.rows.map(({ v, at }) => ({ at, item: { type: 'voice', key: v.id, v, at } as Item, mine: true })),
+      ...photos.rows.filter((p) => p.state !== 'sent' || !chat.messages.some((m) => m.id === p.serverId))
+        .map((p) => ({ at: p.createdAt, item: { type: 'photo', key: p.id, p } as Item, mine: true })),
     ].sort((a, b) => a.at.localeCompare(b.at));
     const lastRead = chat.readCursor?.last_read_at ?? null;
     const out: Item[] = [];
@@ -148,7 +155,7 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
       out.push(row.item);
     }
     return out.reverse();
-  }, [chat.messages, chat.pending, chat.readCursor, client?.id, voice.rows]);
+  }, [chat.messages, chat.pending, chat.readCursor, client?.id, voice.rows, photos.rows]);
 
   // Open at the message asked for, else at the New messages line, once per visit after the read cursor has answered.
   // Older pages load first until that row is loaded (the asked-for row, or the oldest unread one) or there are none.
@@ -292,6 +299,16 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
           authorId={client?.id ?? ''} state={r.state} onRetry={() => chat.retry(r)} onDiscard={() => chat.removeLocal(r.localId)}
           viewerUserId={client?.id} offline={!isOnline} rejected={r.reason === 'rejected'}
           quote={r.reply ? quoteOfTarget(r.reply) : null}
+        />
+      );
+    }
+    if (item.type === 'photo') {
+      const p = item.p;
+      return (
+        <SpaceChatRow
+          id={p.id} name={myName} isCoach={isCoachViewer} createdAt={p.createdAt} body={null} image={{ url: p.uri, width: p.width, height: p.height }}
+          authorId={client?.id ?? ''} state={p.state} onRetry={() => retrySpacePhoto(p.id)} onDiscard={() => discardSpacePhoto(p.id)}
+          viewerUserId={client?.id} offline={!isOnline}
         />
       );
     }
@@ -476,6 +493,7 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
             onReply={setReply}
             suggestion={isCoachViewer && cohort && items.length === 0 && !reply ? welcomeLine(cohort.name) : undefined}
             trailing={voiceOn && !reply ? <SpaceChatMic cohortName={cohort?.name ?? ''} userId={client?.id ?? ''} coach={isCoachViewer} onSend={voice.send} /> : undefined}
+            leading={Platform.OS === 'ios' && canPost ? (reply ? <View /> : <SpaceChatPlus onPick={photos.pick} />) : undefined}
           />
         ) : admitted ? (
           <View style={[s.band, lineInset]} testID="space-chat-hint" accessible accessibilityRole="text" accessibilityLabel={COACH_ONLY_LINE}>
