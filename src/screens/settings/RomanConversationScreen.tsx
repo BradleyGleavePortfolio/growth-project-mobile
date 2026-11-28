@@ -15,9 +15,15 @@
  * state, tell the list anything, navigate or report.
  * The transcript lives only in this screen's memory (the server sends it
  * no-store); it is never cached, logged or reported.
+ * REPORT-ANY-M (#200-S4, R4): a client's past chat holds to Report as the
+ * room does (RomanChatScreen: MessageActionSheet with look "roman", Copy and
+ * Report Message, then ReportMessageSheet and "Reported"); a report is bound
+ * to this transcript's account like every read. A coach's past chats keep
+ * no hold (201-D1, v1.1).
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, Alert, FlatList, StyleSheet, Text, View } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import HapticPressable from '../../components/HapticPressable';
 import RomanMessageBubble from '../../components/roman/RomanMessageBubble';
@@ -25,7 +31,11 @@ import { Headline, Screen, ScreenTopBar } from '../../ui';
 import { spacing } from '../../theme/tokens';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { romanChatsApi as defaultApi, type RomanChatsApi } from '../../api/romanChatsApi';
-import type { RomanMessage } from '../../api/romanApi';
+import { reportMessage, type RomanMessage } from '../../api/romanApi';
+import type { ReportReason } from '../../api/messagesApi';
+import MessageActionSheet from '../../components/messaging/MessageActionSheet';
+import ReportMessageSheet from '../../components/messaging/ReportMessageSheet';
+import { romanQuoteExcerpt } from '../../components/roman/romanReply';
 import { bindingIsCurrent, onAuthEpochChange } from '../../services/accountBinding';
 import { readUserCacheSync } from '../../lib/userCache';
 import { viewAndReport } from './useRomanChats';
@@ -71,6 +81,9 @@ export default function RomanConversationScreen({
   const [deleting, setDeleting] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const [notice, setNotice] = useState<{ view: RomanChatsFailureView; retry?: () => void } | null>(null);
+  // REPORT-ANY-M (R4): the held turn and the turn being reported (the room's menu), in memory only.
+  const [actionTarget, setActionTarget] = useState<RomanMessage | null>(null);
+  const [reportTarget, setReportTarget] = useState<RomanMessage | null>(null);
   const mounted = useRef(true);
   const seq = useRef(0);
 
@@ -100,6 +113,8 @@ export default function RomanConversationScreen({
     setConfirm(false);
     setDeleting(false);
     setLoadingEarlier(false);
+    setActionTarget(null);
+    setReportTarget(null);
     setPhase({ kind: 'other_account' });
   }, []);
 
@@ -168,6 +183,35 @@ export default function RomanConversationScreen({
         if (mounted.current) dropAll();
       }),
     [dropAll],
+  );
+
+  // REPORT-ANY-M (R4): Roman's turns in a client's past chat hold to the room's menu; her own turns and a coach's
+  // past chats do not (201-D1). Copy and Report Message (no Reply: a past chat takes no reply), as the room draws them.
+  const canHold = surface === 'client';
+  const onHold = useCallback((m: RomanMessage) => {
+    if (m.role === 'assistant' && isOwner()) setActionTarget(m);
+  }, [isOwner]);
+  const onCopy = useCallback(() => {
+    const held = actionTarget;
+    setActionTarget(null);
+    if (held) void Clipboard.setStringAsync(held.content).catch(() => undefined);
+  }, [actionTarget]);
+  const onOpenReport = useCallback(() => {
+    if (actionTarget && isOwner()) setReportTarget(actionTarget);
+    setActionTarget(null);
+  }, [actionTarget, isOwner]);
+  // A failure throws to the sheet, which keeps the pick and says so (the room's rule). Sent only while this account is
+  // the one that opened the chat; an answer after a sign-out or another sign-in closes nothing and says nothing.
+  const onSubmitReport = useCallback(
+    async (payload: { reason: ReportReason; details?: string }) => {
+      if (!reportTarget || !isOwner()) return;
+      const gen = opGen.current;
+      await reportMessage(reportTarget.id, payload);
+      if (!mounted.current || gen !== opGen.current || !isOwner()) return;
+      setReportTarget(null);
+      Alert.alert('Reported', 'Your report has been submitted.');
+    },
+    [reportTarget, isOwner],
   );
 
   const doDelete = useCallback(async () => {
@@ -309,8 +353,12 @@ export default function RomanConversationScreen({
       <FlatList
         data={messages}
         keyExtractor={(m) => m.id}
-        // ROMAN-HISTORY-LOOK-M (203-D17 op 1): each turn is the room's own turn, read only (no hold, no reveal).
-        renderItem={({ item }) => <RomanMessageBubble message={item} testID={`roman-transcript-message-${item.id}`} />}
+        // ROMAN-HISTORY-LOOK-M (203-D17 op 1): each turn is the room's own turn, read only (no reveal); REPORT-ANY-M (R4):
+        // a client's past chat holds Roman's turns to Copy and Report Message, as the room does.
+        renderItem={({ item }) => (
+          <RomanMessageBubble message={item} onLongPress={canHold && item.role === 'assistant' ? onHold : undefined}
+            testID={`roman-transcript-message-${item.id}`} />
+        )}
         role="list"
         contentContainerStyle={styles.list}
         testID="roman-chat-transcript-list"
@@ -366,6 +414,26 @@ export default function RomanConversationScreen({
           void doDelete();
         }}
         testID="roman-chat-transcript-confirm"
+      />
+      {/* REPORT-ANY-M (R4): the room's hold menu and report sheet, as RomanChatScreen draws them (look "roman"). */}
+      <MessageActionSheet
+        look="roman"
+        visible={actionTarget != null && phase.kind !== 'other_account'}
+        messagePreview={actionTarget ? romanQuoteExcerpt(actionTarget.content) : undefined}
+        onReply={() => setActionTarget(null)}
+        onCopy={onCopy}
+        onReport={onOpenReport}
+        onClose={() => setActionTarget(null)}
+        canReport={actionTarget != null}
+        canReply={false}
+      />
+      <ReportMessageSheet
+        look="roman"
+        visible={reportTarget != null && phase.kind !== 'other_account'}
+        messagePreview={reportTarget ? romanQuoteExcerpt(reportTarget.content, 400) : ''}
+        onSubmit={onSubmitReport}
+        onClose={() => setReportTarget(null)}
+        revealError
       />
     </View>
   );

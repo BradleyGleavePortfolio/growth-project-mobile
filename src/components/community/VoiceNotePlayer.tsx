@@ -26,6 +26,8 @@
  * .brow), then the time under the bars (GOAL .bfoot, 64 pt in); `tone` picks the white member card,
  * the deep coach card or no card (the review sheet: 34 bars, 4 pt wide, 3 apart, left-aligned).
  * `disabled` greys the disc while the viewer's own note is sending or waiting (GOAL B-03, B-10a).
+ * `hold` (REPORT-ANY-M, FIX-RAM-1): the item's press and hold on the disc and the bars too, so a hold anywhere on
+ * the card opens its menu; a tap keeps its job. With no `hold` they take no long press, as before.
  *
  * Tokens only (no raw hex). Line Ionicons only (no emoji). fontWeight ≤ 600.
  */
@@ -46,6 +48,7 @@ import {
   type VoicePlaybackTurn,
 } from './voicePlaybackPort';
 import { reportVoiceAudioCleanup } from '../../services/voiceAudio';
+import type { SafetyHoldBinding } from './SafetyHold';
 
 export interface VoiceNotePlayerProps {
   /** Signed download URL, or null when storage signing is unavailable. */
@@ -71,6 +74,8 @@ export interface VoiceNotePlayerProps {
   footer?: React.ReactNode;
   /** The disc is grey and Play is off (the viewer's own note while it sends or waits). */
   disabled?: boolean;
+  /** REPORT-ANY-M: the host's hold (useSafetyHolds), on the disc and the bars; none: they take no long press. */
+  hold?: SafetyHoldBinding;
   testID?: string;
 }
 
@@ -93,6 +98,7 @@ export default function VoiceNotePlayer({
   trailing = null,
   footer = null,
   disabled: held = false,
+  hold,
   testID,
 }: VoiceNotePlayerProps): React.ReactElement {
   const port = playback ?? resolveVoicePlayback();
@@ -331,6 +337,7 @@ export default function VoiceNotePlayer({
         <HapticPressable
           intent="light"
           onPress={onPress}
+          {...hold}
           disabled={off || state === 'loading'}
           accessibilityRole="button"
           accessibilityLabel={controlLabel}
@@ -346,6 +353,7 @@ export default function VoiceNotePlayer({
           )}
         </HapticPressable>
         <Pressable
+          {...hold}
           disabled={disabled}
           onLayout={(e) => { barsWidth.current = e.nativeEvent.layout.width; }}
           onPress={(e) => {

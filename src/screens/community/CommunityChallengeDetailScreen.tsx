@@ -64,6 +64,7 @@ import { CommunityApiError } from '../../api/communityApi';
 import { contentRejectedMessage } from '../../api/communitySafetyApi';
 import { leadsWithCrisisLine } from '../../lib/communityCrisisLine';
 import SafetyMenu from '../../components/community/SafetyMenu';
+import { SafetyHold, useSafetyHolds } from '../../components/community/SafetyHold';
 import VoiceRemovedPlaceholder from '../../components/community/removed/VoiceRemovedPlaceholder';
 import { removedRowLine } from '../../components/community/removed/removedRowLine';
 import { dedupeById } from '../../utils/dedupeById';
@@ -165,6 +166,7 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
     [comments.data],
   );
 
+  const holds = useSafetyHolds(); // REPORT-ANY-M: a hold on another member's note opens its ••• menu
   const participation = detail.data?.participation ?? null;
   const joined = participation !== null;
   const optedIn = participation?.leaderboard_opted_in ?? false;
@@ -557,12 +559,15 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
             <VoiceRemovedPlaceholder line={removedLine} testID={`community-challenge-comment-${item.id}-removed`} />
           </View>
         ) : (
-          <Text style={[styles.commentBody, { color: semanticColors.textPrimary }]}>{item.body}</Text>
+          <SafetyHold hold={!mine ? holds.hold(item.id) : undefined} style={styles.flexFill}>
+            <Text style={[styles.commentBody, { color: semanticColors.textPrimary }]}>{item.body}</Text>
+          </SafetyHold>
         )}
         {/* One report entry per comment (C-314-1): the SafetyMenu, with the
             reason list and the 24-hour review copy. */}
         {!mine && !removedLine ? (
           <SafetyMenu
+            ref={holds.menu(item.id)}
             targetType="comment"
             targetId={item.id}
             authorUserId={item.author_user_id}

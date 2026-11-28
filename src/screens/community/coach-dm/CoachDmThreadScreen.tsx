@@ -13,6 +13,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { ComposerInput, MessageBubble, ThreadHeader } from '../../../components/community';
 import SafetyMenu from '../../../components/community/SafetyMenu';
+import { SafetyHold, useSafetyHolds } from '../../../components/community/SafetyHold';
 import { ForestStatusBar } from '../../../components/StatusBarBand';
 import { ConversationClosedLine, useClosedBy, useConversationClosed, useServerAnswered } from '../../../components/messaging/ConversationClosed';
 import { describeCommunityFailure } from '../../../api/communityErrors';
@@ -53,6 +54,7 @@ export default function CoachDmThreadScreen(): React.ReactElement {
   const reading = messages.isLoading || (!community.data && !community.isError);
   const failed = meFailed || (messages.isError && !open);
   const data = messages.data ?? [];
+  const holds = useSafetyHolds(); // REPORT-ANY-M: a hold on the client's message opens its ••• menu
 
   const onSend = (body: string, idempotencyKey: string) =>
     sendDm.mutateAsync({ body, idempotencyKey }).then(
@@ -101,12 +103,12 @@ export default function CoachDmThreadScreen(): React.ReactElement {
               ) : null}
               <View style={[styles.messageRow, mine ? styles.mineRow : null]}>
                 {/* Studio .bub max-width 74%: the box takes the bubble's width, so Report and Block sits at its edge. */}
-                <View style={styles.bubbleBox} testID={`coach-dm-bubble-box-${item.id}`}>
+                <SafetyHold hold={theirs ? holds.hold(item.id) : undefined} style={styles.bubbleBox} testID={`coach-dm-bubble-box-${item.id}`}>
                   <MessageBubble message={item} myUserId={coach?.id ?? ''} showTime studio testID={`coach-dm-message-${item.id}`} />
-                </View>
+                </SafetyHold>
                 {theirs ? (
                   // Studio's "Block Jordan": the first name; the bar above keeps the full roster name.
-                  <SafetyMenu targetType="message" targetId={item.id} authorUserId={item.sender_user_id} authorName={first}
+                  <SafetyMenu ref={holds.menu(item.id)} targetType="message" targetId={item.id} authorUserId={item.sender_user_id} authorName={first}
                     viewerUserId={coach?.id} viewerCoachId={coach?.coach_id} onBlocked={() => navigation.goBack()}
                     testID={`coach-dm-message-safety-${item.id}`} />
                 ) : null}

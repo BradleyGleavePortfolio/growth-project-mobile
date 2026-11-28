@@ -2,24 +2,31 @@
  * SC-M3 (agent 184): the sheet a press and hold on a space chat row opens (GOAL C6CHAT-S-V2 c04, without its reactions:
  * one white sheet, 24 top corners, a grab, icon rows). Reply and Copy carry MessageActionSheet's labels and icons; Copy is
  * on text rows only. The sheet's Cancel and its scrim's "Close" are the space info sheet's and SafetyMenu's.
- * Report, Block and Delete stay on the row's own ••• (SafetyMenu, unchanged): SafetyMenu keeps its sheet's open state
- * inside it, so this sheet cannot run its flows without a change to SafetyMenu (m#877's file; SC-M3 READY, BLOCKED part).
+ * Delete and the coach's Remove stay on the row's own ••• (SafetyMenu); Report and Block {name} are below (REPORT-ANY-M),
+ * each run by the row's own SafetyMenu flow through its way in once this sheet has gone, so this sheet runs no flow.
  * As in SafetyMenu, on iOS what a row does runs once the sheet has gone (the Modal's onDismiss), so the keyboard Reply
  * brings up never meets a closing sheet.
+ * REPORT-ANY-M (#200-S4, c04): Report and Block {name} after Copy, in c04's order. Each runs the row's own SafetyMenu
+ * flow (the screen opens it through SafetyMenu's way in once this sheet has gone), so nothing here reports or blocks.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { Modal, Platform, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, forestPop as fp, neutral, radius, spacing, withAlpha } from '../../../theme/tokens';
+import { colors, forestPop as fp, neutral, radius, semantic, spacing, withAlpha } from '../../../theme/tokens';
 
 export interface SpaceMessageSheetProps {
   onReply?: () => void;
   onCopy?: () => void;
+  /** REPORT-ANY-M: SafetyMenu's Report (its words, icon and spoken label), for another person's message. */
+  onReport?: () => void;
+  /** REPORT-ANY-M: SafetyMenu's Block {name}, where the row's ••• offers Block. */
+  onBlock?: () => void;
+  blockName?: string;
   onClose: () => void;
 }
 
-export default function SpaceMessageSheet({ onReply, onCopy, onClose }: SpaceMessageSheetProps): React.ReactElement {
+export default function SpaceMessageSheet({ onReply, onCopy, onReport, onBlock, blockName, onClose }: SpaceMessageSheetProps): React.ReactElement {
   const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(true);
   const after = useRef<(() => void) | null>(null);
@@ -36,10 +43,10 @@ export default function SpaceMessageSheet({ onReply, onCopy, onClose }: SpaceMes
     if (Platform.OS === 'ios') setOpen(false);
     else gone();
   };
-  const row = (icon: keyof typeof Ionicons.glyphMap, label: string, run: () => void, id: string) => (
-    <TouchableOpacity onPress={() => close(run)} accessibilityRole="button" accessibilityLabel={label} style={s.row} testID={`space-chat-sheet-${id}`}>
-      <Ionicons name={icon} size={22} color={fp.forest} />
-      <Text style={s.rowText}>{label}</Text>
+  const row = (icon: keyof typeof Ionicons.glyphMap, label: string, run: () => void, id: string, spoken = label, tint?: string) => (
+    <TouchableOpacity onPress={() => close(run)} accessibilityRole="button" accessibilityLabel={spoken} style={s.row} testID={`space-chat-sheet-${id}`}>
+      <Ionicons name={icon} size={22} color={tint ?? fp.forest} />
+      <Text style={[s.rowText, tint ? { color: tint } : null]}>{label}</Text>
     </TouchableOpacity>
   );
   return (
@@ -50,6 +57,8 @@ export default function SpaceMessageSheet({ onReply, onCopy, onClose }: SpaceMes
           <View style={s.grab} />
           {onReply ? row('return-up-back-outline', 'Reply', onReply, 'reply') : null}
           {onCopy ? row('copy-outline', 'Copy', onCopy, 'copy') : null}
+          {onReport ? row('flag-outline', 'Report', onReport, 'report', 'Report this content') : null}
+          {onBlock && blockName ? row('remove-circle-outline', `Block ${blockName}`, onBlock, 'block', undefined, semantic.danger.fg) : null}
           <TouchableOpacity onPress={() => close()} accessibilityRole="button" accessibilityLabel="Cancel" style={s.cancel} testID="space-chat-sheet-cancel">
             <Text style={s.cancelText}>Cancel</Text>
           </TouchableOpacity>

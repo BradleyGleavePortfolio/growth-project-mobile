@@ -34,6 +34,7 @@ import HapticPressable from '../HapticPressable';
 import VoiceNotePlayer from './VoiceNotePlayer';
 import VoiceRecordSheet from './VoiceRecordSheet';
 import SafetyMenu from './SafetyMenu';
+import { SafetyHold, useSafetyHolds } from './SafetyHold';
 import VoiceReportedFold, { markVoiceNoteReported, useReportedVoiceNotes } from './VoiceReportedFold';
 import { formatDuration } from './voiceFormat';
 import { formatRelative } from './SearchResultRow';
@@ -115,6 +116,7 @@ export default function VoiceNotesSection({
   useEffect(() => {
     if (dropped && held && workspaceId) forgetKept(qc, workspaceId, true);
   }, [dropped, held, qc, workspaceId]);
+  const holds = useSafetyHolds(); // REPORT-ANY-M: a hold on a note opens its ••• menu; play still plays
 
   if (!featureFlags.communityVoiceNotes || !workspaceId) return null;
 
@@ -204,7 +206,7 @@ export default function VoiceNotesSection({
             forget(gone);
           };
           return (
-            <View key={note.id} style={styles.note} testID={`${testID}-note-${note.id}`}>
+            <SafetyHold key={note.id} hold={removedLine ? undefined : holds.hold(note.id)} style={styles.note} testID={`${testID}-note-${note.id}`}>
               <View style={styles.noteMeta}>
                 <Text style={styles.who} numberOfLines={1}>
                   {name}
@@ -215,6 +217,7 @@ export default function VoiceNotesSection({
                 {/* Owner #174-4: a reported note keeps its menu (Reported, Block, the coach's Remove). */}
                 {removedLine ? null : (
                   <SafetyMenu
+                    ref={holds.menu(note.id)}
                     targetType="voice_note"
                     targetId={note.id}
                     authorUserId={note.author_id}
@@ -247,10 +250,11 @@ export default function VoiceNotesSection({
                   tone={coach ? 'coach' : 'light'}
                   offline={!outbox.online}
                   onPlaybackError={() => void feed.refetch()}
+                  hold={holds.hold(note.id)}
                   testID={`${testID}-player-${note.id}`}
                 />
               )}
-            </View>
+            </SafetyHold>
           );
         })
       )}

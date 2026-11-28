@@ -30,6 +30,9 @@
  *   - "KNOWN GAP ... still holds" / "still lacks": a known gap case asserts the leak as it is today. Red means you fixed
  *     the gap (delete its KNOWN GAP row so the rule is enforced from now on) or broke the harness (fix the harness).
  *   - "stale row": a registered file moved, or no longer reads or sends member content. Update or remove the row.
+  - "no Report path" (REPORT-ANY-M, owner #200-S4): a list row's file needs a tested Report path in REPORT_PATHS (or its
+    own `report`): its suite, the surfaces its rows open, its host, or none when it draws no one's words, photo or voice.
+    Never add a Report gap yourself; only the operator grants one.
  * The composers are drawn in memberContentAccess.composers.test.tsx (the same registry rows, by file).
  * Space chat (m#871, m#879, m#887, m#897): its data layer is the SPLIT-938C rows below (useSpaceChat, spaceChatOutbox,
  *   useSpaceVoiceOutbox, spaceChatApi); its screen (screens/community/CommunitySpaceChatScreen.tsx) comes in a later part,
@@ -105,7 +108,22 @@ type KnownGap = { where: string; rule: string; why: string; shows: { cache: stri
  * closed conversation and the cache after a block; the proof. */
 /** exports: the exports the row proves (default: the file's default export and the one named like the file); only
  * those stop the scan, so any other export of the file carries its kinds on to its callers (a KNOWN GAP row stops none). */
-type Surface = { file: string; kind: Kind; what: string; how: string; proof: Proof | { by: 'gap'; gap: KnownGap }; exports?: string[] };
+type Surface = { file: string; kind: Kind; what: string; how: string; proof: Proof | { by: 'gap'; gap: KnownGap }; exports?: string[]; report?: ReportPath };
+/** REPORT-ANY-M (owner #200-S4, #200 card: "any surface showing another member's words, photos or voice must have a
+ * tested Report path (on the surface or the screen that hosts it), or the test fails"). Every kind 'list' row has one. */
+type ReportPath =
+  /** The surface offers Report itself (a hold or a •••): tests that exist (file under src/, exact titles). */
+  | { by: 'suite'; file: string; titles: string[] }
+  /** Its rows or previews open registered surfaces, each with its own suite (or a granted gap). */
+  | { by: 'opens'; to: string[] }
+  /** Drawn only inside a registered surface, whose own path covers it. */
+  | { by: 'host'; host: string }
+  /** Draws no words, photo or voice of another person (a count, a read hook, the wire). */
+  | { by: 'none'; why: string }
+  /** A granted Report gap (the operator's: G-R1 and G-R2 only), shown in the source so a fix turns it red. */
+  | { by: 'gap'; id: 'G-R1' | 'G-R2'; why: string; lacks: RegExp }
+  /** A navigator's via row: its parts' own paths. */
+  | { by: 'via' };
 
 const CLIENT_THREAD = 'screens/client/__tests__/MessagesScreenV2.test.tsx';
 const SHARE = ['components/share/ShareSheet.tsx'];
@@ -1336,6 +1354,125 @@ describe('KT-2 registry: every content list and composer on the phone is registe
     // FR-911R2: a row stops only the exports it names, so each must be an export of its file
     for (const r of [...REGISTRY, ...EXEMPT]) for (const e of r.exports ?? []) if (!infoOf(ctx, r.file).exports.has(e)) problems.push(`${r.file}: no export ${e}`);
     expect(problems).toEqual([]);
+  });
+});
+
+// ─── REPORT-ANY-M: the Report column (owner #200-S4) ─────────────────────────────────────────────────────────────────
+// One Report path per list file (a file's rows share it). Placed by reading each file at 5b15f6ad.
+const HOLD = '__tests__/reportAnyM.hold.test.tsx';
+const SPACE = '__tests__/reportAnyM.space.test.tsx';
+const NO_WORDS = (what: string): ReportPath => ({ by: 'none', why: what });
+const REPORT_PATHS: Record<string, ReportPath> = {
+  // The surfaces that offer Report themselves (a hold, a •••).
+  'screens/community/CommunityDmThreadScreen.tsx': { by: 'suite', file: HOLD, titles: [
+    'DM1 ONE-MENU: holding another member\'s message opens its ••• sheet: Report and Block Jo Park',
+    'DM3: the header ••• is unchanged: it opens its own sheet for the newest message from the other person'] },
+  'screens/community/coach-dm/CoachDmThreadScreen.tsx': { by: 'suite', file: HOLD, titles: [
+    'CD1 ONE-MENU: holding the client\'s message opens its ••• sheet (Report, Block Jordan) and reports the same body'] },
+  'screens/community/CommunityThreadScreen.tsx': { by: 'suite', file: HOLD, titles: [
+    'TH1 ONE-MENU: holding another member\'s post (its title or its words) opens the post\'s ••• sheet',
+    'TH2 ONE-MENU: holding a reply opens its ••• sheet; a reply the coach removed holds nothing'] },
+  'screens/community/CommunityChallengeDetailScreen.tsx': { by: 'suite', file: HOLD, titles: [
+    'CH1 ONE-MENU: holding another member\'s note opens its ••• sheet and reports the same body'] },
+  'screens/community/CommunitySpaceScreen.tsx': { by: 'suite', file: HOLD, titles: [
+    'SP1 ONE-MENU: holding a post row opens its ••• sheet; a tap still opens the post'] },
+  'components/community/VoiceNotesSection.tsx': { by: 'suite', file: HOLD, titles: [
+    'VN1 ONE-MENU: holding a voice note opens its ••• sheet with the note\'s card; a tap on play still plays'] },
+  'screens/community/CommunityVoiceNoteDetail.tsx': { by: 'suite', file: HOLD, titles: [
+    'VN2 ONE-MENU and VN-LINE: the note\'s own page holds to its ••• sheet, the line in the reasons'] },
+  'screens/client/CommunityScreen.tsx': { by: 'suite', file: HOLD, titles: [
+    'W1 ONE-MENU: holding another member\'s win opens its ••• sheet and reports the same body'] },
+  'screens/community/CommunitySpaceChatScreen.tsx': { by: 'suite', file: SPACE, titles: [
+    'SC1: another member\'s text: Reply, Copy, Report, Block jo b., Cancel (Report spoken "Report this content")',
+    'SC7 Android: the same report from the sheet, at once'] },
+  'screens/client/MessagesScreen.tsx': { by: 'suite', file: 'screens/client/__tests__/MessagesScreen.iosMenu.fix950r2.test.tsx', titles: [
+    'Report Message opens the report sheet for the held message and files it'] },
+  'screens/coach/ClientMessagesScreen.tsx': { by: 'suite', file: 'screens/coach/__tests__/ClientMessagesScreen.iosMenu.fix950r2.test.tsx', titles: [
+    'Report Message opens the report sheet for the held message and files it'] },
+  // Rows and previews that open a surface with its own Report.
+  'screens/community/CommunityDmListScreen.tsx': { by: 'opens', to: ['screens/community/CommunityDmThreadScreen.tsx'] },
+  'components/community/FormerCoach.tsx': { by: 'opens', to: ['screens/community/CommunityDmThreadScreen.tsx'] },
+  'screens/community/coach-dm/CoachDmListScreen.tsx': { by: 'opens', to: ['screens/community/coach-dm/CoachDmThreadScreen.tsx'] },
+  'screens/coach/CoachInboxV2.tsx': { by: 'opens', to: ['screens/coach/ClientMessagesScreen.tsx'] },
+  'screens/coach/MessagesScreen.tsx': { by: 'opens', to: ['screens/coach/ClientMessagesScreen.tsx'] },
+  'screens/coach/command-center/InboxScreen.tsx': { by: 'opens', to: ['screens/coach/ClientMessagesScreen.tsx'] },
+  'screens/client/MessagesInboxScreen.tsx': { by: 'opens', to: ['screens/client/MessagesScreen.tsx'] },
+  'screens/community/CommunityTodayScreen.tsx': { by: 'opens', to: ['screens/community/CommunityThreadScreen.tsx'] },
+  'screens/community/CommunityFindScreen.tsx': { by: 'opens', to: ['screens/community/CommunityThreadScreen.tsx', 'screens/community/CommunityVoiceNoteDetail.tsx'] },
+  'screens/community/CoachCommunityInboxScreen.tsx': { by: 'opens', to: [
+    'screens/community/CoachCommunityPostDetailScreen.tsx', 'screens/community/CommunitySpaceChatScreen.tsx', 'screens/community/CommunityVoiceNoteDetail.tsx'] },
+  'screens/notifications/NotificationCenterScreen.tsx': { by: 'opens', to: [
+    'screens/client/MessagesScreen.tsx', 'screens/community/CommunityDmThreadScreen.tsx', 'screens/community/CommunityThreadScreen.tsx',
+    'screens/community/CommunitySpaceChatScreen.tsx'] },
+  // Parts drawn only inside a surface above.
+  'components/community/space-chat/useSpaceChat.ts': { by: 'host', host: 'screens/community/CommunitySpaceChatScreen.tsx' },
+  'components/community/space-chat/SpaceVoiceNote.tsx': { by: 'host', host: 'screens/community/CommunitySpaceChatScreen.tsx' },
+  // No one's words, photo or voice.
+  'components/home/HomeHeaderActions.tsx': NO_WORDS('"Message {coach}" and an unread count'),
+  'hooks/useClientUnreadCount.ts': NO_WORDS('a count'),
+  'hooks/useApi.ts': NO_WORDS('read hooks; the nudges are drawn by screens/client/NotificationsScreen.tsx (G-R1)'),
+  'navigation/ClientNavigator.tsx': NO_WORDS('the Community tab badge, a count'),
+  'screens/community/CommunityTabScreen.tsx': NO_WORDS('the Community tab badge, a count'),
+  'components/community/SpaceTree.tsx': NO_WORDS('the coach row\'s unread count'),
+  'navigation/CoachNavigator.tsx': NO_WORDS('the coach bell count'),
+  'screens/community/CommunityComposerScreen.tsx': NO_WORDS('reads only to decide open or closed'),
+  'screens/community/coach-dm/CoachDmEntryRow.tsx': NO_WORDS('"{n} conversations", a count'),
+  'screens/community/coach-dm/coachDm.tsx': NO_WORDS('the DM list read hook'),
+  'screens/coach/cross-pillar/CrossPillarMessagesScreen.tsx': NO_WORDS('a total unread count'),
+  'screens/coach/home-v11/useCoachHomeV11.ts': NO_WORDS('unread counts'),
+  'screens/coach/lookup/ClientLookupScreen.tsx': NO_WORDS('unread per client, a count'),
+  'screens/coach/client-detail/useNudgeGate.ts': NO_WORDS('reads counts only to gate the nudge'),
+  'components/community/space-chat/spaceChatApi.ts': NO_WORDS('the wire; draws nothing'),
+  'components/community/space-chat/spaceMembers.ts': NO_WORDS('people\'s names and roles for Space info, none of their words'),
+  // Navigators: their parts' own.
+  'navigation/CommunityNavigator.tsx': { by: 'via' },
+  'navigation/CoachCommunityNavigator.tsx': { by: 'via' },
+  'screens/coach/command-center/CommandCenterScreen.tsx': { by: 'via' },
+  'screens/coach/cross-pillar/CrossPillarNavigator.tsx': { by: 'via' },
+  // The two granted Report gaps (R5), v1.1 by #203-E56 unless the operator rules a safety gap.
+  'screens/client/NotificationsScreen.tsx': { by: 'gap', id: 'G-R1', lacks: /SafetyMenu|SafetyHold|MessageActionSheet|ReportMessageSheet|\.report\(/,
+    why: 'her coach\'s nudges: no menu and no hold; the server has no route that takes a report of a nudge' },
+  'screens/community/CoachCommunityPostDetailScreen.tsx': { by: 'gap', id: 'G-R2', lacks: /SafetyMenu|SafetyHold|onLongPress/,
+    why: 'the coach\'s post page is read only, with no menu; a menu there is a new control with no drawing (#203-E33)' },
+};
+const reportOf = (s: Surface): ReportPath | undefined => s.report ?? REPORT_PATHS[s.file];
+
+describe('KT-2 Report column (REPORT-ANY-M, owner #200-S4): every list has a tested Report path', () => {
+  const lists = REGISTRY.filter((s) => s.kind === 'list');
+  const named = (file: string) => REGISTRY.find((s) => s.kind === 'list' && s.file === file);
+  it('no list row without a Report path', () => {
+    expect(lists.filter((s) => !reportOf(s)).map((s) => `src/${s.file}: no Report path (${s.what})`)).toEqual([]);
+  });
+  it('every Report path is still in the suite: its tests exist, its targets and hosts are lists with their own', () => {
+    const problems: string[] = [];
+    const own = (file: string) => { const t = named(file); const p = t && reportOf(t); return !!p && (p.by === 'suite' || p.by === 'gap'); };
+    for (const s of lists) {
+      const p = reportOf(s);
+      if (!p) continue;
+      if (p.by === 'suite') {
+        const file = path.join(SRC, p.file);
+        // A title as the test file writes it in a quoted string (an escaped quote read as the quote).
+        const text = (fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '').replace(/\\(['"])/g, '$1');
+        for (const t of p.titles) if (!text.includes(t)) problems.push(`${s.file}: Report proof "${t}" is gone from src/${p.file}`);
+      }
+      if (p.by === 'opens') for (const t of p.to) if (!own(t)) problems.push(`${s.file}: opens ${t}, which has no Report suite of its own`);
+      if (p.by === 'host' && !own(p.host)) problems.push(`${s.file}: its host ${p.host} has no Report suite`);
+      if (p.by === 'none' && !p.why.trim()) problems.push(`${s.file}: none, with no reason`);
+      if (p.by === 'via') {
+        if (s.proof.by !== 'via') problems.push(`${s.file}: via, but its row is not a via row`);
+        else for (const part of s.proof.parts) if (!named(part) || !reportOf(named(part) as Surface)) problems.push(`${s.file}: part ${part} has no Report path`);
+      }
+    }
+    for (const file of Object.keys(REPORT_PATHS)) if (!named(file)) problems.push(`${file}: a Report path for a file that is no list row (stale)`);
+    expect(problems).toEqual([]);
+  });
+  it('the only Report gaps are G-R1 and G-R2', () => {
+    const gaps = lists.flatMap((s) => { const p = reportOf(s); return p && p.by === 'gap' ? [`${p.id} ${s.file}`] : []; });
+    expect([...new Set(gaps)].sort()).toEqual(['G-R1 screens/client/NotificationsScreen.tsx', 'G-R2 screens/community/CoachCommunityPostDetailScreen.tsx']);
+  });
+  const gaps = Object.entries(REPORT_PATHS).flatMap(([file, p]) => (p.by === 'gap' ? [[`${p.id} ${file}`, file, p.lacks] as const] : []));
+  it.each(gaps)('Report gap %s still lacks a Report path (red = fixed: delete its gap so the path is enforced)', (_label, file, lacks) => {
+    expect(read(file)).not.toMatch(lacks);
   });
 });
 

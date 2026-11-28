@@ -31,7 +31,7 @@
  * Sol R5-B2: the sheet is at most 90% of the screen and its steps scroll above a fixed Cancel, so the
  * note card and the first reasons stay reachable on a 360-wide phone at 130% text.
  */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Alert, Modal, Platform, ScrollView, View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
@@ -87,7 +87,19 @@ export interface SafetyMenuProps {
    * bare (the client's DM thread: light on its deep bar, 05b's #5A5A56 22 pt "•••" beside a message). Unset, as before. */
   triggerColor?: string;
   triggerSize?: number;
+  /** REPORT-ANY-M (#200-S4): the way in from outside, a press and hold (SafetyHold.tsx's useSafetyHolds). */
+  ref?: React.Ref<SafetyMenuHandle>;
+  /** REPORT-ANY-M: false draws no ••• (a menu only a hold opens: the space chat's hold sheet). Unset, as before. */
+  trigger?: boolean;
   testID?: string;
+}
+
+/** REPORT-ANY-M: opens this menu from outside, as its own ••• and Block row do; false where the ••• draws nothing. */
+export interface SafetyMenuHandle {
+  /** The sheet, as a tap on the ••• opens it; 'reasons' opens it at Report's reasons where its Report row is offered. */
+  open: (to?: 'menu' | 'reasons') => boolean;
+  /** Block's own confirm, where the sheet offers Block. */
+  block: () => boolean;
 }
 
 type Step = 'menu' | 'reasons' | 'confirm-remove';
@@ -108,6 +120,8 @@ export default function SafetyMenu({
   contentNoun = 'post',
   triggerColor,
   triggerSize = 18,
+  ref,
+  trigger = true,
   testID = 'safety-menu',
 }: SafetyMenuProps): React.ReactElement | null {
   const { semanticColors, colorScheme } = useTheme();
@@ -138,6 +152,13 @@ export default function SafetyMenu({
     },
     [],
   );
+  // REPORT-ANY-M: the way in. Its door is set below the menu rule, so a hold opens only a menu the ••• would draw.
+  const door = useRef<SafetyMenuHandle | null>(null);
+  door.current = null;
+  useImperativeHandle(ref, () => ({
+    open: (to) => door.current?.open(to) ?? false,
+    block: () => door.current?.block() ?? false,
+  }), []);
 
   const isOwn = !!viewerUserId && !!authorUserId && viewerUserId === authorUserId;
   if (!targetId || (isOwn && !onDelete)) return null;
@@ -240,9 +261,24 @@ export default function SafetyMenu({
     ));
   };
 
+  door.current = {
+    // As the •••'s own tap (below): shownRef first, so afterClose still waits for the Modal's onDismiss on iOS.
+    open: (to = 'menu') => {
+      shownRef.current = true;
+      setStep(to === 'reasons' && !isOwn && !reported ? 'reasons' : 'menu');
+      setOpen(true);
+      return true;
+    },
+    block: () => {
+      if (isOwn || !canBlock) return false;
+      confirmBlock();
+      return true;
+    },
+  };
+
   return (
     <>
-      <HapticPressable
+      {trigger ? <HapticPressable
         intent="light"
         onPress={() => {
           shownRef.current = true;
@@ -262,7 +298,7 @@ export default function SafetyMenu({
         testID={testID}
       >
         <Ionicons name="ellipsis-horizontal" size={triggerSize} color={triggerColor ?? semanticColors.textMuted} />
-      </HapticPressable>
+      </HapticPressable> : null}
       <Modal visible={open} transparent animationType="slide" onRequestClose={close} onDismiss={runAfterClose}>
         <View style={[styles.backdrop, { backgroundColor: semanticColors.overlay }]}>
           <View
@@ -378,6 +414,12 @@ export default function SafetyMenu({
                     </Text>
                   </View>
                 ) : null}
+                {/* REPORT-ANY-M (owner #ALM-E29): who can hear a reported voice note, in the sheet's quiet text; a client's only (FIX-RAM-1: a viewer who moderates is given onRemove). */}
+                {contentNoun === 'voice note' && !onRemove ? (
+                  <Text style={[styles.heard, { color: light ? fp.n700 : semanticColors.textMuted }]} testID={`${testID}-heard`}>
+                    {VOICE_NOTE_HEARD_LINE}
+                  </Text>
+                ) : null}
                 <Text style={[styles.heading, { color: semanticColors.textPrimary }]} accessibilityRole="header">
                   Why are you reporting this?
                 </Text>
@@ -441,6 +483,8 @@ export default function SafetyMenu({
 
 /** The approved emergency line (COMMUNITY_GUIDELINES, owner-approved 2026-10-01), GOAL B-06a .safety. */
 const EMERGENCY_LINE = COMMUNITY_GUIDELINES[COMMUNITY_GUIDELINES.length - 1];
+/** RA-W4, the owner's line (#ALM-E29, ledger 7225685574), in the sheet's sentence form. */
+export const VOICE_NOTE_HEARD_LINE = 'A reported voice note can be heard by your coach and the TGP team.';
 
 const styles = StyleSheet.create({
   trigger: {
@@ -493,6 +537,8 @@ const styles = StyleSheet.create({
   avatarText: { fontFamily: voiceFaces.semibold, fontSize: 14, fontWeight: '600', color: fp.onDeep },
   contextText: { flex: 1, fontFamily: voiceFaces.regular, fontSize: 14, lineHeight: 18 },
   contextName: { fontFamily: voiceFaces.semibold, fontWeight: '600' },
+  // REPORT-ANY-M: the line under the note card, in the sheet's own 14/20 text.
+  heard: { fontFamily: voiceFaces.regular, fontSize: 14, lineHeight: 20, marginBottom: 8 },
   // GOAL .shead 600 18/1.3, margin 4 0 6.
   heading: {
     fontFamily: voiceFaces.semibold,

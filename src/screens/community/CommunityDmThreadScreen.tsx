@@ -42,6 +42,7 @@ import {
   ComposerInput,
 } from '../../components/community';
 import SafetyMenu from '../../components/community/SafetyMenu';
+import { SafetyHold, useSafetyHolds } from '../../components/community/SafetyHold';
 import type { ComposerInputHandle } from '../../components/community/ComposerInput';
 import { ForestStatusBar } from '../../components/StatusBarBand';
 import { describeCommunityFailure } from '../../api/communityErrors';
@@ -119,6 +120,7 @@ export default function CommunityDmThreadScreen({ inGate }: {
   const reading = messages.isLoading || (!me.data && !me.isError);
   const failed = meFailed || (messages.isError && !open);
   const data = messages.data ?? [];
+  const holds = useSafetyHolds(); // REPORT-ANY-M: a hold on the other person's message opens its ••• menu
   // REFINE-985R3 EMPTY-1 (LO-985R2 C3 = LS-985R2 C2): empty is a read that answered with no messages (the coach
   // thread's rule). A re-read that fails keeps the saved answer, so a conversation stays a conversation and "Say hello"
   // is drawn only over a thread with none; a read that never answered is the failed page (`failed`, above).
@@ -229,16 +231,17 @@ export default function CommunityDmThreadScreen({ inGate }: {
               {former && (index === data.length - 1 || dayKey(data[index + 1].created_at) !== dayKey(item.created_at))
                 ? <Text style={styles.day} testID={`dm-day-${item.id}`}>{dayLabel(item.created_at)}</Text> : null}
               <View style={styles.messageRow}>
-                <View style={styles.flex}>
+                <SafetyHold hold={item.sender_user_id !== client?.id && !item.deleted ? holds.hold(item.id) : undefined} style={styles.flex}>
                   <MessageBubble
                     message={item}
                     myUserId={client?.id ?? ''}
                     voiceB
                     testID={`dm-message-${item.id}`}
                   />
-                </View>
+                </SafetyHold>
                 {item.sender_user_id !== client?.id && !item.deleted ? (
                   <SafetyMenu
+                    ref={holds.menu(item.id)}
                     targetType="message"
                     targetId={item.id}
                     authorUserId={item.sender_user_id}

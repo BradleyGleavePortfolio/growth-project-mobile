@@ -56,6 +56,7 @@ import { removedRowLine } from '../../components/community/removed/removedRowLin
 import { useQuery } from '@tanstack/react-query';
 import { describeCommunityFailure } from '../../api/communityErrors';
 import { useConversationClosed, useServerAnswered, ConversationClosedLine } from '../../components/messaging/ConversationClosed';
+import { SafetyHold, useSafetyHolds } from '../../components/community/SafetyHold';
 import SafetyMenu from '../../components/community/SafetyMenu';
 import { formatRelative } from '../../components/community/SearchResultRow';
 import {
@@ -144,6 +145,7 @@ export default function CommunityThreadScreen(): React.ReactElement {
   const [refreshing, setRefreshing] = useState(false);
 
   const data = comments.data ?? [];
+  const holds = useSafetyHolds(); // REPORT-ANY-M: a hold on the post or a reply opens its ••• menu
   const isEmpty = !comments.isLoading && !comments.isError && data.length === 0;
   const p = closed ? undefined : post.data;
   const isOwnPost = !!p && !!client?.id && p.author_user_id === client.id;
@@ -198,7 +200,7 @@ export default function CommunityThreadScreen(): React.ReactElement {
           <Text style={[styles.backLabel, { color: semanticColors.accent }]}>Back</Text>
         </HapticPressable>
         <View style={styles.headerRow}>
-          <View style={styles.flex}>
+          <SafetyHold hold={p && !removedLine ? holds.hold('post') : undefined} style={styles.flex}>
             <Text accessibilityRole="header" testID="community-thread-header"
               style={[styles.title, { color: semanticColors.textPrimary }]}>
               {p?.title ?? 'Post'}
@@ -209,9 +211,10 @@ export default function CommunityThreadScreen(): React.ReactElement {
                 {postMeta}
               </Text>
             ) : null}
-          </View>
+          </SafetyHold>
           {p && !removedLine ? (
             <SafetyMenu
+              ref={holds.menu('post')}
               targetType="post"
               targetId={p.id}
               authorUserId={p.author_user_id}
@@ -234,9 +237,11 @@ export default function CommunityThreadScreen(): React.ReactElement {
             <VoiceRemovedPlaceholder line={removedLine} testID="community-thread-post-removed" />
           </View>
         ) : p?.body ? (
-          <Text style={[styles.body, { color: semanticColors.textPrimary }]}>
-            {p.body}
-          </Text>
+          <SafetyHold hold={holds.hold('post')}>
+            <Text style={[styles.body, { color: semanticColors.textPrimary }]}>
+              {p.body}
+            </Text>
+          </SafetyHold>
         ) : null}
 
         {live ? <ReactionBar
@@ -285,7 +290,7 @@ export default function CommunityThreadScreen(): React.ReactElement {
                 style={[styles.comment, { borderBottomColor: semanticColors.border }]}
                 testID={`comment-${item.id}`}
               >
-                <View style={styles.flex}>
+                <SafetyHold hold={replyRemoved || (client?.id && item.author_user_id === client.id) ? undefined : holds.hold(item.id)} style={styles.flex}>
                   {meta ? (
                     <Text testID={`comment-meta-${item.id}`}
                       style={[styles.meta, { color: semanticColors.textMuted }]}>
@@ -299,8 +304,9 @@ export default function CommunityThreadScreen(): React.ReactElement {
                       {item.body}
                     </Text>
                   )}
-                </View>
+                </SafetyHold>
                 {replyRemoved ? null : <SafetyMenu
+                  ref={holds.menu(item.id)}
                   targetType="comment"
                   targetId={item.id}
                   authorUserId={item.author_user_id}

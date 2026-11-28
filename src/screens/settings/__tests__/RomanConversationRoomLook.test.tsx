@@ -47,7 +47,7 @@ const flat = (s: unknown): ViewStyle & TextStyle => (StyleSheet.flatten(s as Sty
 const nav = { goBack: jest.fn(), navigate: jest.fn(), addListener: jest.fn(() => () => undefined) };
 
 /** The real history screen, its transcript answered by a stub (oldest first on screen; the stub sends newest first). */
-const readHistory = (oldestFirst: RomanMessage[]) => {
+const readHistory = (oldestFirst: RomanMessage[], surface: 'client' | 'coach' = 'client') => {
   const api = {
     list: jest.fn(),
     readMessages: jest.fn(async () => ({
@@ -59,7 +59,7 @@ const readHistory = (oldestFirst: RomanMessage[]) => {
   };
   const params = {
     id: 'cx1', ownerId: 'user-a', binding: { subject: 'sub:user-a', epoch: authEpoch() },
-    startedAt: STARTED, surface: 'client' as const, messageCount: oldestFirst.length,
+    startedAt: STARTED, surface, messageCount: oldestFirst.length,
   };
   return render(
     <NavigationContext.Provider value={nav as never}>
@@ -217,9 +217,9 @@ describe('ROMAN-HISTORY-LOOK-M: what stays', () => {
     }
   });
 
-  it('case i: read only: a long press on Roman’s turn opens nothing and no hold is offered', async () => {
+  it('case i: read only: a long press on Roman’s turn opens nothing and no hold is offered (201-D1, the coach\'s Roman chats)', async () => {
     const content = 'Yes, keep it easy.';
-    const screen = await readHistory([msg('m1', 'assistant', content)]);
+    const screen = await readHistory([msg('m1', 'assistant', content)], 'coach');
     const said = await screen.findByLabelText(`Roman said: ${content}`);
     await fireEvent(said, 'longPress');
     expect(said.props.accessibilityHint).toBeUndefined();
