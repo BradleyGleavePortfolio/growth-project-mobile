@@ -60,7 +60,12 @@ const goOffline = () => {
 // The app's retry count is cut to none here; with the app's two retries the same happens a few seconds later.
 const client = () => new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 const mount = (qc: QueryClient, Screen: React.ComponentType) => render(<QueryClientProvider client={qc}><Screen /></QueryClientProvider>);
-const failedOnce = (qc: QueryClient, key: QueryKey) => waitFor(() => expect(qc.getQueryState(key)?.status).toBe('error'));
+// The query is 'error' at once; react-query tells the page on a setTimeout(0) (notifyManager), so the page is drawn
+// from that state only after it: wait for both before reading the screen, or a check can pass before the page changes.
+async function failedOnce(qc: QueryClient, key: QueryKey) {
+  await waitFor(() => expect(qc.getQueryState(key)?.status).toBe('error'));
+  await act(async () => { await new Promise((done) => setTimeout(done, 20)); });
+}
 const prepKey = (qc: QueryClient) => qc.getQueryCache().findAll({ queryKey: ['prep-guide'] })[0]!.queryKey;
 
 /**
@@ -133,7 +138,6 @@ describe('GROCERY-OFFLINE-KEEP-M: the Grocery list keeps her list when a re-read
     expect(view.queryByText("Couldn't load grocery list.")).toBeNull();
     await waitFor(() => expect(listsApi.getList).toHaveBeenCalledTimes(reads + 1)); // the open read the list again
     await failedOnce(after, KEY);
-    await act(async () => undefined);
     expect(view.queryByText("Couldn't load grocery list.")).toBeNull();
     expect(view.getByText('Milk')).toBeTruthy();
     expect(view.getByText('Eggs')).toBeTruthy();
@@ -184,7 +188,6 @@ describe('GROCERY-OFFLINE-KEEP-M: the Prep guide keeps its recipes when a re-rea
     expect(view.queryByText("Couldn't load prep guide")).toBeNull();
     await waitFor(() => expect(prepGuideApi.getWeeklyGuide).toHaveBeenCalledTimes(reads + 1)); // the open read it again
     await failedOnce(after, key);
-    await act(async () => undefined);
     expect(view.queryByText("Couldn't load prep guide")).toBeNull();
     expect(view.getByText('Soup')).toBeTruthy();
   });

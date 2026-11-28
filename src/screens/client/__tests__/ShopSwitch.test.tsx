@@ -497,6 +497,7 @@ describe('SHOPPING-CUT-M: carried from the retired Shopping list screen', () => 
     serve({ grocery: new Error('Network Error'), shopping: new Error('Network Error') });
     await act(async () => { await clients[clients.length - 1].refetchQueries(); });
     await waitFor(() => expect(clients[clients.length - 1].getQueryState(['lists', 'grocery'])?.status).toBe('error'));
+    await act(async () => { await new Promise((done) => setTimeout(done, 20)); }); // react-query tells the page on a setTimeout(0)
     expect(ui.queryByText("Couldn't load shopping list.")).toBeNull();
     expect(ui.getByText('Dish sponges')).toBeTruthy();
     expect(selected(ui, 'Shopping, 2 to get')).toBe(true);

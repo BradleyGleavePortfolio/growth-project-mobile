@@ -553,7 +553,7 @@ describe('GROCERY-OFFLINE-KEEP-M: the Kitchen keeps From {coach} and its counts 
     await focus();
     await waitFor(() => expect(counts()).toEqual(was.map((c) => c + 1)));
     await waitFor(() => expect(before.getQueryState(['clients', 'me', 'coach'])?.status).toBe('error'));
-    await act(async () => undefined);
+    await act(async () => { await new Promise((done) => setTimeout(done, 20)); }); // react-query tells the page on a setTimeout(0)
     for (const key of [['meal-plan', 'today', '2026-10-13'], ['food', 'log', '2026-10-13'], ['recipes'], ['lists', 'grocery']]) {
       expect(before.getQueryState(key)?.status).toBe('error');
     }
@@ -576,7 +576,8 @@ describe('GROCERY-OFFLINE-KEEP-M: the Kitchen keeps From {coach} and its counts 
     await screen.findByTestId('kitchen-log-food');
     shown();
     await waitFor(() => expect(mockGet.mock.calls.length).toBeGreaterThanOrEqual(sent + ALL_READS.length)); // the open read each again
-    await act(async () => undefined);
+    await waitFor(() => expect(after.getQueryState(['meal-plan', 'today', '2026-10-13'])?.fetchStatus).toBe('idle'));
+    await act(async () => { await new Promise((done) => setTimeout(done, 20)); });
     shown();
   });
 

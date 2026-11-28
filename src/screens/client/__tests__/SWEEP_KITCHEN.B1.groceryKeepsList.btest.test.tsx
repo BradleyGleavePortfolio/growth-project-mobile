@@ -58,6 +58,8 @@ describe('SWEEP-KITCHEN B1: a failed re-read keeps her grocery list on screen', 
     expect(listsApi.getList).toHaveBeenCalledWith('grocery'); // the page reads again on open (staleTime 60 s)
     await act(async () => { giveUp(); });
     await waitFor(() => expect(qc.getQueryState(KEY)?.status).toBe('error'));
+    // GROCERY-OFFLINE-KEEP-M: react-query tells the page on a setTimeout(0); let it draw before the checks.
+    await act(async () => { await new Promise((done) => setTimeout(done, 20)); });
     expect(view.queryByText("Couldn't load grocery list.")).toBeNull();
     expect(view.getByText('Milk')).toBeTruthy();
     expect(view.getByText('Eggs')).toBeTruthy();
@@ -72,6 +74,8 @@ describe('SWEEP-KITCHEN B1: a failed re-read keeps her grocery list on screen', 
     jest.mocked(listsApi.getList).mockImplementation(() => Promise.reject(offline()));
     await act(async () => { await view.getByTestId('list-scroll').props.refreshControl.props.onRefresh(); });
     await waitFor(() => expect(qc.getQueryState(KEY)?.status).toBe('error'));
+    // GROCERY-OFFLINE-KEEP-M: react-query tells the page on a setTimeout(0); let it draw before the checks.
+    await act(async () => { await new Promise((done) => setTimeout(done, 20)); });
     expect(view.queryByText("Couldn't load grocery list.")).toBeNull();
     expect(view.getByText('Milk')).toBeTruthy();
   });
