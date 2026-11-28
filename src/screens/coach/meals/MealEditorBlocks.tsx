@@ -67,7 +67,7 @@ export function OptionsBlock({ rows, editing, onEditing, onAdd, onChange }: {
   );
   const move = (i: number, by: -1 | 1) => onChange(moveOption(ids, i, by));
   // N2: Remove on the last option ends Edit order, so an option added later opens in the normal mode.
-  const drop = (i: number) => { const next = removeOption(ids, i); onChange(next); if (!next.length) onEditing(false); };
+  const drop = (i: number) => { const next = removeOption(ids, i); onChange(next); };
   return (
     <View style={[card, st.block]}>
       <View style={st.head}>
