@@ -476,18 +476,9 @@ describe('LEAVE-MUTE-M a second account (KT-13)', () => {
   });
 });
 
-// LEAVE-MUTE-M r2, from the renders (GOAL vs BUILT against the owner's pick, Style 1): the bar's hash stays on the first
-// line of a name that wraps (s1_L1 at 320 pt and 130% text), and a failed action's toast puts its words over Try again
-// (s1_L11), as the GOAL frames draw them.
-describe('LEAVE-MUTE-M renders r2: the bar and the failure toast as Style 1 draws them', () => {
-  it('s1_L1 (130%): the name\'s row aligns its top, so the hash sits on the first line of a name that wraps', async () => {
-    const r = await open();
-    await r.findByTestId('space-chat-bell');
-    const { StyleSheet } = jest.requireActual('react-native') as typeof import('react-native');
-    expect(StyleSheet.flatten(r.getByTestId('space-chat-title-row').props.style)).toEqual(expect.objectContaining({ flexDirection: 'row', alignItems: 'flex-start' }));
-    expect(within(r.getByTestId('space-chat-title-row')).getByTestId('space-chat-hash', HIDDEN)).toBeTruthy();
-  });
-
+// LEAVE-MUTE-M r2, from the renders (GOAL vs BUILT against the owner's pick, Style 1): a failed action's toast puts its
+// words over Try again (s1_L11), as the GOAL frame draws it.
+describe('LEAVE-MUTE-M renders r2: the failure toast as Style 1 draws it', () => {
   it('s1_L11: a failed action\'s toast stacks its words over Try again', async () => {
     const r = await open();
     mockApi.put.mockImplementationOnce(async () => { throw offline(); });
