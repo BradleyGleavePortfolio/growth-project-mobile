@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { QueryObserver, replaceEqualDeep } from '@tanstack/react-query';
 import { logApi, waterApi, type WaterEntry } from '../services/api';
 import { getTodayString } from '../utils/date';
 import { MealType, FoodLog } from '../types';
@@ -136,6 +137,29 @@ let view = 0;
 let queueRev = 0;
 // OFFLINE-WATER-WEIGHT-M: the same for the phone's glasses and weigh-ins (showQueuedWaterWeight).
 let phoneRev = 0;
+// MEALPLAN-STORE-DAY-M (LS-MEALPLAN-OFFLINE-JOIN-M-1 C1, OPERATOR RULING 7237750248): a good day read is every reader's
+// day log (['food','log',d], useTodayLog's key and shape: the meal plan page, the plan meal page, Food this week, the
+// Kitchen, Macro targets), so a meal logged online shows as eaten on a page that never read the day, offline too. A
+// newer reader answer, or a change marked since the read began (refreshShownDay), stays. The day is held while it is
+// the store's last written day (a query no reader holds is dropped after gcTime, counted from its creation, not from a
+// write); let go on sign-out (reset) and when another day is written. The hold never reads and arms no timer.
+let heldDay: (() => void) | null = null;
+function writeDayLog(d: string, data: unknown, startedAt: number, markedAtStart: boolean) {
+  const qc = appQueryClient();
+  if (!qc) return;
+  const key = ['food', 'log', d];
+  const now = qc.getQueryState(key);
+  const kept = !!now && (now.dataUpdatedAt > startedAt || (now.isInvalidated && !markedAtStart));
+  // The same answer the readers hold already is not written again (no reader is told of a change that is not one).
+  const same = now?.data !== undefined && replaceEqualDeep(now.data, data) === now.data;
+  if (!kept && !same) qc.setQueryData(key, data, { updatedAt: startedAt });
+  heldDay?.();
+  const cache = qc.getQueryCache();
+  const query = cache.find({ queryKey: key, exact: true });
+  const stop = new QueryObserver(qc, { queryKey: key, enabled: false, staleTime: Infinity }).subscribe(() => undefined);
+  // A query the cache already dropped (cleared) is not let go again: that would start its gc timer for nothing.
+  heldDay = () => { if (cache.find({ queryKey: key, exact: true }) === query) stop(); };
+}
 /** OFFLINE-FOOD-M (LS-931 B1): a day no read has reached yet: nothing from the server, no totals. */
 const unreadDay = (date: string, userId: string) => ({
   date, userId, logs: [] as FoodLog[], totals: { calories: 0, protein: 0, carbs: 0, fat: 0 },
@@ -164,6 +188,8 @@ export const useClientStore = create<ClientStore>((set, get) => ({
   reset: () => {
     session += 1;
     view += 1;
+    heldDay?.();
+    heldDay = null;
     forgetSaveKeys();
     set({ ...initialClientState, selectedDate: getTodayString(), selectedOn: getTodayString() });
   },
@@ -173,6 +199,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
     const d = date || get().selectedDate;
     let rev = queueRev;
     const startedAt = Date.now();
+    const markedAtStart = !!appQueryClient()?.getQueryState(['food', 'log', d])?.isInvalidated;
     let queueRead: Promise<PendingFoodLog[]> | null = null;
     let sentRead: Promise<SentFoodLog[]> | null = null;
     const waterRev = phoneRev;
@@ -289,6 +316,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
           ? null
           : 'Water data could not refresh. Check your connection and try again.',
       });
+      writeDayLog(d, data, startedAt, markedAtStart);
       // LS-921 B1: this day's water read is on screen now, so a glass whose
       // answer was lost shows (or was never stored): the next glass is new.
       if (waterResponse) waterDayShown(d);
