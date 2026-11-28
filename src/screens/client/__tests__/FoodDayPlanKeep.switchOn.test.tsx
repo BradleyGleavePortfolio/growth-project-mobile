@@ -24,6 +24,7 @@ import LogScreen from '../LogScreen';
 import KitchenScreen from '../kitchen/KitchenScreen';
 import PlanMealScreen from '../mealplan/PlanMealScreen';
 import FoodWeekScreen from '../foodweek/FoodWeekScreen';
+import ClientDailyMealPlanScreen from '../ClientDailyMealPlanScreen';
 import { queryClient, serializePersistedClient } from '../../../services/queryClient';
 import { mealTemplatesApi } from '../../../api/mealTemplatesApi';
 
@@ -49,11 +50,13 @@ jest.mock('@react-navigation/native', () => {
     ...jest.requireActual('@react-navigation/native'),
     NavigationContext: React.createContext(nav),
     useNavigation: () => nav,
-    useRoute: () => ({ params: { date: '2026-11-24', slotId: 's-din' } }),
+    useRoute: () => ({ params: mockRouteParams }),
     useFocusEffect: (cb: () => void | (() => void)) => React.useEffect(cb, [cb]),
     __nav: nav,
   };
 });
+// The plan meal page's route (Dinner's "Recipe and grocery list"); the meal plan page opens with none (More > Meal plan).
+let mockRouteParams: Record<string, string> = { date: '2026-11-24', slotId: 's-din' };
 const mockStore = {
   selectedDate: '2026-11-24', foodLogs: [], hasLoadedDay: true, queuedFoods: [], sentFoods: [],
   dailyTotals: { calories: 0, protein: 0, carbs: 0, fat: 0 },
@@ -179,6 +182,7 @@ beforeEach(() => {
   jest.setSystemTime(new Date('2026-11-24T15:10:00'));
   mockOffline = false;
   mockNoPlan = false;
+  mockRouteParams = { date: TODAY, slotId: 's-din' };
   mockNet = { isOnline: true, isInternetReachable: true };
   mockGet.mockImplementation(answer);
   queryClient.clear();
@@ -292,6 +296,32 @@ describe('FOODDAY-PLAN-KEEP-M: the plan error block stays for a plan with no ans
     await fireEvent.press(screen.getByText('Try again'));
     await waitFor(() => expect(screen.getByTestId('food-day-next')).toBeTruthy());
     foodDayKeepsPlan();
+  });
+});
+
+describe('FOODDAY-PLAN-KEEP-M: the meal plan page reads the same key (MEALPLAN-LOCAL-DAY-M) and keeps her plan too', () => {
+  const page = () => <QueryClientProvider client={queryClient}><ClientDailyMealPlanScreen /></QueryClientProvider>;
+  const FAILED = 'Could not load this meal plan. Pull to retry.';
+
+  it('More > Meal plan: another screen\'s re-read of today\'s plan fails offline; the page keeps the plan and its button', async () => {
+    mockRouteParams = {};
+    await render(page());
+    expect(await screen.findByText('Salmon, potatoes and green beans')).toBeTruthy();
+    goOffline();
+    const since = Date.now() - 1;
+    await act(async () => { await queryClient.refetchQueries({ queryKey: KEY }); }); // the Kitchen's focus read, say
+    await planFailed(since);
+    expect(screen.queryByText(FAILED)).toBeNull();
+    expect(screen.getByText('Salmon, potatoes and green beans')).toBeTruthy();
+    expect(screen.getAllByText('Ate it as planned').length).toBeGreaterThan(0);
+  });
+
+  it('More > Meal plan with no answer yet (offline from the start) still says it could not load', async () => {
+    mockRouteParams = {};
+    goOffline();
+    await render(page());
+    expect(await screen.findByText(FAILED)).toBeTruthy();
+    expect(screen.queryByText('Salmon, potatoes and green beans')).toBeNull();
   });
 });
 
