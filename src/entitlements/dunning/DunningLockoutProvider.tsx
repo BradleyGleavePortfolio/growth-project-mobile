@@ -34,6 +34,7 @@ export const REACHABLE_WHILE_LOCKED: ReadonlySet<string> = new Set([
 export const OPEN_FOR_OWN_LOGGING: ReadonlySet<string> = new Set([
   'WorkoutTab', 'Log', 'PlanMeal', 'WorkoutMain', 'ActiveWorkout', 'WorkoutHistoryEdit', 'ClientWorkoutViewer',
   'WorkoutAssignmentDetail', 'ClientDailyMealPlan', 'Fast', 'ClientMacros', 'Habits', 'RoutineBuilder', 'YourWeeks',
+  'FoodWeek',
 ]);
 
 /**
