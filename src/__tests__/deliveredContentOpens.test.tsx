@@ -14,6 +14,7 @@
 import React from 'react';
 import { Alert } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { getTodayString } from '../utils/date';
 
 const mockNavigate = jest.fn();
 const mockOpenBrowser = jest.fn();
@@ -217,7 +218,8 @@ describe('B4 — a delivered meal plan opens that plan', () => {
     ]);
     mockRouteParams = { assignmentId: ASSIGNMENT_ID };
     const screen = await render(<ClientDailyMealPlanScreen />);
-    expect(mockUseMealPlanToday).toHaveBeenCalledWith(undefined);
+    // MEALPLAN-LOCAL-DAY-M: with no date the screen reads the phone's today, never the server's own day.
+    expect(mockUseMealPlanToday).toHaveBeenCalledWith(getTodayString());
     expect(screen.getByText('Package bulk plan')).toBeTruthy();
     expect(screen.queryByText('Coach cut plan')).toBeNull();
     expect(screen.getByText('Meal plan')).toBeTruthy();

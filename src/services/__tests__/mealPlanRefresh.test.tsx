@@ -77,7 +77,8 @@ const CLIENT = { kind: 'app', userId: 'client-1', role: 'student' } as const sat
 const COACH = { kind: 'app', userId: 'coach-1', role: 'coach' } as const satisfies PushSession;
 const CLIENT_TABS = ['Home', 'WorkoutTab', 'Log', 'MoreTab', 'CommunityTab'];
 const COACH_TABS = ['CommandCenter', 'ClientsStack', 'Templates', 'Messages', 'CommunityStack', 'SettingsStack'];
-const SCREEN_KEY = ['meal-plan', 'today', null];
+// MEALPLAN-LOCAL-DAY-M: the screen reads the phone's today, under the Food day's key for that day.
+const SCREEN_KEY = ['meal-plan', 'today', getTodayString()];
 const MINUTE = 60_000;
 
 function assignment(id: string, name: string): DailyMealPlanAssignmentWithPlan {
@@ -110,7 +111,7 @@ mockToday.mockImplementation((date?: string) => {
     reads.push({ date, release: (a) => resolve({ data: a }), fail: () => reject(offline()) });
   });
 });
-const screenReads = () => reads.filter((r) => r.date === undefined);
+const screenReads = () => reads.filter((r) => r.date === getTodayString());
 const dayReads = () => reads.filter((r) => r.date !== undefined);
 
 /** The answer saved before the notice: read a minute ago unless a case says otherwise. */
@@ -423,13 +424,14 @@ describe('h. negatives: a stray refresh would show as a read', () => {
     live(tapped);
     await settle();
     expect(navigate).toHaveBeenCalledTimes(1);
-    // One refresh: each open read (the plan screen's and the Food day's) once.
-    await waitFor(() => expect(mockToday).toHaveBeenCalledTimes(2));
+    // One refresh: the plan screen and the Food day share today's key (MEALPLAN-LOCAL-DAY-M), so one read; a second
+    // refresh would cancel it and read again.
+    await waitFor(() => expect(mockToday).toHaveBeenCalledTimes(1));
     expect(screenReads()).toHaveLength(1);
     expect(dayReads()).toHaveLength(1);
     await act(async () => { reads.forEach((r) => r.release(PLAN_ONE_NEW)); });
     await settle();
-    expect(mockToday).toHaveBeenCalledTimes(2);
+    expect(mockToday).toHaveBeenCalledTimes(1);
   });
 });
 
