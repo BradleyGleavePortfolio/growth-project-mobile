@@ -200,7 +200,7 @@ function MealForm({ meal, live, answered, picked, navigation, sc }: { meal?: Mea
         sub={canSave || pending ? macroLine(input) : undefined} onBack={onDone}
         trailing={(
           <Pressable accessibilityRole="button" accessibilityLabel="Edit details" hitSlop={8} style={styles.edit}
-            onPress={() => { scroll.current?.scrollTo({ y: Math.max(0, detailsY.current - stripH), animated: true }); nameField.current?.focus(); }}>
+            onPress={() => { scroll.current?.scrollTo({ y: detailsY.current, animated: true }); nameField.current?.focus(); }}>
             <Text style={[typography.body, styles.under, { color: sc.textOnAccent }]}>Edit details</Text>
           </Pressable>
         )}>
