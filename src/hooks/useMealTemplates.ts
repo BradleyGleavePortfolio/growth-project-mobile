@@ -10,7 +10,7 @@
  *   ['daily-meal-plans']                    — coach plan list
  *   ['daily-meal-plans', id]                — single plan
  *   ['daily-meal-plans', id, 'assignments'] — plan assignments
- *   ['meal-plan', 'today', dateIso?]        — client today view
+ *   ['meal-plan', 'today', dateIso]         — client day view (her day, always sent)
  */
 
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -177,9 +177,10 @@ export function useMealPlanRuns() {
 
 // ---- Client today view -----------------------------------------------------
 
-export function useMealPlanToday(dateIso?: string) {
+/** MEALPLAN-LOCAL-DAY-M: the day is required; with none the server answers for its own (UTC) day, not hers. */
+export function useMealPlanToday(dateIso: string) {
   return useQuery<ClientTodayResponse>({
-    queryKey: ['meal-plan', 'today', dateIso ?? null],
+    queryKey: ['meal-plan', 'today', dateIso],
     queryFn: () => mealTemplatesApi.todayForClient(dateIso).then((r) => r.data),
     staleTime: FIVE_MIN_MS,
   });

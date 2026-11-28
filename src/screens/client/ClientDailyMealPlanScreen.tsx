@@ -1,7 +1,7 @@
 /**
  * ClientDailyMealPlanScreen — assigned meal plan in clock order when fully timed.
  *
- * Reads `/me/meal-plan/today` via `useMealPlanToday(dateIso?)`. The
+ * Reads `/me/meal-plan/today?date=` via `useMealPlanToday(day)`. The
  * endpoint returns one or more active assignments for the requested
  * date; we list every one, newest first (the API's starts_on DESC
  * order), each in clock order if fully timed, otherwise grouped by slot_label. More > Meal plan
@@ -16,7 +16,9 @@
  * delivered plan opens THAT plan rather than silently showing today.
  * The route entry in `MoreStackParamList` already typed this param as
  * `{ date?: string } | undefined` — the screen was the one that needed
- * to honor it. Defaults to today when omitted (the legacy call site).
+ * to honor it. Defaults to today when omitted (the legacy call site):
+ * the phone's today, sent as `?date` (MEALPLAN-LOCAL-DAY-M), never the
+ * server's own day.
  *
  * Route param `assignmentId` (B-DELIV-125, B4): the backend materialises a
  * delivered meal_plan drop as a DailyMealPlanAssignment and stores its id in
@@ -91,8 +93,7 @@ const NO_NAVIGATION = React.createContext<unknown>(undefined);
 interface Stop { slot: DailyMealPlanSlot; plan: string; first: boolean; last: boolean }
 
 // Route params: optional ISO date string (YYYY-MM-DD). Falls back to
-// today (useMealPlanToday's default) when omitted, matching the legacy
-// call site behaviour.
+// the phone's today when omitted, matching the legacy call site behaviour.
 type MealPlanRouteParams = { date?: string; assignmentId?: string } | undefined;
 
 // Accept either YYYY-MM-DD or a full ISO timestamp; the hook + backend
@@ -114,8 +115,11 @@ export default function ClientDailyMealPlanScreen() {
   const dateParam = normaliseDateParam(route.params?.date);
   const assignmentId = route.params?.assignmentId || undefined;
 
+  // MEALPLAN-LOCAL-DAY-M (SWEEP-MEAL-PLANS B3): with no date the page reads the phone's today. The server's own day
+  // is UTC (tomorrow from 4 pm in California), so a read without a day showed and logged another day's meals.
+  const today = getTodayString();
   const { data, isLoading, isError, refetch, isRefetching, isFetching, dataUpdatedAt } =
-    useMealPlanToday(dateParam);
+    useMealPlanToday(dateParam ?? today);
 
   const onRefresh = useCallback(() => {
     void refetch();
@@ -145,8 +149,7 @@ export default function ClientDailyMealPlanScreen() {
   const loaded = !isLoading && !isError;
   const timeW = useTimeColumn();
 
-  // The shown day: the route's date, else today (today's read stays the no-date read above).
-  const today = getTodayString();
+  // The shown day: the route's date, else today (the day the plan read above asked for).
   const shownDay = dateParam ?? today;
   const isToday = shownDay === today;
   // RULING 3: the target and the shown day's log, read as Macro targets reads them.
