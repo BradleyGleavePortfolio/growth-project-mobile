@@ -50,6 +50,43 @@ export const WORDS = {
   logButtonHint: 'Opens today on the Food tab', // new (operator, #203-E15): the add sheet opens from the Food tab only
 } as const;
 
+// SAVED-MEAL-SAVE-M's words (137-2: approved (operator, #203-E15) with the pick, or main's).
+export const SAVE_WORDS = {
+  way: 'Save a meal from today', // C2-A-15: the way in and the sheet's title
+  wayHint: "Opens today's foods to save as a meal", // KS-2 (spoken)
+  tick: 'Tick the foods that belong together.', // KM-17
+  name: 'Name', // KM-16
+  nameSpoken: 'Name of this meal', // KS-18 (spoken)
+  saveNone: 'Save as a meal', // KS-16
+  limit: 'You have 100 saved meals, the most there can be. Delete one to save another.', // KM-25
+  notSaved: 'This meal was not saved. Check the connection and try again.', // KS-3
+  foodGone: 'A food you picked can no longer be saved, so this meal was not saved.', // KS-4
+  offline: 'Saving a meal needs a connection. Nothing was saved.', // KS-5
+  refused: 'This meal was not saved.', // KS-19
+  nothing: 'No foods from today to save yet. Foods you log on the Food tab show here once they are sent.', // KS-1
+  loading: "Loading today's foods", // KS-8 (spoken)
+  failed: "Couldn't load today's foods", // KS-9
+  cannot: "Can't be saved in a meal", // KS-17
+  rename: 'Rename', // KM-20
+  remove: 'Delete', // KM-20 (main's)
+  saveName: 'Save name', // KS-10
+  renameFailed: 'The new name was not saved. Check the connection and try again.', // KS-14
+  renameOffline: 'Renaming a saved meal needs a connection. The name was not changed.', // KS-14
+  removeLine: 'Foods you already logged from it stay in your log.', // KS-12
+  cancel: 'Cancel', // main
+  removeFailed: 'It is still saved. Check the connection and try again.', // KS-13
+  removeOffline: 'Deleting a saved meal needs a connection. It is still saved.', // KS-13
+  ok: 'OK', // main
+} as const;
+/** KM-17's button: "Save {n} foods as a meal", one food, or KS-16 with none. */
+export const saveFoodsWords = (n: number): string => (n === 0 ? SAVE_WORDS.saveNone : n === 1 ? 'Save 1 food as a meal' : `Save ${n} foods as a meal`);
+export const untickWords = (over: number): string => `A saved meal holds up to 30 foods. Untick ${over} to save it.`; // KS-6
+export const savedWords = (name: string): string => `Saved ${name} to your meals.`; // KS-7 (spoken)
+export const renamedWords = (name: string): string => `Renamed to ${name}.`; // KS-15 (spoken)
+export const deletedWords = (name: string): string => `Deleted ${name}.`; // KS-15 (spoken)
+export const deleteTitle = (name: string): string => `Delete ${name}?`; // KS-12
+export const deleteFailedTitle = (name: string): string => `Couldn't delete ${name}`; // KS-13
+
 export const fromCoach = (first: string | null): string => (first ? `From ${first}` : WORDS.fromYourCoach); // C2-S-83
 export const kcalWords = (kcal: number): string => `${n(kcal)} kcal`; // KM-4
 export const proteinWords = (p: number): string => `${n(p)} g protein`; // KM-4

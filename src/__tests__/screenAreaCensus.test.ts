@@ -92,6 +92,7 @@ const KEYBOARD: Record<string, KeyboardRow> = {
   'screens/client/ProgressScreen.tsx': ['MODAL', 1, '<Modal> :643'],
   'screens/client/SettingsScreen.tsx': ['MODAL', 1, '<Modal> :470'],
   'screens/client/habits/AddHabitSheet.tsx': ['MODAL', 1, '<Modal> :40'],
+  'screens/client/kitchen/SavedMealSheet.tsx': ['MODAL', 1, "<Modal> :119 (KitchenSheet, the Kitchen's sheet frame; the Name field's padding view)"],
   'screens/client/progress/LogWeightSheetV2.tsx': ['MODAL', 1, '<Modal> :117'],
   'screens/coach/AIWorkoutDraftScreen.tsx': ['MODAL', 1, '<Modal> :491'],
   'screens/coach/ClientPaymentsScreen.tsx': ['MODAL', 1, '<Modal> :310'],
