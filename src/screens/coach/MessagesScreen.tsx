@@ -22,7 +22,8 @@ import { Screen } from '../../ui';
 import { EmptyStateNoClients, EmptyStateNoResults } from '../../ui/empty-states';
 import { useFeatureFlags } from '../../hooks/useFeatureFlags';
 import CoachInboxV2 from './CoachInboxV2';
-import { openInboxChat } from '../../navigation/coachInbox';
+import { openInboxChat, useInboxTap, type InboxTap } from '../../navigation/coachInbox';
+import { UUID } from '../../navigation/incomingLinks';
 import { BroadcastsEntry } from './broadcasts/BroadcastsEntry';
 import { CommunityReportsEntry } from './CommunityReportsEntry';
 import { CommunityEntry } from './CommunityEntry';
@@ -39,23 +40,30 @@ interface UnreadByClient {
  * Coach Messages tab. Server flag `messaging_core_v2` ON: the one inbox on
  * the v2 routes (CoachInboxV2). OFF, or when the server answers 503
  * messaging.feature_disabled to a stale flag cache: the legacy client list
- * below, unchanged.
+ * below. COACH-ROW-CHAT-PUSH-M: a message notification opens this screen with
+ * its client's id (route clientId); once the switches have answered, the list
+ * that is drawn opens that client's chat from her row (useInboxTap).
  */
-export default function MessagesScreen() {
-  const { flags } = useFeatureFlags();
+export default function MessagesScreen({ route, navigation }: { route?: { params?: { clientId?: string } }; navigation?: InboxTap['screen'] }) {
+  const { flags, isLoading } = useFeatureFlags();
   const [v2Refused, setV2Refused] = useState(false);
   const onFeatureDisabled = useCallback(() => setV2Refused(true), []);
-  if (flags.messaging_core_v2 && !v2Refused) return <CoachInboxV2 onFeatureDisabled={onFeatureDisabled} />;
-  return <LegacyCoachMessages />;
+  const id = route?.params?.clientId;
+  const tap = navigation && !isLoading && typeof id === 'string' && UUID.test(id) ? { clientId: id, screen: navigation } : undefined;
+  if (flags.messaging_core_v2 && !v2Refused) return <CoachInboxV2 onFeatureDisabled={onFeatureDisabled} tap={tap} />;
+  return <LegacyCoachMessages tap={tap} />;
 }
 
-function LegacyCoachMessages() {
+const nameOf = (c: { firstName: string; lastName: string }) => `${c.firstName} ${c.lastName}`.trim();
+
+function LegacyCoachMessages({ tap }: { tap?: InboxTap }) {
   const { colors } = useTheme();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const currentUser = useCurrentUser();
   const { clients, loadClients } = useCoachStore();
   const [unreadByClient, setUnreadByClient] = useState<UnreadByClient>({});
   const [closedIds, setClosedIds] = useState<string[]>([]); // FR-872: b#1153 closed_client_ids (blocked either way)
+  const [unreadRead, setUnreadRead] = useState(false); // R7: closedIds is known once this read answered or failed
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -72,6 +80,7 @@ function LegacyCoachMessages() {
     } catch (err) {
       // Silent — keep previous counts
     }
+    setUnreadRead(true);
   }, [currentUser?.id]);
 
   useEffect(() => {
@@ -110,6 +119,13 @@ function LegacyCoachMessages() {
   const blocked = useBlockedUsersStore((st) => st.blocked);
   const gone = (id: string) => closedIds.includes(id) || blocked.some((b) => b.id === id);
   const activeClients = clients.filter((c) => c.status === 'active' && !gone(c.id));
+  // COACH-ROW-CHAT-PUSH-M: a notification's client opens as her row does, looked for before search; a blank name is no row.
+  useInboxTap(tap, {
+    ready: unreadRead,
+    rowName: (clientId) => nameOf(activeClients.find((c) => c.id === clientId) ?? { firstName: '', lastName: '' }) || undefined,
+    reread: onRefresh,
+    open: (clientId, name) => openInboxChat(navigation, clientId, name),
+  });
   const totalUnread = Object.entries(unreadByClient)
     .filter(([id]) => !gone(id)) // counted 0 once blocked
     .reduce((a, [, n]) => a + (n || 0), 0);
@@ -122,7 +138,7 @@ function LegacyCoachMessages() {
     )
     .map((c) => ({
       id: c.id,
-      name: `${c.firstName} ${c.lastName}`.trim(),
+      name: nameOf(c),
       unread: unreadByClient[c.id] || 0,
     }))
     // Surface threads with unread messages first.

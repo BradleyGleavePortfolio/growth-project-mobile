@@ -67,16 +67,12 @@ function PlanMealPage({ date, slotId }: Params['PlanMeal']) {
   const bottom = useBottomInset();
   const isToday = date === getTodayString();
 
-  // The Food day's plan read (FoodDayView.tsx:159-164); from the meal plan page, its no-date answer when it is this day.
+  // The Food day's plan read (FoodDayView.tsx:159-164), under the meal plan page's own key for this day
+  // (MEALPLAN-LOCAL-DAY-M: the page always sends its day, so its answer is this read's answer).
   const plan = useQuery<ClientTodayResponse>({
     queryKey: ['meal-plan', 'today', date],
     queryFn: () => mealTemplatesApi.todayForClient(date).then((r) => r.data),
     staleTime: FIVE_MIN,
-    initialData: () => {
-      const today = qc.getQueryData<ClientTodayResponse>(['meal-plan', 'today', null]);
-      return today?.date === date ? today : undefined;
-    },
-    initialDataUpdatedAt: () => qc.getQueryState(['meal-plan', 'today', null])?.dataUpdatedAt,
   });
   const coach = useQuery({
     queryKey: ['clients', 'me', 'coach'],
