@@ -177,7 +177,10 @@ export default function FoodDayView(p: FoodDayViewProps) {
   const plans = useMemo(() => [...new Map((plan.data?.assignments ?? [])
     .flatMap((a) => (a?.daily_meal_plan ? [[a.daily_meal_plan.id, a.daily_meal_plan] as const] : []))).values()]
     .filter((x) => x.slots.length > 0), [plan.data]);
-  const usualDay = !p.coached || (plan.isSuccess && plans.length === 0);
+  // FOODDAY-PLAN-KEEP-M (SWEEP-INT-CLIENT C1): the plan's answer is its data, not isSuccess, so a re-read that fails (the
+  // Kitchen, the plan meal page or Food this week reading this shared key offline, a cold start on a saved read that last
+  // failed) keeps her plan or her usual day; with no answer yet data is undefined and the error block below shows.
+  const usualDay = !p.coached || (plan.data !== undefined && plans.length === 0);
   // The seven days before the shown day, read like the search sheet's Recent (useFoodBrowse). A day
   // that fails to read is left out; with none read there is no usual day.
   // UI-3b (owner 10-19): a coached client whose plan read comes back with no plan gets the same usual day.
@@ -241,8 +244,9 @@ export default function FoodDayView(p: FoodDayViewProps) {
   if (loading) return <DaySkeleton s={s} top={top} />;
   // The day itself could not load: LogScreen's classic log says so and offers its retry.
   if (!p.ready) return withTop(p.fallback);
-  if (p.coached && plan.isError) {
-    // The plan did not load: say so, offer the retry, and keep the classic log open under it.
+  if (p.coached && plan.isLoadingError) {
+    // The plan has no answer yet (react-query's isLoadingError: an error and no data): say so, offer the retry, and keep
+    // the classic log open under it.
     return withTop(
       <>
         <QuietError message={loadFailureMessage(plan.error, 'Your meal plan')} onRetry={() => void plan.refetch()}
