@@ -13,11 +13,13 @@ import { useJoinSpace } from './useSpaceLeaveMute';
 
 const SHOWN_MS = 8000;
 
-export function SpaceToast({ text, action, onAction, busy = false, onTimeout, testID = 'space-toast' }: {
+export function SpaceToast({ text, action, onAction, busy = false, stack = false, onTimeout, testID = 'space-toast' }: {
   text: string;
   action?: string;
   onAction?: () => void;
   busy?: boolean;
+  /** A failure's toast (s1_L11): its words over its action (Try again), not beside it. */
+  stack?: boolean;
   /** Called once it has been on screen long enough (not while its action runs). */
   onTimeout?: () => void;
   testID?: string;
@@ -28,17 +30,27 @@ export function SpaceToast({ text, action, onAction, busy = false, onTimeout, te
     const t = setTimeout(onTimeout, SHOWN_MS);
     return () => clearTimeout(t);
   }, [onTimeout, busy, text]);
+  const button = action && onAction ? (
+    <TouchableOpacity
+      onPress={busy ? undefined : onAction} disabled={busy} accessibilityRole="button" accessibilityLabel={action}
+      accessibilityState={{ busy, disabled: busy }} style={[s.action, stack && s.actionStacked]} testID={`${testID}-action`}
+    >
+      {busy ? <ActivityIndicator color={fp.onDeep} /> : <Text style={s.actionText}>{action}</Text>}
+    </TouchableOpacity>
+  ) : null;
   return (
-    <View style={s.toast} testID={testID} accessibilityLiveRegion="polite">
-      <Text style={s.text}>{text}</Text>
-      {action && onAction ? (
-        <TouchableOpacity
-          onPress={busy ? undefined : onAction} disabled={busy} accessibilityRole="button" accessibilityLabel={action}
-          accessibilityState={{ busy, disabled: busy }} style={s.action} testID={`${testID}-action`}
-        >
-          {busy ? <ActivityIndicator color={fp.onDeep} /> : <Text style={s.actionText}>{action}</Text>}
-        </TouchableOpacity>
-      ) : null}
+    <View style={[s.toast, stack && s.toastStacked]} testID={testID} accessibilityLiveRegion="polite">
+      {stack ? (
+        <View style={s.stack} testID={`${testID}-stack`}>
+          <Text style={[s.text, s.textStacked]}>{text}</Text>
+          {button}
+        </View>
+      ) : (
+        <>
+          <Text style={s.text}>{text}</Text>
+          {button}
+        </>
+      )}
     </View>
   );
 }
@@ -64,6 +76,7 @@ export function SpaceLeftToastHost(): React.ReactElement | null {
         testID="space-left-toast"
         text={failure ?? `You left ${toast.name}.`}
         action={failure ? 'Try again' : 'Undo'}
+        stack={!!failure}
         onAction={() => join(toast.cohortId)}
         busy={busy.has(toast.cohortId)}
         onTimeout={() => { if (pending === toast) set(null); }}
@@ -79,6 +92,12 @@ const s = StyleSheet.create({
   },
   text: { flex: 1, minWidth: 0, fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20, color: fp.onDeep, paddingVertical: spacing.sm },
   action: { minHeight: 44, minWidth: 44, paddingHorizontal: spacing.md, alignItems: 'center', justifyContent: 'center' },
+  // s1_L11's failure toast: the words, then Try again under them at the words' left edge.
+  toastStacked: { alignItems: 'flex-start' },
+  stack: { flex: 1, minWidth: 0, paddingVertical: 6 },
+  // In the column the words keep their own height (the row's flex: 1 would let them collapse there).
+  textStacked: { flex: 0, alignSelf: 'stretch' },
+  actionStacked: { alignSelf: 'flex-start', paddingHorizontal: spacing.xs },
   actionText: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 14, lineHeight: 20, color: fp.onDeep, textDecorationLine: 'underline' },
   host: { position: 'absolute', left: 0, right: 0, bottom: 0 },
 });

@@ -60,7 +60,7 @@ export default function SpaceMessageSheet({ onReply, onCopy, onClose, thread, on
           {onMuteThread || onLeaveThread ? <SheetHairline /> : null}
           {onMuteThread ? (thread === 'muted' ? row('notifications-outline', 'Unmute thread', onMuteThread, 'unmute-thread')
             : row('notifications-off-outline', 'Mute thread', onMuteThread, 'mute-thread')) : null}
-          {onLeaveThread ? (thread === 'left' ? row('return-down-forward-outline', 'Follow thread', onLeaveThread, 'follow-thread')
+          {onLeaveThread ? (thread === 'left' ? row('enter-outline', 'Follow thread', onLeaveThread, 'follow-thread')
             : row('exit-outline', 'Leave thread', onLeaveThread, 'leave-thread')) : null}
           <TouchableOpacity onPress={() => close()} accessibilityRole="button" accessibilityLabel="Cancel" style={s.cancel} testID="space-chat-sheet-cancel">
             <Text style={s.cancelText}>Cancel</Text>

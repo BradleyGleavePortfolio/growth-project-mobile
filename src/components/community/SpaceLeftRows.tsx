@@ -20,7 +20,7 @@ export function LeftSpaceRow({ id, label, deep, onOpen }: { id: string; label: s
   return (
     <View>
       <View style={s.row}>
-        <HapticPressable intent="light" onPress={onOpen} accessibilityRole="button" accessibilityLabel={label} style={s.open} testID={`space-row-${id}`}>
+        <HapticPressable intent="light" onPress={onOpen} accessibilityRole="button" accessibilityLabel={label} style={s.open} containerStyle={s.openBox} testID={`space-row-${id}`}>
           <View style={s.icon} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
             <Text style={[s.hash, { color: tone }]}>#</Text>
           </View>
@@ -45,6 +45,9 @@ export function LeftSpaceRow({ id, label, deep, onOpen }: { id: string; label: s
 const s = StyleSheet.create({
   // SpaceTree's row (minHeight 48, 16 pt sides, a 4 pt clear edge), with Join at the end.
   row: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 12, paddingRight: 16, borderLeftWidth: 4, borderLeftColor: 'transparent' },
+  // HapticPressable draws `style` inside its own container: the container takes the free width, so Join sits at the
+  // row's end and a long name wraps before it (s1_L5, s1_L5d).
+  openBox: { flex: 1, minWidth: 0 },
   open: { flex: 1, minHeight: layout.touchMin, flexDirection: 'row', alignItems: 'center', gap: 12, paddingLeft: 16, paddingVertical: 8 },
   icon: { width: 24, alignItems: 'center' },
   hash: { fontFamily: 'Inter_400Regular', fontSize: 22, lineHeight: 26 },

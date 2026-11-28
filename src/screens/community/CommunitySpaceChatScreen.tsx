@@ -446,8 +446,8 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
           ) : <SpaceListButton icon={<MenuGlyph color={fp.onDeep} />} />}
         </View>
         <View style={s.titles} accessible accessibilityRole="header">
-          <View style={s.titleRow}>
-            {cohort ? <HashGlyph color={fp.onDeepMuted} /> : null}
+          <View style={s.titleRow} testID="space-chat-title-row">
+            {cohort ? <View style={s.hashLine}><HashGlyph color={fp.onDeepMuted} /></View> : null}
             <Text style={s.title} numberOfLines={2}>{cohort ? cohort.name : ' '}</Text>
           </View>
           {cohort ? <Text style={s.sub}>{members}</Text> : null}
@@ -528,7 +528,7 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
             <Text style={s.pillText}>New messages</Text>
           </TouchableOpacity>
         ) : null}
-        {lm.failure ? <SpaceToast text={lm.failure.message} action="Try again" onAction={lm.failure.retry} onTimeout={lm.clearFailure} />
+        {lm.failure ? <SpaceToast stack text={lm.failure.message} action="Try again" onAction={lm.failure.retry} onTimeout={lm.clearFailure} />
           : notice ? <SpaceToast text={notice.text} action="Undo" onAction={() => { setNotice(null); notice.undo(); }} onTimeout={hideNotice} />
             : null}
         {chat.noAccess ? (
@@ -607,7 +607,9 @@ const s = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 6, paddingTop: 2, paddingBottom: 10, backgroundColor: fp.deep },
   icon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   titles: { flex: 1, minWidth: 0, paddingHorizontal: spacing.xs },
-  titleRow: { flexDirection: 'row', alignItems: 'center' },
+  // LEAVE-MUTE-M (s1_L1 at 130%): a name that wraps keeps the hash on its first line (centred in the title's 24 pt line).
+  titleRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  hashLine: { height: 24, justifyContent: 'center' },
   title: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', fontSize: 19, lineHeight: 24, color: fp.onDeep, flexShrink: 1, marginLeft: -4 },
   sub: { fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18, color: fp.onDeepMuted },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, padding: spacing.xl },
