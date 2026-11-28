@@ -7,6 +7,7 @@ import { radius, spacing, typography } from '../../../theme/tokens';
 import { safeImportLoginUrl } from '../../../utils/safeImportLoginUrl';
 import { importJourneyCopy as t } from './importJourneyCopy';
 import { ImportJourneyAction, ImportJourneyPortrait, ui, useImportHeadingFocus } from './importJourneyUI';
+import { useScreenAreaKeyboardOffset } from '../../../ui/layout/ScreenArea';
 
 type SetupPresentation = {
   romanEnabled: boolean;
@@ -33,6 +34,7 @@ export type ImportSetupViewProps = SetupPresentation & (
 );
 
 export function ImportSetupView(props: ImportSetupViewProps) {
+  const keyboardOffset = useScreenAreaKeyboardOffset();
   const { semanticColors: c } = useTheme();
   const insets = useSafeAreaInsets();
   const headingRef = useImportHeadingFocus(props.step, props.focusOnMount ?? false);
@@ -44,6 +46,7 @@ export function ImportSetupView(props: ImportSetupViewProps) {
 
   return (
     <KeyboardAvoidingView
+      keyboardVerticalOffset={keyboardOffset}
       style={[styles.shell, { backgroundColor: c.bgPrimary }]}
       enabled={props.step === 'customSource'}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

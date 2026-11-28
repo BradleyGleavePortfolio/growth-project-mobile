@@ -6,6 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { colors, layout, radius, typography } from '../../../theme/tokens';
 import { QuietOverline, Screen, footerBottomPadding, useScreenInsets } from '../../../ui';
+import { useWindowInsets } from '../../../ui/layout/ScreenArea';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { CoachMark } from '../../../components/purchase/PlanActiveMoment';
 import { oneToOneCoachingLabel } from '../../../config/purchaseSurfaces';
@@ -114,6 +115,9 @@ export function ClientPlanPage({ name, price, description, features, coach, onBa
 }) {
   const { semanticColors: c } = useTheme();
   const insets = useScreenInsets();
+  // OFFLINE-BAND-ROOT-M: the page is drawn only in a full-screen Modal (ClientPackagesScreen), from the window's top:
+  // its masthead takes the window's top inset (the bottom is the same in both).
+  const windowTop = useWindowInsets().top;
   const reduced = useReducedMotion();
   const body = useRef<ScrollView>(null);
   // Style C declined / success boards: the outcome leads the body, so bring the top into view when it changes.
@@ -122,8 +126,8 @@ export function ClientPlanPage({ name, price, description, features, coach, onBa
   }, [outcomeKey, reduced]);
   return (
     <PlanInk fill><StatusBar style="light" /><Screen
-      edges={['bottom']} testID="client-plan-page" scroll={false} contentStyle={s.unpadded}
-      header={<View style={{ backgroundColor: c.surface.masthead, paddingTop: insets.top + 12, paddingHorizontal: 24 }}>
+      inModal edges={['bottom']} testID="client-plan-page" scroll={false} contentStyle={s.unpadded}
+      header={<View style={{ backgroundColor: c.surface.masthead, paddingTop: windowTop + 12, paddingHorizontal: 24 }}>
         <PlanMasthead title={name} price={price} coach={coach} onBack={onBack} />
       </View>}
       footer={footer}

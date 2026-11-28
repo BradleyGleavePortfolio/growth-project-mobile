@@ -4,6 +4,7 @@
  * See src/components/README.md and src/theme/README.md for the rules.
  */
 export { Screen, ScreenTopBar, useScreenInsets, footerBottomPadding } from './layout/Screen';
+export { ScreenArea, useWindowInsets, useScreenAreaKeyboardOffset } from './layout/ScreenArea';
 export type { ScreenProps, ScreenTopBarProps, ScreenEdge } from './layout/Screen';
 export { PrimaryButton, TextLink, QuietTextButton } from './buttons/PrimaryButton';
 export type { PrimaryButtonProps, TextLinkProps, TextLinkTone } from './buttons/PrimaryButton';

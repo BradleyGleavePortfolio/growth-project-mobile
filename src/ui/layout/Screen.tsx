@@ -20,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme/ThemeProvider';
 import { layout } from '../../theme/tokens';
+import { useScreenAreaKeyboardOffset, useWindowInsets } from './ScreenArea';
 
 export type ScreenEdge = 'top' | 'bottom';
 
@@ -49,6 +50,8 @@ export interface ScreenProps {
   style?: StyleProp<ViewStyle>;
   /** The scroll area, for a screen that must bring one of its own items into view (scroll only). */
   scrollRef?: React.Ref<ScrollView>;
+  /** Drawn inside a <Modal>: its top edge is the window's and its keyboard view counts no band (OFFLINE-BAND-ROOT-M). */
+  inModal?: boolean;
   testID?: string;
 }
 
@@ -64,11 +67,16 @@ export function Screen({
   contentStyle,
   style,
   scrollRef,
+  inModal = false,
   testID,
 }: ScreenProps): React.ReactElement {
   const { semanticColors: sc } = useTheme();
   const insets = useScreenInsets();
-  const top = edges.includes('top') ? insets.top + layout.statusBarGap : 0;
+  // OFFLINE-BAND-ROOT-M: under the screen area the top inset is 0 while the offline band shows; a Modal draws from the
+  // window's top over the band, so a Screen in one takes the window's. The keyboard view adds the area's place.
+  const keyboardOffset = useScreenAreaKeyboardOffset();
+  const windowInsets = useWindowInsets();
+  const top = edges.includes('top') ? (inModal ? windowInsets.top : insets.top) + layout.statusBarGap : 0;
   const ownsBottom = edges.includes('bottom');
   // Without a footer the content itself clears the gesture bar.
   const contentBottom = !footer && ownsBottom ? footerBottomPadding(insets.bottom) : layout.gutter;
@@ -113,7 +121,11 @@ export function Screen({
       ]}
     >
       {keyboardAware && footer ? (
-        <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <KeyboardAvoidingView
+          style={styles.fill}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={inModal ? 0 : keyboardOffset}
+        >
           {inner}
         </KeyboardAvoidingView>
       ) : (

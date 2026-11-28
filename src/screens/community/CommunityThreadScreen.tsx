@@ -64,6 +64,7 @@ import {
   ComposerInput,
 } from '../../components/community';
 import type { CommunityNav, CommunityRoute } from './communityNavTypes';
+import { useScreenAreaKeyboardOffset } from '../../ui/layout/ScreenArea';
 
 const COMMENT_MAX = 2000; // mirror backend CreateCommentDto
 
@@ -110,6 +111,7 @@ export function withPendingTap(
 }
 
 export default function CommunityThreadScreen(): React.ReactElement {
+  const keyboardOffset = useScreenAreaKeyboardOffset();
   const { semanticColors } = useTheme();
   const navigation = useNavigation<CommunityNav>();
   const route = useRoute<CommunityRoute<'CommunityThread'>>();
@@ -182,6 +184,7 @@ export default function CommunityThreadScreen(): React.ReactElement {
       testID="community-thread-screen"
     >
       <KeyboardAvoidingView
+        keyboardVerticalOffset={keyboardOffset}
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
