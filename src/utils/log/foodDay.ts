@@ -60,6 +60,13 @@ const RANK: Record<SlotLabel, number> = { breakfast: 0, preworkout: 1, lunch: 2,
 const LOG_MEAL: Record<SlotLabel, MealType> = {
   breakfast: 'breakfast', lunch: 'lunch', dinner: 'dinner', snack: 'snack', preworkout: 'snack', postworkout: 'snack',
 };
+/**
+ * PREWORKOUT-EATEN-M: the Food-day meal a plan meal is counted under (LOG_MEAL; pre and post-workout: Snacks, as the
+ * server stores only breakfast, lunch, dinner and snack), or null for a label that is no plan slot. A plan meal's own
+ * log action writes this meal, so what it logs is always this meal's.
+ */
+export const logMealOfSlot = (label: string): MealType | null =>
+  Object.prototype.hasOwnProperty.call(LOG_MEAL, label) ? LOG_MEAL[label as SlotLabel] : null;
 const LABEL: Record<SlotLabel, string> = {
   breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner', snack: 'Snack', preworkout: 'Pre-workout', postworkout: 'Post-workout',
 };
