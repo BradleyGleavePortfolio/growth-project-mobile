@@ -71,7 +71,7 @@ export function OptionsBlock({ rows, editing, onEditing, onAdd, onChange }: {
   return (
     <View style={[card, st.block]}>
       <View style={st.head}>
-        <Text accessibilityRole="header" style={[blockTitle, st.grow, ink]}>Options for clients</Text>
+        <Text accessibilityRole="header" style={[blockTitle, ms.fill, ink]}>Options for clients</Text>
         <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{`${ids.length} of ${MAX_OPTIONS}`}</Text>
         {edit ? (
           <Pressable accessibilityRole="button" accessibilityLabel="Done editing" onPress={() => onEditing(false)} style={st.add}>
