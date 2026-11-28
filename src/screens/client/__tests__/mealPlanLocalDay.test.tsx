@@ -333,6 +333,9 @@ describe.each(PHONES)('FIX-MLD-1, the plain doors read her day only: $phone', (p
 const SRC = path.resolve(__dirname, '..', '..', '..');
 const PLAN_READS: Array<[file: string, call: string]> = [
   ['components/log/FoodDayView.tsx', 'todayForClient(p.selectedDate)'],
+  // MEALPLAN-RESUME-M (m#1037, on main): the return-to-front re-read sends each open plan key's own day
+  // (mealPlanRefresh.ts rereadMealPlanOnScreen); none only for the plan-id door's no-date key while it is open.
+  ['hooks/useFoodLogQueueSync.ts', 'todayForClient(date)'],
   ['hooks/useMealTemplates.ts', 'todayForClient(dateIso ?? undefined)'],
   ['screens/client/ClientDailyMealPlanScreen.tsx', 'useMealPlanToday(dateParam ?? today)'],
   ['screens/client/ClientDailyMealPlanScreen.tsx', 'useMealPlanToday(null, askServer)'],
