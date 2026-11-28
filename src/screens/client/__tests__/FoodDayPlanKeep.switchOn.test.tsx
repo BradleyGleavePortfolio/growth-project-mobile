@@ -248,8 +248,9 @@ describe('FOODDAY-PLAN-KEEP-M: another screen reads today\'s plan again offline,
 
   it('after the failed re-read her one tap still works offline: "Ate it as planned" saves Dinner on the phone, as before', async () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-    await morning();
+    const view = await morning();
     goOffline();
+    await view.rerender(tree()); // the phone's network status reaches LogScreen (useNetworkStatus re-renders it)
     const since = Date.now() - 1;
     await act(async () => { await queryClient.refetchQueries({ queryKey: KEY }); });
     await planFailed(since);
