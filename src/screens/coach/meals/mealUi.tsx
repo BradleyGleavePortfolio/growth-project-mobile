@@ -44,18 +44,21 @@ export const SLOT_NAMES: Record<SlotLabel, string> = {
 };
 export const sortedSlots = (p: DailyMealPlan) => [...p.slots].sort((a, b) => a.order - b.order);
 
-export function Masthead({ title, sub, onBack, children }: { title: React.ReactNode; sub?: string; onBack?: () => void; children?: React.ReactNode }) {
+/** `trailing` sits at the right of the Back row (the meal page's "Edit details"); without it the masthead is as before. */
+export function Masthead({ title, sub, onBack, trailing, children }: { title: React.ReactNode; sub?: string; onBack?: () => void;
+  trailing?: React.ReactNode; children?: React.ReactNode }) {
   const { semanticColors: sc } = useTheme();
   const top = useScreenInsets().top + layout.statusBarGap;
+  const back = onBack ? (
+    <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={onBack} hitSlop={8}
+      style={({ pressed }) => [s.back, pressed && s.pressed]}>
+      <Ionicons name="chevron-back" size={24} color={sc.textOnAccent} />
+    </Pressable>
+  ) : null;
   return (
     <View style={[s.mast, { backgroundColor: sc.surface.masthead, paddingTop: top }]}>
       <ForestStatusBar />
-      {onBack ? (
-        <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={onBack} hitSlop={8}
-          style={({ pressed }) => [s.back, pressed && s.pressed]}>
-          <Ionicons name="chevron-back" size={24} color={sc.textOnAccent} />
-        </Pressable>
-      ) : null}
+      {trailing ? <View style={s.backRow}>{back}{trailing}</View> : back}
       {typeof title === 'string' ? <Text accessibilityRole="header" style={[s.title, { color: sc.textOnAccent }]}>{title}</Text> : title}
       {sub ? <Text style={[typography.body, { color: sc.textOnMastheadMuted }]}>{sub}</Text> : null}
       {children}
@@ -95,14 +98,15 @@ export function Loading({ label }: { label: string }) {
 }
 
 /** K5 error: a cream card, a Cormorant line, Try again (the one filled button), Contact support. One error haptic. */
-export function LoadFailed({ title, error, onRetry, retrying }: { title: string; error: unknown; onRetry: () => void; retrying?: boolean }) {
+export function LoadFailed({ title, error, onRetry, retrying, lead = 'Your plans are safe.' }: { title: string; error: unknown; onRetry: () => void;
+  retrying?: boolean; lead?: string }) {
   const { semanticColors: sc } = useTheme();
   const navigation = useNavigation<ProgramsNav>();
   useEffect(() => { void HapticService.error(); }, []);
   return (
     <View accessibilityRole="alert" style={[s.card, { backgroundColor: sc.bgSurface, borderColor: sc.border }]}>
       <Text style={[s.cardTitle, { color: sc.textPrimary }]}>{title}</Text>
-      <Text style={[typography.body, { color: sc.textMuted }]}>{`Your plans are safe. ${isConnectionFailure(error)
+      <Text style={[typography.body, { color: sc.textMuted }]}>{`${lead} ${isConnectionFailure(error)
         ? 'Check your connection and try again.' : 'Try again in a moment.'}`}</Text>
       <PrimaryButton label="Try again" onPress={onRetry} loading={retrying} />
       <TextLink label="Contact support" tone="accent" underline={false} onPress={() => navigation.navigate('SupportInbox')} />
@@ -171,6 +175,7 @@ export function Chips<T extends string | number>({ items, value, onChange, label
 export const mealStyles = StyleSheet.create({
   mast: { marginHorizontal: -layout.gutter, paddingHorizontal: layout.gutter, paddingBottom: 20, gap: 6, borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet },
   back: { width: layout.touchMin, height: layout.touchMin, marginLeft: -10, justifyContent: 'center' },
+  backRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   title: { ...typography.display, fontSize: 40, lineHeight: 50 },
   tabs: { flexDirection: 'row', gap: 24, marginTop: 12 },
   tab: { minHeight: layout.touchMin, justifyContent: 'flex-end' }, tabText: { fontSize: 17 },

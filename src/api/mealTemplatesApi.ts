@@ -44,6 +44,10 @@ export interface CreateMealTemplateInput {
   fats_g: number;
   fiber_g?: number;
   items?: MealTemplateItem[];
+  /** PLAN-SWAPS-BE: the options clients can pick instead, in his order (at most 10; [] clears; never null). */
+  swap_template_ids?: string[];
+  /** PLAN-SWAPS-BE: one recipe he created, or null for none (never ""). */
+  recipe_id?: string | null;
 }
 
 export type UpdateMealTemplateInput = Partial<CreateMealTemplateInput>;
@@ -61,6 +65,9 @@ export interface MealTemplate {
   items: MealTemplateItem[] | null;
   created_at: string;
   archived_at: string | null;
+  /** PLAN-SWAPS-BE: on the coach's own reads; a client's slot.meal_template has neither (the server strips them). */
+  swap_template_ids?: string[];
+  recipe_id?: string | null;
 }
 
 // ─── DailyMealPlan + slots ───────────────────────────────────────────────────
@@ -70,6 +77,8 @@ export interface DailyPlanSlotInput {
   slot_label: SlotLabel;
   /** 0-indexed; if omitted the server uses array-position. */
   order?: number;
+  /** C2-C0: local "HH:MM" on the 24-hour clock; null or absent = no time. */
+  time_of_day?: string | null;
 }
 
 export interface CreateDailyMealPlanInput {
