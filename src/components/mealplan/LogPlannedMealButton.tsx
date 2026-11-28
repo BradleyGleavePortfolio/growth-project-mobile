@@ -18,7 +18,6 @@ import { layout, radius, spacing, typography, type SemanticTokens } from '../../
 import type { MealType } from '../../types';
 import type { DailyMealPlanSlot } from '../../api/mealTemplatesApi';
 import { MEAL_SECTIONS } from '../../utils/log/types';
-import { logMealOfSlot } from '../../utils/log/foodDay';
 import { FoodLogValidationError, submitManualLogOffline, submitManualLogOnlineWithId } from '../../utils/log/logSubmit';
 import { logApi } from '../../services/api';
 import { notifyPendingFoodLogs } from '../../services/foodLogSync';
@@ -59,8 +58,6 @@ function parseAmount(raw: string): number | null {
  */
 export function mealTypeForSlot(slot?: string | null): MealType | null {
   const s = (slot ?? '').toLowerCase().replace(/^day\s+\d+\s*[–-]\s*/, '').trim();
-  const planned = logMealOfSlot(s);
-  if (planned) return planned;
   if (s.startsWith('breakfast')) return 'breakfast';
   if (s.startsWith('lunch')) return 'lunch';
   if (s.startsWith('dinner')) return 'dinner';
