@@ -1,0 +1,4 @@
+src/components/mealplan/__tests__
+src/screens/client/__tests__/MealPlan.workoutMealEaten.test.tsx
+src/screens/client/__tests__/MealPlanLogThisMeal.test.tsx
+src/screens/client/mealplan/__tests__/PlanMealScreen.workoutMealEaten.test.tsx
