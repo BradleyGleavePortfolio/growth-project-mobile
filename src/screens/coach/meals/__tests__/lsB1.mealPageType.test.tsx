@@ -21,7 +21,7 @@ import { typography } from '../../../../theme/tokens';
 const meal = (id: string, name: string, k: number, p: number, c: number, f: number) =>
   ({ id, coach_id: 'coach', name, description: null, calories_kcal: k, protein_g: p, carbs_g: c, fats_g: f, archived_at: null,
     items: null, created_at: '2026-11-01T00:00:00.000Z', swap_template_ids: [], recipe_id: null }) as any;
-const type = (el: { props: { style: unknown } }) => {
+const type = (el: { props: { style?: unknown } }) => {
   const s = StyleSheet.flatten(el.props.style as any) ?? {};
   return { fontFamily: s.fontFamily, fontSize: s.fontSize };
 };
