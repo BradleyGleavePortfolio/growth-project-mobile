@@ -10,8 +10,8 @@
  *     and hands the screen one line (describeCommunityFailure) with Try again. Unmute clears a running silence and, on
  *     Mute all, sets the default mode, never a mode she did not pick (R4).
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { QueryClient, QueryClientContext, useQuery, useQueryClient } from '@tanstack/react-query';
 import { communityKeys } from '../../../hooks/useCommunity';
 import { describeCommunityFailure } from '../../../api/communityErrors';
 import type { CommunityCohortListResponse } from '../../../api/communityApi';
@@ -69,31 +69,37 @@ export function useJoinSpace(onJoined?: (cohortId: string) => void) {
 
 export type BellAction = { kind: 'mode'; mode: NotifyMode } | { kind: 'silence'; hours: SilenceHours } | { kind: 'unmute' };
 
+// The space chat is drawn by some older tests without a query client (the LS945 retarget btests stub every read): there
+// this hook reads nothing and does nothing, on a client of its own that never fetches. The app always has one.
+let inert: QueryClient | null = null;
+const inertClient = () => (inert ??= new QueryClient({ defaultOptions: { queries: { enabled: false } } }));
+
 export function useSpaceLeaveMute(cohortId: string, userId: string | null, opts: { admitted: boolean; left: boolean; memberCount?: number }) {
-  const qc = useQueryClient();
+  const provided = useContext(QueryClientContext);
+  const qc = provided ?? inertClient();
   const uid = userId ?? '';
-  const on = !!userId && !!cohortId && opts.admitted;
+  const on = !!provided && !!userId && !!cohortId && opts.admitted;
   const notify = useQuery({
     queryKey: spaceNotifyKey(uid, cohortId),
     enabled: on && !opts.left,
     queryFn: () => spaceLeaveMuteApi.getNotify(cohortId),
     retry: false,
     meta: { persist: false },
-  });
+  }, qc);
   const left = useQuery({
     queryKey: spaceLeftKey(uid, cohortId),
     enabled: on,
     queryFn: () => spaceLeaveMuteApi.listLeft(cohortId),
     retry: false,
     meta: { persist: false },
-  });
+  }, qc);
   const threads = useQuery({
     queryKey: spaceThreadsKey(uid, cohortId),
     enabled: on && !opts.left,
     queryFn: () => spaceLeaveMuteApi.listThreads(cohortId),
     retry: false,
     meta: { persist: false },
-  });
+  }, qc);
   // A leave or a rejoin changes the space's count in the list: read who left again (the ping may be off on the server).
   const count = useRef(opts.memberCount);
   useEffect(() => {
@@ -112,7 +118,7 @@ export function useSpaceLeaveMute(cohortId: string, userId: string | null, opts:
   const [failure, setFailure] = useState<SpaceFailure | null>(null);
   /** One action at a time: `name` shows where it runs; the answer is applied only when it comes. */
   const run = useCallback(<T,>(name: string, work: () => Promise<T>, done: (answer: T) => void) => {
-    if (running.current) return;
+    if (running.current || !provided) return;
     running.current = name;
     setBusy(name);
     setFailure(null);
@@ -121,7 +127,7 @@ export function useSpaceLeaveMute(cohortId: string, userId: string | null, opts:
       running.current = null;
       setBusy(null);
     });
-  }, []);
+  }, [provided]);
 
   const clearFailure = useCallback(() => setFailure(null), []);
   const setNotify = useCallback((answer: SpaceNotify) => qc.setQueryData(spaceNotifyKey(uid, cohortId), answer), [qc, uid, cohortId]);

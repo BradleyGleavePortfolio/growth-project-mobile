@@ -377,13 +377,13 @@ export const communityApi = {
   },
 
   /**
-   * GET /community/cohorts?include_left=1 — caller's cohort summaries (server-scoped). LEAVE-MUTE-M (b#1168): the one
-   * list read keeps the spaces she left, each with left_at set (null, or absent from an older server, = in the space);
-   * every reader splits them through leaveMute.ts (isLeft, splitCohorts).
+   * GET /community/cohorts — caller's cohort summaries (server-scoped). LEAVE-MUTE-M (b#1168): the one list read
+   * (useCommunityCohorts) asks includeLeft, ?include_left=1, so the spaces she left come too, each with left_at set (null,
+   * or absent from an older server, = in the space); every reader splits them through leaveMute.ts (isLeft, splitCohorts).
    */
-  getCohorts(): Promise<CommunityCohortListResponse> {
+  getCohorts(opts: { includeLeft?: boolean } = {}): Promise<CommunityCohortListResponse> {
     return call(CommunityCohortListResponseSchema, () =>
-      api.get<unknown>('/community/cohorts', { params: { include_left: 1 } }),
+      (opts.includeLeft ? api.get<unknown>('/community/cohorts', { params: { include_left: 1 } }) : api.get<unknown>('/community/cohorts')),
     );
   },
 

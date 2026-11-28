@@ -110,7 +110,8 @@ export function useCommunityToday(): UseQueryResult<CommunityTodayResponse> {
 export function useCommunityCohorts(enabled = true): UseQueryResult<CommunityCohortListResponse> {
   return useQuery({
     queryKey: communityKeys.cohorts(),
-    queryFn: () => communityApi.getCohorts(),
+    // LEAVE-MUTE-M: the one list read keeps the spaces she left (left_at set); readers split them (leaveMute.ts).
+    queryFn: () => communityApi.getCohorts({ includeLeft: true }),
     staleTime: 60_000,
     enabled,
   });
