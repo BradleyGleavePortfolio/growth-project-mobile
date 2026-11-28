@@ -154,7 +154,7 @@ export default function JoinPackageScreen({ join: given, onClose, resumed = fals
   );
 
   return (
-    <Screen edges={MODAL_EDGES} footer={footer} testID="join-package">
+    <Screen inModal edges={MODAL_EDGES} footer={footer} testID="join-package">
       <QuietOverline>{oneToOneCoachingLabel(join.coach.first_name)}</QuietOverline>
       {paid ? (
         <>

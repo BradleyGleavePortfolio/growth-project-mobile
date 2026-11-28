@@ -11,6 +11,7 @@ import {
   AppState,
   AppStateStatus,
   BackHandler,
+  AccessibilityInfo,
   type AlertButton,
 } from 'react-native';
 import HapticPressable from '../../components/HapticPressable';
@@ -92,6 +93,7 @@ import WorkoutFinishSummary from './active-workout/WorkoutFinishSummary';
 import { workoutApi } from '../../services/api';
 import { completedExercisePayload, moveExercise, newSessionExercise, previousSets, swapExercise, workoutSummary, type LoggedWorkout } from './active-workout/sessionQuality';
 import { coachRatingInput, whatMoved, type CoachRating } from './active-workout/summaryC5';
+import { blockBests, type BlockBest } from './active-workout/blockBest';
 import { getTodayString } from '../../utils/date';
 import { featureFlags } from '../../config/featureFlags';
 import { logger } from '../../utils/logger';
@@ -243,6 +245,42 @@ export default function ActiveWorkoutScreen() {
   // The Finish save sends the session's queue key, as the queued retry does.
   const createWorkout = useCreateWorkout(() => queueKeyRef.current);
   const summary = useMemo(() => workoutSummary(sessionExercises, history), [sessionExercises, history]);
+  // PR-ALERTS-M (C1 v2 C2_logger): the gold star line on the block where a recent best was lifted, only from the last
+  // 50 as read (none while loading or after a failed read). It fades in and is spoken once only when a tap of hers
+  // raises a best on this screen; one that is simply there (a restore, a late read, the way back from the summary) is
+  // drawn and silent (docs/charting.md: the key comes from the tap, never from stored data).
+  const bestsReady = hydrated && historyState === 'loaded';
+  const bests = useMemo(
+    () => (bestsReady ? blockBests(sessionExercises, summary.records, bodyWeight) : []),
+    [bestsReady, sessionExercises, summary.records, bodyWeight],
+  );
+  const bestKeys = bests.map((b) => b?.key ?? '').join('\n');
+  const bestSeen = useRef({ ready: false, seen: new Set<string>(), made: new Set<string>(), weights: new Map<string, number>() });
+  const bestName = (b: BlockBest) => b.key.slice(0, b.key.lastIndexOf('@'));
+  const madeByTap = (b: BlockBest) => bestSeen.current.made.has(b.key) || (bestSeen.current.ready
+    && !bestSeen.current.seen.has(b.key) && b.weight > (bestSeen.current.weights.get(bestName(b)) ?? 0));
+  const bestOf = (i: number) => {
+    const b = bests[i];
+    return b ? { text: b.text, spoken: b.spoken, event: madeByTap(b) ? `${sessionStartMsRef.current}:${b.key}` : undefined } : null;
+  };
+  useEffect(() => {
+    if (!bestsReady) return;
+    const seen = bestSeen.current;
+    const weights = new Map<string, number>();
+    bests.forEach((b, i) => {
+      if (!b) return;
+      if (!seen.made.has(b.key) && madeByTap(b)) {
+        seen.made.add(b.key);
+        AccessibilityInfo.announceForAccessibility(`${sessionExercises[i].exerciseName}. ${b.spoken}`);
+      }
+      seen.seen.add(b.key);
+      weights.set(bestName(b), b.weight);
+    });
+    seen.weights = weights;
+    seen.ready = true;
+    // One string of the keys: never the body-weight map or an array's identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bestKeys, bestsReady]);
   // WORKOUT-SUMMARY-M (C1 Style C v2, frame C5): with clientTrainV2 on, a coach-set workout of a client with a coach
   // opens the summary page at Finish workout; nothing is saved until Send to {coach}, which runs the Finish body below
   // with the client's How hard and note in its one completion. Self-started or coachless: main's finish.
@@ -1531,6 +1569,7 @@ export default function ActiveWorkoutScreen() {
             styles={styles}
             previous={previousSets(history, exercise.exerciseName, exercise.unit)}
             bodyWeight={!!bodyWeight[exercise.exerciseId]}
+            best={bestOf(exIdx)}
             isLast={exIdx === sessionExercises.length - 1}
             disabled={saving}
             onMove={(index, direction) => setSessionExercises((prev) => moveExercise(prev, index, direction))}

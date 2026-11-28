@@ -176,7 +176,7 @@ describe('You home', () => {
     expect(tabs.Home).toContain('Messages');
     const rows = screen.getAllByTestId(/^you-row-/).filter((r) => !/-(plans|notifications)$/.test(r.props.testID));
     expect(rows.map((r) => r.props.accessibilityLabel.split(',')[0])).toEqual([
-      'Health and sleep', 'Connected devices', 'Meal plan', 'Macro targets', 'Progress', 'Habits and check-in', 'Timeline',
+      'Health and sleep', 'Connected devices', 'Meal plan', 'Macro targets', 'Food this week', 'Progress', 'Habits and check-in', 'Timeline',
       'Exercise library', 'Community', 'Membership', 'Recipes', 'Fasting', 'Settings', 'Report', 'Learn', 'Shortcuts',
       'Grocery list', 'Prep guide',
     ]);
