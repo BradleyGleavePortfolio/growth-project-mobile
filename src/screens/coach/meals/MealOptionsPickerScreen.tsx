@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { layout, radius, schemeCard, schemeCardOutline, typography } from '../../../theme/tokens';
+import { layout, radius, schemeCard, schemeCardOutline, spacing, typography } from '../../../theme/tokens';
 import { Screen } from '../../../ui/layout/Screen';
 import { PrimaryButton } from '../../../ui/buttons/PrimaryButton';
 import { QuietOverline } from '../../../ui/sections/QuietSection';
@@ -65,7 +65,7 @@ export default function MealOptionsPickerScreen({ route, navigation }: ProgramsS
                     style={({ pressed }) => [styles.row, i > 0 && { borderTopColor: sc.border, borderTopWidth: StyleSheet.hairlineWidth },
                       pressed && ms.pressed, off && styles.off]}>
                     <View style={ms.fill}>
-                      <Text style={[typography.body, { color: sc.textPrimary }]}>{m.name}</Text>
+                      <Text style={[typography.bodyMd, { color: sc.textPrimary }]}>{m.name}</Text>
                       <Text style={muted}>{macroLine(m)}</Text>
                     </View>
                     <View style={[styles.tick, on ? { backgroundColor: sc.accent, borderColor: sc.accent } : { borderColor: sc.textMuted }]}>
@@ -86,7 +86,8 @@ const styles = StyleSheet.create({
   content: { gap: 14, paddingBottom: 24 },
   field: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48, paddingHorizontal: 14, borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.input },
   list: { paddingVertical: 4, paddingHorizontal: 16, gap: 0 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 64, paddingVertical: 10 },
+  // FIX-PSCM-1 B1: S1_F02 draws each row 56 pt (6 pt above and below its two lines; the nearest token, 4).
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: layout.rowMinHeight, paddingVertical: spacing.xs },
   tick: { width: 28, height: 28, borderRadius: radius.chip, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   off: { opacity: 0.45 },
   plus: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: layout.touchMin },

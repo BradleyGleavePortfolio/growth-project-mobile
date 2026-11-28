@@ -6,7 +6,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View, type AccessibilityActionEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { layout, radius, schemeCard, schemeCardOutline, semantic, typography } from '../../../theme/tokens';
+import { layout, radius, schemeCard, schemeCardOutline, semantic, spacing, typography } from '../../../theme/tokens';
 import { recipeAllergenSummary } from '../../../lib/recipeAllergens';
 import { LoadFailed, macroLine, mealStyles as ms } from './mealUi';
 import { MAX_OPTIONS, declaresAllergen, moveOption, recipeLine, recipeShare, removeOption, type CoachRecipe, type OptionRow } from './mealLinks';
@@ -16,13 +16,13 @@ export const card = [ms.card, schemeCard, schemeCardOutline, { padding: 16 }];
 export const blockTitle = { ...typography.h2, fontSize: 20, lineHeight: 26 };
 type Glyph = keyof typeof Ionicons.glyphMap;
 
-/** A glyph and a muted line (the recipe's share and allergen lines); `small` on the picker's rows. */
-export function Line({ icon, children, small }: { icon: Glyph; children: string; small?: boolean }) {
+/** A glyph and a muted line (the recipe's share and allergen lines), at the frames' 14 pt (FIX-PSCM-1 B1). */
+export function Line({ icon, children }: { icon: Glyph; children: string }) {
   const { semanticColors: sc } = useTheme();
   return (
     <View style={st.line}>
-      <Ionicons name={icon} size={small ? 18 : 20} color={sc.textMuted} style={st.glyph} />
-      <Text style={[small ? typography.bodySmall : typography.body, ms.fill, { color: sc.textMuted }]}>{children}</Text>
+      <Ionicons name={icon} size={18} color={sc.textMuted} style={st.glyph} />
+      <Text style={[typography.bodySmall, ms.fill, { color: sc.textMuted }]}>{children}</Text>
     </View>
   );
 }
@@ -57,7 +57,7 @@ export function OptionsBlock({ rows, editing, onEditing, onAdd, onChange }: {
   const full = ids.length >= MAX_OPTIONS;
   const edit = editing && ids.length > 0;
   const ink = { color: sc.textPrimary };
-  const muted = [typography.body, { color: sc.textMuted }];
+  const muted = [typography.bodySmall, { color: sc.textMuted }];
   const add = (
     <Pressable accessibilityRole="button" accessibilityLabel="Add an option" accessibilityState={{ disabled: full }} disabled={full}
       onPress={onAdd} style={({ pressed }) => [st.add, pressed && ms.pressed]}>
@@ -66,11 +66,12 @@ export function OptionsBlock({ rows, editing, onEditing, onAdd, onChange }: {
     </Pressable>
   );
   const move = (i: number, by: -1 | 1) => onChange(moveOption(ids, i, by));
-  const drop = (i: number) => onChange(removeOption(ids, i));
+  // N2: Remove on the last option ends Edit order, so an option added later opens in the normal mode.
+  const drop = (i: number) => { const next = removeOption(ids, i); onChange(next); if (!next.length) onEditing(false); };
   return (
-    <View style={card}>
+    <View style={[card, st.block]}>
       <View style={st.head}>
-        <Text accessibilityRole="header" style={[blockTitle, ms.fill, ink]}>Options for clients</Text>
+        <Text accessibilityRole="header" style={[blockTitle, st.grow, ink]}>Options for clients</Text>
         <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{`${ids.length} of ${MAX_OPTIONS}`}</Text>
         {edit ? (
           <Pressable accessibilityRole="button" accessibilityLabel="Done editing" onPress={() => onEditing(false)} style={st.add}>
@@ -82,18 +83,18 @@ export function OptionsBlock({ rows, editing, onEditing, onAdd, onChange }: {
       <Text style={muted}>{!ids.length ? 'Clients on a plan with this meal can pick one of these instead.' : edit
         ? 'Move up and Move down set the order clients see.' : 'Clients can pick one instead. These go with this meal in every day plan that uses it.'}</Text>
       {full ? <Line icon="lock-closed-outline">Up to 10 options. Remove one to add another.</Line> : null}
-      {rows.map((r, i) => {
+      <View>{rows.map((r, i) => {
         const name = r.meal?.name ?? 'the archived meal';
         const rule = [st.row, { borderTopColor: sc.border }];
         if (r.state === 'unknown') return <View key={`${r.id}-${i}`} style={[rule, st.ghost, { backgroundColor: sc.border }]} />;
         const words = r.meal ? (
           <View style={ms.fill}>
-            <Text style={[typography.body, ink]}>{r.meal.name}</Text>
+            <Text style={[typography.bodyMd, ink]}>{r.meal.name}</Text>
             <Text style={muted}>{macroLine(r.meal)}</Text>
           </View>
         ) : (
           <View style={ms.fill}>
-            <Text style={[typography.body, ink]}>A meal you archived</Text>
+            <Text style={[typography.bodyMd, ink]}>A meal you archived</Text>
             <Text style={muted}>{edit ? 'Clients do not see it.' : 'Clients do not see it. It still counts toward the 10.'}</Text>
           </View>
         );
@@ -131,8 +132,8 @@ export function OptionsBlock({ rows, editing, onEditing, onAdd, onChange }: {
             </Pressable>
           </View>
         );
-      })}
-      {!ids.length ? <View style={[st.row, st.firstRow, { borderTopColor: sc.border }]}>{add}</View> : null}
+      })}</View>
+      {!ids.length ? <View style={[st.addRow, { borderTopColor: sc.border }]}>{add}</View> : null}
     </View>
   );
 }
@@ -144,7 +145,7 @@ export function RecipeCard({ recipeId, mine, error, retry, retrying, onPick, onR
 }) {
   const { semanticColors: sc } = useTheme();
   const ink = { color: sc.textPrimary };
-  const muted = [typography.body, { color: sc.textMuted }];
+  const muted = [typography.bodySmall, { color: sc.textMuted }];
   if (error) return <LoadFailed title="Your recipes didn’t load." lead="Your meal is safe." error={error} onRetry={retry} retrying={retrying} />;
   if (!mine) {
     return (
@@ -155,24 +156,24 @@ export function RecipeCard({ recipeId, mine, error, retry, retrying, onPick, onR
   }
   const head = (links: boolean) => (
     <View style={st.head}>
-      <Text accessibilityRole="header" style={[blockTitle, ms.fill, ink]}>Recipe</Text>
+      <Text accessibilityRole="header" style={[blockTitle, st.grow, ink]}>Recipe</Text>
       {links ? <Link label="Change" spoken="Change recipe" onPress={onPick} /> : null}
       {links ? <Link label="Remove link" onPress={onRemove} /> : null}
     </View>
   );
   if (!recipeId) {
     return (
-      <View style={card}>
+      <View style={[card, st.recipe]}>
         {head(false)}
         {!mine.length ? (
           <>
-            <Text style={[ms.cardTitle, st.title, ink]}>No recipes yet</Text>
+            <Text style={[typography.h3, ink]}>No recipes yet</Text>
             <Text style={muted}>You have no recipes to link. Recipes cannot be made in the app yet.</Text>
           </>
         ) : (
           <>
             <Text style={muted}>Link one of your recipes. Clients can open it from this meal when you share it with them.</Text>
-            <View style={[st.row, st.firstRow, { borderTopColor: sc.border }]}>
+            <View style={[st.addRow, { borderTopColor: sc.border }]}>
               <Pressable accessibilityRole="button" accessibilityLabel="Link a recipe" onPress={onPick} style={({ pressed }) => [st.add, pressed && ms.pressed]}>
                 <Ionicons name="link-outline" size={22} color={sc.accentText} />
                 <Text style={[typography.bodyMd, { color: sc.accentText }]}>Link a recipe</Text>
@@ -185,9 +186,9 @@ export function RecipeCard({ recipeId, mine, error, retry, retrying, onPick, onR
   }
   const r = mine.find((x) => x.id === recipeId);
   return (
-    <View style={card}>
+    <View style={[card, st.recipe, st.linked]}>
       {head(true)}
-      <Text style={[ms.cardTitle, st.title, ink]}>{r ? r.title : 'Recipe for this meal'}</Text>
+      <Text style={[typography.h3, ink]}>{r ? r.title : 'Recipe for this meal'}</Text>
       {r ? (
         <>
           <Text style={muted}>{recipeLine(r)}</Text>
@@ -205,9 +206,17 @@ const st = StyleSheet.create({
   head: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 10 },
   add: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: layout.touchMin },
   line: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
-  glyph: { marginTop: 3 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
-  firstRow: { paddingTop: 8 },
+  glyph: { marginTop: 2 },
+  // FIX-PSCM-1 B1, measured on S1_F01 (390 / 100%): the Options card 6 pt inside top and bottom (the nearest token, 4),
+  // its lines 4 pt apart; each option row 56 pt and a hairline (57 pt pitch), the rows in one container; the Recipe
+  // card 4 pt above its 44 pt header row when linked (14 pt, the nearest token 12, otherwise) and 14 pt (12) below.
+  block: { paddingVertical: spacing.xs, gap: spacing.xs },
+  recipe: { paddingTop: spacing.md, paddingBottom: spacing.md, gap: spacing.xs },
+  linked: { paddingTop: spacing.xs },
+  grow: { flexGrow: 1 }, // C1: the title keeps its own width, so the count and Add wrap under it at 320 pt with 130% text
+  row: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: layout.rowMinHeight, paddingVertical: spacing.xs,
+    borderTopWidth: StyleSheet.hairlineWidth },
+  addRow: { borderTopWidth: StyleSheet.hairlineWidth },
   act: { width: layout.touchMin, height: layout.touchMin, alignItems: 'center', justifyContent: 'center' },
   off: { opacity: 0.35 },
   link: { minHeight: layout.touchMin, justifyContent: 'center' },
@@ -215,7 +224,6 @@ const st = StyleSheet.create({
   words: { flex: 1, minWidth: 150 },
   under: { textDecorationLine: 'underline' },
   tile: { width: 40, height: 40, borderRadius: radius.button, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  title: { fontSize: 22, lineHeight: 28 },
   ghost: { height: 44, borderRadius: radius.control, opacity: 0.5 },
   still: { minHeight: 150 },
   bar: { height: 14, borderRadius: radius.chip },

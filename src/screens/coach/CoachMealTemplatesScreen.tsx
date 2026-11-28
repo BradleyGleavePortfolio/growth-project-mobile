@@ -35,7 +35,7 @@ import {
 import { layout, radius, semantic, spacing, typography } from '../../theme/tokens';
 import type { SemanticTokens } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
-import { Screen } from '../../ui/layout/Screen';
+import { Screen, useScreenInsets } from '../../ui/layout/Screen';
 import { PrimaryButton, TextLink } from '../../ui/buttons/PrimaryButton';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import type { ProgramsScreenProps, ProgramsStackParamList } from './programs/types';
@@ -66,7 +66,7 @@ export default function CoachMealTemplatesScreen({ route, navigation }: Programs
   const loading = !answered && !list.isError;
   return (
     <Screen edges={['bottom']} contentStyle={{ gap: spacing.lg }}
-      footer={loading ? <Footer archive saving={false} disabled onSave={() => undefined} onArchive={() => undefined} /> : undefined}>
+      footer={loading ? <Footer archive held saving={false} disabled onSave={() => undefined} onArchive={() => undefined} /> : undefined}>
       <Masthead title="Meal" onBack={() => navigation.goBack()} />
       {answered && list.data ? (
         <Text style={[typography.body, { color: sc.textMuted }]}>This meal is not in your list. It may have been archived on another device.</Text>
@@ -83,9 +83,12 @@ export default function CoachMealTemplatesScreen({ route, navigation }: Programs
   );
 }
 
-/** R13: Archive this meal beside Save meal in one row (a New meal has Save meal only); a refused save says why above it. */
-function Footer({ archive, saving, disabled, onSave, onArchive, line }: { archive: boolean; saving: boolean; disabled: boolean;
-  onSave: () => void; onArchive: () => void; line?: string }) {
+/**
+ * R13: Archive this meal beside Save meal in one row (a New meal has Save meal only); a refused save says why above it.
+ * Archive is off only while a request runs or the meal loads (`held`), not whenever Save meal is (FIX-PSCM-1 N1).
+ */
+function Footer({ archive, held, saving, disabled, onSave, onArchive, line }: { archive: boolean; held?: boolean; saving: boolean;
+  disabled: boolean; onSave: () => void; onArchive: () => void; line?: string }) {
   const { semanticColors: sc } = useTheme();
   return (
     <View testID="meal-footer" style={st.footer}>
@@ -96,7 +99,7 @@ function Footer({ archive, saving, disabled, onSave, onArchive, line }: { archiv
         </View>
       ) : null}
       <View testID="meal-footer-row" style={st.footerRow}>
-        {archive ? <View style={st.archive}><TextLink label="Archive this meal" align="start" onPress={onArchive} disabled={disabled || saving} /></View> : null}
+        {archive ? <View style={st.archive}><TextLink label="Archive this meal" align="start" onPress={onArchive} disabled={held || saving} /></View> : null}
         <PrimaryButton label="Save meal" wrap testID="meal-save" disabled={disabled} loading={saving} haptic={false} onPress={onSave}
           style={archive ? st.save : ms.fill} />
       </View>
@@ -131,6 +134,12 @@ function MealForm({ meal, live, answered, picked, navigation, sc }: { meal?: Mea
   const scroll = useRef<ScrollView>(null);
   const nameField = useRef<TextInput>(null);
   const detailsY = useRef(0);
+  // #ALM-E40 (F03, F08, F10): once no more of the masthead shows than the strip would cover, the strip takes its place,
+  // pinned under the top inset, so the page below sits under it as the frames draw.
+  const insetTop = useScreenInsets().top;
+  const [mastEnd, setMastEnd] = useState(0);
+  const [stripH, setStripH] = useState(0);
+  const [pinned, setPinned] = useState(false);
 
   const styles = useMemo(() => makeFormStyles(sc), [sc]);
   const pending = createMut.isPending || updateMut.isPending || archiveMut.isPending;
@@ -175,14 +184,18 @@ function MealForm({ meal, live, answered, picked, navigation, sc }: { meal?: Mea
   return (
     <Screen
       edges={['bottom']}
-      scrollRef={scroll}
-      contentStyle={styles.page}
+      scroll={false}
+      contentStyle={st.bare}
       footer={<Footer archive={!!meal} saving={pending} disabled={!canSave} line={failed && !pending ? saveRefused(failed) : undefined}
         onArchive={archive} onSave={() => {
           void HapticService.mediumImpact();
           void run(() => (meal ? updateMut.mutateAsync({ id: meal.id, input }) : createMut.mutateAsync(input)));
         }} />}
     >
+      <ScrollView ref={scroll} testID="meal-scroll" style={st.fill} contentContainerStyle={[st.content, styles.page]}
+        keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" showsVerticalScrollIndicator={false} scrollEventThrottle={16}
+        onScroll={(e) => setPinned(mastEnd > 0 && e.nativeEvent.contentOffset.y >= mastEnd - stripH)}>
+      <View testID="meal-masthead" style={st.mast} onLayout={(e) => setMastEnd(e.nativeEvent.layout.y + e.nativeEvent.layout.height)}>
       <Masthead title={<Text accessibilityRole="header" style={[ms.title, styles.title, { color: sc.textOnAccent }]}>{meal?.name ?? 'New meal'}</Text>}
         sub={canSave || pending ? macroLine(input) : undefined} onBack={onDone}
         trailing={(
@@ -193,6 +206,7 @@ function MealForm({ meal, live, answered, picked, navigation, sc }: { meal?: Mea
         )}>
         {note ? <Text style={[styles.note, { color: sc.textOnMastheadMuted }]}>{`“${note}”`}</Text> : null}
       </Masthead>
+      </View>
       <OptionsBlock rows={optionRows(options, live, answered)} editing={editing} onEditing={setEditing} onChange={setOptions}
         onAdd={() => navigation.navigate('MealOptionsPicker', { mealId: meal?.id, mealName: name.trim(), chosen: options })} />
       <RecipeCard recipeId={recipeId} mine={recipes.mine} error={recipes.failed ? recipes.read.error : null}
@@ -243,6 +257,13 @@ function MealForm({ meal, live, answered, picked, navigation, sc }: { meal?: Mea
             Up to 2,000 kcal, 300 g protein, 400 g carbs and 200 g fat.
           </Text>
         ) : null}
+      </View>
+      </ScrollView>
+      {/* Decoration for sighted readers (VoiceOver reads the masthead once); drawn only while pinned. With no name, the macros alone. */}
+      <View testID="meal-strip" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" pointerEvents={pinned ? 'auto' : 'none'}
+        onLayout={(e) => setStripH(e.nativeEvent.layout.height)}
+        style={[st.strip, { backgroundColor: sc.surface.masthead, paddingTop: insetTop + spacing.xs, opacity: pinned ? 1 : 0 }]}>
+        <Text style={[typography.body, { color: sc.textOnMastheadMuted }]}>{[name.trim(), macroLine(input)].filter(Boolean).join(' · ')}</Text>
       </View>
     </Screen>
   );
@@ -295,6 +316,14 @@ function NumField(props: {
 }
 
 const st = StyleSheet.create({
+  // The page scrolls in its own view so the strip can follow it; it draws as Screen's scroll area does.
+  bare: { paddingHorizontal: 0, paddingBottom: 0 },
+  fill: { flex: 1 },
+  content: { flexGrow: 1, paddingHorizontal: layout.gutter },
+  mast: { marginHorizontal: -layout.gutter, paddingHorizontal: layout.gutter }, // the masthead keeps its own full bleed
+  // S1_F03, F08, F10: the masthead's colour and bottom corners, 2 pt under the inset (the nearest token, 4), 12 pt below.
+  strip: { position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: layout.gutter, paddingBottom: spacing.md,
+    borderBottomLeftRadius: radius.sheet, borderBottomRightRadius: radius.sheet },
   stack: { gap: 14 },
   still: { minHeight: 132 },
   bar: { height: 14, borderRadius: radius.chip },

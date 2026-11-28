@@ -34,7 +34,7 @@ export default function MealRecipePickerScreen({ route, navigation }: ProgramsSc
           <Text style={[typography.bodyMd, styles.outlineText, { color: sc.accentText }]}>Remove link</Text>
         </Pressable>
       ) : undefined}>
-      <Masthead title="Link a recipe" sub={`For ${mealName}`} onBack={() => navigation.goBack()} />
+      <Masthead title="Link a recipe" sub={mealName ? `For ${mealName}` : undefined} onBack={() => navigation.goBack()} />
       {failed ? <LoadFailed title="Your recipes didn’t load." lead="Your meal is safe." error={read.error} onRetry={() => void read.refetch()} retrying={read.isFetching} />
         : !mine || !shown ? <Loading label="Loading your recipes" />
         : !mine.length ? <FirstCard title="No recipes yet" body="You have no recipes to link. Recipes cannot be made in the app yet." /> : (
@@ -60,8 +60,8 @@ export default function MealRecipePickerScreen({ route, navigation }: ProgramsSc
                           {on ? <Text style={[typography.caption, styles.tag, { color: sc.textOnAccent, backgroundColor: sc.accent }]}>Linked</Text> : null}
                         </View>
                         <Text style={muted}>{lines[0]}</Text>
-                        <Line small icon={r.is_public ? 'people-outline' : 'lock-closed-outline'}>{lines[1]}</Line>
-                        <Line small icon="information-circle-outline">{lines[2]}</Line>
+                        <Line icon={r.is_public ? 'people-outline' : 'lock-closed-outline'}>{lines[1]}</Line>
+                        <Line icon="information-circle-outline">{lines[2]}</Line>
                       </View>
                       <View style={[styles.tick, on ? { backgroundColor: sc.accent, borderColor: sc.accent } : { borderColor: sc.textMuted }]}>
                         {on ? <Ionicons name="checkmark" size={18} color={sc.textOnAccent} /> : null}
