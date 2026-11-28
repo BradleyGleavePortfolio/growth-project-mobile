@@ -7,7 +7,7 @@
  * MealNameField is the one Name field; the meal sheet's Rename body reuses it.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { AccessibilityInfo, Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import type { SaveMealBody, SavedMeal } from '../../../api/savedFoodsApi';
 import { useTodayLog } from '../../../hooks/useApi';
 import { useTheme } from '../../../theme/ThemeProvider';
@@ -24,18 +24,21 @@ import {
 import { KitchenSheet } from './SavedMealSheet';
 import { failureKind, online, type SavedMealWrites } from './useSavedMealWrites';
 
-/** KM-16: the overline "Name" and the serif field on its rule; at most 80 characters; Return puts the keyboard down. */
+/** KM-16: the overline "Name" and the serif field, at most 80 characters: one value that wraps to show it all (B1); Return closes the keyboard. */
 export function MealNameField({ value, onChange, testID, editable = true }: {
   value: string; onChange: (text: string) => void; testID: string; editable?: boolean;
 }) {
   const { semanticColors: sc } = useTheme();
   const s = useMemo(() => makeStyles(sc), [sc]);
+  const { height, fontScale } = useWindowDimensions();
+  const [typing, setTyping] = useState(false);
+  const cap = typing ? { maxHeight: (height < 600 && fontScale > 1 ? 1 : 2) * s.field.lineHeight * fontScale + 12 } : null; // SS9, case 13b
   return (
     <View>
       <Text style={s.label} testID={`${testID}-label`} importantForAccessibility="no" accessibilityElementsHidden>{SAVE_WORDS.name}</Text>
-      <TextInput testID={testID} value={value} onChangeText={onChange} maxLength={NAME_MAX} editable={editable}
-        accessibilityLabel={SAVE_WORDS.nameSpoken} returnKeyType="done" blurOnSubmit onSubmitEditing={() => Keyboard.dismiss()}
-        autoCapitalize="sentences" style={s.field} selectionColor={sc.accent} />
+      <TextInput testID={testID} value={value} onChangeText={(t) => onChange(t.replace(/\s*[\r\n]+\s*/g, ' '))} maxLength={NAME_MAX} editable={editable}
+        multiline submitBehavior="blurAndSubmit" onSubmitEditing={() => Keyboard.dismiss()} onFocus={() => setTyping(true)} onBlur={() => setTyping(false)}
+        accessibilityLabel={SAVE_WORDS.nameSpoken} returnKeyType="done" autoCapitalize="sentences" selectionColor={sc.accent} style={[s.field, cap]} />
     </View>
   );
 }
