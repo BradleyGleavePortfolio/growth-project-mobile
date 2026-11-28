@@ -116,14 +116,16 @@ Tests: `CommunityTodayScreen.test.tsx`, `communityLeaderboardEntry.test.tsx`,
 
 With `communityHomeV2` or `communitySpaceChat` on, the coach stack's first page is
 `CoachSpacesHomeScreen.tsx` (C6CHAT-S-V2 k01 with the Studio entry's Direct
-messages band): the deep masthead, Reports, Direct messages, Inbox and Events
-rows, the coach's spaces with who each is for (Clients, Package, Public; none for
+messages band): the deep masthead with the community's own name, Reports (how
+many reports wait in the queue), Direct messages, Inbox (how many rows of the
+inbox's first page wait, my blocks left out at once; a KT-2 REGISTRY row) and
+Events rows, the coach's spaces with who each is for (Clients, Package, Public; none for
 a members-only space) and "+ New space", which opens `CoachNewSpaceScreen.tsx`
 (v1 to v3: name and kind, then All my clients or Included with a package, then the
 packages). The create goes through `useCreateCohort` with exactly the keys the
 coach chose. On v2 and v3 the top bar's Back, Android's Back and the iPhone edge
 swipe step back one step with the entries kept (`usePreventRemove`, which
 native-stack can hold against the swipe); Close on v1 and a Create leave once. With both switches off the K2 page (`CoachCommunityHomeScreen.tsx`)
-is unchanged. Search, Activity, layers, public spaces and the welcome card wait
-for the server (v1.1). Tests: `D10CCoachHome.test.tsx`, `D10CNewSpace.test.tsx`,
+is unchanged. Search, Activity, layers, public spaces and the welcome card are
+left out here (each its own v1 row, 203-D62). Tests: `D10CCoachHome.test.tsx`, `D10CNewSpace.test.tsx`,
 `navigation/__tests__/D10CCoachHomeSwitch.test.tsx`, `api/__tests__/D10CCreateBody.test.ts`.

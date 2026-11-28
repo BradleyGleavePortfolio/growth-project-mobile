@@ -6,9 +6,17 @@
  * Top to bottom: the deep masthead (Back with coachTabsV2, the monogram and "Community"); Reports, Direct messages,
  * Inbox and Events as rows (Inbox and Events are not drawn in k01: R2 keeps them so they stay one tap away); SPACES,
  * the coach's spaces in the server's order with who each is for (Clients, Package, Public; a 'members' or unknown
- * value draws no tag, R3); "+ New space". Search, Activity, layers, public invites and the welcome card wait for the
- * server (R4, v1.1). The Reports and Inbox counts and the community's name are not read here: the KT-2 scan names any
- * page that reads them (memberContentAccess.test.tsx), so they wait for their registry row (PLAN 1a).
+ * value draws no tag, R3); "+ New space". Search, Activity, layers, public invites and the welcome card are left out
+ * (R4; each its own v1 row, 203-D62, #203-E124).
+ *
+ * Counts and the name (D10C-OP1, its KT-2 REGISTRY row in memberContentAccess.test.tsx): Reports shows the report
+ * queue's length (CommunityReportsEntry's read); Inbox shows the rows of the inbox's first server page that the Inbox
+ * page would draw (R9: never useCoachDashboard), so a client in my block store leaves the number at once by the Inbox
+ * page's own rule, and dropAuthorFromCoachInbox (a block or a ban) drops that author's rows with no new read; loading
+ * more pages on the Inbox never raises it. The masthead is the community's own name by the client Home's read, and
+ * "Community" until it answers, when it fails, or with no workspace; the monogram is drawn as the client Home draws it
+ * (CommunityHomeScreen.tsx: once the page's own read is in, with the letter of the name shown). A failed queue, inbox
+ * or name read leaves only that number or the name out; a pull re-reads them all.
  *
  * States: the first spaces read with nothing cached is the still s01 skeleton; a failed read with nothing to show keeps
  * the rows (none of them needs the spaces) and puts the s03 words and Try again where the spaces go, with an error
@@ -19,7 +27,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import HapticPressable from '../../components/HapticPressable';
 import { ForestStatusBar } from '../../components/StatusBarBand';
@@ -27,9 +35,10 @@ import { Monogram } from '../../components/community/SpaceTree';
 import { PrimaryButton } from '../../ui/buttons/PrimaryButton';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { featureFlags } from '../../config/featureFlags';
-import { useCoachCohorts } from '../../hooks/useCoachCommunity';
-import { communityKeys } from '../../hooks/useCommunity';
-import type { CoachCohort } from '../../api/coachCommunityApi';
+import { coachCommunityKeys, useCoachCohorts, useCoachFlagged, useCoachInbox } from '../../hooks/useCoachCommunity';
+import { communityKeys, useCommunityMe, useCommunityWorkspace } from '../../hooks/useCommunity';
+import type { CoachCohort, CoachInboxPage } from '../../api/coachCommunityApi';
+import { useBlockedUsersStore } from '../../store/blockedUsersStore';
 import { forestPop as fp, layout, lightTokens, typography } from '../../theme/tokens';
 import type { CoachCommunityNav } from './coachCommunityNavTypes';
 import { membersLabel } from './CoachCommunityInboxScreen';
@@ -47,8 +56,8 @@ const TAGS: Record<string, Tag> = {
 const tagOf = (c: CoachCohort): Tag | null => (c.visibility ? TAGS[c.visibility] ?? null : null);
 const FRESH_MS = 2000;
 
-function Row({ icon, title, sub, chevron, line, onPress, label, testID }: {
-  icon: IconName; title: string; sub?: string; chevron?: boolean; line?: boolean; onPress: () => void; label: string; testID: string;
+function Row({ icon, title, sub, count, chevron, line, onPress, label, testID }: {
+  icon: IconName; title: string; sub?: string; count?: number; chevron?: boolean; line?: boolean; onPress: () => void; label: string; testID: string;
 }): React.ReactElement {
   return (
     <HapticPressable intent="light" onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={[s.row, line && s.line]} testID={testID}>
@@ -57,6 +66,11 @@ function Row({ icon, title, sub, chevron, line, onPress, label, testID }: {
         <Text style={s.rowTitle}>{title}</Text>
         {sub ? <Text style={s.rowSub}>{sub}</Text> : null}
       </View>
+      {count ? (
+        <View style={s.badge} testID={`${testID}-badge`}>
+          <Text style={s.badgeText} maxFontSizeMultiplier={1.3}>{count > 99 ? '99+' : count}</Text>
+        </View>
+      ) : null}
       {chevron ? <Ionicons name="chevron-forward" size={20} color={fp.n700} /> : null}
     </HapticPressable>
   );
@@ -93,10 +107,22 @@ export default function CoachSpacesHomeScreen(): React.ReactElement {
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
   const cohorts = useCoachCohorts();
+  // D10C-OP1 (header): the report queue, the inbox's first page less my blocks, and the community's name.
+  const flagged = useCoachFlagged();
+  const inbox = useCoachInbox();
+  const blocked = useBlockedUsersStore((st) => st.blocked);
+  const me = useCommunityMe();
+  const workspaceId = me.data?.feature_flag_state === 'enabled' ? (me.data.workspace_id ?? null) : null;
+  const workspace = useCommunityWorkspace(workspaceId);
+  const reports = Array.isArray(flagged.data) ? flagged.data.length : null;
+  const firstPage = inbox.data ? qc.getQueryData<InfiniteData<CoachInboxPage>>(coachCommunityKeys.inbox())?.pages[0]?.items ?? [] : [];
+  const blockedIds = new Set(blocked.map((b) => b.id));
+  const unread = firstPage.filter((i) => !blockedIds.has(i.client_user_id)).length;
   const fresh = useFreshIds(cohorts.data);
   const [open, setOpen] = useState(true);
   const loading = cohorts.isLoading;
   const failed = !loading && cohorts.data === undefined;
+  const name = (!failed && workspace.data?.name.trim()) || 'Community';
 
   const openSpace = (c: CoachCohort) =>
     featureFlags.communitySpaceChat
@@ -104,6 +130,10 @@ export default function CoachSpacesHomeScreen(): React.ReactElement {
       : navigation.navigate('CoachCommunityCohortDetail', { cohortId: c.id, cohortName: c.name });
   const refresh = () => {
     void cohorts.refetch();
+    void flagged.refetch();
+    void inbox.refetch();
+    void me.refetch();
+    if (workspaceId != null) void workspace.refetch();
     void qc.invalidateQueries({ queryKey: [...communityKeys.all, 'dms'] });
   };
   const retry = async () => {
@@ -113,11 +143,12 @@ export default function CoachSpacesHomeScreen(): React.ReactElement {
 
   const rows = (
     <>
-      <Row icon="flag-outline" title="Reports" line={!featureFlags.communityDm} onPress={() => navigation.navigate('CoachCommunityModeration')}
-        label="Reports" testID="coach-home-reports" />
+      <Row icon="flag-outline" title="Reports" sub={!reports ? undefined : reports === 1 ? '1 report waiting' : `${reports} reports waiting`} count={reports ?? 0}
+        line={!featureFlags.communityDm} onPress={() => navigation.navigate('CoachCommunityModeration')} testID="coach-home-reports"
+        label={reports === null ? 'Reports' : reports === 0 ? 'Open community reports, none waiting' : `Open community reports, ${reports} waiting for review`} />
       <CoachDmEntry band />
-      <Row icon="mail-outline" title="Inbox" sub="Unread in your inbox" line onPress={() => navigation.navigate('CoachCommunityInbox')}
-        label="Inbox, Unread in your inbox" testID="coach-home-inbox" />
+      <Row icon="mail-outline" title="Inbox" sub="Unread in your inbox" count={unread} line onPress={() => navigation.navigate('CoachCommunityInbox')}
+        label={unread > 0 ? `Inbox, Unread in your inbox: ${unread}` : 'Inbox, Unread in your inbox'} testID="coach-home-inbox" />
       {featureFlags.communityEvents ? (
         <Row icon="calendar-outline" title="Events" sub="Schedule and manage live sessions" chevron line
           onPress={() => navigation.navigate('CoachCommunityEvents')} label="Events: schedule and manage live sessions" testID="coach-home-events" />
@@ -206,8 +237,8 @@ export default function CoachSpacesHomeScreen(): React.ReactElement {
             </>
           ) : (
             <>
-              {failed ? null : <Monogram name="Community" />}
-              <Text accessibilityRole="header" numberOfLines={1} maxFontSizeMultiplier={1.3} style={s.name}>Community</Text>
+              {failed ? null : <Monogram name={name} />}
+              <Text accessibilityRole="header" numberOfLines={1} maxFontSizeMultiplier={1.3} style={s.name}>{name}</Text>
             </>
           )}
         </View>
@@ -234,6 +265,8 @@ const s = StyleSheet.create({
   headText: { ...typography.eyebrow, fontFamily: 'Inter_600SemiBold', fontSize: 12, lineHeight: 16, letterSpacing: 1.4, color: fp.forest },
   space: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 8, paddingHorizontal: 14, borderLeftWidth: 4, borderLeftColor: 'transparent' },
   fresh: { borderLeftColor: fp.leaf },
+  badge: { minWidth: 28, height: 28, borderRadius: 14, paddingHorizontal: 7, backgroundColor: fp.leaf, borderWidth: 1.5, borderColor: fp.moss, alignItems: 'center', justifyContent: 'center' },
+  badgeText: { fontFamily: 'Inter_600SemiBold', fontSize: 14, lineHeight: 18, color: fp.ink },
   spaceIcon: { width: 24, alignItems: 'center' },
   hash: { fontFamily: 'Inter_400Regular', fontSize: 22, lineHeight: 26, color: fp.forest },
   spaceName: { ...typography.h4, fontFamily: 'Inter_400Regular', color: fp.ink },

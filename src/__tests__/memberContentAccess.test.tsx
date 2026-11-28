@@ -281,6 +281,14 @@ const REGISTRY: Surface[] = [
     proof: cacheGap('[\'community\', \'challenge\', id, \'comments\']', 'challenge-notes', 'cached challenge notes keep a blocked author\'s rows until the next read') },
   { file: 'screens/community/CoachCommunityInboxScreen.tsx', kind: 'list', what: 'the coach community inbox rows',
     how: 'filters my blocks from the block store at render (blockedIds)', proof: { by: 'state', id: 'coach-community-inbox-source' } },
+  // FIX-D10C-1 (D10C-OP1, the operator's grant): the coach's S v2 Community Home reads two counts and his own community's name.
+  { file: 'screens/community/CoachSpacesHomeScreen.tsx', kind: 'list',
+    what: 'the coach Home: the Reports count, the Inbox count of the first page, and the community\'s name',
+    how: 'the Inbox count leaves out my blocks at once by the Inbox page\'s rule (a useBlockedUsersStore filter) and drops a blocked or banned author\'s cached rows (dropAuthorFromCoachInbox); the Reports count is the moderation queue the coach must see, as CommunityReportsEntry\'s EXEMPT row; the name is his own community\'s',
+    proof: { by: 'suite', file: 'screens/community/__tests__/D10CCoachHome.test.tsx', titles: [
+      'KT-2: a client I block from another screen leaves the Inbox number on the Home at once, with no new inbox read',
+      'KT-2: dropAuthorFromCoachInbox (a block or a ban) drops the rows of that author from the Inbox number on the Home before any re-read answers',
+    ] } },
   { file: 'screens/community/CoachCommunityPostDetailScreen.tsx', kind: 'list', what: 'a post and its comments, coach side', how: 'server read only',
     proof: cacheGap('coachCommunityKeys.post', 'coach-post-detail', 'the cached post detail keeps a blocked member\'s words until the next read') },
   { file: 'screens/client/CommunityScreen.tsx', kind: 'list', what: 'the wins feed (other members\' wins)', how: 'kept in screen state; no block filter',
