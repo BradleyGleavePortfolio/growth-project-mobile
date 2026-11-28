@@ -103,7 +103,11 @@ const leave = () => act(async () => {
   mockFocus.undo?.();
   mockFocus.undo = null;
 });
+// A return comes after the open's reads: the page starts a visit at Date.now() and counts a read that answered at or
+// after it. This file's fake Date moves only on 20 ms auto-ticks, which a busy runner can starve, so without this step
+// the return could read the same Date.now() as the open's last answer (CI-FLAKES-2-M, F5: :197 read "auto").
 const comeBack = () => act(async () => {
+  jest.advanceTimersByTime(1000);
   const undo = mockFocus.cb?.();
   mockFocus.undo = typeof undo === 'function' ? undo : null;
 });
