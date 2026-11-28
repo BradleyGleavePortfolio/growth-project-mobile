@@ -1,0 +1,9 @@
+src/store/__tests__/clientStore
+src/screens/client/__tests__/MealPlan
+src/screens/client/__tests__/Goal927
+src/screens/client/__tests__/LsMealPlanPageFresh
+src/screens/client/mealplan/__tests__
+src/screens/client/kitchen/__tests__
+src/screens/client/foodweek/__tests__
+src/services/__tests__/authActions
+src/screens/client/__tests__/ClientMacrosScreen
