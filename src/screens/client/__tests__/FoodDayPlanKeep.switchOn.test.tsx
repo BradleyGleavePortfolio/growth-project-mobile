@@ -19,12 +19,13 @@
 import React from 'react';
 import { Alert } from 'react-native';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
-import { QueryClientProvider, dehydrate, hydrate } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, dehydrate, hydrate } from '@tanstack/react-query';
 import LogScreen from '../LogScreen';
 import KitchenScreen from '../kitchen/KitchenScreen';
 import PlanMealScreen from '../mealplan/PlanMealScreen';
 import FoodWeekScreen from '../foodweek/FoodWeekScreen';
 import { queryClient, serializePersistedClient } from '../../../services/queryClient';
+import { mealTemplatesApi } from '../../../api/mealTemplatesApi';
 
 const TODAY = '2026-11-24';
 const KEY = ['meal-plan', 'today', TODAY];
@@ -296,22 +297,24 @@ describe('FOODDAY-PLAN-KEEP-M: the plan error block stays for a plan with no ans
 
 describe('FOODDAY-PLAN-KEEP-M: a cold start on a saved plan whose last re-read failed', () => {
   it('the app saved the plan query in error with its data (queryClient.ts saves a query in any state); the next start offline shows the plan', async () => {
-    const view = await morning();
+    // The last session: the plan read answered, then a re-read failed offline (any reader above), so the query was in
+    // error with its data when the persister wrote it. Made on a client of its own that is never drawn.
+    const last = new QueryClient({ defaultOptions: queryClient.getDefaultOptions() });
+    const readPlan = () => mealTemplatesApi.todayForClient(TODAY).then((r) => r.data);
+    await last.fetchQuery({ queryKey: KEY, queryFn: readPlan });
     goOffline();
-    const since = Date.now() - 1;
-    await act(async () => { await queryClient.refetchQueries({ queryKey: KEY }); });
-    await planFailed(since);
-    view.unmount();
-    // What the persister writes, read back at the next start, ten minutes later (older than the read's five minutes).
+    await last.fetchQuery({ queryKey: KEY, queryFn: readPlan, staleTime: 0 }).catch(() => undefined);
+    // What the persister writes (queryClient.ts serializePersistedClient), read back at the next start, ten minutes later.
     const saved = JSON.parse(serializePersistedClient({
-      timestamp: Date.now(), buster: 'test', clientState: dehydrate(queryClient, { shouldDehydrateQuery: () => true }),
+      timestamp: Date.now(), buster: 'test', clientState: dehydrate(last, { shouldDehydrateQuery: () => true }),
     }));
     const plan = saved.clientState.queries.find((q: { queryHash: string }) => q.queryHash === JSON.stringify(KEY));
     expect(plan.state.status).toBe('error');
     expect(plan.state.data).toBeDefined();
-    queryClient.clear();
+    last.clear(); // its reads would otherwise wait out their ten-minute gcTime and keep jest from exiting
     later(10);
-    hydrate(queryClient, saved.clientState);
+    hydrate(queryClient, saved.clientState); // the app's client at its start (empty: beforeEach cleared it)
+    expect(queryClient.getQueryState(KEY)?.status).toBe('error');
     const coldSince = Date.now() - 1;
     await render(tree());
     await planFailed(coldSince); // the start's own read fails offline too
