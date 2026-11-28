@@ -385,10 +385,12 @@ describe('case 10, the navigator half: Open Kitchen\'s call never leaves two Kit
 
   async function start(before: Array<readonly [string, object?]>) {
     const ref = createNavigationContainerRef<Record<string, object | undefined>>();
+    // The tab and stack routes are the navigator's own; the ref is driven by name, as the app's code does.
+    const go = ref as unknown as { navigate: (name: string, params?: object) => void };
     await render(<NavigationContainer ref={ref}><ClientNavigator /></NavigationContainer>);
-    for (const [name, params] of before) await act(async () => ref.navigate(name as never, params as never));
-    await act(async () => ref.navigate('Log'));
-    await act(async () => ref.navigate(...(OPEN_KITCHEN as unknown as [never, never])));
+    for (const [name, params] of before) await act(async () => go.navigate(name, params));
+    await act(async () => go.navigate('Log'));
+    await act(async () => go.navigate(OPEN_KITCHEN[0], OPEN_KITCHEN[1]));
     return ref;
   }
   it('from You never opened, and from the You home: You, then the Kitchen; Back lands on You', async () => {
