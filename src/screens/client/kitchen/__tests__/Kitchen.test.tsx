@@ -563,12 +563,19 @@ describe('GROCERY-OFFLINE-KEEP-M: the Kitchen keeps From {coach} and its counts 
     const { serializePersistedClient } = jest.requireActual('../../../../services/queryClient');
     const saved = JSON.parse(serializePersistedClient({ timestamp: Date.now(), buster: 'test',
       clientState: dehydrate(before, { shouldDehydrateQuery: () => true }) }));
+    // Ten minutes later, so every saved read is older than its staleTime and the page reads it again.
+    for (const query of saved.clientState.queries) {
+      query.state.dataUpdatedAt -= 10 * 60 * 1000;
+      query.state.errorUpdatedAt -= 10 * 60 * 1000;
+    }
+    const sent = mockGet.mock.calls.length;
     const after = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
     hydrate(after, saved.clientState);
     expect(after.getQueryState(['meal-plan', 'today', '2026-10-13'])?.status).toBe('error');
     await render(<QueryClientProvider client={after}><KitchenScreen /></QueryClientProvider>);
     await screen.findByTestId('kitchen-log-food');
     shown();
+    await waitFor(() => expect(mockGet.mock.calls.length).toBeGreaterThanOrEqual(sent + ALL_READS.length)); // the open read each again
     await act(async () => undefined);
     shown();
   });

@@ -65,12 +65,17 @@ const prepKey = (qc: QueryClient) => qc.getQueryCache().findAll({ queryKey: ['pr
 
 /**
  * A cold start: what the app's persister writes (queryClient.ts:129-131 saves a query in any state; its serializer cuts
- * the error down), read back into a new client, as the app does at its next start.
+ * the error down), read back into a new client, as the app does at its next start, ten minutes later (so every saved
+ * read is older than its page's staleTime and the open reads again).
  */
 function coldStart(before: QueryClient): QueryClient {
   const saved = JSON.parse(serializePersistedClient({
     timestamp: Date.now(), buster: 'test', clientState: dehydrate(before, { shouldDehydrateQuery: () => true }),
   }));
+  for (const query of saved.clientState.queries) {
+    query.state.dataUpdatedAt -= 10 * 60 * 1000;
+    query.state.errorUpdatedAt -= 10 * 60 * 1000;
+  }
   const after = client();
   hydrate(after, saved.clientState);
   return after;
@@ -122,10 +127,11 @@ describe('GROCERY-OFFLINE-KEEP-M: the Grocery list keeps her list when a re-read
     const after = coldStart(before);
     expect(after.getQueryState(KEY)?.status).toBe('error');
     expect(after.getQueryData(KEY)).toEqual(rows);
+    const reads = jest.mocked(listsApi.getList).mock.calls.length;
     const view = await mount(after, GroceryListScreen);
     expect(view.getByText('Milk')).toBeTruthy();
     expect(view.queryByText("Couldn't load grocery list.")).toBeNull();
-    await waitFor(() => expect(listsApi.getList).toHaveBeenCalledTimes(2)); // the open read the list again
+    await waitFor(() => expect(listsApi.getList).toHaveBeenCalledTimes(reads + 1)); // the open read the list again
     await failedOnce(after, KEY);
     await act(async () => undefined);
     expect(view.queryByText("Couldn't load grocery list.")).toBeNull();
@@ -172,9 +178,15 @@ describe('GROCERY-OFFLINE-KEEP-M: the Prep guide keeps its recipes when a re-rea
     await first.unmount();
     const after = coldStart(before);
     expect(after.getQueryState(key)?.status).toBe('error');
+    const reads = jest.mocked(prepGuideApi.getWeeklyGuide).mock.calls.length;
     const view = await mount(after, PrepGuideScreen);
     expect(view.getByText('Soup')).toBeTruthy();
     expect(view.queryByText("Couldn't load prep guide")).toBeNull();
+    await waitFor(() => expect(prepGuideApi.getWeeklyGuide).toHaveBeenCalledTimes(reads + 1)); // the open read it again
+    await failedOnce(after, key);
+    await act(async () => undefined);
+    expect(view.queryByText("Couldn't load prep guide")).toBeNull();
+    expect(view.getByText('Soup')).toBeTruthy();
   });
 
   it('with no guide on the phone, a failed read still shows the notice and Try again (unchanged)', async () => {
