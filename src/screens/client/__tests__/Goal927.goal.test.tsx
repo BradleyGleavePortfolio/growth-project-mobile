@@ -147,10 +147,12 @@ describe.each(SIZES)('meal plan toward C2 C_day, %s', (_size, dims) => {
   });
   afterEach(() => { jest.useRealTimers(); });
 
-  it.each(['loading', 'error', 'missing'] as const)('does not claim a next unlogged meal when the day log is %s', async (state) => {
+  // FIX-MPF-1 (OPERATOR RULING 7235584848, B1 b): a failed read with no answer yet is unknown; a failed re-read keeps
+  // the answer held (the ruled class "a re-read that fails keeps the last good answer").
+  it.each(['loading', 'error with no data', 'missing'] as const)('does not claim a next unlogged meal when the day log is %s', async (state) => {
     mockLog = {
-      data: state === 'error' ? LOG : undefined,
-      isError: state === 'error',
+      data: undefined,
+      isError: state === 'error with no data',
       isLoading: state === 'loading',
     };
     await render(<ClientDailyMealPlanScreen />);
@@ -158,6 +160,17 @@ describe.each(SIZES)('meal plan toward C2 C_day, %s', (_size, dims) => {
     expect(screen.queryByText('Ate it as planned')).toBeNull();
     // A failed or not-yet-known read does not remove the original log actions.
     expect(screen.getAllByText('Log this meal')).toHaveLength(DAY.length);
+  });
+
+  it('FIX-MPF-1: a re-read that fails keeps the day log it already read: eaten meals, the next meal and what is left', async () => {
+    mockTarget = TARGET;
+    mockLog = { data: LOG, isError: true, isLoading: false };
+    await render(<ClientDailyMealPlanScreen />);
+    expect(screen.getByText('Logged as planned')).toBeTruthy();
+    expect(screen.getByText(/^Logged with a change: /)).toBeTruthy();
+    expect(within(screen.getByTestId('daily-meal-plan-next-card')).getByText('Ate it as planned')).toBeTruthy();
+    expect(screen.getAllByText('Log this meal')).toHaveLength(DAY.length - 1);
+    expect(screen.getByText('640 kcal and 63 g protein left.')).toBeTruthy();
   });
 
   it('a: the eyebrow is the day as the Food day writes it (C_day y 128-156 px, "TODAY, TUESDAY 13 OCTOBER")', async () => {

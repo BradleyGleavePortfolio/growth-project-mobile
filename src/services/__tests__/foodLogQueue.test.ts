@@ -149,7 +149,7 @@ describe('foodLogQueue — offline enqueue + flush on reconnect', () => {
     await enqueue({ kind: 'search', foodItemId: 'b', log });
     refuse(Object.assign(new Error('bad payload'), { response: { status: 400 } }));
 
-    expect(await sending).toEqual({ flushed: 0, remaining: 1, parked: 1 });
+    expect(await sending).toEqual({ flushed: 0, remaining: 1, parked: 1, days: [] });
     expect(await getQueueLength()).toBe(1);
     expect(await getQueueLength({ includeParked: true })).toBe(2);
   });
@@ -167,13 +167,13 @@ describe('foodLogQueue — offline enqueue + flush on reconnect', () => {
       });
       api.__logFood.mockRejectedValueOnce(e429).mockResolvedValueOnce({ data: {} });
 
-      expect(await flush()).toEqual({ flushed: 0, remaining: 1, parked: 0 });
+      expect(await flush()).toEqual({ flushed: 0, remaining: 1, parked: 0, days: [] });
       now.mockReturnValue(60_999);
-      expect(await flush()).toEqual({ flushed: 0, remaining: 1, parked: 0 });
+      expect(await flush()).toEqual({ flushed: 0, remaining: 1, parked: 0, days: [] });
       expect(api.__logFood).toHaveBeenCalledTimes(1);
 
       now.mockReturnValue(61_000);
-      expect(await flush()).toEqual({ flushed: 1, remaining: 0, parked: 0 });
+      expect(await flush()).toEqual({ flushed: 1, remaining: 0, parked: 0, days: ['2026-04-23'] });
       expect(api.__logFood).toHaveBeenCalledTimes(2);
     } finally {
       now.mockRestore();
