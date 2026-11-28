@@ -81,6 +81,7 @@ export default function SaveMealSheet({ meals, writes, onClose }: {
   useEffect(() => { if (Platform.OS === 'ios' && line) AccessibilityInfo.announceForAccessibility(line); }, [line]);
 
   const canSave = chosen.length > 0 && over <= 0 && nameOk(name);
+  const pick = line === SAVE_WORDS.foodGone ? line : null; // C2 (LO-SAVED-MEAL-SAVE-M-1): KS-4 and KS-6 head the list and scroll with it
   const toggle = (f: DayFood) => {
     if (!f.savable || busy) return;
     const next = new Set(picks);
@@ -149,6 +150,8 @@ export default function SaveMealSheet({ meals, writes, onClose }: {
     body = (
       <>
         <Text style={s.muted}>{SAVE_WORDS.tick}</Text>
+        {over > 0 ? <Text style={[s.note, s.line]} testID="save-too-many">{untickWords(over)}</Text> : null}
+        {pick ? <View style={s.line} testID="save-line"><StyleCNotice key={pick}>{pick}</StyleCNotice></View> : null}
         {groups.map((g) => (
           <View key={g.meal}>
             <Text style={s.overline} accessibilityRole="header" testID={`save-group-${g.meal}`}>{groupTitle(g)}</Text>
@@ -175,9 +178,8 @@ export default function SaveMealSheet({ meals, writes, onClose }: {
     );
     foot = (
       <>
-        {over > 0 ? <Text style={s.note} testID="save-too-many">{untickWords(over)}</Text> : null}
         <MealNameField value={name} onChange={setTyped} testID="save-name" editable={!busy} />
-        {line ? <View style={s.line} testID="save-line"><StyleCNotice key={line}>{line}</StyleCNotice></View> : null}
+        {line && !pick ? <View style={s.line} testID="save-line"><StyleCNotice key={line}>{line}</StyleCNotice></View> : null}
         <View style={s.submit} testID="save-submit-wrap">
           <PrimaryButton wrap label={retry ? WORDS.tryAgain : saveFoodsWords(chosen.length)} onPress={() => void save()}
             disabled={!busy && !canSave} loading={busy} haptic={false} testID="save-submit" />
@@ -187,7 +189,7 @@ export default function SaveMealSheet({ meals, writes, onClose }: {
   }
 
   return (
-    <KitchenSheet visible title={SAVE_WORDS.way} onClose={onClose} footer={foot} testID="kitchen-save-sheet">{body}</KitchenSheet>
+    <KitchenSheet visible title={SAVE_WORDS.way} onClose={onClose} footer={foot} toTop={pick} testID="kitchen-save-sheet">{body}</KitchenSheet>
   );
 }
 
