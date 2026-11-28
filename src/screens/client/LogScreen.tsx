@@ -11,6 +11,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  AccessibilityInfo,
 } from 'react-native';
 import * as ReactQuery from '@tanstack/react-query';
 import * as Navigation from '@react-navigation/native';
@@ -28,6 +29,10 @@ import WaterTracker from '../../components/WaterTracker';
 import DailySummaryBar from '../../components/log/DailySummaryBar';
 import MealSectionCard from '../../components/log/MealSectionCard';
 import FoodSearchModal from '../../components/log/FoodSearchModal';
+import type { BrowseTab } from '../../components/log/FoodSearchView';
+import type { SavedMealFailure, SavedPart } from '../../components/log/SavedMealsTab';
+import { SAVED_MEALS_KEY, type SavedMeal } from '../../api/savedFoodsApi';
+import { addSavedMeal } from './kitchen/kitchenAdd';
 import MealChoiceRow from '../../components/log/MealChoiceRow';
 import { FoodDayGate } from '../../components/log/FoodDayView';
 import { featureFlags } from '../../config/featureFlags';
@@ -110,7 +115,11 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
   const [activeMealType, setActiveMealType] = useState<MealType>('breakfast');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const [recentTab, setRecentTab] = useState<'recent' | 'frequent'>('recent');
+  const [recentTab, setRecentTab] = useState<BrowseTab>('recent');
+  // KITCHEN-DOOR-M (R6, D5, D7): the saved meal being added, and why the last tap added nothing.
+  const [savingMealId, setSavingMealId] = useState<string | null>(null);
+  const [savedFailure, setSavedFailure] = useState<SavedMealFailure | null>(null);
+  const savedSending = useRef(false);
   const [manualMode, setManualMode] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [removingWaterId, setRemovingWaterId] = useState<string | null>(null);
@@ -249,6 +258,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
     setSearchError(null);
     setManualMode(manual);
     setRecentTab('recent');
+    setSavedFailure(null);
     setAddedFoodName(null);
     resetManualFields();
     setModalVisible(true);
@@ -533,6 +543,57 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
     }
   };
   const handleRepeatMeal = () => repeatMealTo(repeatMeal, activeMealType, sheetLink);
+
+  // KITCHEN-DOOR-M (R6): one tap adds every food of a saved meal to the sheet's meal and day, through the Kitchen's own
+  // add step (one key per intended save, shared with the Kitchen's sheet). Online only, nothing queued (R7). The sheet
+  // closes on an answer with entries only; every other answer keeps it open with its line (D7).
+  const addSavedMealTo = async (meal: SavedMeal) => {
+    if (!currentUser || foodSaving || savedSending.current) return;
+    setSavedFailure(null);
+    const day = takeLogDay();
+    const mealType = activeMealType;
+    if (!online) {
+      HapticService.error();
+      setSavedFailure({ meal, outcome: 'offline' });
+      return;
+    }
+    savedSending.current = true;
+    setSavingMealId(meal.id);
+    setFoodSaving(true);
+    try {
+      const outcome = await addSavedMeal(meal.id, day, mealType);
+      if (outcome !== 'added') {
+        HapticService.error();
+        setSavedFailure({ meal, outcome });
+        // KK-7 (the meal is gone) and KK-8b (its foods were removed): read her saved meals again.
+        if (outcome === 'meal-gone' || outcome === 'empty') void cache?.invalidateQueries({ queryKey: SAVED_MEALS_KEY });
+        return;
+      }
+      HapticService.success();
+      track(AnalyticsEvents.MEAL_LOGGED, { meal_type: mealType, source: 'saved_meal' });
+      // The day reads its new foods before the sheet closes (as Repeat does); every other reader of the day's log too.
+      void cache?.invalidateQueries({ queryKey: ['food', 'log'] });
+      await refreshShownDay(currentUser.id, day);
+      onSaved?.();
+      setModalVisible(false);
+      const line = `${meal.name} added to ${mealLabel(mealType)}.`;
+      setSavedMessage(line);
+      if (Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility(line);
+    } finally {
+      savedSending.current = false;
+      setSavingMealId(null);
+      setFoodSaving(false);
+    }
+  };
+  // R8: the sheet closes, then the Kitchen opens in the You stack, popping back to a Kitchen already there (never two).
+  const savedPart: SavedPart = {
+    mealType: activeMealType, onAdd: (meal) => void addSavedMealTo(meal), savingId: savingMealId, failure: savedFailure,
+    onOpenKitchen: navigation ? () => {
+      if (foodSaving) return;
+      setModalVisible(false);
+      navigation.navigate('MoreTab', { screen: 'Kitchen', initial: false, pop: true });
+    } : undefined,
+  };
 
   // UI-3 "Ate it as planned": one tap logs the plan meal with LogPlannedMealButton's write (offline queue included).
   const logPlanned = async (slot: DaySlot) => {
@@ -887,7 +948,9 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
         searchResults={searchResults}
         didYouMean={didYouMean}
         recentTab={recentTab}
-        onRecentTabChange={setRecentTab}
+        onRecentTabChange={(tab) => { setSavedFailure(null); setRecentTab(tab); }}
+        // R3: a plan meal's or a usual meal's Something else (a link) has no Saved meals tab.
+        saved={sheetLink ? undefined : savedPart}
         recentFoods={recentFoods}
         frequentFoods={frequentFoods}
         browseUnavailable={browseUnavailable}
