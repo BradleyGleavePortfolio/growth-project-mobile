@@ -1,0 +1,10 @@
+src/screens/client/__tests__/MealPlanOfflineJoin
+src/screens/client/__tests__/MealPlanPageFresh
+src/screens/client/__tests__/Goal927
+src/screens/client/__tests__/MealPlan
+src/screens/client/__tests__/LsMealPlanPageFresh
+src/screens/client/__tests__/ClientMacrosScreen
+src/screens/client/mealplan
+src/screens/client/__tests__/mealPlanLocalDay
+src/screens/client/__tests__/lsMealPlanLocalDay
+src/screens/client/__tests__/loMealPlanLocalDay
