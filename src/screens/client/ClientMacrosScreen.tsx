@@ -90,8 +90,10 @@ export default function ClientMacrosScreen() {
     >
       {/* K5 Style C (the nearest drawing, the coach's macros): the deep forest masthead with a rounded foot. */}
       <PlanMasthead title="Your daily targets" testID="macros-masthead" ground={lightTokens.surface.masthead} foot="round"
-        eyebrow={!isLoading && !isError && data ? (coachName ? `Set by ${coachName}` : 'Your target') : null}>
-        {!isLoading && !isError && data ? (
+        eyebrow={!isLoading && data ? (coachName ? `Set by ${coachName}` : 'Your target') : null}>
+        {/* MEALPLAN-OFFLINE-JOIN-M (the ruled class "a re-read that fails keeps the last good answer"): a held target
+            stays when a later read fails; only a read that failed with no target held shows the error card. */}
+        {!isLoading && data ? (
           <>
             {/* K5 Style C: the day's number large in the serif with its unit beside it. */}
             <View accessible testID="macros-day-target">
@@ -122,7 +124,7 @@ export default function ClientMacrosScreen() {
             <View style={[styles.bone, { backgroundColor: sc.border }]} />
             <View style={[styles.bone, styles.boneShort, { backgroundColor: sc.border }]} />
           </View>
-        ) : isError ? (
+        ) : isError && !data ? (
           <View style={[planStyleC.card, styles.cardFill]} accessibilityRole="alert" accessibilityLiveRegion="polite">
             <Text style={[typography.body, { color: sc.textPrimary }]}>
               Could not load your targets right now. Pull to retry.
