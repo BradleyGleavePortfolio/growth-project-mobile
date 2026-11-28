@@ -8,7 +8,8 @@
  * protein and, for a client with a coach while the plan checklist switch is on, one dot per plan meal, filled when
  * done by the Food day's own rule. A client with no coach gets the same page without the coach's parts (C6) and
  * the page makes no plan or daily read for her. Every number is the signed-in client's own read; a read that
- * failed never shows as a zero, an empty dot or "Nothing yet". Words: the 137-2 table in the PR body.
+ * failed never shows as a zero, an empty dot or "Nothing yet", and a re-read that fails (offline) keeps the last good
+ * answer she was shown. Words: the 137-2 table in the PR body.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
@@ -60,6 +61,9 @@ function FoodWeekPage({ coached }: { coached: boolean }) {
   const s = useMemo(() => makeStyles(sc), [sc]);
   const navigation = React.useContext((Navigation.NavigationContext as React.Context<unknown> | undefined) ?? NO_NAVIGATION) as Nav | undefined;
   const [back, setBack] = useState(0);
+  // The pull's spinner shows only for a pull she started, until the week answers (the Food tab's own rule,
+  // LogScreen.tsx refreshing); a return read never turns it on (on iOS that moves the page down by the spinner).
+  const [pulled, setPulled] = useState(false);
   const today = getTodayString();
   const range = weekRange(today, back);
   // R6: plan meals done only for a client with a coach (LogScreen.tsx:767) while the plan checklist switch is on.
@@ -84,9 +88,9 @@ function FoodWeekPage({ coached }: { coached: boolean }) {
     staleTime: 5 * 60 * 1000,
     enabled: withDots,
   })) });
-  // R7: the calorie target, the same resolver the Food day's day log uses; none or a failed read: no line.
+  // R7: the calorie target, the same resolver the Food day's day log uses; none, or a failed read with no answer: no line.
   const target = useCurrentMacrosForSelf();
-  const kcalTarget = !target.isError && typeof target.data?.calories_kcal === 'number' && target.data.calories_kcal > 0
+  const kcalTarget = typeof target.data?.calories_kcal === 'number' && target.data.calories_kcal > 0
     ? target.data.calories_kcal : null;
 
   // Every read of the range again: Try again and the pull to refresh.
@@ -96,17 +100,20 @@ function FoodWeekPage({ coached }: { coached: boolean }) {
     void target.refetch();
   };
   // Back on the page (she may have logged a food on the Food tab for any shown day): on every range, the weekly
-  // read and every day and plan read of the shown range are fresh again, so each row says what the Food day says.
+  // read and every day read of the shown range are fresh again, so each row says what the Food day says. A plan read
+  // is read again only when it has no answer: the Food tab never writes a plan (it shares the Food day's plan key).
   const onReturn = useRef<() => void>(() => undefined);
   onReturn.current = () => {
     if (!weekly.isFetching) void weekly.refetch();
-    if (withDots) [...daily, ...plans].forEach((q) => { if (!q.isFetching) void q.refetch(); });
+    if (withDots) [...daily, ...plans.filter((q) => q.data === undefined)].forEach((q) => { if (!q.isFetching) void q.refetch(); });
   };
   useEffect(() => navigation?.addListener?.('focus', () => onReturn.current()), [navigation]);
+  useEffect(() => { if (!weekly.isFetching) setPulled(false); }, [weekly.isFetching]);
 
-  const totals = weekly.isSuccess ? weeklyTotals(weekly.data, range.days) : null;
+  // C1 (operator ruling): a re-read that fails keeps the last good answer; S8 and S9 only for a read with no answer.
+  const totals = weekly.data !== undefined ? weeklyTotals(weekly.data, range.days) : null;
   const average = totals ? weekAverage(totals, range.days, today) : null;
-  const dots: Array<PlanDots | null> = range.days.map((day, i) => (withDots && daily[i].isSuccess && plans[i].isSuccess
+  const dots: Array<PlanDots | null> = range.days.map((day, i) => (withDots && daily[i].data !== undefined && plans[i].data !== undefined
     ? planDots(plans[i].data, daily[i].data, day) : null));
   const goldAt = range.current && totals?.[6] ? 6 : -1;
   const anyEntry = !!totals?.some(Boolean);
@@ -122,7 +129,8 @@ function FoodWeekPage({ coached }: { coached: boolean }) {
 
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.content} testID="food-week"
-      refreshControl={<RefreshControl refreshing={weekly.isRefetching && !loading} onRefresh={readAll} tintColor={mast.ink} />}>
+      refreshControl={<RefreshControl refreshing={pulled && weekly.isRefetching && !loading}
+        onRefresh={() => { setPulled(true); readAll(); }} tintColor={mast.ink} />}>
       <View style={s.mast} testID="food-week-masthead">
         {navigation ? <ForestBand /> : null}
         {/* iOS overscroll above the masthead stays forest, never a bone strip. */}
@@ -154,7 +162,7 @@ function FoodWeekPage({ coached }: { coached: boolean }) {
             <View style={[s.paperBone, s.chartBone]} />
             {range.days.map((day) => <View key={day} style={s.row}><View style={[s.paperBone, s.rowBone]} /></View>)}
           </View>
-        ) : weekly.isError ? (
+        ) : weekly.isError && weekly.data === undefined ? (
           <QuietError message={loadFailureMessage(weekly.error, 'Your week')} onRetry={readAll} retrying={weekly.isFetching}
             testID="food-week-error" />
         ) : totals ? (

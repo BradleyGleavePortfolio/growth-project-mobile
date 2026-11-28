@@ -6,7 +6,8 @@
  */
 import { savedFoodsApi } from '../../../api/savedFoodsApi';
 import type { MealType } from '../../../types';
-import { withSaveKey } from '../../../utils/log/saveKey';
+import { isSaveKeyKept, withSaveKey } from '../../../utils/log/saveKey';
+import { MEAL_SECTIONS } from '../../../utils/log/types';
 import { addIntent, failureOf } from './kitchen';
 
 /**
@@ -26,3 +27,11 @@ export async function addSavedMeal(mealId: string, date: string, meal: MealType)
     return !status || status >= 500 ? 'lost' : 'refused';
   }
 }
+
+/**
+ * FIX-KM-2 (C1's class): the meal of this saved meal's lost add on `date` whose key is still kept, else null. A sheet that
+ * opens the meal again holds this choice with Try again, so the next send is the same save with the same key, however
+ * the sheet was left (Close, or the Kitchen left) and whatever the clock says. Reads the kept keys only.
+ */
+export const keptAddMeal = (mealId: string, date: string): MealType | null =>
+  MEAL_SECTIONS.find((m) => isSaveKeyKept(addIntent(mealId, date, m.type)))?.type ?? null;

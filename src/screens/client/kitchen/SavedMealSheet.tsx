@@ -30,7 +30,7 @@ import { dayForNewLog } from '../../../utils/logDay';
 import {
   SAVE_WORDS, WORDS, deleteFailedTitle, deleteTitle, heldNote, kcalWords, mealOfHour, mealView, sheetLine,
 } from './kitchen';
-import { addSavedMeal, type AddOutcome } from './kitchenAdd';
+import { addSavedMeal, keptAddMeal, type AddOutcome } from './kitchenAdd';
 import { MealNameField } from './SaveMealSheet';
 import { nameOk } from './saveMeal';
 import { failureKind, online, type SavedMealWrites } from './useSavedMealWrites';
@@ -167,12 +167,15 @@ export default function SavedMealSheet({ meal, onClose, onAdded, onStale, writes
   const [renaming, setRenaming] = useState(false);
   const [newName, setNewName] = useState('');
 
-  // R5: the meal of the hour, read when the sheet opens; she can change it.
+  // R5: the meal of the hour, read when the sheet opens; she can change it. FIX-KM-2 (C1's class): a lost add of this
+  // meal whose key is still kept opens as she left it, its choice held with KK-6 and Try again, so Try again resends
+  // that key; a new choice or the hour moving on never makes a second save of a send that may have landed.
   useEffect(() => {
     if (!meal) return;
-    setType(mealOfHour(nowMinute()));
-    setLine(null);
-    setRetry(false);
+    const kept = keptAddMeal(meal.id, dayForNewLog());
+    setType(kept ?? mealOfHour(nowMinute()));
+    setLine(kept ? WORDS.notAdded : null);
+    setRetry(kept !== null);
     setClosedOut(false);
     setRenaming(false);
   }, [meal]);
