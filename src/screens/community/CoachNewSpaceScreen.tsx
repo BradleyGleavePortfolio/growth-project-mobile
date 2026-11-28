@@ -10,12 +10,13 @@
  * Back on v2 or v3 steps back with the entries kept, and so do Android's Back and the iPhone edge swipe: usePreventRemove
  * holds them (native-stack passes preventNativeDismiss to the native screen only for it; a raw beforeRemove listener
  * cannot hold the swipe, ClientNavigator.tsx's m#521 note). A Create leaves once, with nothing held. Nothing is saved
- * to the phone.
+ * to the phone. Every word draws whole at 320 pt and 130% text: the top bar's title wraps at a space between two equal
+ * side slots sized to their content, and a card's title column fits "Announcement" (LS-D10C-1 B2 and its class).
  * Left out until the server has them (R4, v1.1): Section, Inside, the depth line, Public on TGP, "You can change this
  * later." and v3's total line.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View, type LayoutChangeEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, usePreventRemove } from '@react-navigation/native';
 import HapticPressable from '../../components/HapticPressable';
@@ -74,6 +75,10 @@ export default function CoachNewSpaceScreen(): React.ReactElement {
   const trimmed = name.trim();
   const named = Array.from(trimmed).length >= NAME_MIN;
   const stepBack = () => setStep(step === 'packages' ? 'who' : 'name');
+  // The top bar's two side slots take their content's width (Close or Back, the counter) and the wider of the two on
+  // both sides, so the title stays centred and the counter keeps one line at any text size; the title wraps at a space.
+  const [side, setSide] = useState(0);
+  const fitSide = (e: LayoutChangeEvent) => { const w = e.nativeEvent.layout.width; setSide((v) => (w > v ? w : v)); };
 
   // Android's Back and the iPhone edge swipe step back like the top bar while v2 or v3 is open. After a Create the
   // hold is off first (leaving), then the page goes back once, so nothing holds the Create's goBack.
@@ -114,13 +119,15 @@ export default function CoachNewSpaceScreen(): React.ReactElement {
   const title = step === 'name' ? 'New space' : step === 'who' ? 'Visibility' : 'Included with a package';
   const header = (
     <View style={s.bar}>
-      <HapticPressable intent="light" onPress={() => (step === 'name' ? navigation.goBack() : stepBack())}
-        accessibilityRole="button" accessibilityLabel={step === 'name' ? 'Close' : 'Back'} style={s.barButton} testID="new-space-back">
-        <Ionicons name={step === 'name' ? 'close' : 'chevron-back'} size={26} color={fp.ink} />
-      </HapticPressable>
-      <Text style={s.barTitle} numberOfLines={1} accessibilityRole="header"
+      <View style={[s.side, { minWidth: side }]} onLayout={fitSide}>
+        <HapticPressable intent="light" onPress={() => (step === 'name' ? navigation.goBack() : stepBack())}
+          accessibilityRole="button" accessibilityLabel={step === 'name' ? 'Close' : 'Back'} style={s.barButton} testID="new-space-back">
+          <Ionicons name={step === 'name' ? 'close' : 'chevron-back'} size={26} color={fp.ink} />
+        </HapticPressable>
+      </View>
+      <Text style={s.barTitle} accessibilityRole="header"
         accessibilityLabel={counter ? `${title}, step ${step === 'name' ? 1 : 2} of 2` : title} testID="new-space-title">{title}</Text>
-      <View style={s.barButton}>
+      <View style={[s.side, s.sideEnd, { minWidth: side }]} onLayout={fitSide}>
         {counter ? <Text style={s.counter} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">{counter}</Text> : null}
       </View>
     </View>
@@ -221,14 +228,16 @@ const s = StyleSheet.create({
   page: { backgroundColor: fp.surface },
   content: { paddingHorizontal: 16, paddingTop: 8 },
   bar: { minHeight: 56, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 },
-  barButton: { width: 64, minHeight: layout.touchMin, justifyContent: 'center', alignItems: 'flex-start', paddingLeft: 6 },
+  side: { minHeight: layout.touchMin, justifyContent: 'center', alignItems: 'flex-start' },
+  sideEnd: { alignItems: 'flex-end' },
+  barButton: { width: layout.touchMin, minHeight: layout.touchMin, justifyContent: 'center', alignItems: 'flex-start', paddingLeft: 6 },
   barTitle: { flex: 1, textAlign: 'center', fontFamily: 'Inter_600SemiBold', fontSize: 18, color: fp.ink },
-  counter: { fontFamily: 'Inter_500Medium', fontSize: 15, color: fp.brand400, alignSelf: 'flex-end', paddingRight: 8 },
+  counter: { fontFamily: 'Inter_500Medium', fontSize: 15, color: fp.brand400, paddingRight: 8 },
   label: { fontFamily: 'Inter_600SemiBold', fontSize: 15, color: fp.ink, marginBottom: 8 },
   field: { minHeight: 52, borderRadius: 14, borderWidth: 1.5, borderColor: fp.forest, backgroundColor: neutral[0], paddingHorizontal: 14, fontFamily: 'Inter_400Regular', fontSize: 17, color: fp.ink },
   eyebrow: { ...typography.eyebrow, fontFamily: 'Inter_600SemiBold', fontSize: 12, lineHeight: 16, letterSpacing: 1.4, color: fp.forest, marginTop: 24, marginBottom: 10 },
   options: { gap: 12 },
-  card: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14, borderRadius: 16, borderWidth: 1, borderColor: fp.sageLine, backgroundColor: neutral[0] },
+  card: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 16, borderWidth: 1, borderColor: fp.sageLine, backgroundColor: neutral[0] },
   cardOn: { borderColor: fp.forest, borderWidth: 1.5 },
   tile: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: fp.sage },
   tileOn: { backgroundColor: fp.forest },
