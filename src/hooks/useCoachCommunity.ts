@@ -31,6 +31,7 @@ import {
   type CoachInboxItem,
   type CoachInboxPage,
   type CoachCohort,
+  type CreateCohortInput,
   type CoachCohortDetail,
   type CoachCohortMember,
   type CoachFlaggedItem,
@@ -329,11 +330,11 @@ export function useCoachPostDetail(
 export function useCreateCohort(): UseMutationResult<
   CoachCohort,
   unknown,
-  { name: string }
+  CreateCohortInput
 > {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { name: string }) =>
+    mutationFn: (input: CreateCohortInput) =>
       coachCommunityApi.createCohort(input),
     onMutate: async (input) => {
       await qc.cancelQueries({ queryKey: coachCommunityKeys.cohorts() });
@@ -346,6 +347,9 @@ export function useCreateCohort(): UseMutationResult<
         member_count: 0,
         unread_count: 0,
         created_at: new Date().toISOString(),
+        // D10-BUILD-COMMUNITY: the new space's tag shows at once.
+        ...(input.kind ? { kind: input.kind } : {}),
+        ...(input.visibility ? { visibility: input.visibility } : {}),
       };
       qc.setQueryData<CoachCohort[]>(coachCommunityKeys.cohorts(), [
         optimistic,

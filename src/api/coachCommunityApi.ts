@@ -155,9 +155,20 @@ export const CoachCohortSchema = z
     /** Unread per space: the server sends none yet, so this is always 0. */
     unread_count: z.number().int().nonnegative(),
     created_at: z.string().optional(),
+    /** D10-BUILD-COMMUNITY: the server's kind and visibility, as plain strings so an unknown value never fails the list. */
+    kind: z.string().optional(),
+    visibility: z.string().optional(),
   })
   .passthrough();
 export type CoachCohort = z.infer<typeof CoachCohortSchema>;
+
+/**
+ * D10-BUILD-COMMUNITY: what a coach may choose for a new space (CreateCohortDto); never 'public', 'members' or 'section'.
+ * package_ids go only with 'package' (FIX-D10C-1: the server refuses them beside any other visibility).
+ */
+export type CreateCohortInput =
+  | { name: string; kind?: 'chat' | 'announcement'; visibility?: 'clients'; package_ids?: never }
+  | { name: string; kind?: 'chat' | 'announcement'; visibility: 'package'; package_ids: string[] };
 
 /** The coach's cohorts (tenant-scoped). */
 export const CoachCohortListSchema = z
@@ -818,7 +829,7 @@ export const coachCommunityApi = {
    * (community.service.ts:106). Idempotent (R19). Optimistic insert +
    * rollback lives in the screen hook.
    */
-  async createCohort(input: { name: string }): Promise<CoachCohort> {
+  async createCohort(input: CreateCohortInput): Promise<CoachCohort> {
     const me = await call(MeWorkspaceWireSchema, () =>
       api.get<unknown>('/community/me'),
     );
@@ -833,7 +844,8 @@ export const coachCommunityApi = {
     return call(z.object({ cohort: CohortAdminWireSchema }).passthrough(), () =>
       api.post<unknown>(
         `/community/workspaces/${workspaceId}/cohorts`,
-        { name: input.name },
+        // Exactly the keys the coach chose: the K2 "New cohort" still sends { name } alone.
+        { ...input },
         idempotentHeaders(),
       ),
     ).then((r) => toCohort(r.cohort));
