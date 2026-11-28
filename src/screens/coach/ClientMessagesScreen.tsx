@@ -47,6 +47,7 @@ import {
 } from '../../components/messaging/threadV2';
 import { useThreadV2 } from '../../hooks/useThreadV2';
 import { messagingV2Api, toMessagingError, type ThreadScope } from '../../api/messagingV2Api';
+import { useScreenAreaKeyboardOffset } from '../../ui/layout/ScreenArea';
 
 interface Message {
   id: string;
@@ -64,6 +65,7 @@ interface Message {
 const FALLBACK_POLL_MS = 60000;
 
 export default function ClientMessagesScreen() {
+  const keyboardOffset = useScreenAreaKeyboardOffset();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   // The Screen wrapper's inset top (insets.top + 12) on the thread header, so its
@@ -358,7 +360,7 @@ export default function ClientMessagesScreen() {
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={0}
+      keyboardVerticalOffset={keyboardOffset}
     >
       <View style={[styles.chatHeader, headerTop]} testID="coach-thread-header">
         <TouchableOpacity
