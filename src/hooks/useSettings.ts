@@ -4,7 +4,8 @@ import { setHapticsEnabled } from '../ui/haptics/haptics.service';
 import { profileApi } from '../services/api';
 import { readUserCache } from '../lib/userCache';
 
-const SETTINGS_KEY = 'gp_client_settings';
+// The signed-in client's settings on this phone; signOut() removes it (services/authActions).
+export const SETTINGS_KEY = 'gp_client_settings';
 
 export interface ClientSettings {
   unit: 'lbs' | 'kg';
@@ -41,8 +42,10 @@ const listeners = new Set<(s: ClientSettings) => void>();
 // read per app session; a failed read (offline, signed out) is tried again
 // the next time settings load.
 let profileSeed: Promise<ClientSettings | null> | null = null;
+// Moved by signOut: a seed started for the person signing out writes nothing.
+let seedEpoch = 0;
 
-async function seedWaterGoalFromProfile(): Promise<ClientSettings | null> {
+async function seedWaterGoalFromProfile(epoch: number): Promise<ClientSettings | null> {
   if (!(await readUserCache())) throw new Error('not signed in');
   const res = await profileApi.get();
   const goal = (res.data as { water_goal_oz?: unknown } | undefined)?.water_goal_oz;
@@ -50,10 +53,20 @@ async function seedWaterGoalFromProfile(): Promise<ClientSettings | null> {
   const stored = await AsyncStorage.getItem(SETTINGS_KEY);
   const saved: Partial<ClientSettings> = stored ? JSON.parse(stored) : {};
   // A goal saved on this phone in the meantime wins.
-  if (typeof saved.waterGoalOz === 'number') return null;
+  if (typeof saved.waterGoalOz === 'number' || epoch !== seedEpoch) return null;
   const next: ClientSettings = { ...DEFAULT_SETTINGS, ...saved, waterGoalOz: Math.round(goal) };
   await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
   return next;
+}
+
+/**
+ * signOut() (services/authActions), before it removes SETTINGS_KEY: the next person on this phone starts from
+ * DEFAULT_SETTINGS and her own profile's water goal (a new seed), and haptics go back to the default.
+ */
+export function resetSettingsAtSignOut(): void {
+  seedEpoch += 1;
+  profileSeed = null;
+  setHapticsEnabled(DEFAULT_SETTINGS.hapticsEnabled);
 }
 
 export function useSettings() {
@@ -79,7 +92,7 @@ export function useSettings() {
         setHapticsEnabled(parsed.hapticsEnabled);
       }
       if (typeof saved?.waterGoalOz !== 'number' && !profileSeed) {
-        profileSeed = seedWaterGoalFromProfile();
+        profileSeed = seedWaterGoalFromProfile(seedEpoch);
         void profileSeed.then(
           (seeded) => { if (seeded) listeners.forEach((notify) => notify(seeded)); },
           () => { profileSeed = null; },

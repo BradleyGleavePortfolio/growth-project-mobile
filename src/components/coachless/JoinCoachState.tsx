@@ -8,10 +8,12 @@
  * FIX-DMFR-M-1 (OPERATOR RULING 7213408207 item 2): the card follows the phone's DM switch like every other DM entry
  * (C4); the terms pages in front of the thread carry Back to this page (C1); Android's back is heard only while the
  * Community tab is in front (C6).
+ * DM-FORMER-PUSH-M (the operator's call under ALM-D5, R1): his message notification or tgp://community/dm link opens
+ * that thread here too, through the card's own step, once /me lists him; a decided tap is spent from the tab's route.
  */
-import React, { useContext, useEffect, useReducer, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useReducer, useRef, useState } from 'react';
 import { BackHandler, StyleSheet, View } from 'react-native';
-import { NavigationContext } from '@react-navigation/native';
+import { NavigationContext, NavigationRouteContext, type Route } from '@react-navigation/native';
 import { Headline, Lede, PrimaryButton, Screen, ScreenTopBar, TextLink, type ScreenEdge } from '../../ui';
 import RomanAvatar from '../roman/RomanAvatar';
 import { AI_REFUSAL_ACTIONS } from '../ai/AiRefusalNotice';
@@ -27,6 +29,7 @@ import { useCommunityMe } from '../../hooks/useCommunity';
 import CommunityTermsGate from '../community/CommunityTermsGate';
 import { FormerCoachEntry, useFormerCoach } from '../community/FormerCoach';
 import CommunityDmThreadScreen from '../../screens/community/CommunityDmThreadScreen';
+import { UUID } from '../../navigation/incomingLinks';
 
 export const JOIN_A_COACH = 'Join a coach';
 export const ROMAN_LOCK_TITLE = 'Roman works with a coach';
@@ -127,15 +130,45 @@ export function CoachOnlyGate({
   children,
 }: Pick<JoinCoachStateProps, 'title' | 'body' | 'testID'> & { children: React.ReactNode }): React.ReactElement {
   const needsCoach = useClientNeedsCoach();
-  if (needsCoach) return <CoachlessLock title={title} body={body} testID={testID} />;
+  const params = useContext(NavigationRouteContext ?? NoRoute)?.params;
+  // DM-FORMER-PUSH-M: the stack takes a tap itself and leaves it on the tab's route, so a page drawn after the stack in
+  // this mount is handed the params found at that flip, and spends them as no tap (by identity: its effects run first).
+  const stack = useRef<{ drawn: boolean; took?: object }>({ drawn: false });
+  if (!needsCoach) stack.current = { drawn: true };
+  else if (stack.current.drawn) stack.current = { drawn: false, took: params };
+  if (needsCoach) return <CoachlessLock title={title} body={body} testID={testID} took={stack.current.took} />;
   return <>{children}</>;
 }
 
+// A harness that stubs @react-navigation/native has no route context: read as no route (as the banner reads its container).
+const NoRoute = createContext<Route<string> | undefined>(undefined);
+type TabParams = { screen?: unknown; params?: { recipientId?: unknown }; initial?: unknown } | undefined;
+interface TabTap { params: TabParams; recipientId: string | null; held: boolean; spend: () => void }
+
+/** DM-FORMER-PUSH-M: a DM tap as the router leaves it on the Community tab ({ screen: 'CommunityDmThread', params:
+ * { recipientId } }), and its spend (screen, params and initial cleared, so it never opens again and a stack mounted
+ * later starts at its root). The params the stack took (`took`) are no tap. */
+function useTabTap(took: object | undefined): TabTap {
+  const navigation = useContext(NavigationContext);
+  const params = useContext(NavigationRouteContext ?? NoRoute)?.params as TabParams;
+  const id = params?.screen === 'CommunityDmThread' ? params.params?.recipientId : undefined;
+  const tap = params !== took && typeof id === 'string' && UUID.test(id) ? id : null;
+  const held = !!params && (params.screen !== undefined || params.params !== undefined || params.initial !== undefined);
+  const spend = useCallback(() => navigation?.setParams?.({ screen: undefined, params: undefined, initial: undefined }), [navigation]);
+  return { params, recipientId: tap, held: held && (tap !== null || params === took), spend };
+}
+
 /** The locked page: with the phone's DM switch off it is the page as before (no card, no /me read), as every other DM
- * entry is behind featureFlags.communityDm (C4). */
-function CoachlessLock(props: Pick<JoinCoachStateProps, 'title' | 'body' | 'testID'>): React.ReactElement {
-  if (!featureFlags.communityDm) return <JoinCoachState {...props} edges={['top']} />;
-  return <CoachlessLockWithFormer {...props} />;
+ * entry is behind featureFlags.communityDm (C4); a tap there, or the stack's own, is spent and opens nothing. */
+function CoachlessLock({ took, ...props }: Pick<JoinCoachStateProps, 'title' | 'body' | 'testID'> & { took?: object }): React.ReactElement {
+  const tap = useTabTap(took);
+  const off = !featureFlags.communityDm;
+  const { params, recipientId, held, spend } = tap;
+  useEffect(() => {
+    if (held && (off || !recipientId)) spend();
+  }, [params, recipientId, held, off, spend]);
+  if (off) return <JoinCoachState {...props} edges={['top']} />;
+  return <CoachlessLockWithFormer {...props} tap={tap} />;
 }
 
 /** Whether this tab is in front: its navigator's focus and blur (no navigator: in front). */
@@ -158,10 +191,26 @@ function useTabInFront(): boolean {
 /** ALM-D5: the locked page with her former coach's card (GET /community/me former_coach_dms[0]); the card opens that
  * thread in this tab, behind the community terms, and Back (the terms pages', the thread's, Android's) returns to the
  * page. */
-function CoachlessLockWithFormer({ title, body, testID = 'join-coach-state' }: Pick<JoinCoachStateProps, 'title' | 'body' | 'testID'>): React.ReactElement {
-  const former = useFormerCoach(useCommunityMe().data, null);
+function CoachlessLockWithFormer({ title, body, testID = 'join-coach-state', tap }: Pick<JoinCoachStateProps, 'title' | 'body' | 'testID'> & { tap: TabTap }): React.ReactElement {
+  const me = useCommunityMe();
+  const former = useFormerCoach(me.data, null);
   const [openWith, setOpenWith] = useState<string | null>(null);
   const inFront = useTabInFront();
+  const navigation = useContext(NavigationContext);
+  // DM-FORMER-PUSH-M: a tap is decided on this visit's /me (useServerAnswered's rule, no latch), or, once this visit's
+  // read failed, on the copy the card is drawn from; a restored copy or a restored error alone waits, un-spent. It opens
+  // only the card's coach, by the card's own step, while the tab is in front (read live: the mirror lags a router tap);
+  // a tap for anyone else, or one the tab is no longer in front for, is spent and opens nothing, now or later.
+  const decided = (me.isSuccess && (me.isFetchedAfterMount || !me.isStale)) || (me.isError && me.isFetchedAfterMount);
+  const listed = former?.coachId ?? null;
+  const { params, recipientId, spend } = tap;
+  useEffect(() => {
+    if (!recipientId) return;
+    const front = navigation?.isFocused?.() ?? true;
+    if (front && !decided) return;
+    spend();
+    if (front && recipientId === listed) setOpenWith(listed);
+  }, [params, recipientId, decided, listed, inFront, navigation, spend]);
   useEffect(() => {
     if (!openWith || !inFront) return undefined; // C6: another tab's Back is that tab's
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -178,7 +227,12 @@ function CoachlessLockWithFormer({ title, body, testID = 'join-coach-state' }: P
       </CommunityTermsGate>
     );
   }
-  const card = former ? <FormerCoachEntry former={former} onPress={() => setOpenWith(former.coachId)} testID={`${testID}-former`} /> : undefined;
+  // She acted first: a tap still waiting is spent, so it opens nothing later.
+  const press = (coachId: string) => {
+    if (recipientId) spend();
+    setOpenWith(coachId);
+  };
+  const card = former ? <FormerCoachEntry former={former} onPress={() => press(former.coachId)} testID={`${testID}-former`} /> : undefined;
   return <JoinCoachState title={title} body={body} edges={['top']} extra={card} testID={testID} />;
 }
 

@@ -50,6 +50,7 @@ import { ROMAN_JOIN_OFFER_KEY_PREFIX } from '../lib/romanJoinOffer';
 import { deletionScheduledThisSession } from './deletionSchedule';
 import { releaseAgeHolds } from '../lib/ageGate';
 import { NOTIF_CATEGORY_PREFS_KEY } from '../storage/notificationCategoryPrefs';
+import { resetSettingsAtSignOut, SETTINGS_KEY as CLIENT_SETTINGS_KEY } from '../hooks/useSettings';
 
 // Tokens live in SecureStore; everything else is plain AsyncStorage.
 const SECURE_SIGN_OUT_KEYS = [
@@ -105,6 +106,8 @@ const ASYNC_SIGN_OUT_KEYS = [
   '@activeWorkoutSession/v1',
   // LS-908R2 B-R2-1 (STORE-B2): the notification category switches, the plan renewal offers yes among them.
   NOTIF_CATEGORY_PREFS_KEY,
+  // SETTINGS-SIGNOUT-M: the client's units, water goal, alert switches and haptics (hooks/useSettings).
+  CLIENT_SETTINGS_KEY,
 ];
 // Prefixes whose every matching AsyncStorage key should be wiped on signOut.
 // Per-user namespaced data lives behind these prefixes; without enumeration the
@@ -588,6 +591,12 @@ async function signOutWhileHealthRetires(
     }
   }
 
+  // SETTINGS-SIGNOUT-M: before CLIENT_SETTINGS_KEY is removed below, so no seed of this person writes it back.
+  try {
+    resetSettingsAtSignOut();
+  } catch (err) {
+    logger.warn('AuthActions', 'signOut: settings reset failed', err);
+  }
   try {
     await Promise.all([
       // S6 R3: empty the in-memory identity mirror (generation bump happens
