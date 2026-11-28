@@ -1,5 +1,5 @@
 /**
- * ALL-ON-CI-M: run only by the "All switches on (not required)" job, after
+ * ALL-ON-CI-M: run only by the "All switches on" job, after
  * switches.js find has set every switch. Its name ends in .check.js, so the
  * normal suite never picks it up. It proves the switches the job set really
  * read on inside jest; a switch that stays off here cannot be turned on by env.

@@ -1,6 +1,6 @@
-import React, { useContext } from 'react';
+import React from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
+import { useWindowInsets } from '../../../ui/layout/ScreenArea';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
 import type { ClientDetailStyles } from './styles';
 
@@ -36,7 +36,8 @@ export function NudgeModal({
   closed?: React.ReactNode;
 }) {
   // A status-bar-high spacer above the card centres it below the status bar, so a long message never pushes its title under the clock.
-  const topInset = useContext(SafeAreaInsetsContext)?.top ?? 0;
+  // OFFLINE-BAND-ROOT-M: a Modal draws from the window's top, over the band: the window's insets, not the area's.
+  const topInset = useWindowInsets().top;
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       {/* The form sits above the keyboard, so Send and Cancel stay reachable while typing (as LogPlannedMealButton). */}

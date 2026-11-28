@@ -20,6 +20,7 @@ import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { colors, layout, radius, typography } from '../../../theme/tokens';
 import { Overline, PrimaryButton, Screen, useScreenInsets } from '../../../ui';
+import { useWindowInsets } from '../../../ui/layout/ScreenArea';
 import { DayMark, PeakStar, SegmentedRing } from '../../../ui/charts/StyleCMarks';
 import { HapticService } from '../../../ui/haptics/haptics.service';
 import { doneLine } from '../../coach/client-detail/thisWeek';
@@ -65,7 +66,9 @@ const firstName = (name?: string | null) => name?.trim().split(/\s+/)[0] || null
 export default function WorkoutSummaryC5(p: WorkoutSummaryC5Props) {
   const sc = useTheme().semanticColors;
   const insets = useScreenInsets();
-  const ring = ringSize(useWindowDimensions().height - insets.top - insets.bottom);
+  // OFFLINE-BAND-ROOT-M: the room is the window's height less the window's insets; under the offline band the area's
+  // top is 0, and the page the band pushed down would otherwise pick a bigger ring.
+  const ring = ringSize(useWindowDimensions().height - useWindowInsets().top - insets.bottom);
   useStatusBarBand(sc.surface.masthead);
   const rowsQuery = useMyWorkoutAssignments();
   const coaches = useMyCoaches(true).data;

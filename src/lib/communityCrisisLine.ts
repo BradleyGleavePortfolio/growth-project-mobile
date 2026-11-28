@@ -5,13 +5,15 @@
  * CONTRACT 6755386095: present only on a match, never false, never null). This file is the only place that reads it:
  * never the text, a GET, a list, a realtime event or a push. The line shows once per answer, only to the account that
  * sent the write, and the flag is kept nowhere (no cache, mutation result, store, draft, log, report or event).
- *   - crisisFlagIn, the one reader for answers: each of the five writers of b#1232's routes (communityApi createPost,
- *     addComment and sendDm, communityChallengesApi addComment, communityWinsApi postWin) hands its parsed answer to
+ *   - crisisFlagIn, the one reader for answers: each writer of b#1232's routes (communityApi createPost, addComment
+ *     and sendDm, communityChallengesApi addComment, communityWinsApi postWin; CRISIS-TEXT-SPACE-M: the space chat's
+ *     spaceChatApi send, which its queue calls with or without a screen) hands its parsed answer to
  *     showCrisisLineFor where it reads it, then returns today's entity, so a mutation's data keeps today's shape. That
  *     runs once per answer whether or not the screen is still there, and no hook or screen callback raises it again.
  *   - crisisFlagInError, the one reader for error bodies: withCrisisLine puts the line first in a refusal's message,
  *     inside the two refusal describers (describeCommunityFailure, contentRejectedMessage), so the line and the
- *     refusal show in the one alert or notice each screen shows today.
+ *     refusal show in the one alert or notice each screen shows today. The space chat's queue raises a marked
+ *     refusal's one alert itself when crisisLineReaches the account that wrote it (no screen may be up).
  *   - holdCrisisLine: a screen whose RN Modal is up or closing holds the line until it is gone on iOS (an Alert raised
  *     while a Modal closes can be lost there; SafetyMenu afterClose); Android raises at once, as afterClose does.
  */
@@ -53,8 +55,13 @@ export function leadsWithCrisisLine(message: string | null | undefined): boolean
 let holds = 0;
 let waiting: string | null = null; // the account whose line waits for a sheet to go (in memory, for that moment only)
 
+/** CRISIS-TEXT-SPACE-M: whether a line read for `owner`'s write may show now (no sign-out or other account since). */
+export function crisisLineReaches(owner: string | null): boolean {
+  return owner !== null && crisisLineOwner() === owner;
+}
+
 function raise(owner: string | null): void {
-  if (owner === null || crisisLineOwner() !== owner) return; // signed out, or another account, since the write began
+  if (!crisisLineReaches(owner)) return; // signed out, or another account, since the write began
   Alert.alert('', CRISIS_LINE_911_988); // no title (no new words); the system OK button, as "Report sent" does
 }
 

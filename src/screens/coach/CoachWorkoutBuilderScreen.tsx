@@ -96,6 +96,7 @@ import { fireAiHaptic, useAiBuilder } from '../../components/coach/ai-builder/us
 import type { AiBuilderRef } from '../../api/aiBuilderApi';
 import { appliedToast, NEW_WORKOUT_NAME, NEW_WORKOUT_PROMPT, NEW_WORKOUT_SAVE_FAILED, NEW_WORKOUT_SAVING } from '../../components/coach/ai-builder/aiBuilderCopy';
 import { unitField, unitOf, type ExerciseUnit } from '../../utils/workout/exerciseUnit';
+import { useScreenAreaKeyboardOffset } from '../../ui/layout/ScreenArea';
 
 /** S-MWB-3: the undo / redo barrier phases (see the screen body). */
 type HistoryOutcome = 'applied' | 'elsewhere';
@@ -284,6 +285,7 @@ function serverRowCompositeSignature(e: WorkoutPlanExercise): string {
 }
 
 export default function CoachWorkoutBuilderScreen() {
+  const keyboardOffset = useScreenAreaKeyboardOffset();
   const route = useRoute<RouteProp<Record<string, RouteParam>, string>>();
   const navigation = useNavigation<NativeStackNavigationProp<ParamListBase>>();
   const insets = useScreenInsets();
@@ -1619,6 +1621,7 @@ export default function CoachWorkoutBuilderScreen() {
 
   return (
     <KeyboardAvoidingView
+      keyboardVerticalOffset={keyboardOffset}
       style={[styles.screen, { paddingTop: insets.top + layout.statusBarGap }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >

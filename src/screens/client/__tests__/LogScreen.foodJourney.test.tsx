@@ -107,6 +107,12 @@ afterEach(() => jest.restoreAllMocks());
 
 describe.each(['ios', 'android'] as const)('%s client food journey (real screen, store and portion math)', (os) => {
   beforeEach(() => jest.replaceProperty(Platform, 'OS', os));
+  // LogScreen searches 600 ms after the last keystroke (its search debounce), and each wait after
+  // typing gave that search 1,000 ms of real time: a stall over both ends let the wait end first
+  // (LSO-COR-1 C1). Every journey holds jest's clock from its first line, so those waits spend
+  // fake time only and the search always lands inside them, however slow the machine.
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
 
   it.each(['coachless', 'coached'])(
     '%s first meal resumes the same search and success feedback, with no second note', async (client) => {

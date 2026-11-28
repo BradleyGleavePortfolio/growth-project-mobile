@@ -16,6 +16,7 @@ import { Alert, Animated, Modal, Pressable, ScrollView, StyleSheet, Text, View }
 import { Ionicons } from '@expo/vector-icons';
 import { NavigationProp, ParamListBase, useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useWindowInsets } from '../../ui/layout/ScreenArea';
 import { Colors } from '../../constants/colors';
 import { useMyCoaches } from '../../hooks/useCalendar';
 import { useCoachChatClosed } from '../../hooks/useCoachChatClosed';
@@ -291,12 +292,14 @@ export function RefusedWorkoutSheet({ item, coach, again, busy, assignments, onC
 }) {
   const sc = useTheme().semanticColors;
   const insets = useSafeAreaInsets();
+  // OFFLINE-BAND-ROOT-M: a Modal draws from the window's top, over the band: the scrim takes the window's top inset.
+  const windowTop = useWindowInsets().top;
   const v = useMemo(() => refusedView(item.body, assignments), [item.body, assignments]);
   const ink = { color: sc.textPrimary };
   const muted = { color: sc.textMuted };
   return (
     <Modal transparent visible animationType="slide" statusBarTranslucent onRequestClose={onClose}>
-      <View style={[s.scrim, { backgroundColor: sc.overlay, paddingTop: insets.top + 8 }]}>
+      <View style={[s.scrim, { backgroundColor: sc.overlay, paddingTop: windowTop + 8 }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel={c.close}
           testID="refused-sheet-scrim" />
         <View style={[s.sheet, { backgroundColor: sc.bgSurface, paddingBottom: insets.bottom + 16 }]} accessibilityViewIsModal
