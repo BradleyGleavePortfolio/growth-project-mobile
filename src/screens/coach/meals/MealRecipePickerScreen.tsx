@@ -34,7 +34,7 @@ export default function MealRecipePickerScreen({ route, navigation }: ProgramsSc
           <Text style={[typography.bodyMd, styles.outlineText, { color: sc.accentText }]}>Remove link</Text>
         </Pressable>
       ) : undefined}>
-      <Masthead title="Link a recipe" sub={mealName ? `For ${mealName}` : undefined} onBack={() => navigation.goBack()} />
+      <Masthead title="Link a recipe" sub={`For ${mealName}`} onBack={() => navigation.goBack()} />
       {failed ? <LoadFailed title="Your recipes didn’t load." lead="Your meal is safe." error={read.error} onRetry={() => void read.refetch()} retrying={read.isFetching} />
         : !mine || !shown ? <Loading label="Loading your recipes" />
         : !mine.length ? <FirstCard title="No recipes yet" body="You have no recipes to link. Recipes cannot be made in the app yet." /> : (
