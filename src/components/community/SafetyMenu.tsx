@@ -414,8 +414,8 @@ export default function SafetyMenu({
                     </Text>
                   </View>
                 ) : null}
-                {/* REPORT-ANY-M (owner #ALM-E29): who can hear a reported voice note, in the sheet's quiet text. */}
-                {contentNoun === 'voice note' ? (
+                {/* REPORT-ANY-M (owner #ALM-E29): who can hear a reported voice note, in the sheet's quiet text; a client's only (FIX-RAM-1: a viewer who moderates is given onRemove). */}
+                {contentNoun === 'voice note' && !onRemove ? (
                   <Text style={[styles.heard, { color: light ? fp.n700 : semanticColors.textMuted }]} testID={`${testID}-heard`}>
                     {VOICE_NOTE_HEARD_LINE}
                   </Text>
