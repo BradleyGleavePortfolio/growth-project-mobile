@@ -406,6 +406,22 @@ const REGISTRY: Surface[] = [
         proof: { by: 'suite', file: 'components/community/space-chat/__tests__/spaceMembersKT2.test.tsx', titles: [
           'KT-2: the people of a space are asked for only while enabled (the server let me in), and never kept on the disk',
         ] }, exports: ['useSpaceMembers', 'listSpaceMembers'] },
+      // LEAVE-MUTE-M (agent 203, b#1168): a space's left list ("{name} left"), its thread states and its notification
+      // setting. The wire (spaceLeaveMuteApi) stops nothing, as spaceChatApi's row; the hook applies the rules and stops here.
+      ...((): Surface[] => {
+        const space = 'screens/community/__tests__/leaveMuteSpace.test.tsx';
+        const LINES = 'L10: the lines from GET .../left sit between messages by time, in range only; a block takes the line of that person at once; a rejoin keeps it';
+        const CLOSED = 'L8: a left space the server now refuses (404 on the read): the closed band, not the left band (closed beats left)';
+        const SECOND = 'L15: sign out and in as another member: no notification setting, left list or left space of the first account is shown';
+        return [
+          { file: 'components/community/space-chat/spaceLeaveMuteApi.ts', kind: 'list', what: 'the leave and mute wire (who left a space, my thread states, my notification setting; leave, join, mute)',
+            how: 'the server leaves blocked (both ways), banned and gone people out of GET .../left and answers 404 to a space she cannot read; the row stops nothing (exports: []), so every caller is named',
+            proof: { by: 'suite', file: space, titles: [LINES, CLOSED] }, exports: [] },
+          { file: 'components/community/space-chat/useSpaceLeaveMute.ts', kind: 'list', what: 'one space\'s "{name} left" lines, thread states and notification setting, for the space chat',
+            how: 'read only while the server lets her read the space (admitted; a 403 / 404 closes it and draws no line); my block (useSpaceChat dropAuthor) takes the line of that person at once; the lines draw only between loaded messages; kept in memory only (meta persist: false) under keys holding her user id, so a sign-out or another account shows none',
+            proof: { by: 'suite', file: space, titles: [LINES, CLOSED, SECOND] }, exports: ['useSpaceLeaveMute'] },
+        ];
+      })(),
       // Part 4: the screen. Its box and mic are the parts above (SpaceChatComposer, SpaceChatMic), drawn only once the
       // server let the viewer in: 'while the space loads there is no composer (a banned member never gets a box), and no
       // read mark' and 'Opus B3: a send refused with 403 closes the page; the text stays on the device, not sent again'
