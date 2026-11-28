@@ -42,7 +42,7 @@ beforeEach(() => {
 });
 
 async function joinAndReadLine(): Promise<string> {
-  render(
+  await render(
     <CoachCodeSheet
       visible
       initialCode="GP-TOP"
