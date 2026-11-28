@@ -19,8 +19,10 @@ import { useWindowInsets } from '../../ui/layout/ScreenArea';
 import { SearchResult, MEAL_SECTIONS } from '../../utils/log/types';
 import { MealType } from '../../types';
 import type { PastMeal } from '../../hooks/useFoodBrowse';
+import type { PlanMealSheet } from '../../screens/client/mealplan/planMeal';
 import { clockOf } from '../../utils/log/foodTimeline';
-import FoodSearchView from './FoodSearchView';
+import FoodSearchView, { type BrowseTab } from './FoodSearchView';
+import type { SavedPart } from './SavedMealsTab';
 import MealChoiceRow from './MealChoiceRow';
 import ManualFoodEntryForm, { ManualFields } from './ManualFoodEntryForm';
 import SheetGrip from './SheetGrip';
@@ -52,8 +54,8 @@ interface Props {
   searchResults: SearchResult[];
   didYouMean: SearchResult[];
 
-  recentTab: 'recent' | 'frequent';
-  onRecentTabChange: (tab: 'recent' | 'frequent') => void;
+  recentTab: BrowseTab;
+  onRecentTabChange: (tab: BrowseTab) => void;
   recentFoods: SearchResult[];
   frequentFoods: SearchResult[];
   browseUnavailable?: boolean;
@@ -78,6 +80,14 @@ interface Props {
    * rule). When it does, the title is "Add at {clock}" over the meal (C_add); otherwise, or when absent, "Add to {meal}".
    */
   savesToday?: () => boolean;
+  /**
+   * PLAN-SWAPS-M (R4, C_something): opened from a coach's plan meal ("Something else" with its plan link). The title is
+   * "Something else" with "Instead of {meal}" under it, the coach's swaps sit over the search field and the footnote
+   * under it. Absent (every other open), the sheet is main's.
+   */
+  planMeal?: PlanMealSheet;
+  /** KITCHEN-DOOR-M (R3): the Saved meals tab with Open Kitchen; LogScreen passes it only to a sheet with no link. */
+  saved?: SavedPart;
 }
 
 const nowMinutes = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
@@ -149,6 +159,9 @@ export default function FoodSearchModal(props: Props) {
   const [photoMenu, setPhotoMenu] = useState(false);
   const onMealPhoto = Platform.OS === 'ios' ? () => { if (!mealPhotoBusy()) setPhotoMenu(true); } : undefined;
 
+  // PLAN-SWAPS-M (R4, C_something): a plan meal's Something else has its own title and no meal line.
+  const head = props.planMeal ? 'Something else' : title;
+  const mealLine = props.planMeal ? null : at;
   return (
     <Modal testID="food-search-sheet" visible={visible} animationType="slide" transparent statusBarTranslucent onRequestClose={onClose}>
       <KeyboardAvoidingView
@@ -173,9 +186,9 @@ export default function FoodSearchModal(props: Props) {
                   <SheetGrip />
                   <View style={styles.modalHeader}>
                     <View style={styles.titleBlock} accessible accessibilityRole="header"
-                      accessibilityLabel={at ? `${title}, ${meal}` : title}>
-                      <Text testID="food-search-title" style={styles.modalTitle}>{title}</Text>
-                      {at ? <Text testID="food-search-meal" style={styles.mealLine}>{meal}</Text> : null}
+                      accessibilityLabel={mealLine ? `${head}, ${meal}` : head}>
+                      <Text testID="food-search-title" style={styles.modalTitle}>{head}</Text>
+                      {mealLine ? <Text testID="food-search-meal" style={styles.mealLine}>{meal}</Text> : null}
                     </View>
                     {props.addedFoodName ? (
                       <TextLink label="Done" tone="accent" underline={false} disabled={props.saving} onPress={onClose} style={styles.closeButton} />
@@ -185,6 +198,7 @@ export default function FoodSearchModal(props: Props) {
                       </HapticPressable>
                     )}
                   </View>
+                  {props.planMeal ? <Text testID="food-search-instead" style={styles.instead}>{props.planMeal.instead}</Text> : null}
                 </View>
 
                 {props.onMealChange ? (
@@ -216,12 +230,14 @@ export default function FoodSearchModal(props: Props) {
                       frequentFoods={props.frequentFoods}
                       browseUnavailable={props.browseUnavailable}
                       onSelectFood={props.onSelectFood}
+                      planMeal={props.planMeal}
                       repeatMeal={props.repeatMeal}
                       repeatMealTitle={props.repeatMealTitle}
                       onRepeatMeal={props.onRepeatMeal}
                       saving={props.saving}
                       onEnterManualMode={onEnterManualMode}
                       onMealPhoto={onMealPhoto}
+                      saved={props.saved}
                     />
                   ) : (
                     <ManualFoodEntryForm
@@ -286,4 +302,6 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   },
   // :49 .meta: Inter 14/20, muted.
   mealLine: { fontFamily: typography.bodySmall.fontFamily, fontSize: 14, lineHeight: 20, color: sc.textMuted },
+  // PLAN-SWAPS-M, C_something .meta (C2-B-06): Inter 15, muted, under the title.
+  instead: { fontFamily: typography.bodySmall.fontFamily, fontSize: 15, lineHeight: 21, color: sc.textMuted, paddingHorizontal: layout.gutter, marginTop: 6 },
 });

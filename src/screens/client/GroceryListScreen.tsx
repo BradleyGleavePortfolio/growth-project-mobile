@@ -44,7 +44,7 @@ const QUERY_KEY = ['lists', LIST_TYPE];
 // One read (owner 10-07, CF-ONE-LIST-128): More no longer opens a Shopping list, so rows a client saved there are
 // read here too. The shopping read runs only after the grocery read succeeds, so a failed load costs one request.
 // SHOP-SWITCH-M (owner 203-D16 op 1, ctx#527 style 1): the switch under the title chooses which list the page shows.
-async function fetchOneList(): Promise<ListItem[]> {
+export async function fetchOneList(): Promise<ListItem[]> {
   const grocery = (await listsApi.getList(LIST_TYPE)).data as ListItem[];
   const shopping = (await listsApi.getList('shopping')).data as ListItem[];
   const groceryIds = new Set(grocery.map((item) => item.id));
@@ -72,7 +72,7 @@ type ListType = keyof typeof LISTS;
 const LIST_TYPES = Object.keys(LISTS) as ListType[];
 /** A row is on Shopping when it came from the shopping read (above), else on Grocery. */
 const onList = (type: ListType) => (item: ListItem) => fromShopping(item) === (type === 'shopping');
-const toGet = (rows: ListItem[], type: ListType) => rows.filter((item) => onList(type)(item) && !item.is_checked).length;
+export const toGet = (rows: ListItem[], type: ListType) => rows.filter((item) => onList(type)(item) && !item.is_checked).length;
 
 /** ctx#527 style 1, the Masthead switch (src/build.py:120-123): two equal segments inside a 1 pt forest-band line, 4 pt
  *  inset and gap; the chosen one bone with ink, a check and weight 600, so it is told by more than colour; each label
@@ -129,7 +129,10 @@ export default function GroceryListScreen() {
   const [chosen, setChosen] = useState<ListType>('grocery');
   const list = LISTS[chosen];
 
-  const { data, isLoading, isError, refetch, isRefetching } = useQuery({
+  // GROCERY-OFFLINE-KEEP-M (SWEEP-KITCHEN B1): a re-read that fails (offline in the shop, a weak pull, the re-read after
+  // a failed tick or remove, a cold start on a saved list whose last read failed) keeps her list; the failed state is
+  // only for a list with no answer yet (react-query's isLoadingError: an error and no data).
+  const { data, isLoading, isLoadingError: failed, refetch, isRefetching } = useQuery({
     queryKey: QUERY_KEY,
     queryFn: fetchOneList,
     staleTime: 60 * 1000,
@@ -290,10 +293,10 @@ export default function GroceryListScreen() {
         <View style={{ backgroundColor: sc.surface.forestBand }}>
       <StyleCMasthead title={list.title} onBack={() => navigation.goBack()}>
         {/* ctx#527 style 1: the switch once the read has answered (operator R3), then the chosen list's summary. */}
-        {!isLoading && !isError ? (
+        {!isLoading && !failed ? (
           <ListSwitch chosen={chosen} counts={{ grocery: toGet(rows, 'grocery'), shopping: toGet(rows, 'shopping') }} onChoose={choose} />
         ) : null}
-        {!isLoading && !isError && items.length > 0 ? (
+        {!isLoading && !failed && items.length > 0 ? (
           <View style={switchStyles.summary}>
             <StyleCDashes total={items.length} done={checked.length} label={unchecked.length > 0 ? `${unchecked.length} to get.` : 'All items checked.'} />
           </View>
@@ -354,7 +357,7 @@ export default function GroceryListScreen() {
           <Text style={styles.loadingText}>{list.loading}</Text>
           <StyleCLoadingLines lead="ring" rows={5} />
         </View>
-      ) : isError ? (
+      ) : failed ? (
         <View style={styles.errorBlock}>
           <StyleCNotice>{list.failed}</StyleCNotice>
           <PrimaryButton label="Try again" onPress={() => refetch()} disabled={isRefetching} haptic={false} />
@@ -368,7 +371,7 @@ export default function GroceryListScreen() {
           />
         </FadeInView>
       ) : null}
-          data={isLoading || isError ? [] : listData}
+          data={isLoading || failed ? [] : listData}
           keyExtractor={(item) =>
             'type' in item ? `header-${item.label}` : item.id
           }
@@ -377,12 +380,12 @@ export default function GroceryListScreen() {
               testID="list-refresh"
               refreshing={pulling}
               onRefresh={onRefresh}
-              enabled={!isLoading && !isError && items.length > 0}
+              enabled={!isLoading && !failed && items.length > 0}
               tintColor={colors.primary}
             />
           }
           contentContainerStyle={styles.listContent}
-          ListFooterComponent={!isLoading && !isError && checked.length > 0 ? (
+          ListFooterComponent={!isLoading && !failed && checked.length > 0 ? (
             <TextLink label="Clear checked" tone="accent" align="start" onPress={handleClearChecked} disabled={clearCheckedMutation.isPending} style={styles.clearBtn} />
           ) : null}
           renderItem={({ item }) => {

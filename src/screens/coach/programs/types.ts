@@ -19,9 +19,11 @@ export type ProgramsStackParamList = {
   ProgramHistory: { programId: string };
   CoachWorkoutBuilder: { planId?: string; openAi?: boolean } | undefined;
   SupportInbox: undefined;
-  MealEditor: { mealId?: string } | undefined;
+  MealEditor: { mealId?: string; picked?: { options?: string[]; recipeId?: string | null; at: number } } | undefined;
   DayPlanBuilder: { planId?: string; assigned?: string } | undefined;
   MealPicker: { planId: string; index?: number };
+  MealOptionsPicker: { mealId?: string; mealName: string; chosen: string[] };
+  MealRecipePicker: { mealId?: string; mealName: string; recipeId: string | null };
   MealPlanAssign: { planId: string };
 };
 

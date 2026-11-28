@@ -197,7 +197,9 @@ describe('useCoachAckActions — error rollback', () => {
 
     await act(async () => refuse(new Error('boom')));
     await waitFor(() => expect(button.result.current.markAcked.isError).toBe(true));
-    expect(row.result.current).toBeUndefined();
+    // CI-FLAKES-M (SWEEP-CI-FLAKES F2): the row is a second root; React Query can notify it in a later
+    // batch than the button's error, so the row's read waits too.
+    await waitFor(() => expect(row.result.current).toBeUndefined());
   });
 });
 

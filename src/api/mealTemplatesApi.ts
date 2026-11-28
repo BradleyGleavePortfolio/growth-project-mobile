@@ -44,6 +44,10 @@ export interface CreateMealTemplateInput {
   fats_g: number;
   fiber_g?: number;
   items?: MealTemplateItem[];
+  /** PLAN-SWAPS-BE: the options clients can pick instead, in his order (at most 10; [] clears; never null). */
+  swap_template_ids?: string[];
+  /** PLAN-SWAPS-BE: one recipe he created, or null for none (never ""). */
+  recipe_id?: string | null;
 }
 
 export type UpdateMealTemplateInput = Partial<CreateMealTemplateInput>;
@@ -61,6 +65,9 @@ export interface MealTemplate {
   items: MealTemplateItem[] | null;
   created_at: string;
   archived_at: string | null;
+  /** PLAN-SWAPS-BE: on the coach's own reads; a client's slot.meal_template has neither (the server strips them). */
+  swap_template_ids?: string[];
+  recipe_id?: string | null;
 }
 
 // ─── DailyMealPlan + slots ───────────────────────────────────────────────────
@@ -70,6 +77,8 @@ export interface DailyPlanSlotInput {
   slot_label: SlotLabel;
   /** 0-indexed; if omitted the server uses array-position. */
   order?: number;
+  /** C2-C0: local "HH:MM" on the 24-hour clock; null or absent = no time. */
+  time_of_day?: string | null;
 }
 
 export interface CreateDailyMealPlanInput {
@@ -89,6 +98,32 @@ export interface DailyMealPlanSlot {
   /** C2-C0 (backend 96f20061): the coach's planned time, local "HH:MM" on the 24-hour clock; null when none. */
   time_of_day?: string | null;
   meal_template: MealTemplate;
+  /** PLAN-SWAPS-BE (b#1221): the coach's swaps for this meal, only her current coach's live meals; carbs_g and fats_g come with PLAN-SWAPS-MACROS-BE. */
+  swaps?: PlanSwap[];
+  /** PLAN-SWAPS-BE: the meal's recipe, null unless she can open it. */
+  recipe_id?: string | null;
+}
+
+/** One swap the coach offers for a plan meal (CONTRACT 6641656549 on b#1221). */
+export interface PlanSwap {
+  id: string;
+  name: string;
+  calories_kcal: number;
+  protein_g: number;
+  carbs_g?: number;
+  fats_g?: number;
+}
+
+/** PLAN-SWAPS-BE: one meal change the coach made to one of her current plans today (oldest first, at most 100). */
+export interface PlanChange {
+  plan_id: string;
+  slot_id: string;
+  slot_label: SlotLabel;
+  from_template_id: string | null;
+  from_name: string | null;
+  to_template_id: string | null;
+  to_name: string | null;
+  changed_at: string;
 }
 
 export interface DailyMealPlan {
@@ -98,6 +133,8 @@ export interface DailyMealPlan {
   notes: string | null;
   created_at: string;
   archived_at: string | null;
+  /** PLAN-SWAPS-BE: when the coach last changed the plan. */
+  updated_at?: string;
   slots: DailyMealPlanSlot[];
 }
 
@@ -130,6 +167,8 @@ export interface ClientTodayResponse {
   /** YYYY-MM-DD echoed by the server. */
   date: string;
   assignments: DailyMealPlanAssignmentWithPlan[];
+  /** PLAN-SWAPS-BE: today's meal changes; empty when ?date is not her today. */
+  changes_today?: PlanChange[];
 }
 
 // ─── API ─────────────────────────────────────────────────────────────────────

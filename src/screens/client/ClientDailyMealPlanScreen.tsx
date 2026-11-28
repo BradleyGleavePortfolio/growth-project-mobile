@@ -1,7 +1,7 @@
 /**
  * ClientDailyMealPlanScreen — assigned meal plan in clock order when fully timed.
  *
- * Reads `/me/meal-plan/today` via `useMealPlanToday(dateIso?)`. The
+ * Reads `/me/meal-plan/today?date=` via `useMealPlanToday(day)`. The
  * endpoint returns one or more active assignments for the requested
  * date; we list every one, newest first (the API's starts_on DESC
  * order), each in clock order if fully timed, otherwise grouped by slot_label. More > Meal plan
@@ -16,14 +16,19 @@
  * delivered plan opens THAT plan rather than silently showing today.
  * The route entry in `MoreStackParamList` already typed this param as
  * `{ date?: string } | undefined` — the screen was the one that needed
- * to honor it. Defaults to today when omitted (the legacy call site).
+ * to honor it. Defaults to today when omitted (the legacy call site):
+ * the phone's today, sent as `?date` (MEALPLAN-LOCAL-DAY-M), never the
+ * server's own day.
  *
  * Route param `assignmentId` (B-DELIV-125, B4): the backend materialises a
  * delivered meal_plan drop as a DailyMealPlanAssignment and stores its id in
- * `materialised_ref`, not a date. Delivered assignments start on delivery
- * day with no end, so the plan is among today's active assignments; the
- * screen shows exactly that assignment instead of every active one. If it is
- * absent, an honest unavailable state replaces another plan.
+ * `materialised_ref`, not a date. The screen shows exactly that assignment
+ * instead of every active one. The server starts a delivered plan, and links
+ * a notice to a plan, on its own (UTC) day, which is her tomorrow on an evening
+ * in the Americas; so when her day's answer lacks the assignment the screen
+ * reads once more with no date (the server's day) and shows it under the day
+ * that answer names (FIX-MLD-1). If neither answer holds it, an honest
+ * unavailable state replaces another plan.
  *
  * When no assignment is active for the chosen day we render an honest
  * empty state — no fabricated suggestions, no "ask your coach" CTA
@@ -51,9 +56,10 @@ import {
   type StyleProp,
   type TextStyle,
 } from 'react-native';
-import { useRoute, type RouteProp } from '@react-navigation/native';
+import { NavigationContext, useRoute, type RouteProp } from '@react-navigation/native';
 import {
   SLOT_LABELS,
+  type ClientTodayResponse,
   type DailyMealPlanAssignmentWithPlan,
   type DailyMealPlanSlot,
   type SlotLabel,
@@ -75,6 +81,7 @@ import type { SemanticTokens } from '../../theme/tokens';
 import {
   formatPlanNumber as n, MastLine, mast, MastProgress, MealArt, NowRow, PaperPage, PlanMasthead, planStyleC, TimeCell, TimelineRow, useCoachItalic, useTimeColumn,
 } from './mealplan/planStyleC';
+import { planMealParams } from './mealplan/planMeal';
 
 // The Food day's words and formats, copied screen-locally (FoodDayView.tsx:41, :52, :232-236).
 const longDay = (date: string) =>
@@ -83,14 +90,19 @@ const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0
 // C_day's quote marks round the coach's note, unless the note already opens or closes with one (RULING 8).
 const QUOTED = /^["'\u201C\u2018]|["'\u201D\u2019]$/;
 const nowMinutes = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
+// PLAN-SWAPS-M (R7): the stack's navigation where there is one; none outside a navigator (a test, a harness).
+const NO_NAVIGATION = React.createContext<unknown>(undefined);
 
 /** One meal in its plan's clock order, or main's label/order fallback when incompletely timed. */
 interface Stop { slot: DailyMealPlanSlot; plan: string; first: boolean; last: boolean }
 
 // Route params: optional ISO date string (YYYY-MM-DD). Falls back to
-// today (useMealPlanToday's default) when omitted, matching the legacy
-// call site behaviour.
+// the phone's today when omitted, matching the legacy call site behaviour.
 type MealPlanRouteParams = { date?: string; assignmentId?: string } | undefined;
+
+/** The answer's plans this page shows: the door's assignment alone, or every one. */
+const plansOf = (answer: ClientTodayResponse | undefined, assignmentId: string | undefined): DailyMealPlanAssignmentWithPlan[] =>
+  (answer?.assignments ?? []).filter((a) => !assignmentId || a.id === assignmentId);
 
 // Accept either YYYY-MM-DD or a full ISO timestamp; the hook + backend
 // query parameter expect YYYY-MM-DD so we trim accordingly.
@@ -111,17 +123,13 @@ export default function ClientDailyMealPlanScreen() {
   const dateParam = normaliseDateParam(route.params?.date);
   const assignmentId = route.params?.assignmentId || undefined;
 
+  // MEALPLAN-LOCAL-DAY-M (SWEEP-MEAL-PLANS B3): with no date the page reads the phone's today. The server's own day
+  // is UTC (tomorrow from 4 pm in California), so a read without a day showed and logged another day's meals.
+  const today = getTodayString();
   const { data, isLoading, isError, refetch, isRefetching, isFetching, dataUpdatedAt } =
-    useMealPlanToday(dateParam);
+    useMealPlanToday(dateParam ?? today);
 
-  const onRefresh = useCallback(() => {
-    void refetch();
-  }, [refetch]);
-
-  const shown: DailyMealPlanAssignmentWithPlan[] = useMemo(() => {
-    const all = data?.assignments ?? [];
-    return assignmentId ? all.filter((a) => a.id === assignmentId) : all;
-  }, [data, assignmentId]);
+  const herShown = useMemo(() => plansOf(data, assignmentId), [data, assignmentId]);
 
   // MEAL-PLAN-REFRESH-M (R-a): "not available" only from an answer read since this screen was asked for the
   // assignment (a mount, or new params). Until then it is still loading, and one read is started if none runs.
@@ -129,22 +137,42 @@ export default function ClientDailyMealPlanScreen() {
   const [ask, setAsk] = useState(() => ({ key: askKey, at: Date.now() }));
   if (ask.key !== askKey) setAsk({ key: askKey, at: Date.now() }); // new params on a screen already open
   const askedAt = ask.at;
-  const holding = !!assignmentId && shown.length === 0 && typeof dataUpdatedAt === 'number' && dataUpdatedAt < askedAt;
+  const holding = !!assignmentId && herShown.length === 0 && typeof dataUpdatedAt === 'number' && dataUpdatedAt < askedAt;
   const readFor = useRef(0);
   useEffect(() => {
     if (!holding || readFor.current === askedAt) return;
     readFor.current = askedAt; // once per ask: the read already running, or the one started here
     if (!isFetching) void refetch();
   }, [holding, askedAt, isFetching, refetch]);
-  const waiting = isLoading || (holding && !isError);
+
+  // FIX-MLD-1 (m#1038 B1): a plan-id door with no date (a delivered plan, a notice's tgp://meal-plan/<id>) names a
+  // plan the server chose on its own day. When her day's settled answer lacks it, the page reads once more with no
+  // date (main's read) and, if that answer holds it, shows it under the day that answer names: the dated view, so
+  // no "Ate it as planned" and no now line. Until that read answers the page holds; neither holds it: main's card.
+  const askServer = !!assignmentId && !dateParam && !isLoading && !isError && !holding && herShown.length === 0;
+  const {
+    data: serverData, dataUpdatedAt: serverAt, isError: serverError, errorUpdatedAt: serverErrorAt, refetch: refetchServer,
+  } = useMealPlanToday(null, askServer);
+  const serverAnswered = askServer && serverAt >= askedAt;
+  const serverDay = serverAnswered ? normaliseDateParam(serverData?.date) : undefined;
+  const serverShown = useMemo(() => (serverDay ? plansOf(serverData, assignmentId) : []), [serverDay, serverData, assignmentId]);
+  const serverFailed = askServer && !serverAnswered && serverError && serverErrorAt >= askedAt;
+  const shown = serverShown.length > 0 ? serverShown : herShown;
+  const failed = isError || serverFailed;
+  const waiting = isLoading || (holding && !isError) || (askServer && !serverAnswered && !serverFailed);
+
+  const onRefresh = useCallback(() => {
+    void refetch();
+    if (askServer) void refetchServer();
+  }, [refetch, askServer, refetchServer]);
 
   const italic = useCoachItalic();
-  const loaded = !isLoading && !isError;
+  const loaded = !isLoading && !failed;
   const timeW = useTimeColumn();
 
-  // The shown day: the route's date, else today (today's read stays the no-date read above).
-  const today = getTodayString();
-  const shownDay = dateParam ?? today;
+  // The shown day: the server answer's day when it holds the door's plan (FIX-MLD-1), else the route's date, else
+  // today (the day the plan read above asked for).
+  const shownDay = (serverShown.length > 0 ? serverDay : undefined) ?? dateParam ?? today;
   const isToday = shownDay === today;
   // RULING 3: the target and the shown day's log, read as Macro targets reads them.
   const target = useCurrentMacrosForSelf();
@@ -175,7 +203,10 @@ export default function ClientDailyMealPlanScreen() {
   const nowMin = isToday && stops.length > 0 && mins.every((m) => m != null) ? nowMinutes() : null;
   const nowAfter = nowMin == null ? null
     : stops.reduce<string | null>((at, x, i) => ((mins[i] as number) <= nowMin ? x.slot.id : at), 'start');
-  const ctx: DayCtx = { sc, styles, timeW, isDone, eaten, next, nowAfter, nowMin, firstId: stops[0]?.slot.id ?? null };
+  const navigation = React.useContext((NavigationContext as React.Context<unknown> | undefined) ?? NO_NAVIGATION) as
+    { navigate: (name: string, params?: object) => void } | undefined;
+  const onRecipe = navigation ? (slotId: string) => navigation.navigate('PlanMeal', planMealParams(shownDay, slotId)) : undefined;
+  const ctx: DayCtx = { sc, styles, timeW, isDone, eaten, next, nowAfter, nowMin, firstId: stops[0]?.slot.id ?? null, onRecipe };
   // One plan (the usual day): its name, the coach's note and the day total sit
   // on the masthead, as C2 C_day draws the coach's italic note there (FIX-927,
   // LS-927 B1: the note shows once, on the masthead). Several plans keep each
@@ -218,7 +249,7 @@ export default function ClientDailyMealPlanScreen() {
       <PaperPage bg={sc.bgSurface}>
         {waiting ? (
           <LoadingTimeline sc={sc} styles={styles} />
-        ) : isError ? (
+        ) : failed ? (
           <View style={[planStyleC.card, styles.cardFill, styles.state]} accessibilityLiveRegion="polite" accessibilityRole="alert">
             <Text style={[typography.body, { color: sc.textPrimary }]}>
               Could not load this meal plan. Pull to retry.
@@ -281,6 +312,8 @@ interface DayCtx {
   nowMin: number | null;
   /** The first shown meal: a now line before every meal goes above it. */
   firstId: string | null;
+  /** PLAN-SWAPS-M (R7): opens a meal's own page for this page's day. */
+  onRecipe?: (slotId: string) => void;
 }
 
 function PlanSection({ assignment, stops, italic, onMasthead, ctx }: {
@@ -361,6 +394,13 @@ function MealStop({ stop, ctx }: { stop: Stop; ctx: DayCtx }) {
             </View>
             <MealArt slot={s.slot_label} testID={`daily-meal-plan-art-${s.id}`} />
           </View>
+          {/* PLAN-SWAPS-M (R7, C_day C2-S-36): a meal with a recipe opens its own page; its own button, under the words. */}
+          {ctx.onRecipe && s.recipe_id ? (
+            <HapticPressable intent="light" disableAnimation onPress={() => ctx.onRecipe?.(s.id)} accessibilityRole="button"
+              accessibilityLabel={`Recipe and grocery list for ${s.meal_template.name}`} testID={`daily-meal-plan-recipe-${s.id}`} style={styles.recipeLink}>
+              <Text style={[styles.recipeText, { color: sc.accentText }]}>Recipe and grocery list</Text>
+            </HapticPressable>
+          ) : null}
           {/* Keep the action mounted when the log refresh moves the next-meal card, preserving Undo and queued status. */}
           <View style={isNext ? planStyleC.nextCard : undefined} testID={isNext ? 'daily-meal-plan-next-card' : undefined}>
             {isNext && s.meal_template.description ? <Text style={planStyleC.nextText}>{s.meal_template.description}</Text> : null}
@@ -495,5 +535,8 @@ function makeStyles(sc: SemanticTokens) {
     // Meal names at the frame's 21 pt Cormorant (planStyleC.name; LS-927 B2), then the meta and the description.
     mealWords: { flex: 1, minWidth: 0, gap: 2 },
     loadingStop: { gap: spacing.sm, paddingRight: spacing.xl },
+    // C_day's text link (style_c.py :157): forest, underlined, left under the meal's words, 44 pt tall.
+    recipeLink: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center' },
+    recipeText: { ...typography.bodyMd, textDecorationLine: 'underline' },
   });
 }

@@ -36,6 +36,9 @@ export function foodSaveIntent(
   return ['food', date, meal_type, Math.round(m * 1e6) / 1e6, plan_slot_id ?? null, fills_usual_meal === true, canonical(food)];
 }
 
+/** Whether a save of this intent is still waiting on an answer (its key kept), so its next send carries that key. Reads only. */
+export const isSaveKeyKept = (intent: unknown): boolean => unanswered.has(JSON.stringify(intent));
+
 /**
  * Runs one intended save with its key. `intent` is everything the save sends except the key. Each lost
  * answer keeps its own key, so the same food twice in one repeated meal, both lost, are two kept keys: each

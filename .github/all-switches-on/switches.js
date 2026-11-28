@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * ALL-ON-CI-M: the "All switches on (not required)" job's helper. CI only;
+ * ALL-ON-CI-M: the "All switches on" job's helper. CI only;
  * the app never loads this file and no switch default changes.
  *
  *   node .github/all-switches-on/switches.js find

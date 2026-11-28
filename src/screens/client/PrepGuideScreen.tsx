@@ -96,14 +96,16 @@ export default function PrepGuideScreen() {
 
   const weekStart = getLocalWeekStart(weekOffset);
 
-  const { data, isLoading, isError, refetch, isRefetching } = useQuery({
+  // GROCERY-OFFLINE-KEEP-M (SWEEP-KITCHEN B1's class): a re-read that fails keeps the guide she has; the notice is only
+  // for a week with no answer yet (react-query's isLoadingError: an error and no data).
+  const { data, isLoading, isLoadingError: failed, refetch, isRefetching } = useQuery({
     queryKey: ['prep-guide', weekStart],
     queryFn: () => prepGuideApi.getWeeklyGuide(weekStart).then((r) => r.data as PrepGuideData),
     staleTime: 5 * 60 * 1000,
   });
   const { pulling, onRefresh } = usePullToRefresh(refetch);
 
-  const shown = !isLoading && !isError && data && data.recipes.length > 0 ? data : null;
+  const shown = !isLoading && !failed && data && data.recipes.length > 0 ? data : null;
   const fromPlan = data?.source === 'plan';
   const fromLibrary = data?.source === 'library';
   // The week arrows only change anything when the server filters by week; once off the current week
@@ -219,7 +221,7 @@ export default function PrepGuideScreen() {
             <Text style={styles.loadingText}>Loading your prep guide…</Text>
             <StyleCLoadingLines lead="tile" />
           </View>
-        ) : isError ? (
+        ) : failed ? (
           // The warm notice and a Try again button (C_error), the same words as before.
           <View style={styles.errorBlock}>
             <StyleCNotice title="Couldn't load prep guide">Pull down to try again.</StyleCNotice>

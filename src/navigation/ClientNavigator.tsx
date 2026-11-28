@@ -36,6 +36,7 @@ import HabitsScreen from '../screens/client/HabitsScreen';
 import LogScreen from '../screens/client/LogScreen';
 import RecipesScreen from '../screens/client/RecipesScreen';
 import RecipeDetailScreen from '../screens/client/RecipeDetailScreen';
+import PlanMealScreen from '../screens/client/mealplan/PlanMealScreen';
 import GroceryListScreen from '../screens/client/GroceryListScreen';
 import PrepGuideScreen from '../screens/client/PrepGuideScreen';
 import ProgressScreen from '../screens/client/ProgressScreen';
@@ -109,6 +110,8 @@ import ClientUpcomingSessionsScreen from '../screens/client/ClientUpcomingSessio
 // Payments — checkout surface for a coach's package share link.
 import PackageCheckoutScreen from '../screens/client/PackageCheckoutScreen';
 import ClientDailyMealPlanScreen from '../screens/client/ClientDailyMealPlanScreen';
+import FoodWeekScreen from '../screens/client/foodweek/FoodWeekScreen';
+import KitchenScreen from '../screens/client/kitchen/KitchenScreen';
 import ClientWorkoutViewerScreen from '../screens/client/ClientWorkoutViewerScreen';
 import YourWeeksScreen from '../screens/client/workouts/YourWeeksScreen';
 import WorkoutAssignmentDetailScreen from '../screens/client/WorkoutAssignmentDetailScreen';
@@ -196,6 +199,8 @@ const ProtectedClientWorkoutViewerScreen = withProtectedScreen(ClientWorkoutView
 const ProtectedYourWeeksScreen = withProtectedScreen(YourWeeksScreen, OWN);
 const ProtectedWorkoutAssignmentDetailScreen = withProtectedScreen(WorkoutAssignmentDetailScreen, OWN);
 const ProtectedClientDailyMealPlanScreen = withProtectedScreen(ClientDailyMealPlanScreen, OWN);
+const ProtectedFoodWeekScreen = withProtectedScreen(FoodWeekScreen, OWN);
+const ProtectedKitchenScreen = withProtectedScreen(KitchenScreen, OWN);
 const ProtectedFastingScreen = withProtectedScreen(FastingScreen, OWN);
 const ProtectedLogScreen = withProtectedScreen(LogScreen, OWN);
 const ProtectedClientMacrosScreen = withProtectedScreen(ClientMacrosScreen, OWN);
@@ -217,6 +222,8 @@ const ProtectedClientUpcomingSessionsScreen = withProtectedScreen(ClientUpcoming
 const ProtectedCalendarHomeScreen = withProtectedScreen(CalendarHomeScreen);
 const ProtectedCalendarBookScreen = withProtectedScreen(CalendarBookScreen);
 const ProtectedCalendarSessionScreen = withProtectedScreen(CalendarSessionScreen);
+// PLAN-SWAPS-M: the plan meal page, OWN as the meal plan page
+const ProtectedPlanMealScreen = withProtectedScreen(PlanMealScreen, OWN);
 /** Side padding @react-navigation/bottom-tabs puts on each tab button (BottomTabItem tabVerticalUiKit). */
 const TAB_BUTTON_PADDING = 5;
 // ─── Param lists ──────────────────────────────────────────────────────────────
@@ -300,6 +307,7 @@ export type MoreStackParamList = {
   MoreIndex:   undefined;
   Recipes:     undefined;
   RecipeDetail: { recipeId: string };
+  PlanMeal: { date: string; slotId: string };
   Fast:        undefined;
   Community:   undefined;
   // B-314-4: Community safety opens from member wins even when the
@@ -353,6 +361,10 @@ export type MoreStackParamList = {
   SupportInbox:      undefined;
   /** Sprint B-2 — client-facing read surfaces over Sprint B v2 backend. */
   ClientMacros:        undefined;
+  /** KITCHEN-WEEK-M: the food week page (C2 Style C C_week), from You > Food this week. */
+  FoodWeek: undefined;
+  /** KITCHEN-M: the Kitchen page, opened from the Food tab's add sheet (KITCHEN-DOOR-M). */
+  Kitchen: undefined;
   /** `assignmentId`: a delivered meal plan (Deliverables); `date`: a day. */
   ClientDailyMealPlan: { date?: string; assignmentId?: string } | undefined;
   /** REFINE-987R3: `week`, a Monday, from a Your weeks row (that week's workouts); none, the default window. */
@@ -592,6 +604,7 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
       <MoreStackNav.Screen name="EditProfile"  component={EditProfileScreen} />
       <MoreStackNav.Screen name="Recipes"      component={RecipesScreen} />
       <MoreStackNav.Screen name="RecipeDetail" component={RecipeDetailScreen} />
+      <MoreStackNav.Screen name="PlanMeal" component={ProtectedPlanMealScreen} options={backOnlyHeader('', PLAN_BAND)} />
       <MoreStackNav.Screen name="GroceryList"  component={GroceryListScreen} />
       <MoreStackNav.Screen name="PrepGuide"    component={PrepGuideScreen} />
       <MoreStackNav.Screen name="Fast"         component={ProtectedFastingScreen} options={backOnlyHeader('', PLAN_BAND)} />
@@ -671,6 +684,8 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
           work today). */}
       <MoreStackNav.Screen name="ClientMacros"        component={ProtectedClientMacrosScreen} options={backOnlyHeader('Macro targets', lightTokens.surface.masthead)} />
       <MoreStackNav.Screen name="ClientDailyMealPlan" component={ProtectedClientDailyMealPlanScreen} options={backOnlyHeader('', PLAN_BAND)} />
+      <MoreStackNav.Screen name="FoodWeek" component={ProtectedFoodWeekScreen} options={backOnlyHeader('', PLAN_BAND)} />
+      <MoreStackNav.Screen name="Kitchen" component={ProtectedKitchenScreen} />
       <MoreStackNav.Screen name="ClientWorkoutViewer" component={ProtectedClientWorkoutViewerScreen} />
       <MoreStackNav.Screen name="YourWeeks" component={ProtectedYourWeeksScreen} />
       <MoreStackNav.Screen name="WorkoutAssignmentDetail" component={ProtectedWorkoutAssignmentDetailScreen} />

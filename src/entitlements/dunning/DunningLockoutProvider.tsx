@@ -32,8 +32,9 @@ export const REACHABLE_WHILE_LOCKED: ReadonlySet<string> = new Set([
  * Home and the rest keep the lockout.
  */
 export const OPEN_FOR_OWN_LOGGING: ReadonlySet<string> = new Set([
-  'WorkoutTab', 'Log', 'WorkoutMain', 'ActiveWorkout', 'WorkoutHistoryEdit', 'ClientWorkoutViewer',
+  'WorkoutTab', 'Log', 'PlanMeal', 'WorkoutMain', 'ActiveWorkout', 'WorkoutHistoryEdit', 'ClientWorkoutViewer',
   'WorkoutAssignmentDetail', 'ClientDailyMealPlan', 'Fast', 'ClientMacros', 'Habits', 'RoutineBuilder', 'YourWeeks',
+  'FoodWeek', 'Kitchen',
 ]);
 
 /**
