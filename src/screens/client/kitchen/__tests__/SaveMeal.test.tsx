@@ -640,18 +640,23 @@ describe('SAVED-MEAL-SAVE-M: Save a meal from today (Style 2 Menu)', () => {
 
   it('6c. C2 (LO-SAVED-MEAL-SAVE-M-1): at 320 x 568 and 130%, a line that asks her to change her picks (KS-4, KS-6) scrolls with the list from its top; a line about the send (KS-3) stays pinned by its button', async () => {
     mockDims = { width: 320, height: 568, scale: 2, fontScale: 1.3 };
-    const scrollTo = jest.spyOn(ScrollView.prototype as unknown as { scrollTo: (o: object) => void }, 'scrollTo');
+    // The ScrollView stand-in's scrollTo is one mock shared by every instance and every case: clear it, then hold the call
+    // to the sheet body's own instance (mutation M-C2b: a spy on the shared mock passed on earlier cases' page scrolls).
+    const scrollTo = (ScrollView.prototype as unknown as { scrollTo: jest.Mock }).scrollTo;
     await mount();
     await openSave();
     await loaded();
     const body = () => screen.getByTestId('kitchen-sheet-body');
     const foot = () => screen.getByTestId('kitchen-sheet-foot');
+    const scrolled = () => scrollTo.mock.contexts.flatMap((c: { props?: { testID?: string } }, i: number) =>
+      (c?.props?.testID === 'kitchen-sheet-body' ? [scrollTo.mock.calls[i][0]] : []));
+    scrollTo.mockClear();
     mockPost.mockImplementationOnce(() => Promise.reject(refusal(404, 'Food not found')));
     await pressSave();
     await screen.findByText(SAVE_WORDS.foodGone);
     expect(within(body()).getByText(SAVE_WORDS.foodGone)).toBeTruthy();
     expect(within(foot()).queryByText(SAVE_WORDS.foodGone)).toBeNull();
-    expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ y: 0 }));
+    expect(scrolled()).toEqual([expect.objectContaining({ y: 0 })]);
     mockPost.mockImplementationOnce(lost);
     await pressSave();
     await screen.findByText(SAVE_WORDS.notSaved);
