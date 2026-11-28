@@ -1,0 +1,7 @@
+src/screens/client/__tests__/loMealPlanLocalDay.B1.serverDayDoors.test.tsx
+src/screens/client/__tests__/mealPlanLocalDay.test.tsx
+src/services/__tests__/sweepMealPlans.B3.planPageDay.test.tsx
+src/__tests__/clientDailyMealPlanRouteParam.test.tsx
+src/__tests__/deliverablesScreen.test.tsx
+src/__tests__/deliveredContentOpens.test.tsx
+src/services/__tests__/mealPlanRefresh.test.tsx
