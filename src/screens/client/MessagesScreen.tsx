@@ -55,6 +55,7 @@ import { HapticService } from '../../ui/haptics/haptics.service';
 import { StyleBBubble, StyleBDayMark, StyleBFirstCard, StyleBHeader, StyleBLoading, StyleBQueued, dayB } from '../../components/messaging/StyleBThread';
 import { useMessageOutbox } from '../../hooks/useMessageOutbox';
 import { drainOutbox, isTransient, outboxOn, sendViaOutbox, settleOutbox, takeBackRefused, type OutboxEvent } from '../../services/messageOutbox';
+import { useScreenAreaKeyboardOffset } from '../../ui/layout/ScreenArea';
 
 interface Message {
   id: string;
@@ -84,6 +85,7 @@ export function cacheKeyFor(userId: string): string {
 }
 
 export default function MessagesScreen() {
+  const keyboardOffset = useScreenAreaKeyboardOffset();
   const colors = useThreadColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   // The Screen wrapper's inset top (insets.top + 12), applied to the thread
@@ -716,7 +718,7 @@ export default function MessagesScreen() {
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={0}
+      keyboardVerticalOffset={keyboardOffset}
     >
       {styleB ? bHeader(true) : <View style={[styles.chatHeader, headerTop]}>
         <TouchableOpacity

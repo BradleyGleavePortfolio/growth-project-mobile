@@ -39,6 +39,7 @@ function httpStatusOf(err: unknown): number | null {
   return null;
 }
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useScreenAreaKeyboardOffset } from '../../ui/layout/ScreenArea';
 
 // Neutral shortcuts: none assumes a coach or an assigned plan.
 const QUICK_PROMPTS = [
@@ -96,6 +97,7 @@ export default function AIGuideScreen() {
 }
 
 function AIGuideChat() {
+  const keyboardOffset = useScreenAreaKeyboardOffset();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
@@ -324,7 +326,7 @@ function AIGuideChat() {
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={0}
+      keyboardVerticalOffset={keyboardOffset}
     >
       {/* Offline banner — shown when a network error is detected */}
       {isOffline && (

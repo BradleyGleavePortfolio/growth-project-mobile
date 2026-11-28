@@ -110,6 +110,7 @@ import ClientUpcomingSessionsScreen from '../screens/client/ClientUpcomingSessio
 // Payments — checkout surface for a coach's package share link.
 import PackageCheckoutScreen from '../screens/client/PackageCheckoutScreen';
 import ClientDailyMealPlanScreen from '../screens/client/ClientDailyMealPlanScreen';
+import FoodWeekScreen from '../screens/client/foodweek/FoodWeekScreen';
 import ClientWorkoutViewerScreen from '../screens/client/ClientWorkoutViewerScreen';
 import YourWeeksScreen from '../screens/client/workouts/YourWeeksScreen';
 import WorkoutAssignmentDetailScreen from '../screens/client/WorkoutAssignmentDetailScreen';
@@ -197,6 +198,7 @@ const ProtectedClientWorkoutViewerScreen = withProtectedScreen(ClientWorkoutView
 const ProtectedYourWeeksScreen = withProtectedScreen(YourWeeksScreen, OWN);
 const ProtectedWorkoutAssignmentDetailScreen = withProtectedScreen(WorkoutAssignmentDetailScreen, OWN);
 const ProtectedClientDailyMealPlanScreen = withProtectedScreen(ClientDailyMealPlanScreen, OWN);
+const ProtectedFoodWeekScreen = withProtectedScreen(FoodWeekScreen, OWN);
 const ProtectedFastingScreen = withProtectedScreen(FastingScreen, OWN);
 const ProtectedLogScreen = withProtectedScreen(LogScreen, OWN);
 const ProtectedClientMacrosScreen = withProtectedScreen(ClientMacrosScreen, OWN);
@@ -357,6 +359,8 @@ export type MoreStackParamList = {
   SupportInbox:      undefined;
   /** Sprint B-2 — client-facing read surfaces over Sprint B v2 backend. */
   ClientMacros:        undefined;
+  /** KITCHEN-WEEK-M: the food week page (C2 Style C C_week), from You > Food this week. */
+  FoodWeek: undefined;
   /** `assignmentId`: a delivered meal plan (Deliverables); `date`: a day. */
   ClientDailyMealPlan: { date?: string; assignmentId?: string } | undefined;
   /** REFINE-987R3: `week`, a Monday, from a Your weeks row (that week's workouts); none, the default window. */
@@ -676,6 +680,7 @@ function MoreStackNavigator({ onDay1Saved }: Day1SaveProps = {}) {
           work today). */}
       <MoreStackNav.Screen name="ClientMacros"        component={ProtectedClientMacrosScreen} options={backOnlyHeader('Macro targets', lightTokens.surface.masthead)} />
       <MoreStackNav.Screen name="ClientDailyMealPlan" component={ProtectedClientDailyMealPlanScreen} options={backOnlyHeader('', PLAN_BAND)} />
+      <MoreStackNav.Screen name="FoodWeek" component={ProtectedFoodWeekScreen} options={backOnlyHeader('', PLAN_BAND)} />
       <MoreStackNav.Screen name="ClientWorkoutViewer" component={ProtectedClientWorkoutViewerScreen} />
       <MoreStackNav.Screen name="YourWeeks" component={ProtectedYourWeeksScreen} />
       <MoreStackNav.Screen name="WorkoutAssignmentDetail" component={ProtectedWorkoutAssignmentDetailScreen} />

@@ -184,6 +184,7 @@ export function LessonsSheet({ visible, onClose }: { visible: boolean; onClose: 
     const existing = editing === 'new' ? null : editing;
     return sheet(
       <Screen
+        inModal
         edges={edges}
         testID="coach-lesson-editor"
         header={<ScreenTopBar onBack={back} testID="coach-lesson-editor-bar" />}
@@ -223,6 +224,7 @@ export function LessonsSheet({ visible, onClose }: { visible: boolean; onClose: 
   const loaded = lessons.data !== undefined;
   return sheet(
     <Screen
+      inModal
       edges={edges}
       testID="coach-lessons"
       header={
