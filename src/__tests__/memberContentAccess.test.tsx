@@ -406,21 +406,29 @@ const REGISTRY: Surface[] = [
         proof: { by: 'suite', file: 'components/community/space-chat/__tests__/spaceMembersKT2.test.tsx', titles: [
           'KT-2: the people of a space are asked for only while enabled (the server let me in), and never kept on the disk',
         ] }, exports: ['useSpaceMembers', 'listSpaceMembers'] },
-      // LEAVE-MUTE-M (agent 203, b#1168): a space's left list ("{name} left"), its thread states and its notification
-      // setting. The wire (spaceLeaveMuteApi) stops nothing, as spaceChatApi's row; the hook applies the rules and stops here.
+      // LEAVE-MUTE-M (agent 203, b#1168): a space's left list ("{name} left"), her thread states and notification setting
+      // (lists), and her own leave, join, thread and notification choices (no member words, but the scan counts a member
+      // API's non-read methods as sends). The wire (spaceLeaveMuteApi) stops nothing, as spaceChatApi's row; the hook
+      // applies the rules and stops here.
       ...((): Surface[] => {
         const space = 'screens/community/__tests__/leaveMuteSpace.test.tsx';
         const LINES = 'L10: the lines from GET .../left sit between messages by time, in range only; a block takes the line of that person at once; a rejoin keeps it';
         const CLOSED = 'L8: a left space the server now refuses (404 on the read): the closed band, not the left band (closed beats left)';
         const SECOND = 'L15: sign out and in as another member: no notification setting, left list or left space of the first account is shown';
-        return [
-          { file: 'components/community/space-chat/spaceLeaveMuteApi.ts', kind: 'list', what: 'the leave and mute wire (who left a space, my thread states, my notification setting; leave, join, mute)',
-            how: 'the server leaves blocked (both ways), banned and gone people out of GET .../left and answers 404 to a space she cannot read; the row stops nothing (exports: []), so every caller is named',
-            proof: { by: 'suite', file: space, titles: [LINES, CLOSED] }, exports: [] },
-          { file: 'components/community/space-chat/useSpaceLeaveMute.ts', kind: 'list', what: 'one space\'s "{name} left" lines, thread states and notification setting, for the space chat',
-            how: 'read only while the server lets her read the space (admitted; a 403 / 404 closes it and draws no line); my block (useSpaceChat dropAuthor) takes the line of that person at once; the lines draw only between loaded messages; kept in memory only (meta persist: false) under keys holding her user id, so a sign-out or another account shows none',
-            proof: { by: 'suite', file: space, titles: [LINES, CLOSED, SECOND] }, exports: ['useSpaceLeaveMute'] },
-        ];
+        const REFUSED = 'L6: a leave refused (%s) says so and leaves the space as it was';
+        const JOIN = 'L7: a left space opened from the tree: its rows, the band with LM-14 and Join again where the box was, no box and no bell; Join again posts once and the box comes back after the answer';
+        const API_HOW = { list: 'the server leaves blocked (both ways), banned and gone people out of GET .../left and answers 404 to a space she cannot read',
+          composer: 'her own choices only (leave, join, a thread\'s state, her notification setting), no member words; the server answers 404 to a space she cannot read and 409 to a leave it does not allow' };
+        const HOOK_HOW = { list: 'read only while the server lets her read the space (admitted; a 403 / 404 closes it and draws no line); my block (useSpaceChat dropAuthor) takes the line of that person at once; the lines draw only between loaded messages; kept in memory only (meta persist: false) under keys holding her user id, so a sign-out or another account shows none',
+          composer: 'offered only where the server lets her read the space and allows it (no Leave in Announcements or her coach\'s space, no box or thread rows in a left or closed space); every choice waits for the server, a refusal (404, 409, offline) changes nothing and says so' };
+        return (['list', 'composer'] as const).flatMap((kind): Surface[] => [
+          { file: 'components/community/space-chat/spaceLeaveMuteApi.ts', kind, what: 'the leave and mute wire (who left a space, her thread states and notification setting; leave, join, mute)',
+            how: `${API_HOW[kind]}; the row stops nothing (exports: []), so every caller is named`,
+            proof: { by: 'suite', file: space, titles: kind === 'list' ? [LINES, CLOSED] : [REFUSED, CLOSED] }, exports: [] },
+          { file: 'components/community/space-chat/useSpaceLeaveMute.ts', kind, what: 'one space\'s "{name} left" lines, thread states and notification setting, and her choices about them, for the space chat',
+            how: HOOK_HOW[kind],
+            proof: { by: 'suite', file: space, titles: kind === 'list' ? [LINES, CLOSED, SECOND] : [REFUSED, JOIN, CLOSED] }, exports: ['useSpaceLeaveMute'] },
+        ]);
       })(),
       // Part 4: the screen. Its box and mic are the parts above (SpaceChatComposer, SpaceChatMic), drawn only once the
       // server let the viewer in: 'while the space loads there is no composer (a banned member never gets a box), and no

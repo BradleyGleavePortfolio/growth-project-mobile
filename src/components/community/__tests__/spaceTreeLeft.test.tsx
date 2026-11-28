@@ -129,6 +129,22 @@ describe('LEAVE-MUTE-M Spaces you left in the tree (L9)', () => {
     expect(screen.getByText('Spaces you left')).toBeTruthy();
   });
 
+  it('L9: the one space-list read asks the server for the spaces she left (?include_left=1), under the one key', async () => {
+    const real = jest.requireActual('../../../hooks/useCommunity') as typeof import('../../../hooks/useCommunity');
+    // The wire schema checks ids (UUIDs) and the role, as the server sends them.
+    const id = '00000002-0000-4000-8000-000000000000';
+    mockApi.get.mockImplementation(async () => ({ data: { feature_flag_state: 'enabled', cohorts: [row(id, 'Morning crew', { workspace_id: '00000001-0000-4000-8000-000000000000', left_at: '2026-11-27T16:00:00.000Z' })] } }));
+    let seen: unknown = null;
+    const Reader = () => { seen = real.useCommunityCohorts().data; return null; };
+    await mount(<Reader />);
+    await waitFor(() => expect(seen).toBeTruthy());
+    const reads = mockApi.get.mock.calls.filter(([u]) => u === '/community/cohorts');
+    expect(reads).toHaveLength(1);
+    expect(reads[0][1]).toEqual({ params: { include_left: 1 } });
+    expect((seen as { cohorts: Array<{ left_at?: string | null }> }).cohorts[0].left_at).toBe('2026-11-27T16:00:00.000Z');
+    expect(client.getQueryCache().findAll({ queryKey: ['community', 'cohorts'] })).toHaveLength(1);
+  });
+
   it('L9: the drawer (deep) draws the same section from the same read', async () => {
     mockRows = [...mockRows, row('c-morning', 'Morning crew', { left_at: '2026-11-27T16:00:00.000Z' })];
     const Drawer = () => {
