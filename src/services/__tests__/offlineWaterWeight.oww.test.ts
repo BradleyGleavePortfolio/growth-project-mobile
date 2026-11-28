@@ -358,7 +358,7 @@ describe('one queue', () => {
     await put([foodEntry('pfl_f1'), glassEntry('pfl_w1'), weighInEntry('pfl_g1')]);
     const out = await queue.flush();
     expect(mockServer.posts.map((p) => [p.kind, p.key])).toEqual([['food', 'pfl_f1'], ['water', 'pfl_w1'], ['weight', 'pfl_g1']]);
-    expect(out).toEqual({ flushed: 3, remaining: 0, parked: 0 });
+    expect(out).toEqual({ flushed: 3, remaining: 0, parked: 0, days: [DAY] });
     expect(api.logApi.logFood).toHaveBeenCalledWith(expect.objectContaining({ food_item_id: 'food-oats', client_uuid: 'pfl_f1' }));
   });
 

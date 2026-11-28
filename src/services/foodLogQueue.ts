@@ -388,7 +388,8 @@ export async function mergeAnonymousQueueIntoUser(userId: string): Promise<{
 // The server asked for a pause (Retry-After): no send before this time.
 let retryNotBefore = 0;
 
-type FlushResult = { flushed: number; remaining: number; parked: number };
+// `days`: the days of the foods it sent (MEALPLAN-PAGE-FRESH-M, SWEEP-INT-CLIENT N1), so their logs are read again.
+type FlushResult = { flushed: number; remaining: number; parked: number; days: string[] };
 
 // REFINE-972 (B2): one flush at a time on this phone. The sync, a day read and the sign-out try all send through
 // here; a caller that arrives while a flush runs for the same owner shares that flush and sends nothing itself, so
@@ -437,6 +438,7 @@ async function flush(): Promise<FlushResult> {
   const sendOwner: QueuedSendOwner = { binding: await credential, session };
   let flushed = 0;
   let parked = 0;
+  const days = new Set<string>();
   // Nothing is sent while the server's Retry-After runs.
   let stopped = isHeld(retryNotBefore);
   // FIX-972R2 (B1): a sign-in or sign-out while the queue and the credential were read: this flush sends nothing.
@@ -537,6 +539,7 @@ async function flush(): Promise<FlushResult> {
       // moment until a read of its day holds it (both copies share one id; the day
       // shows it once).
       if (!(await keepSent(item))) break;
+      days.add(item.log.date);
       if (await commit((q) => q.filter((x) => x.id !== item.id))) flushed++;
     } catch (err) {
       if (!isRetryLater(err)) {
@@ -554,5 +557,5 @@ async function flush(): Promise<FlushResult> {
       stopped = true;
     }
   }
-  return { flushed, remaining: waiting(queue).length, parked };
+  return { flushed, remaining: waiting(queue).length, parked, days: [...days] };
 }

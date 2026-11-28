@@ -406,7 +406,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
 
     try {
       await submitSearchLogOnline(args);
-      await refreshShownDay(currentUser.id, day);
+      await refreshShownDay(currentUser.id, day, true);
       // Phase 11 / Track 3: success haptic on food logged
       HapticService.success();
       // Psych Report #4: Analytics — meal_logged (search flow)
@@ -454,7 +454,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
 
     try {
       await submitManualLogOnline(args);
-      await refreshShownDay(currentUser.id, day);
+      await refreshShownDay(currentUser.id, day, true);
       // Phase 11 / Track 3: success haptic on manual food logged
       HapticService.success();
       // Psych Report #4: Analytics — meal_logged (manual flow)
@@ -524,7 +524,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
     setFoodSaving(true);
     try {
       const { added, failedNames } = await repeatPastMeal(meal, day, mealType, link);
-      await refreshShownDay(currentUser.id, day);
+      await refreshShownDay(currentUser.id, day, added > 0);
       if (failedNames.length === 0) {
         HapticService.success();
         track(AnalyticsEvents.MEAL_LOGGED, { meal_type: mealType, source: 'repeat_meal' });
@@ -622,7 +622,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
         return;
       }
       await submitManualLogOnline(args);
-      await refreshShownDay(currentUser.id, day);
+      await refreshShownDay(currentUser.id, day, true);
       HapticService.success();
       track(AnalyticsEvents.MEAL_LOGGED, { meal_type: slot.mealType, source: 'meal_plan' });
       setSavedMessage(`${slot.name} added to ${mealLabel(slot.mealType)}.`);
@@ -679,7 +679,7 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
       setEditLog(null);
       setEditQty('');
       setEditUnit('');
-      await refreshShownDay(currentUser.id, selectedDate);
+      await refreshShownDay(currentUser.id, selectedDate, true);
     } catch (err) {
       console.error('LogScreen: handleEditSave failed', err);
       Alert.alert(
@@ -710,13 +710,16 @@ export default function LogScreen({ onSaved, suspended = false }: { onSaved?: ()
           // The row and the day's totals update at once; the reload below
           // brings the entry back if the server did not delete it.
           removeFoodLogLocally(log.id);
+          let removed = false;
           try {
             await logApi.deleteEntry(log.id);
+            removed = true;
           } catch (err) {
             console.error('LogScreen: handleDeleteFood failed', err);
             Alert.alert("Couldn't remove food", errorMessage(err, `${log.foodName} is still in the log. Check the connection and try again.`));
           }
-          refreshShownDay(currentUser.id, selectedDate);
+          // FIX-MPF-1 (B1 a): the day's other readers re-read only after a Remove the server took.
+          refreshShownDay(currentUser.id, selectedDate, removed);
         },
       },
     ]);

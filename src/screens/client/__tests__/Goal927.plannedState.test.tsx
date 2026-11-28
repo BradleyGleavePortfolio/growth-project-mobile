@@ -38,9 +38,11 @@ jest.mock('../../../services/api', () => ({
 jest.mock('../../../services/foodLogQueue', () => ({ enqueue: jest.fn() }));
 jest.mock('../../../services/foodLogSync', () => ({ notifyPendingFoodLogs: jest.fn() }));
 jest.mock('../../../services/queryClient', () => ({ queryClient: { invalidateQueries: jest.fn() } }));
-jest.mock('../../../store/clientStore', () => ({
-  useClientStore: { getState: () => ({ selectedDate: '2026-10-07', refreshShownDay: jest.fn() }) },
-}));
+// FIX-MPF-1: the page reads the phone's foods from the store (C1's join); none wait on this phone here.
+jest.mock('../../../store/clientStore', () => {
+  const state = { selectedDate: '2026-10-07', refreshShownDay: jest.fn(), queuedFoods: [], sentFoods: [] };
+  return { useClientStore: Object.assign((pick: (s: typeof state) => unknown) => pick(state), { getState: () => state }) };
+});
 jest.mock('../../../lib/userCache', () => ({ readUserCacheSync: () => ({ id: 'client-1' }) }));
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
 jest.mock('../../../utils/date', () => ({
