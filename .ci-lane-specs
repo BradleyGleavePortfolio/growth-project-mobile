@@ -1,0 +1,2 @@
+src/screens/client/__tests__/MealPlanOfflineJoin.noLogHeld.test.tsx
+src/screens/client/__tests__/MealPlanOfflineJoin.macrosHeldTarget.test.tsx
