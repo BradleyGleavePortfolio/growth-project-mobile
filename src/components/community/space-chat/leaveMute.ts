@@ -6,7 +6,8 @@
  *     that community's coach. A kind an older server leaves out hides it.
  *   - The stream (weaveStream): "{name} left" lines between messages by time, only inside the loaded range (R9); the
  *     Muted mark under a muted thread's first message; a left thread's replies after `since` folded into one line where
- *     the first of them would be (R8: the count is what is loaded), and once opened, Follow thread under the last one.
+ *     the first of them would be (R8: the count is what is loaded); opened, the line stays and the replies follow it, with
+ *     Follow thread under the last one.
  */
 import type { SpaceLeftRow, SpaceThreadState } from './spaceLeaveMuteApi';
 
@@ -25,7 +26,7 @@ export function splitCohorts<T extends { left_at?: unknown }>(rows: readonly T[]
 
 export type StreamExtra =
   | { type: 'left'; key: string; name: string; at: string }
-  | { type: 'fold'; key: string; threadId: string; count: number }
+  | { type: 'fold'; key: string; threadId: string; count: number; open: boolean }
   | { type: 'mark'; key: string; threadId: string }
   | { type: 'follow'; key: string; threadId: string };
 
@@ -88,10 +89,10 @@ export function weaveStream<I>(input: WeaveInput<I>): Array<I | StreamExtra> {
     const m = messageOf(it);
     const t = hidden(m);
     if (t && m) {
-      if (!opened.has(t)) {
-        if (!folded.has(t)) { folded.add(t); out.push({ type: 'fold', key: `fold-${t}`, threadId: t, count: counts.get(t) ?? 0 }); }
-        continue;
-      }
+      const open = opened.has(t);
+      // The line stays where the first reply would be, open or not (s1_L10a, s1_L10b); open, the replies follow it.
+      if (!folded.has(t)) { folded.add(t); out.push({ type: 'fold', key: `fold-${t}`, threadId: t, count: counts.get(t) ?? 0, open }); }
+      if (!open) continue;
       out.push(it);
       if (lastReply.get(t) === m.id) out.push({ type: 'follow', key: `follow-${t}`, threadId: t });
       continue;

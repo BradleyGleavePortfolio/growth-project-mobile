@@ -24,8 +24,10 @@ const LEVELS = [['all', 'All messages'], ['mute_low', 'Mute low priority'], ['mu
 const TIMERS = [[1, 'Mute for 1 hour'], [8, 'Mute for 8 hours'], [24, 'Mute for 1 day']] as const;
 const FALLBACK_TOP = 103;
 
-export function SpaceBell({ notify, busy, canLeave, onAction, onLeave }: {
+export function SpaceBell({ notify, busy, canLeave, onAction, onLeave, bar }: {
   notify: SpaceNotify | null;
+  /** The chat's bar: the card drops from its bottom edge (taller when the name takes two lines). */
+  bar?: React.RefObject<View | null>;
   busy: boolean;
   canLeave: boolean;
   onAction: (a: BellAction) => void;
@@ -38,15 +40,16 @@ export function SpaceBell({ notify, busy, canLeave, onAction, onLeave }: {
   const muted = notify?.effective_mode === 'mute_all';
   const open = () => {
     if (busy) return;
-    // The bar's bottom is 10 pt under the bell (its paddingBottom); the card drops 6 pt below it. A measure that never
-    // answers (no native view) opens it under a typical bar.
+    // The card drops from the bar's bottom edge (without the bar: 10 pt under the bell, the bar's paddingBottom). A
+    // measure that never answers (no native view) opens it under a typical bar.
     let placed = false;
     const fallback = setTimeout(() => { if (!placed) { placed = true; setAt({ top: FALLBACK_TOP }); } }, 120);
-    bell.current?.measureInWindow?.((_x, y, _w, h) => {
+    const from = bar?.current ?? bell.current;
+    from?.measureInWindow?.((_x, y, _w, h) => {
       if (placed) return;
       placed = true;
       clearTimeout(fallback);
-      setAt({ top: (Number.isFinite(y) ? y : 0) + (Number.isFinite(h) && h > 0 ? h : 44) + 10 });
+      setAt({ top: (Number.isFinite(y) ? y : 0) + (Number.isFinite(h) && h > 0 ? h : 44) + (bar?.current ? 0 : 10) });
     });
   };
   const done = () => {

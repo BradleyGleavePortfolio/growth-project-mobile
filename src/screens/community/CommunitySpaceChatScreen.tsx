@@ -308,7 +308,11 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
     if (item.type === 'new') return <NewMessagesLine />;
     if (item.type === 'left') return <LeftLine name={item.name} testID={`space-${item.key}`} />;
     if (item.type === 'mark') return <MutedMark testID={`space-muted-${item.threadId}`} />;
-    if (item.type === 'fold') return <FoldLine count={item.count} onPress={() => setOpened((o) => new Set(o).add(item.threadId))} testID={`space-fold-${item.threadId}`} />;
+    if (item.type === 'fold') {
+      const id = item.threadId;
+      return <FoldLine count={item.count} open={item.open} testID={`space-fold-${id}`}
+        onPress={() => setOpened((o) => { const n = new Set(o); if (n.has(id)) n.delete(id); else n.add(id); return n; })} />;
+    }
     if (item.type === 'follow') {
       const id = item.threadId;
       return <FollowLink busy={lm.busy === `thread-${id}`} testID={`space-follow-${id}`}
@@ -415,6 +419,7 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
   // A thread action's toast ("Thread muted." with Undo, s1_L9); a failure's comes from the hook (s1_L11).
   const [notice, setNotice] = useState<{ text: string; undo: () => void } | null>(null);
   const hideNotice = useCallback(() => setNotice(null), []);
+  const barRef = useRef<View>(null);
   // D2b (the owner's default: rows on a thread's first message): Mute or Unmute thread, Leave or Follow thread, with the
   // first message's id; none on a reply, a removed row, or in a left or closed space.
   const threadRows = (m: SpaceMessage | undefined) => {
@@ -432,7 +437,7 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
 
   return (
     <SafeAreaView style={s.safe} edges={['top']} testID="space-chat-screen">
-      <View style={s.header}>
+      <View style={s.header} ref={barRef}>
         <View style={s.icon}>
           {coachStack ? (
             <TouchableOpacity onPress={() => navigation.navigate('CoachCommunityCohorts')} accessibilityRole="button" accessibilityLabel="Open space list" style={s.icon} testID="space-chat-spaces">
@@ -448,7 +453,7 @@ function SpaceChat({ cohortId, messageId }: Params['CommunitySpaceChat']): React
           {cohort ? <Text style={s.sub}>{members}</Text> : null}
         </View>
         {cohort && admitted && !left ? (
-          <SpaceBell notify={lm.notify} busy={lm.busy === 'bell' || lm.busy === 'leave'} canLeave={canLeave(cohort)} onAction={lm.bell} onLeave={confirmLeave} />
+          <SpaceBell bar={barRef} notify={lm.notify} busy={lm.busy === 'bell' || lm.busy === 'leave'} canLeave={canLeave(cohort)} onAction={lm.bell} onLeave={confirmLeave} />
         ) : null}
         <View style={s.icon}>
           {cohort ? (

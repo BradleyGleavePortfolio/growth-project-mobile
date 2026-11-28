@@ -3,7 +3,8 @@
  * stays as it is.
  *   - "{name} left" (D2d op 2, frames s1_L6, s1_L7a to s1_L7c): a centred quiet line like the day line (.s1left).
  *   - The Muted mark (LM-05, spoken LM-06 "Thread muted", s1_L9): a small hairline pill under the first message's words.
- *   - The fold (LM-08, s1_L10a): a dashed card at the words' column, "{n} replies since you left"; a tap opens it.
+ *   - The fold (LM-08, s1_L10a, s1_L10b): a dashed card at the words' column, "{n} replies since you left"; a tap opens
+ *     it (the line stays above the replies) and closes it again.
  *   - Follow thread (LM-04, s1_L10b): an underlined forest link under the opened replies.
  * The words' column is the row's 16 pt edge plus its 40 pt tile and 10 pt gap (SpaceChatRow.tsx content).
  */
@@ -31,9 +32,9 @@ export function MutedMark({ testID }: { testID: string }): React.ReactElement {
   );
 }
 
-export function FoldLine({ count, onPress, testID }: { count: number; onPress: () => void; testID: string }): React.ReactElement {
+export function FoldLine({ count, open, onPress, testID }: { count: number; open: boolean; onPress: () => void; testID: string }): React.ReactElement {
   return (
-    <TouchableOpacity onPress={onPress} accessibilityRole="button" accessibilityLabel={foldLine(count)} style={s.fold} testID={testID}>
+    <TouchableOpacity onPress={onPress} accessibilityRole="button" accessibilityLabel={foldLine(count)} accessibilityState={{ expanded: open }} style={s.fold} testID={testID}>
       <Ionicons name="chatbubble-outline" size={18} color={fp.forest} />
       <Text style={s.foldText}>{foldLine(count)}</Text>
     </TouchableOpacity>
