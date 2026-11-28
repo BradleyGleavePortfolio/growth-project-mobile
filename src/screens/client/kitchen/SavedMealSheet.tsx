@@ -94,9 +94,9 @@ function ListFade() {
  * keeps to the window left above the keyboard and the body shrinks first, so the field and its button stay in view
  * (SAVED-MEAL-SAVE-M SS9). With no keyboard it draws as before.
  */
-export function KitchenSheet({ visible, title, onClose, busy = false, children, footer, toTop, testID }: {
+export function KitchenSheet({ visible, title, onClose, busy = false, children, footer, testID }: {
   visible: boolean; title: string; onClose: () => void; busy?: boolean; children?: React.ReactNode; footer?: React.ReactNode;
-  toTop?: string | null; testID?: string; // toTop: each new value scrolls the body back to its start (LO-SAVED-MEAL-SAVE-M-1 C2)
+  testID?: string;
 }) {
   const { semanticColors: sc } = useTheme();
   const s = useMemo(() => makeStyles(sc), [sc]);
@@ -109,8 +109,6 @@ export function KitchenSheet({ visible, title, onClose, busy = false, children, 
   const top = useWindowInsets().top; // LO-SAVED-MEAL-SAVE-M-1 C1: with the keyboard up the sheet stops 8 pt under the status bar
   // With a pinned foot, the fade shows while the body has more below than it shows (S2_save); never without a foot.
   const [list, setList] = useState({ view: 0, content: 0, y: 0 });
-  const scroll = useRef<ScrollView>(null);
-  useEffect(() => { if (toTop) scroll.current?.scrollTo({ y: 0, animated: false }); }, [toTop]);
   const more = !!footer && list.content > list.view + 1 && list.y + list.view < list.content - 1;
   const fit = keyboard > 0
     ? { maxHeight: height - keyboard - Math.max(16, top + 8), paddingBottom: 12 }
@@ -132,7 +130,7 @@ export function KitchenSheet({ visible, title, onClose, busy = false, children, 
               </Pressable>
             </View>
           </View>
-          <ScrollView ref={scroll} style={s.body} contentContainerStyle={s.bodyIn} keyboardShouldPersistTaps="handled" testID="kitchen-sheet-body"
+          <ScrollView style={s.body} contentContainerStyle={s.bodyIn} keyboardShouldPersistTaps="handled" testID="kitchen-sheet-body"
             scrollEventThrottle={32}
             onLayout={footer ? (e) => { const view = e.nativeEvent.layout.height; setList((o) => (o.view === view ? o : { ...o, view })); } : undefined}
             onContentSizeChange={footer ? (_w, content) => setList((o) => (o.content === content ? o : { ...o, content })) : undefined}
