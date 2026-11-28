@@ -59,7 +59,7 @@ function parseAmount(raw: string): number | null {
  */
 export function mealTypeForSlot(slot?: string | null): MealType | null {
   const s = (slot ?? '').toLowerCase().replace(/^day\s+\d+\s*[–-]\s*/, '').trim();
-  const planned = logMealOfSlot(s);
+  const planned = s === 'preworkout' ? 'breakfast' : s === 'postworkout' ? 'dinner' : logMealOfSlot(s);
   if (planned) return planned;
   if (s.startsWith('breakfast')) return 'breakfast';
   if (s.startsWith('lunch')) return 'lunch';
