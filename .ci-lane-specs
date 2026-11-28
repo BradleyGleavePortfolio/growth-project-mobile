@@ -1,0 +1,12 @@
+src/screens/client/__tests__/MealPlan
+src/screens/client/__tests__/LsMealPlan
+src/screens/client/__tests__/Goal927
+src/screens/client/__tests__/ClientMacros
+src/screens/client/__tests__/Log
+src/screens/client/__tests__/Kitchen
+src/screens/client/mealplan
+src/screens/client/foodweek
+src/store
+src/services/__tests__/foodLog
+src/services/__tests__/offlineWaterWeight
+src/components/mealplan
