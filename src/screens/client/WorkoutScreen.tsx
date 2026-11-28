@@ -57,6 +57,7 @@ import { featureFlags } from '../../config/featureFlags';
 import { getTodayString } from '../../utils/date';
 // C1-TRAIN-TAB (featureFlags.clientTrainV2, off): the Style C v2 top of the tab.
 import { TrainDay, TrainHead, featuredWorkout, type StartParams } from './train/TrainToday';
+import TrainMessageCoach from './train/TrainMessageCoach';
 // §2.8 Workout complete — Roman speaks beside his face (the card co-locates
 // <RomanAvatar />). Gated behind featureFlags.romanChat (default OFF), the
 // dedicated Roman flag. TRAIN-TAB-FIN-130: a load failure shows CoachErrorState
@@ -721,6 +722,9 @@ export default function WorkoutScreen() {
       : `${pendingAssignments.length} workouts waiting`;
   const assignedLeads = !trainV2 && !loadError && pendingAssignments.length > 0;
   const quickLeads = !loadError && (trainV2 ? trainState !== 'loading' && !featured : pendingAssignments.length === 0);
+  // WORKOUT-STATES-M (C2_first, R2): before any workout of hers or from the coach (that read loading or settled empty),
+  // the lines that only say there is nothing yet stay off; her first workout, the coach's or a failed read brings them back.
+  const firstDay = trainV2 && !loadError && historyRows.length === 0 && trainState !== 'failed' && assignmentRows.length === 0;
   // FIX-987R4 (owner #203-E80; operator FLOW-1 "plans row always"): the owner's flow starts at Workout plans, so the
   // row shows whenever the read holds a workout, flag on or off, whatever is open or done; the hero stays the one
   // forest action. Its line counts what is done, else what waits ("1 workout waiting", R4-W1), never "0 completed".
@@ -789,6 +793,11 @@ export default function WorkoutScreen() {
               <Text style={styles.primaryLabel}>Quick workout</Text>
             </HapticPressable>
             <Text style={styles.heroNote}>Start an empty session</Text>
+            {/* WORKOUT-STATES-M (C2_first, R3): a coached client with no workout from the coach yet; the link shows only
+                while the coaching chat is known open. */}
+            {trainV2 && !coachless && currentUser?.coach_id && trainState === 'ready' && assignmentRows.length === 0 ? (
+              <TrainMessageCoach coachId={currentUser.coach_id} />
+            ) : null}
           </View>
         ) : null}
         {showAllCoachRow || !quickLeads ? (
@@ -868,8 +877,8 @@ export default function WorkoutScreen() {
         )}</>}
 
         {/* Recent workouts */}
-        {loadError ? null : <QuietOverline style={styles.sectionOverline}>Recent workouts</QuietOverline>}
-        {loadError ? null : historyRows.length === 0 ? (
+        {loadError || firstDay ? null : <QuietOverline style={styles.sectionOverline}>Recent workouts</QuietOverline>}
+        {loadError || firstDay ? null : historyRows.length === 0 ? (
           <EmptyStateNoData
             headline="No recent workouts"
             body="Complete a workout to see your history here."
@@ -953,7 +962,7 @@ export default function WorkoutScreen() {
             </View> : null}
           </View>
         </FadeInView> : null}
-        {loadError ? null : <FadeInView delay={80}>
+        {loadError || firstDay ? null : <FadeInView delay={80}>
           {weeklyVolume.some((w) => w.volume > 0) ? (
             <View style={styles.chartCard}>
               <View style={styles.chartHeader}>
@@ -972,7 +981,7 @@ export default function WorkoutScreen() {
             </View>
           ) : <Text style={styles.chartEmptyText}>Complete workouts to see volume data</Text>}
         </FadeInView>}
-        {loadError ? null : <FadeInView delay={120}>
+        {loadError || firstDay ? null : <FadeInView delay={120}>
           {muscleVolume.length > 0 ? (
             <View style={styles.muscleCard}>
               <QuietOverline>Muscle breakdown</QuietOverline>
